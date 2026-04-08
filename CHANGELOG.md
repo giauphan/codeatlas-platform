@@ -7,8 +7,14 @@ All notable changes to CodeAtlas are documented here.
 ### Fixed
 - Handle undefined `stats` in `AnalysisResult` — prevents `Cannot read properties of undefined (reading 'files')` errors during MCP tool execution
 - Made `stats`, `entityCounts`, `totalFilesAnalyzed` optional in interface with null-coalescing fallbacks
-- Fixed `.agent/memory/` → `.agents/memory/` path in `index.ts` and `auto-memory.md` to match project convention
 - Removed `npm run lint` from `pretest` script (lint setup missing, caused failures)
+
+---
+
+## [1.4.1] - 2026-04-03
+
+### Fixed
+- Fixed `.agent/memory/` → `.agents/memory/` path in `index.ts` and `auto-memory.md` to match project convention
 
 ### Added
 - `scripts/sync-all-memory.cjs` — Utility script to generate `.agents/memory/` for all projects at once
