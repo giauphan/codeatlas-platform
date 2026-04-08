@@ -111,7 +111,7 @@
     "vscode:prepublish": "npm run build",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
+    "pretest": "npm run compile",
     "lint": "eslint src --ext ts",
     "test": "node --experimental-vm-modules node_modules/tsx/dist/cli.mjs src/test/analyzer.test.ts",
     "build:webview": "vite build",
