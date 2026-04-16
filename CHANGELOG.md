@@ -2,6 +2,16 @@
 
 All notable changes to CodeAtlas are documented here.
 
+## [1.5.0] - 2026-04-16
+
+### Added
+- **Auto-generate `.agents/memory/`** — Extension now automatically creates the memory folder after every `Analyze Project` run
+  - `system-map.md`, `modules.json`, `feature-flows.json`, `conventions.md` are regenerated each time
+  - `business-rules.json` and `change-log.json` are preserved if they already exist (only created on first run)
+- New `src/memoryGenerator.ts` module encapsulating memory generation logic
+
+---
+
 ## [1.4.3] - 2026-04-16
 
 ### Fixed

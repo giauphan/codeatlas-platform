@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { WebviewProvider } from './WebviewProvider';
 import { CodeAnalyzer } from './analyzer/parser';
 import { AnalysisResult, AnalysisManifest, ChunkData, CrossChunkLinks } from './analyzer/types';
+import { generateMemory } from './memoryGenerator';
 
 /**
  * Global status bar item for CodeAtlas analysis state.
@@ -125,6 +126,13 @@ export function activate(context: vscode.ExtensionContext) {
           JSON.stringify(result, null, 2),
           'utf-8'
         );
+
+        // Auto-generate .agents/memory/ folder
+        try {
+          generateMemory(workspaceRoot, result);
+        } catch (memErr) {
+          console.error('CodeAtlas: Memory generation failed:', memErr);
+        }
 
         // Save chunked data
         const chunksDir = path.join(codeatlasDir, 'chunks');
