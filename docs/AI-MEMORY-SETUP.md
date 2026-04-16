@@ -1,162 +1,150 @@
 # 🧠 AI System Memory — Setup Guide
 
-## Cái này là gì?
+## What is this?
 
-Giải quyết vấn đề **AI quên context giữa các conversation**. Khi bạn mở chat mới, AI tự biết:
-- Hệ thống có những module nào, kết nối ra sao
-- Business rules hiện tại
+Solves the **AI losing context between conversations** problem. When you start a new chat, AI automatically knows:
+- System modules and how they connect
+- Current business rules
 - Code conventions
-- Gần đây sửa gì
+- Recent changes
 
-## Yêu cầu
+## Requirements
 
-1. **CodeAtlas MCP server** đã cài và chạy ([xem hướng dẫn](#cài-codeatlas-mcp))
-2. Project đã chạy `CodeAtlas: Analyze Project` trong VS Code ít nhất 1 lần
+1. **CodeAtlas extension** installed in VS Code / Cursor
+2. Project analyzed at least once (`CodeAtlas: Analyze Project`)
 
-## Setup cho project mới
+## Setup (One-Time)
 
-### Bước 1: Copy rule files
+### Step 1: Install CodeAtlas Extension
 
-```bash
-# Thay YOUR_PROJECT bằng đường dẫn project của bạn
-mkdir -p /path/to/YOUR_PROJECT/.agents/rules/
+Install `codeatlas` from VS Code Marketplace or use the `.vsix` file.
 
-# Copy 2 rule files
-cp /home/biibon/CodeAtlas/docs/rules-template/auto-memory.md /path/to/YOUR_PROJECT/.agents/rules/
-cp /home/biibon/CodeAtlas/docs/rules-template/codeatlas-mcp.md /path/to/YOUR_PROJECT/.agents/rules/
-```
+### Step 2: Add CodeAtlas MCP Server
 
-Hoặc copy nhanh tất cả:
-```bash
-cp /home/biibon/CodeAtlas/docs/rules-template/*.md /path/to/YOUR_PROJECT/.agents/rules/
-```
+Choose your AI platform:
 
-**2 files được copy:**
-| File | Chức năng |
-|------|-----------|
-| `auto-memory.md` | Bắt AI đọc memory đầu conversation, sync sau khi sửa code |
-| `codeatlas-mcp.md` | Bắt AI dùng CodeAtlas MCP tools thay vì grep thủ công |
-
-### Bước 2: Chạy Analyze Project
-
-Mở project trong VS Code → `Ctrl+Shift+P` → `CodeAtlas: Analyze Project`
-
-Việc này tạo file `.codeatlas/analysis.json` — dữ liệu để MCP tools đọc.
-
-### Bước 3: Sync Memory lần đầu
-
-Trong Gemini CLI hoặc editor AI, gọi:
-
-```
-Hãy gọi sync_system_memory cho project này
-```
-
-AI sẽ tạo folder `.agents/memory/` với 6 files:
-
-```
-.agents/memory/
-├── system-map.md          # Sơ đồ Mermaid tổng quan (auto-generated)
-├── modules.json           # Danh sách modules + imports + contains
-├── feature-flows.json     # Feature → files mapping
-├── business-rules.json    # Business rules bạn mô tả
-├── change-log.json        # Lịch sử thay đổi gần đây
-└── conventions.md         # Languages, patterns, structure
-```
-
-### Bước 4: Xong!
-
-Từ giờ mọi conversation mới, AI sẽ:
-1. Đọc `.agents/memory/` → biết flow hệ thống
-2. Dùng MCP trace code → hiểu trước khi sửa
-3. Sync memory sau khi sửa → conversation sau nhớ
-
----
-
-## Cài CodeAtlas MCP
-
-### Gemini CLI / Antigravity
-
-Thêm vào `.gemini/settings.json` của project:
-
+**Gemini / Antigravity** — `.gemini/settings.json`:
 ```json
 {
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["tsx", "/home/biibon/CodeAtlas/index.ts"]
+      "args": ["-y", "@giauphan/codeatlas-mcp"]
     }
   }
 }
 ```
 
-### Cursor
-
-Thêm vào `.cursor/mcp.json`:
-
+**Cursor** — `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["tsx", "/home/biibon/CodeAtlas/index.ts"]
+      "args": ["-y", "@giauphan/codeatlas-mcp"]
     }
   }
 }
 ```
 
-### Claude Code CLI
-
+**Claude Code CLI**:
 ```bash
-claude mcp add codeatlas -- npx tsx /home/biibon/CodeAtlas/index.ts
+claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
 ```
+
+**Windsurf / Other MCP-compatible editors**:
+```json
+{
+  "mcpServers": {
+    "codeatlas": {
+      "command": "npx",
+      "args": ["-y", "@giauphan/codeatlas-mcp"]
+    }
+  }
+}
+```
+
+### Step 3: Run Analyze Project
+
+Open your project in VS Code → `Ctrl+Shift+P` → `CodeAtlas: Analyze Project`
+
+This automatically creates:
+```
+.codeatlas/
+└── analysis.json          # Code analysis data for MCP
+
+.agents/
+├── memory/
+│   ├── system-map.md      # Mermaid architecture diagram (auto-generated)
+│   ├── modules.json       # Module registry + imports + contains
+│   ├── feature-flows.json # Feature → files mapping
+│   ├── business-rules.json # Business rules (preserved between analyses)
+│   ├── change-log.json    # Recent changes log (preserved between analyses)
+│   └── conventions.md     # Languages, patterns, structure (auto-generated)
+└── rules/
+    ├── codeatlas-mcp.md   # Tells AI how to use CodeAtlas MCP tools
+    └── auto-memory.md     # Tells AI to read/sync memory automatically
+```
+
+### Step 4: Done! 🎉
+
+From now on, every new AI conversation will:
+1. Read `.agents/memory/` → know system architecture
+2. Use MCP tools to trace code → understand before editing
+3. Sync memory after changes → next conversation remembers
+
+**No manual file copying needed. Everything is auto-generated.**
 
 ---
 
-## MCP Tools có sẵn
+## How It Works
 
-| Tool | Khi nào dùng |
+```
+You: "feature X has bug Y"
+          │
+          ▼
+AI reads .agents/memory/       ← recalls system flow
+          │
+          ▼
+AI calls trace_feature_flow("X")  ← finds related files
+          │
+          ▼
+AI reads files in readingOrder     ← understands current code
+          │
+          ▼
+AI fixes code                      ← edits the right place
+          │
+          ▼
+AI calls sync_system_memory()      ← updates memory for next time
+```
+
+## MCP Tools Reference
+
+| Tool | When to use |
 |------|-------------|
-| `generate_system_flow` | Xem sơ đồ kiến trúc hệ thống (Mermaid) |
-| `sync_system_memory` | Sau khi sửa code (BẮT BUỘC gọi) |
-| `trace_feature_flow` | Trước khi sửa feature (hiểu context) |
-| `get_project_structure` | Xem danh sách modules, classes, functions |
-| `get_dependencies` | Xem quan hệ import/call giữa modules |
-| `search_entities` | Tìm function/class theo tên |
-| `get_file_entities` | Xem tất cả entities trong 1 file |
-| `get_insights` | Phân tích code quality |
-| `list_projects` | Liệt kê tất cả projects đã analyze |
-
-## Luồng fix problem
-
-```
-Bạn: "feature X bị lỗi Y"
-          │
-          ▼
-AI đọc .agents/memory/     ← nhớ lại flow hệ thống
-          │
-          ▼
-AI gọi trace_feature_flow("X")  ← tìm files liên quan
-          │
-          ▼
-AI đọc files theo readingOrder   ← hiểu code hiện tại
-          │
-          ▼
-AI fix code                      ← sửa đúng chỗ
-          │
-          ▼
-AI gọi sync_system_memory()     ← cập nhật memory cho lần sau
-```
+| `generate_system_flow` | See Mermaid architecture diagram |
+| `sync_system_memory` | After code changes (MUST call) |
+| `trace_feature_flow` | Before working on a feature |
+| `get_project_structure` | List modules, classes, functions |
+| `get_dependencies` | Import/call relationships |
+| `search_entities` | Find function/class by name |
+| `get_file_entities` | All entities in a specific file |
+| `get_insights` | Code quality analysis |
+| `list_projects` | List all analyzed projects |
 
 ## FAQ
 
-**Q: Memory bị cũ khi code thay đổi?**
-A: Không. Rule bắt AI gọi `sync_system_memory` sau mỗi lần sửa code. Memory luôn được cập nhật từ code thực tế.
+**Q: Memory gets stale when code changes?**
+A: No. Rules force AI to call `sync_system_memory` after every edit. Memory auto-updates from actual code.
 
-**Q: Business rules thay đổi thì sao?**
-A: Khi bạn mô tả rule mới, AI tự lưu vào `business-rules.json`. File này chỉ append, không bao giờ xóa.
+**Q: Business rules change?**
+A: When you mention new rules, AI saves them to `business-rules.json`. This file only appends, never deletes.
 
-**Q: Project mới chưa có analysis.json?**
-A: Chạy `CodeAtlas: Analyze Project` trong VS Code trước. Sau đó MCP tools mới hoạt động.
+**Q: New project without analysis.json?**
+A: Run `CodeAtlas: Analyze Project` in VS Code first. Then MCP tools work.
 
-**Q: Dùng được với ngôn ngữ nào?**
-A: TypeScript, JavaScript, Python, PHP (bao gồm Blade templates).
+**Q: What languages are supported?**
+A: TypeScript, JavaScript, Python, PHP (including Blade templates).
+
+**Q: Do I need to copy rule files manually?**
+A: No! Since v1.5.0, running `Analyze Project` auto-generates both `.agents/memory/` and `.agents/rules/`.
