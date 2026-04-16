@@ -261,8 +261,9 @@ An MCP server named \`codeatlas\` is available. It provides code analysis data i
 2. **Looking for a function/class** → call \`search_entities\` (faster than grep, includes relationships)
 3. **Understanding connections** → call \`get_dependencies\` for import/call relationships
 4. **High-level overview** → call \`generate_system_flow\` for Mermaid architecture diagram
-5. **Exploring a file** → call \`get_file_entities\` to see all entities in that file
-6. **After making changes** → call \`sync_system_memory\` to update AI memory
+5. **Execution flow of a feature** → call \`generate_feature_flow_diagram\` for call-chain Mermaid diagram
+6. **Exploring a file** → call \`get_file_entities\` to see all entities in that file
+7. **After making changes** → call \`sync_system_memory\` to update AI memory
 
 ### Available Tools
 
@@ -274,7 +275,8 @@ An MCP server named \`codeatlas\` is available. It provides code analysis data i
 | \`get_insights\` | AI-generated code quality analysis |
 | \`search_entities\` | Find function, class, or module by name |
 | \`get_file_entities\` | All entities inside a specific file |
-| \`generate_system_flow\` | Mermaid diagram of system architecture |
+| \`generate_system_flow\` | Mermaid diagram of system architecture (module imports) |
+| \`generate_feature_flow_diagram\` | Mermaid diagram of feature execution flow (call chains) |
 | \`sync_system_memory\` | Update .agents/memory/ after code changes |
 | \`trace_feature_flow\` | Trace feature flow before working on it |
 
@@ -356,15 +358,20 @@ trigger: always_on
 4. **Need a high-level overview** → call \`generate_system_flow\`
    - Returns a Mermaid diagram showing the full system architecture
 
-5. **Need to know what's in a specific file** → call \`get_file_entities\`
+5. **Need to see execution flow of a feature** → call \`generate_feature_flow_diagram\`
+   - Returns a Mermaid flowchart or sequence diagram showing the call chain
+   - Shows: entry point → controller → service → model step-by-step
+
+6. **Need to know what's in a specific file** → call \`get_file_entities\`
    - Returns all classes, functions, variables in that file
 
 **Example flow when user says "fix login timeout":**
 \`\`\`
 1. trace_feature_flow(keyword: "login")     → get list of related files
-2. Read files in readingOrder               → understand current logic
-3. Fix the code                             → make changes
-4. sync_system_memory(changeDescription: "Fixed login timeout") → update memory
+2. generate_feature_flow_diagram(keyword: "login") → see execution flow
+3. Read files in readingOrder               → understand current logic
+4. Fix the code                             → make changes
+5. sync_system_memory(changeDescription: "Fixed login timeout") → update memory
 \`\`\`
 
 ### 🔄 MANDATORY: Sync Memory After Changes
@@ -387,7 +394,8 @@ trigger: always_on
 
 | Tool | When to use |
 |------|-------------|
-| \`generate_system_flow\` | See/understand system architecture |
+| \`generate_system_flow\` | See/understand system architecture (module imports) |
+| \`generate_feature_flow_diagram\` | See execution flow of a feature (call chains) |
 | \`sync_system_memory\` | After code changes (ALWAYS call this) |
 | \`trace_feature_flow\` | Before working on a feature (understand context) |
 | \`get_project_structure\` | Detailed entity listing |

@@ -20,8 +20,8 @@ trigger: always_on
 
 **NEVER start coding without understanding the codebase first.** Follow this flow:
 
-1. **User describes a problem/feature** → FIRST call `trace_feature_flow` with a keyword from the user's description
-   - This returns the list of related files in `readingOrder`
+1. **User describes a problem/feature** → FIRST call `trace_feature_flow` with a keyword
+   - Returns the list of related files in `readingOrder`
    - Read those files to understand the current implementation
 
 2. **Need to find a specific function/class** → call `search_entities` instead of grep
@@ -33,65 +33,48 @@ trigger: always_on
 4. **Need a high-level overview** → call `generate_system_flow`
    - Returns a Mermaid diagram showing the full system architecture
 
-5. **Need to know what's in a specific file** → call `get_file_entities`
+5. **Need to see execution flow of a feature** → call `generate_feature_flow_diagram`
+   - Returns a Mermaid flowchart or sequence diagram showing the call chain
+   - Shows: entry point → controller → service → model step-by-step
+
+6. **Need to know what's in a specific file** → call `get_file_entities`
    - Returns all classes, functions, variables in that file
 
-**Example flow when user says "fix crawl timeout":**
+**Example flow when user says "fix login timeout":**
 ```
-1. trace_feature_flow(keyword: "crawl")     → get list of related files
-2. Read files in readingOrder               → understand current logic  
-3. Fix the code                             → make changes
-4. sync_system_memory(changeDescription: "Fixed crawl timeout") → update memory
+1. trace_feature_flow(keyword: "login")     → get list of related files
+2. generate_feature_flow_diagram(keyword: "login") → see execution flow
+3. Read files in readingOrder               → understand current logic
+4. Fix the code                             → make changes
+5. sync_system_memory(changeDescription: "Fixed login timeout") → update memory
 ```
 
 ### 🔄 MANDATORY: Sync Memory After Changes
 
-**After completing ANY code changes, you MUST call `sync_system_memory` with BOTH params:**
+**After completing ANY code changes, you MUST call `sync_system_memory`:**
 
 1. **`changeDescription`** (ALWAYS required): What you just changed
-   - Example: `"Fixed crawl timeout by adding retry logic in crawler.py"`
+   - Example: `"Fixed login timeout by adding retry logic"`
 
-2. **`businessRule`** (extract from conversation if applicable): 
-   - Listen for ANY domain logic the user mentions during the conversation
+2. **`businessRule`** (if user mentions domain logic):
    - Business rules are statements like:
-     - "Video dưới 10 giây thì bỏ qua"
-     - "VIP user skip email verify"  
-     - "Chỉ crawl video có trên 1000 likes"
-     - "Upload lên Drive folder theo topic"
-   - Even if user says it casually, SAVE IT as a business rule
-   - If no business rule was mentioned, omit this param
-
-**Example:**
-```
-User: "fix crawl lỗi, nhớ là chỉ lấy video trên 500 likes thôi"
-                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                    → This is a business rule!
-
-AI after fixing:
-sync_system_memory(
-  changeDescription: "Fixed crawl error in browser_search.py",
-  businessRule: "Only crawl videos with 500+ likes"
-)
-```
+     - "VIP users skip email verification"
+     - "Only process videos with 1000+ likes"
+     - "Free tier limited to 5 projects"
+   - If user mentions any such rule, SAVE IT
 
 **DO NOT SKIP THIS STEP.** If you forget to sync, the next conversation loses all context.
-
-### 📊 When User Asks About System Flow
-
-Use `generate_system_flow` MCP tool to show Mermaid diagrams:
-- `scope: "modules-only"` for overview
-- `scope: "feature"` + `feature: "keyword"` for specific feature
-- `scope: "full"` for detailed view (large output)
 
 ### Available Memory Tools
 
 | Tool | When to use |
 |------|-------------|
-| `generate_system_flow` | User wants to see/understand system architecture |
-| `sync_system_memory` | After completing code changes (ALWAYS call this) |
-| `trace_feature_flow` | Before working on a feature (understand context first) |
-| `get_project_structure` | Need detailed entity listing |
-| `get_dependencies` | Need specific dependency relationships |
-| `search_entities` | Looking for specific function/class by name |
-| `get_file_entities` | Need to know what's inside a specific file |
-| `get_insights` | Need code quality / architecture analysis |
+| `generate_system_flow` | See/understand system architecture (module imports) |
+| `generate_feature_flow_diagram` | See execution flow of a feature (call chains) |
+| `sync_system_memory` | After code changes (ALWAYS call this) |
+| `trace_feature_flow` | Before working on a feature (understand context) |
+| `get_project_structure` | Detailed entity listing |
+| `get_dependencies` | Specific dependency relationships |
+| `search_entities` | Find function/class by name |
+| `get_file_entities` | Contents of a specific file |
+| `get_insights` | Code quality / architecture analysis |
