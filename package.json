@@ -2,7 +2,7 @@
   "name": "codeatlas",
   "displayName": "CodeAtlas",
   "description": "Lightweight AI-powered source code analysis extension for VS Code / Cursor",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "publisher": "giauphan",
   "icon": "resources/icon.png",
   "repository": {

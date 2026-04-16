@@ -2,6 +2,14 @@
 
 All notable changes to CodeAtlas are documented here.
 
+## [1.4.3] - 2026-04-16
+
+### Fixed
+- Ensure `JSON.parse` results are validated as arrays before calling `.push()` / `.unshift()` — prevents runtime errors when `business-rules.json` or `change-log.json` contain non-array data
+- Applied fix to both `index.ts` and `scripts/sync-all-memory.cjs`
+
+---
+
 ## [1.4.2] - 2026-04-08
 
 ### Fixed
