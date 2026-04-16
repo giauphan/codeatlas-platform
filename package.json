@@ -1,7 +1,7 @@
 {
   "name": "codeatlas",
   "displayName": "CodeAtlas",
-  "description": "Lightweight AI-powered source code analysis extension for VS Code / Cursor",
+  "description": "AI-powered code analysis with MCP server — gives AI assistants deep understanding of your codebase with persistent memory across conversations",
   "version": "1.6.0",
   "publisher": "giauphan",
   "icon": "resources/icon.png",

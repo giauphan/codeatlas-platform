@@ -1,148 +1,277 @@
 # 🗺️ CodeAtlas
 
-**Lightweight AI-powered source code analysis extension for VS Code / Cursor**
+**AI-powered code analysis & memory for VS Code, Cursor, Windsurf**
 
-![Version](https://img.shields.io/badge/version-1.4.0-blue)
-![VS Code Version](https://img.shields.io/badge/VS%20Code-v1.80%2B-blue?logo=visualstudiocode)
-![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue?logo=typescript)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+[![Version](https://img.shields.io/badge/version-1.6.0-blue)](https://github.com/giauphan/CodeAtlas/releases)
+[![VS Code](https://img.shields.io/badge/VS%20Code-v1.80%2B-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/)
+[![npm](https://img.shields.io/npm/v/@giauphan/codeatlas-mcp?label=MCP%20Server&logo=npm)](https://www.npmjs.com/package/@giauphan/codeatlas-mcp)
+[![CI](https://github.com/giauphan/CodeAtlas/actions/workflows/ci.yml/badge.svg)](https://github.com/giauphan/CodeAtlas/actions)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-CodeAtlas helps you visualize, understand, and navigate your codebase using interactive network graphs, AI-powered insights, and **persistent AI memory via MCP**.
+> **Analyze your codebase once → AI understands it forever.**
+>
+> CodeAtlas gives AI assistants (Gemini, Claude, Cursor, Windsurf, Copilot) deep understanding of your code via MCP — with persistent memory between conversations.
 
-## Features
+---
 
-### 🌐 VS Code Extension
-- **Interactive Force-Directed Graph**: Visualize your code's architecture and dependencies in real-time
-- **AST-Based Code Analysis**: Deep semantic understanding of TypeScript, JavaScript, Python, and PHP files
-- **AI-Powered Insights**: Get actionable recommendations, security audits, and maintainability scores
-- **AI Copilot Chat**: Talk to your codebase and ask complex architectural questions using natural language
-- **Entity & Relationship Overview**: See clear counts and statistics of all modules, classes, functions, and their connections
-- **Click-to-Navigate**: Jump straight from graph nodes to the corresponding source code lines
-- **Auto-Reanalyze on Save**: The graph updates automatically as you write code
-- **Search & Filter**: Quickly find specific entities and filter node types to declutter large graphs
+## ✨ Why CodeAtlas?
 
-### 🧠 MCP Server — AI System Memory (NEW in v1.4.0)
+| Problem | CodeAtlas Solution |
+|---|---|
+| AI forgets your project structure every conversation | **Persistent memory** in `.agents/memory/` |
+| AI greps files blindly, missing relationships | **10 MCP tools** for instant code intelligence |
+| No way to see how features flow through code | **Mermaid diagrams** of execution flows |
+| Hard to onboard on new codebases | **Auto-generated architecture maps** |
+| Different AI IDEs need different configs | **Auto-generates rules** for Cursor, Claude, Windsurf, Gemini |
 
-CodeAtlas includes an **MCP (Model Context Protocol) server** that gives AI assistants (Gemini, Claude, Cursor, etc.) deep understanding of your codebase — and **persistent memory between conversations**.
+---
 
-| Tool | Description |
-|------|-------------|
-| `list_projects` | List all analyzed projects |
-| `get_project_structure` | Get all modules, classes, functions, variables |
-| `get_dependencies` | Import/call/containment relationships |
-| `search_entities` | Fuzzy search by entity name with relationships |
-| `get_file_entities` | All entities in a specific file |
-| `get_insights` | AI-generated code quality insights |
-| `generate_system_flow` | Auto-generate Mermaid architecture diagrams |
-| `sync_system_memory` | Create/update `.agents/memory/` — AI's long-term memory |
-| `trace_feature_flow` | Trace a feature's flow through the codebase |
+## 🚀 Quick Start (2 minutes)
 
-**How AI Memory works:**
+### Step 1: Install the Extension
+
+Download `codeatlas-1.6.0.vsix` from [Releases](https://github.com/giauphan/CodeAtlas/releases), then:
+
 ```
-Conversation 1 → AI writes code → sync_system_memory → .agents/memory/ updated
-                                                              │
+VS Code: Extensions → ⋯ → Install from VSIX
+```
+
+### Step 2: Analyze Your Project
+
+```
+Ctrl+Shift+P → CodeAtlas: Analyze Project
+```
+
+This generates:
+- `.codeatlas/analysis.json` — Code structure data
+- `.agents/memory/` — AI-readable system documentation
+- `.agents/rules/` — MCP instructions for AI
+- IDE-specific rules for **Cursor** / **Claude** / **Windsurf** (auto-detected)
+
+### Step 3: Connect Your AI
+
+Pick your AI IDE and add the MCP config:
+
+<details>
+<summary>🟢 <b>Gemini / Antigravity</b> — <code>.gemini/settings.json</code></summary>
+
+```json
+{
+  "mcpServers": {
+    "codeatlas": {
+      "command": "npx",
+      "args": ["-y", "@giauphan/codeatlas-mcp"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>⚫ <b>Cursor</b> — <code>.cursor/mcp.json</code></summary>
+
+```json
+{
+  "mcpServers": {
+    "codeatlas": {
+      "command": "npx",
+      "args": ["-y", "@giauphan/codeatlas-mcp"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>🔵 <b>VS Code Copilot</b> — <code>.vscode/settings.json</code></summary>
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "codeatlas": {
+        "command": "npx",
+        "args": ["-y", "@giauphan/codeatlas-mcp"]
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>🟣 <b>Claude Desktop</b> — <code>claude_desktop_config.json</code></summary>
+
+```json
+{
+  "mcpServers": {
+    "codeatlas": {
+      "command": "npx",
+      "args": ["-y", "@giauphan/codeatlas-mcp"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>🟣 <b>Claude Code CLI</b></summary>
+
+```bash
+claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
+```
+</details>
+
+<details>
+<summary>🔴 <b>Windsurf</b> — <code>.windsurf/mcp.json</code></summary>
+
+```json
+{
+  "mcpServers": {
+    "codeatlas": {
+      "command": "npx",
+      "args": ["-y", "@giauphan/codeatlas-mcp"]
+    }
+  }
+}
+```
+</details>
+
+> **That's it!** Your AI now understands your codebase structure, dependencies, and can remember context across conversations.
+
+---
+
+## 🛠️ MCP Tools (10 tools)
+
+### Code Analysis
+
+| Tool | What it does |
+|------|-------------|
+| `list_projects` | List all analyzed projects (auto-discovers `~/`) |
+| `get_project_structure` | Get all modules, classes, functions, variables |
+| `get_dependencies` | Get import / call / containment / implements relationships |
+| `get_insights` | AI-generated code quality & security insights |
+| `search_entities` | Fuzzy search by entity name (faster than grep!) |
+| `get_file_entities` | Get all entities defined in a specific file |
+
+### Architecture Visualization
+
+| Tool | What it does |
+|------|-------------|
+| `generate_system_flow` | Auto-generate Mermaid **architecture diagrams** (module imports) |
+| `generate_feature_flow_diagram` | Auto-generate Mermaid **execution flow diagrams** (call chains) |
+
+### AI Memory
+
+| Tool | What it does |
+|------|-------------|
+| `sync_system_memory` | Create/update `.agents/memory/` — AI's persistent long-term memory |
+| `trace_feature_flow` | Trace a feature through the codebase, returns files in dependency order |
+
+---
+
+## 🧠 AI Memory System
+
+AI assistants lose context between conversations. CodeAtlas solves this:
+
+```
+Conversation 1 → AI writes code → calls sync_system_memory
+                                          │
+                                   .agents/memory/
+                                   ├── system-map.md      ← Mermaid architecture
+                                   ├── modules.json       ← All modules & entities
+                                   ├── conventions.md     ← Code patterns & style
+                                   ├── business-rules.json ← Domain logic
+                                   ├── feature-flows.json  ← Feature traces
+                                   └── change-log.json     ← What changed & when
+                                          │
 Conversation 2 → AI reads .agents/memory/ → knows full system flow instantly
 ```
 
-## Quick Start
+### Auto-Generated IDE Rules
 
-### VS Code Extension
+On `Analyze Project`, CodeAtlas automatically creates rule files so your AI **knows how to use CodeAtlas** out of the box:
 
-1. Install from the VSIX package or VS Code Marketplace
-2. Open a project workspace
-3. Open the Command Palette (`Ctrl+Shift+P`) and run **CodeAtlas: Analyze Project**
-4. Explore the interactive graph and ask AI for insights!
+| File Generated | For |
+|---|---|
+| `.agents/rules/codeatlas-mcp.md` | Generic (all AIs) |
+| `.agents/rules/auto-memory.md` | Memory read/sync instructions |
+| `.cursor/rules/codeatlas.mdc` | Cursor |
+| `CLAUDE.md` | Claude Code |
+| `.windsurfrules` | Windsurf |
 
-### MCP Server Setup
+> Files are only created if they don't exist — **your customizations are never overwritten**.
 
-Add to your editor's MCP config:
+---
 
-**Gemini CLI / Antigravity** (`.gemini/settings.json`):
-```json
-{
-  "mcpServers": {
-    "codeatlas": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/CodeAtlas/index.ts"]
-    }
-  }
-}
-```
+## 🌐 VS Code Extension Features
 
-**Cursor** (`.cursor/mcp.json`):
-```json
-{
-  "mcpServers": {
-    "codeatlas": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/CodeAtlas/index.ts"]
-    }
-  }
-}
-```
+- **Interactive Force-Directed Graph** — Visualize code architecture and dependencies
+- **AST-Based Analysis** — Deep semantic understanding, not just text matching
+- **AI Copilot Chat** — Ask architectural questions about your codebase
+- **Entity Overview** — Clear counts of modules, classes, functions, relationships
+- **Click-to-Navigate** — Jump from graph nodes to source code
+- **Auto-Reanalyze on Save** — Graph updates as you code
+- **Search & Filter** — Find specific entities, filter by type
 
-**Claude Code CLI**:
-```bash
-claude mcp add codeatlas -- npx tsx /path/to/CodeAtlas/index.ts
-```
+---
 
-### AI Memory Setup
-
-Copy rule templates to your project so AI automatically uses CodeAtlas:
-
-```bash
-mkdir -p /path/to/your-project/.agents/rules/
-cp /path/to/CodeAtlas/docs/rules-template/*.md /path/to/your-project/.agents/rules/
-```
-
-Then run `sync_system_memory` once to generate the initial memory snapshot.
-
-> 📖 Full setup guide: [docs/AI-MEMORY-SETUP.md](docs/AI-MEMORY-SETUP.md)
-
-## Supported Languages
+## 🌍 Supported Languages
 
 | Language | Parser | Features |
 |----------|--------|----------|
-| TypeScript / JavaScript | `@typescript-eslint/typescript-estree` | Full AST: imports, classes, functions, variables, calls |
+| TypeScript / JavaScript | `@typescript-eslint/typescript-estree` | Full AST: imports, classes, functions, variables, calls, implements |
 | Python | Regex-based | Classes, functions, variables, imports, calls |
-| PHP | Regex-based | Classes, interfaces, traits, enums, functions, properties, constants, `use` statements |
+| PHP | Regex-based | Classes, interfaces, traits, enums, functions, properties, constants |
 | Blade Templates | Regex-based | `@extends`, `@include`, `@component`, `<x-component>` |
 
-## Architecture
+---
+
+## 🏗️ Architecture
 
 ```mermaid
 graph LR
     A[VS Code Extension] -->|Analyze| B(AST Parser)
     B -->|Graph Data| C[.codeatlas/analysis.json]
     C -->|Read| D[MCP Server]
-    D -->|Tools| E[AI Assistants]
+    D -->|10 Tools| E[AI Assistants]
     E -->|sync_system_memory| F[.agents/memory/]
     F -->|Read at start| E
-    A -->|Render| G[React Webview UI]
-    G -->|Graph| H((react-force-graph-2d))
+    A -->|Auto-generate| G[IDE Rules]
+    G -->|.cursor / CLAUDE.md / .windsurfrules| E
+    A -->|Render| H[React Webview UI]
+    H -->|Graph| I((react-force-graph-2d))
 ```
 
-## Tech Stack
+---
+
+## 🧑‍💻 Contributing
+
+We welcome contributions! To get started:
+
+```bash
+git clone https://github.com/giauphan/CodeAtlas.git
+cd CodeAtlas
+npm install
+npm run build
+# Press F5 in VS Code to launch Extension Development Host
+npm test  # Run tests
+```
+
+---
+
+## 📦 Tech Stack
 
 | Component | Technology |
 |---|---|
 | Extension Host | VS Code API, TypeScript |
-| AST Parser | `@typescript-eslint/typescript-estree`, Python & PHP regex parsers |
+| AST Parser | `@typescript-eslint/typescript-estree`, Python & PHP regex |
 | MCP Server | `@modelcontextprotocol/sdk`, Zod |
 | Webview UI | React, Vite |
-| Graph Visualization | `react-force-graph-2d` |
-| Build Tooling | `esbuild`, `tsc`, `vsce` |
-
-## Contributing
-
-We welcome contributions! To get started:
-
-1. Fork the repository and create a new branch
-2. Run `npm install` to install dependencies
-3. Run `npm run build` to build the extension and webview
-4. Press `F5` in VS Code to launch the Extension Development Host
-5. Submit a PR!
+| Graph | `react-force-graph-2d` |
+| CI | GitHub Actions |
+| Build | `esbuild`, `tsc`, `vsce` |
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT](LICENSE) — Free for personal and commercial use.
