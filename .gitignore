@@ -4,3 +4,19 @@ out/
 .vscode-test/
 *.vsix
 mcp-server/
+
+# IDE & AI config (may contain local paths or tokens)
+.gemini/
+.codeatlas/
+.agents/
+.cursor/
+.windsurfrules
+CLAUDE.md
+
+# Secrets
+.env
+.env.*
+.npmrc
+*.pem
+*.key
+*.p12
