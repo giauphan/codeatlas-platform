@@ -2,6 +2,18 @@
 
 All notable changes to CodeAtlas are documented here.
 
+## [1.6.0] - 2026-04-16
+
+### Added
+- **New MCP Tool: `generate_feature_flow_diagram`** — Generates Mermaid diagrams showing the actual execution flow of a feature
+  - Traces call chains: entry point → controller → service → model
+  - Supports `flowchart` and `sequence` diagram types
+  - Includes topological sort for step-by-step execution order
+  - Color-coded: 🟢 entry points, 🔵 keyword matches, 🟠 classes, ⬜ functions
+- Updated `.agents/rules/codeatlas-mcp.md` template with new tool reference
+
+---
+
 ## [1.5.0] - 2026-04-16
 
 ### Added

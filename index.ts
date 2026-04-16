@@ -125,7 +125,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 // Create MCP server
 const server = new McpServer({
   name: "codeatlas",
-  version: "1.5.0",
+  version: "1.6.0",
 });
 
 // Tool 0: List all discovered projects
@@ -894,6 +894,328 @@ server.tool(
         .filter((f) => f.hasSeedMatch && f.filePath !== "external")
         .map((f) => f.filePath),
       message: `Found ${seedNodes.size} direct matches and ${visited.size - seedNodes.size} connected entities for '${keyword}'. Start reading from the files in 'readingOrder'.`,
+    };
+
+    return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+// Tool 9: Generate Feature Flow Diagram — Mermaid execution flow for a feature
+server.tool(
+  "generate_feature_flow_diagram",
+  "Generate a Mermaid diagram showing the EXECUTION FLOW of a feature. Unlike generate_system_flow (which shows module imports), this traces the actual call chain: entry point → controller → service → model → database. Given a keyword, it finds all related functions and classes, then builds a flowchart or sequence diagram showing how they call each other at runtime. This is the best tool for understanding HOW a feature works step-by-step.",
+  {
+    project: z.string().optional().describe("Project name or path"),
+    keyword: z.string().describe("Feature keyword to trace (e.g. 'login', 'payment', 'upload', 'auth')"),
+    diagramType: z.enum(["flowchart", "sequence"]).optional().describe("Type of Mermaid diagram: 'flowchart' (default) shows call graph, 'sequence' shows step-by-step execution order"),
+    depth: z.number().optional().describe("How many call hops to follow (default: 3)"),
+    maxNodes: z.number().optional().describe("Maximum nodes in diagram (default: 40)"),
+  },
+  async ({ project, keyword, diagramType, depth, maxNodes }) => {
+    const loaded = loadAnalysis(project);
+    if (!loaded) {
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
+    }
+
+    const q = keyword.toLowerCase();
+    const maxDepth = depth || 3;
+    const maxN = maxNodes || 40;
+    const dType = diagramType || "flowchart";
+    const nodes = loaded.analysis.graph.nodes;
+    const links = loaded.analysis.graph.links;
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const nodeNameMap = new Map(nodes.map((n) => [n.id, n.label]));
+
+    // Step 1: Find seed nodes matching keyword
+    const seedNodes = new Set<string>();
+    for (const node of nodes) {
+      if (
+        node.label.toLowerCase().includes(q) ||
+        (node.filePath && node.filePath.toLowerCase().includes(q)) ||
+        node.id.toLowerCase().includes(q)
+      ) {
+        seedNodes.add(node.id);
+      }
+    }
+
+    if (seedNodes.size === 0) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            keyword,
+            matchCount: 0,
+            message: `No entities found matching '${keyword}'. Try a broader keyword.`,
+            suggestions: nodes
+              .filter((n) => n.type === "function" || n.type === "class")
+              .map((n) => n.label)
+              .filter((l, i, arr) => arr.indexOf(l) === i)
+              .slice(0, 15),
+          }, null, 2),
+        }],
+      };
+    }
+
+    // Step 2: BFS expand following CALL relationships (execution flow)
+    const visited = new Set<string>(seedNodes);
+    let frontier = new Set<string>(seedNodes);
+
+    // Also follow `contains` to find methods inside classes
+    const callAndContainsLinks = links.filter((l) => l.type === "call" || l.type === "contains");
+
+    for (let d = 0; d < maxDepth; d++) {
+      const nextFrontier = new Set<string>();
+      for (const link of callAndContainsLinks) {
+        if (frontier.has(link.source) && !visited.has(link.target)) {
+          nextFrontier.add(link.target);
+          visited.add(link.target);
+        }
+        if (frontier.has(link.target) && !visited.has(link.source)) {
+          nextFrontier.add(link.source);
+          visited.add(link.source);
+        }
+      }
+      frontier = nextFrontier;
+      if (nextFrontier.size === 0) break;
+    }
+
+    // Step 3: Get trace nodes (only functions, classes, methods — skip modules/variables for execution flow)
+    let traceNodes = nodes.filter((n) => visited.has(n.id) && (n.type === "function" || n.type === "class"));
+
+    // Truncate if too many
+    if (traceNodes.length > maxN) {
+      // Prioritize: seed matches first, then by call connections
+      const callConnections = new Map<string, number>();
+      for (const link of links) {
+        if (link.type === "call") {
+          callConnections.set(link.source, (callConnections.get(link.source) || 0) + 1);
+          callConnections.set(link.target, (callConnections.get(link.target) || 0) + 1);
+        }
+      }
+      traceNodes.sort((a, b) => {
+        if (seedNodes.has(a.id) && !seedNodes.has(b.id)) return -1;
+        if (!seedNodes.has(a.id) && seedNodes.has(b.id)) return 1;
+        return (callConnections.get(b.id) || 0) - (callConnections.get(a.id) || 0);
+      });
+      traceNodes = traceNodes.slice(0, maxN);
+    }
+
+    const traceNodeIds = new Set(traceNodes.map((n) => n.id));
+    const traceLinks = links.filter(
+      (l) => traceNodeIds.has(l.source) && traceNodeIds.has(l.target) && l.type === "call"
+    );
+
+    // Deduplicate links
+    const linkSet = new Set<string>();
+    const dedupLinks = traceLinks.filter((l) => {
+      const key = `${l.source}|${l.target}`;
+      if (linkSet.has(key)) return false;
+      linkSet.add(key);
+      return true;
+    });
+
+    // Step 4: Identify entry points (nodes with no incoming call edges or seed matches)
+    const hasIncoming = new Set<string>();
+    for (const link of dedupLinks) {
+      hasIncoming.add(link.target);
+    }
+    const entryPoints = traceNodes.filter(
+      (n) => !hasIncoming.has(n.id) || seedNodes.has(n.id)
+    );
+
+    // Step 5: Build Mermaid diagram
+    let mermaid = "";
+    const sanitizeLabel = (s: string) => s.replace(/"/g, "'").replace(/[<>]/g, "");
+
+    if (dType === "sequence") {
+      // === Sequence Diagram ===
+      const seqLines: string[] = ["sequenceDiagram"];
+
+      // Declare participants (group by file/class)
+      const participantMap = new Map<string, string>();
+      let pCounter = 0;
+      for (const node of traceNodes) {
+        const pid = `P${pCounter++}`;
+        participantMap.set(node.id, pid);
+        const icon = node.type === "class" ? "🏗️" : "⚡";
+        const fileSuffix = node.filePath ? ` (${path.basename(node.filePath)})` : "";
+        seqLines.push(`    participant ${pid} as ${icon} ${sanitizeLabel(node.label)}${fileSuffix}`);
+      }
+
+      // Add call arrows
+      for (const link of dedupLinks) {
+        const src = participantMap.get(link.source);
+        const tgt = participantMap.get(link.target);
+        if (src && tgt && src !== tgt) {
+          seqLines.push(`    ${src}->>+${tgt}: calls`);
+          seqLines.push(`    ${tgt}-->>-${src}: returns`);
+        }
+      }
+
+      mermaid = seqLines.join("\n");
+    } else {
+      // === Flowchart Diagram ===
+      const flowLines: string[] = ["graph TD"];
+
+      // Style definitions
+      flowLines.push("    classDef entry fill:#4CAF50,stroke:#388E3C,color:#fff,stroke-width:2px");
+      flowLines.push("    classDef seed fill:#2196F3,stroke:#1565C0,color:#fff,stroke-width:2px");
+      flowLines.push("    classDef cls fill:#FF9800,stroke:#E65100,color:#fff");
+      flowLines.push("    classDef func fill:#607D8B,stroke:#37474F,color:#fff");
+
+      // Add nodes
+      const mermaidIdMap = new Map<string, string>();
+      let nCounter = 0;
+      for (const node of traceNodes) {
+        const mid = `f${nCounter++}`;
+        mermaidIdMap.set(node.id, mid);
+        const label = sanitizeLabel(node.label);
+        const fileSuffix = node.filePath ? `<br/>${path.basename(node.filePath)}` : "";
+
+        if (node.type === "class") {
+          flowLines.push(`    ${mid}[["🏗️ ${label}${fileSuffix}"]]`);
+        } else {
+          flowLines.push(`    ${mid}("⚡ ${label}${fileSuffix}")`);
+        }
+
+        // Apply styles
+        if (entryPoints.includes(node) && !hasIncoming.has(node.id)) {
+          flowLines.push(`    class ${mid} entry`);
+        } else if (seedNodes.has(node.id)) {
+          flowLines.push(`    class ${mid} seed`);
+        } else if (node.type === "class") {
+          flowLines.push(`    class ${mid} cls`);
+        } else {
+          flowLines.push(`    class ${mid} func`);
+        }
+      }
+
+      // Add call arrows
+      for (const link of dedupLinks) {
+        const src = mermaidIdMap.get(link.source);
+        const tgt = mermaidIdMap.get(link.target);
+        if (src && tgt) {
+          flowLines.push(`    ${src} -->|calls| ${tgt}`);
+        }
+      }
+
+      // Add legend
+      flowLines.push("");
+      flowLines.push(`    subgraph Legend`);
+      flowLines.push(`        L1("🟢 Entry Point"):::entry`);
+      flowLines.push(`        L2("🔵 Keyword Match"):::seed`);
+      flowLines.push(`        L3("🟠 Class"):::cls`);
+      flowLines.push(`        L4("⬜ Function"):::func`);
+      flowLines.push(`    end`);
+
+      mermaid = flowLines.join("\n");
+    }
+
+    // Step 6: Build execution order (topological sort)
+    const executionOrder: Array<{
+      step: number;
+      name: string;
+      type: string;
+      file: string | null;
+      line: number | null;
+      callsTo: string[];
+      calledBy: string[];
+    }> = [];
+
+    // Simple topological ordering
+    const inDegree = new Map<string, number>();
+    for (const node of traceNodes) {
+      inDegree.set(node.id, 0);
+    }
+    for (const link of dedupLinks) {
+      inDegree.set(link.target, (inDegree.get(link.target) || 0) + 1);
+    }
+
+    const queue: string[] = [];
+    for (const [id, deg] of inDegree) {
+      if (deg === 0) queue.push(id);
+    }
+
+    let step = 1;
+    const ordered = new Set<string>();
+    while (queue.length > 0 && step <= maxN) {
+      const current = queue.shift()!;
+      if (ordered.has(current)) continue;
+      ordered.add(current);
+
+      const node = nodeMap.get(current);
+      if (node) {
+        const callsTo = dedupLinks
+          .filter((l) => l.source === current)
+          .map((l) => nodeNameMap.get(l.target) || l.target);
+        const calledBy = dedupLinks
+          .filter((l) => l.target === current)
+          .map((l) => nodeNameMap.get(l.source) || l.source);
+
+        executionOrder.push({
+          step: step++,
+          name: node.label,
+          type: node.type,
+          file: node.filePath ? path.relative(loaded.projectDir, node.filePath) : null,
+          line: node.line || null,
+          callsTo,
+          calledBy,
+        });
+      }
+
+      // Add neighbors
+      for (const link of dedupLinks) {
+        if (link.source === current) {
+          const newDeg = (inDegree.get(link.target) || 1) - 1;
+          inDegree.set(link.target, newDeg);
+          if (newDeg <= 0 && !ordered.has(link.target)) {
+            queue.push(link.target);
+          }
+        }
+      }
+    }
+
+    // Add any remaining unvisited nodes (cycles)
+    for (const node of traceNodes) {
+      if (!ordered.has(node.id)) {
+        const callsTo = dedupLinks
+          .filter((l) => l.source === node.id)
+          .map((l) => nodeNameMap.get(l.target) || l.target);
+        const calledBy = dedupLinks
+          .filter((l) => l.target === node.id)
+          .map((l) => nodeNameMap.get(l.source) || l.source);
+
+        executionOrder.push({
+          step: step++,
+          name: node.label,
+          type: node.type,
+          file: node.filePath ? path.relative(loaded.projectDir, node.filePath) : null,
+          line: node.line || null,
+          callsTo,
+          calledBy,
+        });
+      }
+    }
+
+    const result = {
+      keyword,
+      project: loaded.projectName,
+      diagramType: dType,
+      seedMatches: seedNodes.size,
+      nodesInDiagram: traceNodes.length,
+      callRelationships: dedupLinks.length,
+      entryPoints: entryPoints.map((n) => ({
+        name: n.label,
+        type: n.type,
+        file: n.filePath ? path.relative(loaded.projectDir, n.filePath) : null,
+      })),
+      mermaidDiagram: mermaid,
+      executionOrder,
+      readingOrder: executionOrder
+        .filter((e) => e.file)
+        .map((e) => e.file!)
+        .filter((f, i, arr) => arr.indexOf(f) === i),
+      message: `Generated ${dType} diagram for '${keyword}': ${traceNodes.length} nodes, ${dedupLinks.length} call relationships. Entry points: ${entryPoints.map((n) => n.label).join(", ")}`,
     };
 
     return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
