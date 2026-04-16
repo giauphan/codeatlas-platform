@@ -2,7 +2,7 @@
   "name": "codeatlas",
   "displayName": "CodeAtlas",
   "description": "AI-powered code analysis with MCP server — gives AI assistants deep understanding of your codebase with persistent memory across conversations",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "publisher": "giauphan",
   "icon": "resources/icon.png",
   "repository": {
