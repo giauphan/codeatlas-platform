@@ -191,7 +191,10 @@ for (const projectDir of projects) {
   const clPath = path.join(memoryDir, 'change-log.json');
   let changeLog = [];
   if (fs.existsSync(clPath)) {
-    try { changeLog = JSON.parse(fs.readFileSync(clPath, 'utf8')); } catch {}
+    try {
+      const parsedCL = JSON.parse(fs.readFileSync(clPath, 'utf8'));
+      changeLog = Array.isArray(parsedCL) ? parsedCL : [];
+    } catch {}
   }
   if (changeLog.length === 0 || changeLog[0].description === 'Initial memory sync') {
     changeLog = [{ timestamp: new Date().toISOString(), description: 'Memory regenerated with full feature detection' }];
