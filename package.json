@@ -1,8 +1,8 @@
 {
-  "name": "codeatlas",
+  "name": "@giauphan/codeatlas-mcp",
   "displayName": "CodeAtlas",
   "description": "AI-powered code analysis with MCP server — gives AI assistants deep understanding of your codebase with persistent memory across conversations",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "publisher": "giauphan",
   "icon": "resources/icon.png",
   "repository": {
@@ -10,6 +10,12 @@
     "url": "https://github.com/giauphan/CodeAtlas"
   },
   "license": "MIT",
+  "bin": {
+    "codeatlas-mcp": "dist/extension.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "code analysis",
     "graph",

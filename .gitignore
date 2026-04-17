@@ -20,3 +20,4 @@ CLAUDE.md
 *.pem
 *.key
 *.p12
+.npmrc
