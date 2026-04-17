@@ -148,3 +148,35 @@ A: TypeScript, JavaScript, Python, PHP (including Blade templates).
 
 **Q: Do I need to copy rule files manually?**
 A: No! Since v1.5.0, running `Analyze Project` auto-generates both `.agents/memory/` and `.agents/rules/`.
+
+## Model Compatibility
+
+Rules have been tested against multiple AI models:
+
+| Model | Compliance | Notes |
+|-------|-----------|-------|
+| **gemma-3-27b-it** | 🟢 100% | Perfect — all 7 test cases passed |
+| **gemma-3-12b-it** | 🟢 100% | Perfect — all 7 test cases passed |
+| **gemma-4-31b-it** | 🟢 86% | Minor: mentions grep alongside search_entities |
+| **gemini-2.5-flash-lite** | 🟢 100% |  — all passed |
+
+### Known Limitations
+
+- **Gemma models** don't support `system_instruction` or function calling. Rules must be embedded in user prompt text.
+- **Gemini free tier** has strict rate limits (15 RPM). Use exponential backoff for batch testing.
+
+## Rule Writing Best Practices
+
+Patterns that achieve 100% model compliance:
+
+| Pattern | Example | Why |
+|---------|---------|-----|
+| **Absolute language** | "NEVER use grep" | No ambiguity |
+| **Numbered steps** | "1. trace → 2. read → 3. fix" | Sequential enforcement |
+| **Concrete examples** | "VIP users skip verification" | Pattern matching |
+| **Consequence warnings** | "next conversation loses context" | Fear of breaking |
+| **Bold keywords** | "**FIRST** call trace_feature_flow" | Visual attention |
+| **MANDATORY headers** | "### 🧠 MANDATORY:" | Stands out |
+
+> ⚠️ Avoid comparative language like "instead of" or "faster than" — use absolute prohibitions like "NEVER" or "MUST" for reliable compliance.
+

@@ -24,8 +24,8 @@ trigger: always_on
    - Returns the list of related files in `readingOrder`
    - Read those files to understand the current implementation
 
-2. **Need to find a specific function/class** → call `search_entities` instead of grep
-   - Faster and includes relationship data (who calls it, who imports it)
+2. **Need to find a specific function/class** → call `search_entities`. NEVER use grep or find commands.
+   - `search_entities` is faster and includes relationship data (who calls it, who imports it)
 
 3. **Need to understand how things connect** → call `get_dependencies`
    - Shows import/call/containment relationships between modules
@@ -56,12 +56,26 @@ trigger: always_on
 1. **`changeDescription`** (ALWAYS required): What you just changed
    - Example: `"Fixed login timeout by adding retry logic"`
 
-2. **`businessRule`** (if user mentions domain logic):
-   - Business rules are statements like:
-     - "VIP users skip email verification"
-     - "Only process videos with 1000+ likes"
-     - "Free tier limited to 5 projects"
-   - If user mentions any such rule, SAVE IT
+2. **`businessRule`** (ALWAYS extract if user mentions ANY domain logic):
+   - ALWAYS save when user mentions:
+     - Conditions: "only process videos > 30s", "skip if under 1000 likes"
+     - Permissions: "VIP users skip email verification"
+     - Limits: "free tier limited to 5 projects"
+     - Filters: "ignore duplicate entries", "only crawl public profiles"
+   - Even if user says it casually, YOU MUST SAVE IT
+   - If you are unsure whether something is a business rule, SAVE IT ANYWAY
+
+**Example:**
+```
+User: "fix upload bug, nhớ là chỉ lấy video trên 500 likes thôi"
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        → This is a business rule! MUST save it.
+
+sync_system_memory(
+  changeDescription: "Fixed upload bug",
+  businessRule: "Only process videos with 500+ likes"
+)
+```
 
 **DO NOT SKIP THIS STEP.** If you forget to sync, the next conversation loses all context.
 

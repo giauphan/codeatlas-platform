@@ -14,7 +14,7 @@ claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
 ## Workflow
 
 1. **Before making changes** → call `trace_feature_flow` with a keyword to find related files
-2. **Looking for a function/class** → call `search_entities` (faster than grep, includes relationships)
+2. **Looking for a function/class** → call `search_entities`. NEVER use grep or find commands.
 3. **Understanding connections** → call `get_dependencies` for import/call relationships
 4. **High-level overview** → call `generate_system_flow` for Mermaid architecture diagram
 5. **Execution flow of a feature** → call `generate_feature_flow_diagram` for call-chain Mermaid diagram
@@ -44,7 +44,16 @@ At the **start of EVERY conversation**, read `.agents/memory/` if it exists:
 3. `.agents/memory/conventions.md` — Coding conventions
 4. `.agents/memory/change-log.json` — Recent changes
 
-**After code changes**, ALWAYS call `sync_system_memory(changeDescription: "what you changed")`.
+**After code changes**, ALWAYS call `sync_system_memory`:
+- `changeDescription` (ALWAYS required): What you just changed
+- `businessRule` (ALWAYS extract if user mentions ANY domain logic):
+  - Conditions: "only process videos > 30s", "skip if under 1000 likes"
+  - Permissions: "VIP users skip email verification"
+  - Limits: "free tier limited to 5 projects"
+  - Even if user says it casually, YOU MUST SAVE IT
+  - If unsure whether something is a business rule, SAVE IT ANYWAY
+
+**DO NOT SKIP THIS STEP.** If you forget to sync, the next conversation loses all context.
 
 ## Example
 
