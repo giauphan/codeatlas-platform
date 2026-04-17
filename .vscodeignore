@@ -10,3 +10,11 @@ esbuild.js
 .vscode/**
 docs/**
 mcp-server/**
+.agents/**
+.codeatlas/**
+.gemini/**
+.github/**
+scripts/**
+index.ts
+out/**
+*.vsix
