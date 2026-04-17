@@ -17,7 +17,7 @@ export class CodeAnalyzer {
   constructor(
     workspaceRoot: string,
     maxFiles: number = 5000,
-    excludedDirectories: string[] = ['node_modules', 'dist', 'out', '.git', '__pycache__', '.venv'],
+    excludedDirectories: string[] = ['node_modules', 'dist', 'out', '.git', '__pycache__', '.venv', 'venv', 'env', '.env', 'vendor', 'build', '.tox', '.mypy_cache', '.pytest_cache', 'coverage', '.next', '.nuxt'],
     fileExtensions: string[] = ['.ts', '.tsx', '.js', '.jsx', '.py', '.php'],
     excludedFiles: string[] = ['_ide_helper.php', '_ide_helper_models.php', '.phpstorm.meta.php']
   ) {
@@ -436,8 +436,20 @@ export class CodeAnalyzer {
         filePath: filePath,
         line: func.line
       });
+
+      let linkSourceId = moduleId;
+      if (func.indent && func.indent > 0) {
+        // Find the most recent class defined before this function
+        const parentClass = [...result.classes]
+          .reverse()
+          .find(cls => cls.line < func.line);
+        if (parentClass) {
+          linkSourceId = `class:${moduleId}:${parentClass.name}`;
+        }
+      }
+
       this.addLink({
-        source: moduleId,
+        source: linkSourceId,
         target: funcId,
         type: 'contains'
       });
@@ -478,13 +490,26 @@ export class CodeAnalyzer {
       }
     }
 
+    // Build a simple scope tracker from functions list
+    const sortedFunctions = [...result.functions].sort((a, b) => a.line - b.line);
     for (const call of result.calls) {
+      // Find which function this call is inside
+      let enclosingScope = moduleId;
+      for (let fi = sortedFunctions.length - 1; fi >= 0; fi--) {
+        if (sortedFunctions[fi].line <= call.line) {
+          enclosingScope = `function:${moduleId}:${sortedFunctions[fi].name}`;
+          break;
+        }
+      }
       const targetId = `function:${moduleId}:${call.name}`;
-      this.addLink({
-        source: moduleId,
-        target: targetId,
-        type: 'call'
-      });
+      // Don't add self-referencing calls
+      if (enclosingScope !== targetId) {
+        this.addLink({
+          source: enclosingScope,
+          target: targetId,
+          type: 'call'
+        });
+      }
     }
   }
 

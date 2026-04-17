@@ -21,13 +21,13 @@ export class PythonParser {
    */
   public parseFile(filePath: string, code: string): {
     classes: { name: string; parents: string[]; line: number }[];
-    functions: { name: string; line: number }[];
+    functions: { name: string; line: number; indent?: number }[];
     variables: { name: string; line: number }[];
     imports: { source: string; names: string[]; line: number }[];
     calls: { name: string; line: number }[];
   } {
     const classes: { name: string; parents: string[]; line: number }[] = [];
-    const functions: { name: string; line: number }[] = [];
+    const functions: { name: string; line: number; indent?: number }[] = [];
     const variables: { name: string; line: number }[] = [];
     const imports: { source: string; names: string[]; line: number }[] = [];
     const calls: { name: string; line: number }[] = [];
@@ -48,13 +48,13 @@ export class PythonParser {
         classes.push({ name: className, parents, line: lineNumber });
       }
 
-      // Match Functions
-      // /^(?:async\s+)?def\s+(\w+)\s*\(/
-      // Exclude methods inside classes (check indentation: if line starts with whitespace, it's a method)
-      // The prompt specifically asks to check indentation, so we check if the line starts with `def` or `async def` without leading whitespace.
-      const funcMatch = /^(?:async\s+)?def\s+(\w+)\s*\(/.exec(line);
+      // Match Functions (including indented class methods)
+      // /^(\s*)(?:async\s+)?def\s+(\w+)\s*\(/
+      const funcMatch = /^(\s*)(?:async\s+)?def\s+(\w+)\s*\(/.exec(line);
       if (funcMatch) {
-        functions.push({ name: funcMatch[1], line: lineNumber });
+        const indent = funcMatch[1].length;
+        const funcName = funcMatch[2];
+        functions.push({ name: funcName, line: lineNumber, indent });
       }
 
       // Match Variables (top-level)

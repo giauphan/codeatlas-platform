@@ -172,6 +172,12 @@ server.tool(
       nodes = nodes.filter((n) => n.type === type);
     }
 
+    // Filter out venv/node_modules entities
+    nodes = nodes.filter((n) => {
+      const fp = n.filePath || "";
+      return !fp.includes("node_modules") && !fp.includes("venv") && !fp.includes(".venv") && !fp.includes("site-packages");
+    });
+
     const maxResults = limit || 100;
     const truncated = nodes.length > maxResults;
     nodes = nodes.slice(0, maxResults);
@@ -232,6 +238,15 @@ server.tool(
         return label.toLowerCase().includes(target.toLowerCase());
       });
     }
+
+    // Deduplicate links
+    const linkDedup = new Set<string>();
+    links = links.filter((l) => {
+      const key = l.source + '|' + l.target + '|' + l.type;
+      if (linkDedup.has(key)) return false;
+      linkDedup.add(key);
+      return true;
+    });
 
     const maxResults = limit || 100;
     const truncated = links.length > maxResults;
@@ -294,6 +309,18 @@ server.tool(
     if (type && type !== "all") {
       nodes = nodes.filter((n) => n.type === type);
     }
+
+    // Filter out venv/node_modules entities for cleaner results
+    nodes = nodes.filter((n) => {
+      if (n.id.startsWith('external:')) return false;
+      if (n.filePath && (
+        n.filePath.includes('/venv/') ||
+        n.filePath.includes('/.venv/') ||
+        n.filePath.includes('/node_modules/') ||
+        n.filePath.includes('/site-packages/')
+      )) return false;
+      return true;
+    });
 
     const q = query.toLowerCase();
     const matches = nodes.filter((n) => n.label.toLowerCase().includes(q));
@@ -403,7 +430,7 @@ server.tool(
 
     // Filter by scope
     if (diagramScope === "modules-only") {
-      nodes = nodes.filter((n) => n.type === "module" && n.filePath);
+      nodes = nodes.filter((n) => n.type === "module" && (n.filePath || n.id.startsWith("external:")));
       const nodeIds = new Set(nodes.map((n) => n.id));
       links = links.filter((l) => nodeIds.has(l.source) && nodeIds.has(l.target) && l.type === "import");
     } else if (diagramScope === "feature" && feature) {
@@ -790,6 +817,16 @@ server.tool(
     // Step 1: Find seed nodes matching the keyword
     const seedNodes = new Set<string>();
     for (const node of nodes) {
+      // Skip external modules and venv/node_modules files
+      if (node.id.startsWith('external:')) continue;
+      if (node.filePath && (
+        node.filePath.includes('/venv/') ||
+        node.filePath.includes('/.venv/') ||
+        node.filePath.includes('/node_modules/') ||
+        node.filePath.includes('/vendor/') ||
+        node.filePath.includes('/site-packages/')
+      )) continue;
+
       if (
         node.label.toLowerCase().includes(q) ||
         (node.filePath && node.filePath.toLowerCase().includes(q)) ||
@@ -929,6 +966,16 @@ server.tool(
     // Step 1: Find seed nodes matching keyword
     const seedNodes = new Set<string>();
     for (const node of nodes) {
+      // Skip external modules and venv/node_modules files
+      if (node.id.startsWith('external:')) continue;
+      if (node.filePath && (
+        node.filePath.includes('/venv/') ||
+        node.filePath.includes('/.venv/') ||
+        node.filePath.includes('/node_modules/') ||
+        node.filePath.includes('/vendor/') ||
+        node.filePath.includes('/site-packages/')
+      )) continue;
+
       if (
         node.label.toLowerCase().includes(q) ||
         (node.filePath && node.filePath.toLowerCase().includes(q)) ||
