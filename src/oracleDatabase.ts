@@ -1,11 +1,12 @@
 import oracledb from "oracledb";
+import path from "path";
 
 // Cấu hình kết nối
 // User cần cấu hình biến môi trường hoặc thay đổi trực tiếp
 const dbConfig = {
   user: process.env.ORACLE_USER || "CODEATLAS",
   password: process.env.ORACLE_PASSWORD || "CodeAtlas_123",
-  connectString: process.env.ORACLE_CONN_STRING || "localhost:1521/FREEPDB1" 
+  connectString: process.env.ORACLE_CONN_STRING || "codeatlasdatabase_high" 
 };
 
 export class OracleMemoryService {
@@ -17,6 +18,12 @@ export class OracleMemoryService {
   static async init() {
     if (!this.pool) {
       try {
+        // Khởi tạo Oracle Client với Wallet
+        oracledb.initOracleClient({ 
+          libDir: process.env.ORACLE_LIB_DIR, 
+          configDir: path.join(process.cwd(), "wallet") 
+        });
+
         // Tuỳ chọn tối ưu cho 23ai/26ai
         oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
         oracledb.fetchAsString = [oracledb.CLOB];

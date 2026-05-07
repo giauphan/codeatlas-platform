@@ -21,3 +21,10 @@ CLAUDE.md
 *.key
 *.p12
 .npmrc
+
+# Oracle Wallet
+!wallet/
+!wallet/*.sso
+!wallet/*.jks
+!wallet/*.ora
+!wallet/*.properties
