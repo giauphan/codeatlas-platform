@@ -2,6 +2,16 @@
 
 All notable changes to CodeAtlas are documented here.
 
+## [1.8.1] - 2026-05-07
+
+### Added
+- Upgraded to Oracle Thick Mode using Instant Client 21.16 for full mTLS support.
+- Added automatic Oracle Client initialization logic in `src/oracleDatabase.ts`.
+
+### Fixed
+- Stabilized Oracle Autonomous Database 26ai connectivity with 100% mTLS compatibility.
+- Resolved ORA-01017 credential error by properly quoting .env values.
+
 ## [1.8.0] - 2026-05-07
 
 ### Added

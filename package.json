@@ -2,7 +2,7 @@
   "name": "codeatlas-enterprise",
   "displayName": "CodeAtlas Enterprise (Oracle 26ai Edition)",
   "description": "AI-powered code analysis with MCP server — gives AI assistants deep understanding of your codebase with persistent memory across conversations",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "private": true,
   "publisher": "giauphan",
   "icon": "resources/icon.png",
@@ -138,6 +138,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@typescript-eslint/typescript-estree": "^6.4.0",
+    "dotenv": "^17.4.2",
     "express": "^4.18.2",
     "firebase-admin": "^13.8.0",
     "lucide-react": "^0.268.0",

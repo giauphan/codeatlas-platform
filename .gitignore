@@ -4,6 +4,7 @@ out/
 .vscode-test/
 *.vsix
 mcp-server/
+package-lock.json
 
 # IDE & AI config (may contain local paths or tokens)
 .gemini/
