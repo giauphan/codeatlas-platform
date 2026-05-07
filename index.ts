@@ -1420,7 +1420,7 @@ async function main() {
 
     app.post("/messages", async (req, res) => {
       if (transport) {
-        await transport.handlePost(req, res);
+        await transport.handlePostMessage(req, res);
       } else {
         res.status(400).send("No active SSE connection");
       }
