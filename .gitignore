@@ -17,13 +17,11 @@ CLAUDE.md
 .env
 .env.*
 .npmrc
-*.pem
-*.key
-*.p12
-.npmrc
 
-# Oracle Wallet
+# Oracle Wallet (Allowed for private repo)
 !wallet/
+!wallet/*.pem
+!wallet/*.p12
 !wallet/*.sso
 !wallet/*.jks
 !wallet/*.ora

@@ -1,13 +1,13 @@
 import oracledb from "oracledb";
-import path from "path";
+import * as path from "path";
 
 // Cấu hình kết nối
-// User cần cấu hình biến môi trường hoặc thay đổi trực tiếp
 const dbConfig = {
-  user: process.env.ORACLE_USER || "CODEATLAS",
-  password: process.env.ORACLE_PASSWORD || "CodeAtlas_123",
+  user: process.env.ORACLE_USER || "admin",
+  password: process.env.ORACLE_PASSWORD || "",
   connectString: process.env.ORACLE_CONN_STRING || "codeatlasdatabase_high" 
 };
+
 
 export class OracleMemoryService {
   private static pool: oracledb.Pool | null = null;
