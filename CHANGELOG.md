@@ -2,6 +2,14 @@
 
 All notable changes to CodeAtlas are documented here.
 
+## [1.6.4] - 2026-05-07
+
+### Added
+- Integrated RTK (Rust Token Killer) for optimized token usage in shell commands.
+- Setup `rtk` wrapper rules for Antigravity agent in `rules/`.
+
+---
+
 ## [1.6.0] - 2026-04-16
 
 ### Added

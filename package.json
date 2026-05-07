@@ -1,20 +1,14 @@
 {
-  "name": "codeatlas",
-  "displayName": "CodeAtlas",
+  "name": "codeatlas-enterprise",
+  "displayName": "CodeAtlas Enterprise (Oracle 26ai Edition)",
   "description": "AI-powered code analysis with MCP server — gives AI assistants deep understanding of your codebase with persistent memory across conversations",
-  "version": "1.6.2",
+  "version": "1.6.4",
+  "private": true,
   "publisher": "giauphan",
   "icon": "resources/icon.png",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/giauphan/CodeAtlas"
-  },
-  "license": "MIT",
+  "license": "UNLICENSED",
   "bin": {
     "codeatlas-mcp": "dist/extension.js"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "keywords": [
     "code analysis",
@@ -144,6 +138,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@typescript-eslint/typescript-estree": "^6.4.0",
     "lucide-react": "^0.268.0",
+    "oracledb": "^6.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-force-graph-2d": "^1.24.1",
