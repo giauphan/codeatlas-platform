@@ -2,6 +2,30 @@
 
 All notable changes to CodeAtlas are documented here.
 
+## [1.8.0] - 2026-05-07
+
+### Added
+- **Subscription Tier System** — Introduced Free, Plus, Pro, and Enterprise tiers.
+- **Tier-based Access Control** — MCP server now enforces tool restrictions based on API key tier.
+  - **Free Tier Limits**:
+    - Only `generate_system_flow` and `get_project_structure` are fully enabled.
+    - `get_project_structure` and `get_file_entities` are limited to 50 results.
+    - Advanced tools (`get_insights`, `trace_feature_flow`, etc.) require a paid plan.
+- **Dashboard Updates**:
+  - Display user tier badge.
+  - Automatic 'free' tier assignment on signup.
+  - API keys now inherit user tier.
+  - Upgrade prompts for free tier users.
+
+## [1.7.0] - 2026-05-20
+
+### Added
+- **Standalone MCP Server Support** — Can now be deployed as a remote server via SSE or local via Stdio.
+- **Security Mechanism** — Added API Key authentication via `CODEATLAS_API_KEY` environment variable.
+  - For SSE: Validates `x-api-key` header or `apiKey` query parameter.
+  - For Stdio: Validates the presence of the environment variable on the host.
+- **Dynamic Transport** — Automatically switches to SSE if `PORT` environment variable is set.
+
 ## [1.6.4] - 2026-05-07
 
 ### Added

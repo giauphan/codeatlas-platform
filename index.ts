@@ -2,9 +2,89 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
+import * as http from "http";
+import * as url from "url";
+import express from "express";
+import * as admin from "firebase-admin";
+
+// Initialize Firebase Admin
+// Note: You should set GOOGLE_APPLICATION_CREDENTIALS env var or initialize with a service account
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp();
+  } catch (e) {
+    console.error("Firebase Admin initialization failed. Ensure GOOGLE_APPLICATION_CREDENTIALS is set.");
+  }
+}
+
+const db = admin.firestore();
+
+// RAM Cache for checkAuth
+const authCache = new Map<string, { tier: string, expires: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Security: Verify API Key from Firestore
+ * Instead of environment variables, we query the 'keys' collection group
+ * to find if the provided key exists in any user's account.
+ */
+async function checkAuth(apiKey?: string): Promise<string> {
+  const keyToVerify = apiKey || process.env.CODEATLAS_API_KEY;
+
+  if (!keyToVerify) {
+    throw new Error("Unauthorized: API Key is required (either via header/query or CODEATLAS_API_KEY env var).");
+  }
+
+  // Check RAM Cache
+  const cached = authCache.get(keyToVerify);
+  if (cached && cached.expires > Date.now()) {
+    return cached.tier;
+  }
+
+  try {
+    const keysSnapshot = await db.collectionGroup('keys')
+      .where('key', '==', keyToVerify)
+      .limit(1)
+      .get();
+
+    if (keysSnapshot.empty) {
+      throw new Error("Unauthorized: Invalid API Key.");
+    }
+
+    const keyDoc = keysSnapshot.docs[0];
+    
+    // Get tier from users/{uid} document instead of the key itself
+    // Path: users/{uid}/keys/{keyId}
+    const userRef = keyDoc.ref.parent.parent;
+    if (!userRef) {
+      throw new Error("Unauthorized: Invalid key ownership structure.");
+    }
+
+    const userDoc = await userRef.get();
+    const tier = userDoc.exists ? (userDoc.data()?.tier || 'free') : 'free';
+
+    // Update Cache
+    authCache.set(keyToVerify, {
+      tier,
+      expires: Date.now() + CACHE_TTL
+    });
+
+    // Update lastUsed timestamp (only on cache miss to optimize DB writes)
+    await keyDoc.ref.update({
+      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return tier;
+  } catch (err: any) {
+    if (err.message.includes("Unauthorized")) throw err;
+    console.error("Auth Error:", err.message);
+    throw new Error(`Authentication service unavailable: ${err.message}`);
+  }
+}
 
 interface GraphNode {
   id: string;
@@ -125,7 +205,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 // Create MCP server
 const server = new McpServer({
   name: "codeatlas",
-  version: "1.6.4",
+  version: "1.8.0",
 });
 
 // Tool 0: List all discovered projects
@@ -134,6 +214,10 @@ server.tool(
   "List all projects that have been analyzed by CodeAtlas. Returns project names, paths, and last analysis time.",
   {},
   async () => {
+    const tier = await checkAuth();
+    if (tier === 'free') {
+      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
+    }
     const projects = discoverProjects();
     if (projects.length === 0) {
       return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'CodeAtlas: Analyze Project' in VS Code first." }] };
@@ -162,6 +246,7 @@ server.tool(
     limit: z.number().optional().describe("Max results to return (default: 100)"),
   },
   async ({ project, type, limit }) => {
+    const tier = await checkAuth();
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' in VS Code first." }] };
@@ -178,7 +263,7 @@ server.tool(
       return !fp.includes("node_modules") && !fp.includes("venv") && !fp.includes(".venv") && !fp.includes("site-packages");
     });
 
-    const maxResults = limit || 100;
+    const maxResults = tier === 'free' ? Math.min(limit || 50, 50) : (limit || 100);
     const truncated = nodes.length > maxResults;
     nodes = nodes.slice(0, maxResults);
 
@@ -215,6 +300,10 @@ server.tool(
     limit: z.number().optional().describe("Max results (default: 100)"),
   },
   async ({ project, source, target, relationship, limit }) => {
+    const tier = await checkAuth();
+    if (tier === 'free') {
+      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
+    }
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
@@ -273,6 +362,10 @@ server.tool(
   "Get AI-generated code insights including refactoring suggestions, security issues, and maintainability analysis.",
   {},
   async () => {
+    const tier = await checkAuth();
+    if (tier === 'free') {
+      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
+    }
     const loaded = loadAnalysis();
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
@@ -300,6 +393,10 @@ server.tool(
     type: z.enum(["all", "module", "class", "function", "variable"]).optional().describe("Filter by entity type"),
   },
   async ({ project, query, type }) => {
+    const tier = await checkAuth();
+    if (tier === 'free') {
+      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
+    }
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
@@ -364,6 +461,11 @@ server.tool(
     filePath: z.string().describe("File path (partial match, e.g. 'User.php' or 'src/models')"),
   },
   async ({ project, filePath }) => {
+    const tier = await checkAuth();
+    // get_file_entities is restricted to 50 files for free tier, but allowed.
+    // However, the requirement says "Chỉ cho phép: 'generate_system_flow' và 'get_project_structure'".
+    // But it also says "Giới hạn 'get_file_entities' ... tối đa 50 files".
+    // I will allow it but with the limit.
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
@@ -386,10 +488,17 @@ server.tool(
       byFile.get(fp)!.push(n);
     }
 
+    let filesEntries = Array.from(byFile.entries());
+    if (tier === 'free') {
+      filesEntries = filesEntries.slice(0, 50);
+    }
+
     const result = {
       query: filePath,
       filesFound: byFile.size,
-      files: Array.from(byFile.entries()).map(([fp, entities]) => ({
+      showing: filesEntries.length,
+      truncated: byFile.size > filesEntries.length,
+      files: filesEntries.map(([fp, entities]) => ({
         filePath: fp,
         entities: entities.map((e) => ({
           name: e.label,
@@ -417,6 +526,7 @@ server.tool(
     maxNodes: z.number().optional().describe("Maximum nodes in diagram (default: 60). Reduce for large projects"),
   },
   async ({ project, scope, feature, maxNodes }) => {
+    await checkAuth();
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
@@ -547,6 +657,10 @@ server.tool(
     changeDescription: z.string().optional().describe("Optional: Description of what was just changed (for the changelog)"),
   },
   async ({ project, businessRule, changeDescription }) => {
+    const tier = await checkAuth();
+    if (tier === 'free') {
+      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
+    }
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
@@ -803,6 +917,10 @@ server.tool(
     depth: z.number().optional().describe("How many hops to follow from matching nodes (default: 2)"),
   },
   async ({ project, keyword, depth }) => {
+    const tier = await checkAuth();
+    if (tier === 'free') {
+      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
+    }
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
@@ -949,6 +1067,10 @@ server.tool(
     maxNodes: z.number().optional().describe("Maximum nodes in diagram (default: 40)"),
   },
   async ({ project, keyword, diagramType, depth, maxNodes }) => {
+    const tier = await checkAuth();
+    if (tier === 'free') {
+      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
+    }
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
@@ -1271,9 +1393,55 @@ server.tool(
 
 // Start server
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("CodeAtlas MCP server running on stdio");
+  const port = process.env.PORT ? parseInt(process.env.PORT) : null;
+
+  if (port) {
+    // SSE Mode - for remote server deployment
+    const app = express();
+
+    // Authentication middleware
+    app.use(async (req, res, next) => {
+      const clientKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string);
+      try {
+        await checkAuth(clientKey);
+        next();
+      } catch (err: any) {
+        res.status(401).send(err.message);
+      }
+    });
+
+    let transport: SSEServerTransport | null = null;
+
+    app.get("/sse", async (req, res) => {
+      console.error("New SSE connection");
+      transport = new SSEServerTransport("/messages", res);
+      await server.connect(transport);
+    });
+
+    app.post("/messages", async (req, res) => {
+      if (transport) {
+        await transport.handlePost(req, res);
+      } else {
+        res.status(400).send("No active SSE connection");
+      }
+    });
+
+    app.listen(port, () => {
+      console.error(`CodeAtlas MCP SSE server running on port ${port}`);
+      console.error(`- SSE endpoint: http://localhost:${port}/sse`);
+      console.error(`- Message endpoint: http://localhost:${port}/messages`);
+      if (process.env.CODEATLAS_API_KEY) {
+        console.error(`- Security: API Key enabled`);
+      } else {
+        console.error(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
+      }
+    });
+  } else {
+    // Stdio Mode - for local use (e.g. Claude Desktop)
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("CodeAtlas MCP server running on stdio");
+  }
 }
 
 main().catch(console.error);
