@@ -5,7 +5,6 @@ import {
   addDoc, 
   deleteDoc, 
   doc, 
-  getDoc,
   onSnapshot, 
   query, 
   orderBy,
@@ -24,7 +23,6 @@ import {
   ExternalLink,
   ShieldCheck,
   Zap,
-  Info,
   Loader2
 } from 'lucide-react';
 
