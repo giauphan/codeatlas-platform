@@ -116,8 +116,7 @@
     "test": "node --experimental-vm-modules node_modules/tsx/dist/cli.mjs src/test/analyzer.test.ts",
     "build:webview": "vite build",
     "build:extension": "node esbuild.js",
-    "build": "npm run build:webview && npm run build:extension",
-    "package": "npm run build && vsce package --no-dependencies"
+    "build": "npm run build:webview && npm run build:extension"
   },
   "devDependencies": {
     "@types/express": "^4.17.17",
