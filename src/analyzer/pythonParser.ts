@@ -1,24 +1,6 @@
-/**
- * Python file parser that uses regular expressions to extract AST-like structure
- * from Python code. Since a full Python AST parser is not available in TypeScript,
- * this provides a heuristic-based approach to finding classes, functions, variables,
- * and imports.
- */
-export class PythonParser {
-  private static readonly pythonKeywords = new Set([
-    'if', 'for', 'while', 'with', 'class', 'def', 'return', 'print',
-    'elif', 'except', 'assert', 'yield', 'and', 'or', 'not', 'in', 'is',
-    'try', 'finally', 'raise', 'import', 'from', 'as', 'pass', 'break', 'continue',
-    'global', 'nonlocal', 'del', 'lambda', 'async', 'await'
-  ]);
+import { parse } from 'py-ast';
 
-  /**
-   * Parses Python code to extract classes, functions, variables, imports, and function calls.
-   *
-   * @param filePath The path of the Python file being parsed
-   * @param code The contents of the Python file
-   * @returns An object containing arrays of extracted entities
-   */
+export class PythonParser {
   public parseFile(filePath: string, code: string): {
     classes: { name: string; parents: string[]; line: number }[];
     functions: { name: string; line: number; indent?: number }[];
@@ -32,57 +14,64 @@ export class PythonParser {
     const imports: { source: string; names: string[]; line: number }[] = [];
     const calls: { name: string; line: number }[] = [];
 
-    const lines = code.split(/\r?\n/);
+    try {
+      const ast = parse(code);
 
-    // Process line by line to accurately capture line numbers
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const lineNumber = i + 1;
+      const traverse = (node: any) => {
+        if (!node || typeof node !== 'object') return;
 
-      // Match Classes
-      // /^class\s+(\w+)(?:\(([^)]+)\))?\s*:/
-      const classMatch = /^class\s+(\w+)(?:\(([^)]+)\))?\s*:/.exec(line);
-      if (classMatch) {
-        const className = classMatch[1];
-        const parents = classMatch[2] ? classMatch[2].split(',').map(p => p.trim()) : [];
-        classes.push({ name: className, parents, line: lineNumber });
-      }
-
-      // Match Functions (including indented class methods)
-      // /^(\s*)(?:async\s+)?def\s+(\w+)\s*\(/
-      const funcMatch = /^(\s*)(?:async\s+)?def\s+(\w+)\s*\(/.exec(line);
-      if (funcMatch) {
-        const indent = funcMatch[1].length;
-        const funcName = funcMatch[2];
-        functions.push({ name: funcName, line: lineNumber, indent });
-      }
-
-      // Match Variables (top-level)
-      // /^([A-Z_][A-Z0-9_]*)\s*[:=]/
-      const varMatch = /^([A-Z_][A-Z0-9_]*)\s*[:=]/.exec(line);
-      if (varMatch) {
-        variables.push({ name: varMatch[1], line: lineNumber });
-      }
-
-      // Match Imports
-      // /^(?:from\s+(\S+)\s+)?import\s+(.+)/
-      const importMatch = /^(?:from\s+(\S+)\s+)?import\s+(.+)/.exec(line);
-      if (importMatch) {
-        const source = importMatch[1] || '';
-        const names = importMatch[2].split(',').map(n => n.trim().split(/\s+as\s+/)[0]);
-        imports.push({ source, names, line: lineNumber });
-      }
-
-      // Match Function Calls
-      // /(\w+)\s*\(/g
-      const callRegex = /(\w+)\s*\(/g;
-      let callMatch;
-      while ((callMatch = callRegex.exec(line)) !== null) {
-        const callName = callMatch[1];
-        if (!PythonParser.pythonKeywords.has(callName)) {
-          calls.push({ name: callName, line: lineNumber });
+        if (node.type === 'ClassDef') {
+          classes.push({
+            name: node.name,
+            parents: node.bases.map((b: any) => b.id || 'object'),
+            line: node.lineno
+          });
         }
-      }
+
+        if (node.type === 'FunctionDef' || node.type === 'AsyncFunctionDef') {
+          functions.push({
+            name: node.name,
+            line: node.lineno,
+            indent: node.col_offset
+          });
+        }
+
+        if (node.type === 'Assign') {
+          node.targets.forEach((target: any) => {
+            if (target.type === 'Name') {
+              variables.push({ name: target.id, line: node.lineno });
+            }
+          });
+        }
+
+        if (node.type === 'Import' || node.type === 'ImportFrom') {
+          imports.push({
+            source: node.module || '',
+            names: node.names.map((n: any) => n.name),
+            line: node.lineno
+          });
+        }
+
+        if (node.type === 'Call') {
+          if (node.func.type === 'Name') {
+            calls.push({ name: node.func.id, line: node.lineno });
+          } else if (node.func.type === 'Attribute') {
+            calls.push({ name: node.func.attr, line: node.lineno });
+          }
+        }
+
+        Object.values(node).forEach(child => {
+          if (Array.isArray(child)) {
+            child.forEach(c => traverse(c));
+          } else {
+            traverse(child);
+          }
+        });
+      };
+
+      traverse(ast);
+    } catch (e) {
+      console.warn(`[PythonParser] Failed to parse AST for ${filePath}`, e);
     }
 
     return { classes, functions, variables, imports, calls };
