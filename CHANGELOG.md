@@ -2,14 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.8] - 2026-05-16
+
+### Fixed
+- **SSE Session Management**: Implemented `Map`-based session management in `index.ts` to support concurrent connections and reconnections, resolving "session not found" errors.
+- **Cloudflare/Proxy Compatibility**: Added `X-Accel-Buffering: no` and explicit stream headers to prevent buffering issues in production environments.
+- **Lint Fix**: Removed non-existent `server.disconnect` call.
+
 ## [2.1.6] - 2026-05-16
-
-### Changed
-- **Security Hardening**: Removed the weak hardcoded admin bypass key (`ca_enterprise_9999`).
-- **Secure Authentication**: Implemented a secure 48-character hex key in `.env` for Admin access.
-- **Privacy Protection**: Suppressed sensitive key logging in `checkAuth` to prevent accidental exposure in console logs.
-
-## [2.1.5] - 2026-05-16
 
 ### Added
 - **Auto-Indexing Engine**: Integrated Chokidar file watcher to automatically trigger codebase re-indexing on local file changes.

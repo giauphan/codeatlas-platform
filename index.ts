@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.6",
+    version: "2.1.8",
   },
   {
     capabilities: {
@@ -1733,19 +1733,44 @@ async function main() {
       }
     });
 
-    let transport: SSEServerTransport | null = null;
+    // Multi-session support for concurrent users/reconnections
+    const transports = new Map<string, SSEServerTransport>();
 
     app.get("/sse", async (req, res) => {
-      console.error("New SSE connection");
-      transport = new SSEServerTransport("/messages", res);
+      console.error("[SSE] New connection request");
+      
+      // Critical for Cloudflare/Nginx/Proxies to prevent buffering
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      
+      const transport = new SSEServerTransport("/messages", res);
       await server.connect(transport);
+
+      // Store transport by sessionId (available on the transport instance)
+      const sessionId = (transport as any).sessionId;
+      if (sessionId) {
+        transports.set(sessionId, transport);
+        console.error(`[SSE] Session established: ${sessionId}`);
+
+        // Cleanup on connection close
+        res.on("close", () => {
+          console.error(`[SSE] Session closed: ${sessionId}`);
+          transports.delete(sessionId);
+        });
+      }
     });
 
     app.post("/messages", async (req, res) => {
+      const sessionId = req.query.sessionId as string;
+      const transport = transports.get(sessionId);
+
       if (transport) {
         await transport.handlePostMessage(req, res);
       } else {
-        res.status(400).send("No active SSE connection");
+        console.error(`[SSE] Session not found: ${sessionId}`);
+        res.status(404).send("Session not found");
       }
     });
 
