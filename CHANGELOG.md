@@ -1,6 +1,16 @@
 # Changelog
 
-All notable changes to CodeAtlas are documented here.
+All notable changes to this project will be documented in this file.
+
+## [2.1.2] - 2026-05-16
+
+### Added
+- Super Admin bypass key for uninterrupted access during Firestore indexing.
+
+### Changed
+- Migrated from npm to pnpm for disk space optimization and faster installs.
+- Hardened .gitignore to exclude pnpm logs and Firebase service account JSON files.
+- Synchronized environment configuration for SSE server on port 8080.
 
 ## [2.1.0] - 2026-05-16
 
