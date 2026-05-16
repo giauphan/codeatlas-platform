@@ -20,9 +20,7 @@ import {
   LogOut, 
   Activity, 
   Clock,
-  ExternalLink,
   ShieldCheck,
-  Zap,
   Loader2
 } from 'lucide-react';
 
@@ -46,22 +44,16 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Real-time user tier updates
-    const unsubscribeTier = onSnapshot(doc(db, 'users', user.uid), (doc) => {
-      if (doc.exists()) {
-        setUserTier(doc.data().tier || 'free');
-      }
-    }, (err) => {
-      console.error("Error fetching tier:", err);
-    });
+    // Enterprise edition: Always set tier to enterprise in UI
+    setUserTier('enterprise');
 
     const q = query(
       collection(db, 'users', user.uid, 'keys'),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribeKeys = onSnapshot(q, (snapshot) => {
-      const keysData = snapshot.docs.map(doc => ({
+    const unsubscribeKeys = onSnapshot(q, (snapshot: any) => {
+      const keysData = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
       })) as ApiKey[];
@@ -69,7 +61,6 @@ export const Dashboard: React.FC = () => {
     });
 
     return () => {
-      unsubscribeTier();
       unsubscribeKeys();
     };
   }, [user]);
@@ -154,19 +145,19 @@ export const Dashboard: React.FC = () => {
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          {/* Tier Badge */}
+          {/* Enterprise Badge */}
           <div style={{ 
             padding: '0.25rem 0.75rem', 
             borderRadius: '12px', 
             fontSize: '0.75rem', 
             fontWeight: '800', 
             textTransform: 'uppercase',
-            background: userTier === 'free' ? 'rgba(148, 163, 184, 0.1)' : 'rgba(56, 189, 248, 0.15)',
-            border: `1px solid ${userTier === 'free' ? 'rgba(148, 163, 184, 0.2)' : 'var(--primary)'}`,
-            color: userTier === 'free' ? '#94a3b8' : 'var(--primary)',
+            background: 'rgba(56, 189, 248, 0.15)',
+            border: '1px solid var(--primary)',
+            color: 'var(--primary)',
             letterSpacing: '0.05em'
           }}>
-            {userTier} Tier
+            Enterprise Edition
           </div>
 
           <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
@@ -196,48 +187,7 @@ export const Dashboard: React.FC = () => {
 
       <main style={{ padding: '3rem 2rem', maxWidth: '1100px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
         <header style={{ marginBottom: '4rem' }}>
-          {userTier === 'free' && (
-            <motion.div 
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              style={{ 
-                marginBottom: '2rem',
-                padding: '1.25rem 2rem',
-                background: 'linear-gradient(to right, rgba(56, 189, 248, 0.1), rgba(129, 140, 248, 0.1))',
-                borderRadius: '16px',
-                border: '1px solid rgba(56, 189, 248, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '2rem'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <Zap size={24} color="var(--primary)" />
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '700' }}>Upgrade your plan</h4>
-                  <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                    Your Free tier is limited to basic diagrams and 50 files. Get unlimited access with CodeAtlas Plus or Pro.
-                  </p>
-                </div>
-              </div>
-              <a 
-                href="https://codeatlas.dev/pricing" 
-                target="_blank" 
-                rel="noreferrer"
-                className="btn-primary" 
-                style={{ 
-                  padding: '0.625rem 1.25rem', 
-                  fontSize: '0.875rem', 
-                  height: 'auto',
-                  textDecoration: 'none'
-                }}
-              >
-                Upgrade Now
-                <ExternalLink size={16} />
-              </a>
-            </motion.div>
-          )}
+          {/* Upgrade banner removed in Enterprise Edition */}
           <motion.h1 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -273,7 +223,7 @@ export const Dashboard: React.FC = () => {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 <AnimatePresence mode="popLayout">
-                  {keys.map((apiKey) => (
+                  {keys.map((apiKey: ApiKey) => (
                     <motion.div 
                       key={apiKey.id}
                       layout
