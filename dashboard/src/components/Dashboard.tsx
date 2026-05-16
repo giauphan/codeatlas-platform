@@ -246,8 +246,8 @@ const ControlCenterView: React.FC<any> = ({ stats, keys, analysis, createKey, de
         <h1 style={{ fontSize: '3.5rem', margin: 0, fontWeight: 900 }} className="tech-font">Neural Control</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', marginTop: '0.5rem' }}>Orchestrating codebase intelligence and secure access.</p>
       </div>
-      <div style={{ padding: '0.65rem 1.25rem', borderRadius: '10px', background: 'rgba(157, 0, 255, 0.1)', border: '1px solid var(--secondary-neon)', color: 'var(--secondary-neon)', fontWeight: 800, fontSize: '0.9rem' }}>
-        v2.1.3 ONLINE
+      <div style={{ padding: '0.65rem 1.25rem', borderRadius: '10px', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid var(--primary-neon)', color: 'var(--primary-neon)', fontWeight: 800, fontSize: '0.9rem' }}>
+        v2.1.4 ONLINE
       </div>
     </header>
 

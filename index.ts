@@ -260,25 +260,29 @@ const triggerAutoIndex = () => {
   });
 };
 
+let indexTimeout: NodeJS.Timeout | null = null;
+
 // Watch for changes in source files
-const watcher = chokidar.watch(['**/*.ts', '**/*.js', '**/*.tsx', '**/*.jsx'], {
-  ignored: [
-    /(^|[\/\\])\../, // ignore dotfiles
-    '**/node_modules/**',
-    '**/dist/**',
-    '**/build/**',
-    '**/.codeatlas/**'
-  ],
+const watcher = chokidar.watch(process.cwd(), {
+  ignored: [/(^|[\/\\])\../, '**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'],
   persistent: true,
-  ignoreInitial: true,
-  cwd: projectRoot
+  ignoreInitial: true
 });
 
-watcher.on('change', (changedPath: string) => {
-  console.log(`[Watcher] File changed: ${changedPath}`);
-  // Debounce indexing to avoid hammering the CPU
-  setTimeout(triggerAutoIndex, 2000);
+watcher.on('change', (path) => {
+  console.log(`\n[Auto-Scan] ⚡ File change detected: ${path}`);
+  if (indexTimeout) clearTimeout(indexTimeout);
+  indexTimeout = setTimeout(() => {
+    console.log(`[Auto-Scan] 🔄 Triggering neural re-indexing...`);
+    triggerAutoIndex();
+  }, 2000);
 });
+
+console.log(`\n${'='.repeat(50)}`);
+console.log(`🚀 CODEATLAS ENTERPRISE v2.1.4 ONLINE`);
+console.log(`📡 Auto-Indexing: WATCHING PATH [${process.cwd()}]`);
+console.log(`🛡️  Security: FIREBASE ADMIN ACTIVE`);
+console.log(`${'='.repeat(50)}\n`);
 
 // Setup Express app to serve as both MCP SSE and REST API
 const app = express();
