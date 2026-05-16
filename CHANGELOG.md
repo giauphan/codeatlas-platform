@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.4] - 2026-05-16
+
+### Added
+- **Auto-Indexing Engine**: Integrated Chokidar file watcher to automatically trigger codebase re-indexing on local file changes.
+- **Neural Indexing UI**: Modernized the Cloud Index tab with a Roo-Code style control panel, featuring auto-indexing toggles and a real-time log stream.
+- **Cluster Graph Layout**: Refactored the Knowledge Graph logic to group functions and variables around their parent modules in a "Neural Cluster" formation.
+- **Interactive Graph Filters**: Added entity-type filtering (Modules, Functions, Classes, Variables) and deep search capabilities.
+- **Multi-Tab Auth UI**: Restored and upgraded the Authentication interface to support Access Tokens, Firebase Email/Password, and Admin Bypass.
+
+### Fixed
+- **TypeScript Type Safety**: Resolved "implicitly any" and module resolution errors in the core MCP engine.
+- **Dashboard Stabilization**: Fixed layout overlaps and ensured robust data fetching with deep optional chaining.
+
 ## [2.1.3] - 2026-05-16
 
 ### Added

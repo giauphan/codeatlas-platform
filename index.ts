@@ -8,6 +8,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as http from "http";
 import * as url from "url";
+import chokidar from 'chokidar';
+import { exec } from 'child_process';
 import express from "express";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
@@ -234,12 +236,9 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 }
 
 // Create MCP server
-import chokidar from 'chokidar';
-import { exec } from 'child_process';
-
 const server = new McpServer({
-  name: "codeatlas",
-  version: "1.5.0",
+  name: "codeatlas-enterprise",
+  version: "2.1.4",
 });
 
 // Auto-Indexing Logic
@@ -275,8 +274,8 @@ const watcher = chokidar.watch(['**/*.ts', '**/*.js', '**/*.tsx', '**/*.jsx'], {
   cwd: projectRoot
 });
 
-watcher.on('change', (path) => {
-  console.log(`[Watcher] File changed: ${path}`);
+watcher.on('change', (changedPath: string) => {
+  console.log(`[Watcher] File changed: ${changedPath}`);
   // Debounce indexing to avoid hammering the CPU
   setTimeout(triggerAutoIndex, 2000);
 });
