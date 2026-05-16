@@ -39,7 +39,7 @@ export const Dashboard: React.FC = () => {
   const [newKeyName, setNewKeyName] = useState('');
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [userTier, setUserTier] = useState<string>('enterprise');
+  const [userTier] = useState<string>('enterprise');
   const [stats, setStats] = useState({ totalRequests: 0, lastActivity: null });
   const [activities, setActivities] = useState<any[]>([]);
   const user = auth.currentUser;
@@ -48,9 +48,9 @@ export const Dashboard: React.FC = () => {
     if (!user) return;
 
     // Real-time stats updates
-    const unsubscribeStats = onSnapshot(doc(db, 'users', user.uid), (doc) => {
-      if (doc.exists() && doc.data().stats) {
-        setStats(doc.data().stats);
+    const unsubscribeStats = onSnapshot(doc(db, 'users', user.uid), (docSnapshot) => {
+      if (docSnapshot.exists() && docSnapshot.data().stats) {
+        setStats(docSnapshot.data().stats);
       }
     });
 
@@ -73,8 +73,8 @@ export const Dashboard: React.FC = () => {
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribeKeys = onSnapshot(q, (snapshot: any) => {
-      const keysData = snapshot.docs.map((doc: any) => ({
+    const unsubscribeKeys = onSnapshot(q, (snapshot) => {
+      const keysData = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data()
       })) as ApiKey[];
@@ -130,11 +130,9 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--background)', position: 'relative' }}>
-      {/* Decorative background gradients */}
       <div style={{ position: 'fixed', top: 0, right: 0, width: '50vw', height: '50vh', background: 'radial-gradient(circle at 70% 30%, rgba(56, 189, 248, 0.08), transparent 70%)', zIndex: 0 }} />
       <div style={{ position: 'fixed', bottom: 0, left: 0, width: '50vw', height: '50vh', background: 'radial-gradient(circle at 30% 70%, rgba(129, 140, 248, 0.08), transparent 70%)', zIndex: 0 }} />
 
-      {/* Navbar */}
       <nav style={{ 
         borderBottom: '1px solid var(--border)', 
         padding: '1rem 3rem', 
@@ -168,7 +166,6 @@ export const Dashboard: React.FC = () => {
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          {/* Enterprise Badge */}
           <div style={{ 
             padding: '0.25rem 0.75rem', 
             borderRadius: '12px', 
@@ -210,7 +207,6 @@ export const Dashboard: React.FC = () => {
 
       <main style={{ padding: '3rem 2rem', maxWidth: '1100px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
         <header style={{ marginBottom: '4rem' }}>
-          {/* Upgrade banner removed in Enterprise Edition */}
           <motion.h1 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -232,7 +228,6 @@ export const Dashboard: React.FC = () => {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2.5rem', alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-            {/* Keys List */}
             <section>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.5rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -284,7 +279,7 @@ export const Dashboard: React.FC = () => {
                                 padding: '0.25rem'
                               }}
                             >
-                              {copiedId === apiKey.id ? <Check size={18} /> : <Copy size={18} className="hover:text-white" />}
+                              {copiedId === apiKey.id ? <Check size={18} /> : <Copy size={18} />}
                             </button>
                           </div>
                         </div>
@@ -337,8 +332,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           <aside style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* Create Key Section */}
-            <section className="glass-card" style={{ padding: '2rem', border: '1px solid var(--primary-glow)', position: 'sticky', top: '100px' }}>
+            <section className="glass-card" style={{ padding: '2rem', border: '1px solid var(--primary-glow)' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <Plus size={24} color="var(--primary)" />
                 New Key
@@ -361,7 +355,6 @@ export const Dashboard: React.FC = () => {
               </form>
             </section>
 
-            {/* Quick Stats */}
             <section className="glass-card" style={{ padding: '2rem' }}>
               <h3 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                 <Activity size={20} color="var(--primary)" />
@@ -369,8 +362,8 @@ export const Dashboard: React.FC = () => {
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 {[
-                  { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), change: '' },
-                  { label: 'Last Active', value: (stats.lastActivity as any)?.toDate().toLocaleTimeString() || 'None', change: '' },
+                  { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), change: 'Global' },
+                  { label: 'Last Active', value: (stats.lastActivity as any)?.toDate().toLocaleTimeString() || 'None', change: 'Real-time' },
                   { label: 'System Health', value: '100%', change: 'Optimal' }
                 ].map((stat, i) => (
                   <div key={i}>
@@ -386,7 +379,6 @@ export const Dashboard: React.FC = () => {
               </div>
             </section>
 
-            {/* Activity Feed */}
             <section className="glass-card" style={{ padding: '2rem' }}>
               <h3 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                 <Clock size={20} color="var(--primary)" />
@@ -394,8 +386,8 @@ export const Dashboard: React.FC = () => {
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {activities.map((act) => (
-                  <div key={act.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: '1rem', position: 'relative' }}>
-                    <div style={{ position: 'absolute', left: '-5px', top: '0', width: '8px', height: '8px', borderRadius: '50%', background: act.success ? 'var(--success)' : 'var(--error)' }} />
+                  <div key={act.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: '1rem', position: 'relative', paddingBottom: '0.5rem' }}>
+                    <div style={{ position: 'absolute', left: '-5px', top: '0', width: '8px', height: '8px', borderRadius: '50%', background: act.success !== false ? 'var(--success)' : 'var(--error)' }} />
                     <div style={{ fontSize: '0.875rem', fontWeight: '700' }}>{act.tool}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{act.timestamp?.toDate().toLocaleTimeString()}</div>
                   </div>
@@ -405,7 +397,6 @@ export const Dashboard: React.FC = () => {
           </aside>
         </div>
 
-        {/* Usage Chart Section */}
         <section style={{ marginTop: '5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem' }}>
             <div>
@@ -428,7 +419,6 @@ export const Dashboard: React.FC = () => {
             position: 'relative',
             overflow: 'hidden'
           }}>
-            {/* Grid Lines */}
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '2rem', opacity: 0.1, pointerEvents: 'none' }}>
               {[1,2,3,4].map(i => <div key={i} style={{ borderTop: '1px solid #fff', width: '100%' }} />)}
             </div>
