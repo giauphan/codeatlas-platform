@@ -1577,6 +1577,12 @@ async function main() {
     // SSE Mode - for remote server deployment
     const app = express();
 
+    // Serve static files from dashboard directory
+    const dashboardPath = path.join(process.cwd(), "dashboard");
+    if (fs.existsSync(dashboardPath)) {
+      app.use(express.static(dashboardPath));
+    }
+
     // Authentication middleware
     app.use(async (req, res, next) => {
       const clientKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string);
