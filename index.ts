@@ -80,11 +80,9 @@ async function checkAuth(apiKey?: string): Promise<string> {
     }
 
     const userDoc = await userRef.get();
-    const tier = userDoc.exists ? (userDoc.data()?.tier || 'free') : 'free';
-
-    // Update Cache
+    // Update Cache - For Enterprise deployment, everyone gets enterprise tier
     authCache.set(keyToVerify, {
-      tier,
+      tier: 'enterprise',
       expires: Date.now() + CACHE_TTL
     });
 
@@ -93,7 +91,7 @@ async function checkAuth(apiKey?: string): Promise<string> {
       lastUsed: FieldValue.serverTimestamp()
     });
 
-    return tier;
+    return 'enterprise';
   } catch (err: any) {
     if (err.message.includes("Unauthorized")) throw err;
     console.error("Auth Error:", err.message);
@@ -254,10 +252,7 @@ server.tool(
   "List all projects that have been analyzed by CodeAtlas. Returns project names, paths, and last analysis time.",
   {},
   async () => {
-    const tier = await checkAuth();
-    if (tier === 'free') {
-      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
-    }
+    // Enterprise edition: full access enabled
     const projects = discoverProjects();
     if (projects.length === 0) {
       return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
@@ -303,7 +298,7 @@ server.tool(
       return !fp.includes("node_modules") && !fp.includes("venv") && !fp.includes(".venv") && !fp.includes("site-packages");
     });
 
-    const maxResults = tier === 'free' ? Math.min(limit || 50, 50) : (limit || 100);
+    const maxResults = limit || 500; // Increased default limit for Enterprise
     const truncated = nodes.length > maxResults;
     nodes = nodes.slice(0, maxResults);
 
@@ -340,10 +335,7 @@ server.tool(
     limit: z.number().optional().describe("Max results (default: 100)"),
   },
   async ({ project, source, target, relationship, limit }: { project?: string; source?: string; target?: string; relationship?: string; limit?: number }) => {
-    const tier = await checkAuth();
-    if (tier === 'free') {
-      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
-    }
+    await checkAuth();
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -402,10 +394,7 @@ server.tool(
   "Get AI-generated code insights including refactoring suggestions, security issues, and maintainability analysis.",
   {},
   async () => {
-    const tier = await checkAuth();
-    if (tier === 'free') {
-      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
-    }
+    await checkAuth();
     const loaded = loadAnalysis();
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -433,10 +422,7 @@ server.tool(
     type: z.enum(["all", "module", "class", "function", "variable"]).optional().describe("Filter by entity type"),
   },
   async ({ project, query, type }: { project?: string; query: string; type?: string }) => {
-    const tier = await checkAuth();
-    if (tier === 'free') {
-      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
-    }
+    await checkAuth();
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -525,9 +511,7 @@ server.tool(
     }
 
     let filesEntries = Array.from(byFile.entries());
-    if (tier === 'free') {
-      filesEntries = filesEntries.slice(0, 50);
-    }
+    // No limit for Enterprise
 
     const result = {
       query: filePath,
@@ -917,9 +901,6 @@ server.tool(
 
     // === 7. Sync to Oracle 26ai (Enterprise Knowledge Graph) — Gated and Default False ===
     if (enableEnterpriseSync) {
-      if (tier === 'free') {
-        console.error("Skipping Oracle sync: Enterprise features require Pro/Plus plan.");
-      } else {
         try {
           console.error(`Syncing Knowledge Graph for ${loaded.projectName} to Oracle 26ai...`);
           await OracleMemoryService.saveSemanticMemory(loaded.projectName, nodes);
@@ -933,7 +914,6 @@ server.tool(
         } catch (oracleErr) {
           console.error("Failed to sync to Oracle:", oracleErr);
         }
-      }
     }
 
     const result = {
@@ -974,7 +954,6 @@ server.tool(
   async ({ project, keyword, depth }: { project?: string; keyword: string; depth?: number }) => {
     const tier = await checkAuth();
     if (tier === 'free') {
-      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
     }
     const loaded = loadAnalysis(project);
     if (!loaded) {
@@ -1116,7 +1095,6 @@ server.tool(
   async ({ project, keyword, diagramType, depth, maxNodes }: { project?: string; keyword: string; diagramType?: 'flowchart' | 'sequence'; depth?: number; maxNodes?: number }) => {
     const tier = await checkAuth();
     if (tier === 'free') {
-      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
     }
     const loaded = loadAnalysis(project);
     if (!loaded) {
@@ -1448,7 +1426,6 @@ server.tool(
   async ({ project }: { project?: string }) => {
     const tier = await checkAuth();
     if (tier === 'free') {
-      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
     }
     const loaded = loadAnalysis(project);
     if (!loaded) {
@@ -1509,9 +1486,8 @@ server.tool(
       return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
     }
 
-    // Plan limits
+    // Enterprise Plan: Full scanning enabled
     let limit = projects.length;
-    if (tier === 'free') limit = 1;
     if (maxProjects && maxProjects < limit) limit = maxProjects;
 
     const scanResults: any[] = [];
@@ -1556,13 +1532,11 @@ server.tool(
 
     const result = {
       timestamp: new Date().toISOString(),
-      tier,
+      tier: 'enterprise',
       projectsScanned: projectsToScan.length,
       totalProjectsDiscovered: projects.length,
       results: scanResults,
-      message: tier === 'free' && projects.length > 1 
-        ? "Free plan limit: Only scanned the first project. Upgrade to Plus/Pro for full enterprise scan."
-        : `Successfully scanned ${projectsToScan.length} projects.`
+      message: `Successfully scanned ${projectsToScan.length} projects with Enterprise Edition.`
     };
 
     return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
