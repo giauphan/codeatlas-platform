@@ -262,25 +262,47 @@ const triggerAutoIndex = () => {
 
 let indexTimeout: NodeJS.Timeout | null = null;
 
-// Watch for changes in source files
-const watcher = chokidar.watch(process.cwd(), {
+// Watch for changes in all discovered projects
+const projects = discoverProjects();
+const watchPaths = projects.map(p => p.dir);
+
+if (watchPaths.length === 0) {
+  watchPaths.push(process.cwd());
+}
+
+const watcher = chokidar.watch(watchPaths, {
   ignored: [/(^|[\/\\])\../, '**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'],
   persistent: true,
   ignoreInitial: true
 });
 
-watcher.on('change', (path) => {
-  console.log(`\n[Auto-Scan] ⚡ File change detected: ${path}`);
+watcher.on('change', (filePath) => {
+  const project = projects.find(p => filePath.startsWith(p.dir));
+  const projectName = project ? project.name : 'Unknown';
+  
+  console.log(`\n[Auto-Scan] ⚡ Change in [${projectName}]: ${filePath}`);
+  
   if (indexTimeout) clearTimeout(indexTimeout);
   indexTimeout = setTimeout(() => {
-    console.log(`[Auto-Scan] 🔄 Triggering neural re-indexing...`);
-    triggerAutoIndex();
+    console.log(`[Auto-Scan] 🔄 Re-indexing [${projectName}]...`);
+    
+    // Run indexing in the project directory
+    const cmd = `cd "${project?.dir || process.cwd()}" && npx tsx "${path.join(projectRoot, 'run_indexing.ts')}"`;
+    
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`[Auto-Index] ❌ Error indexing ${projectName}: ${error.message}`);
+        return;
+      }
+      console.log(`[Auto-Index] ✅ ${projectName} updated and synced to DB.`);
+    });
   }, 2000);
 });
 
 console.log(`\n${'='.repeat(50)}`);
 console.log(`🚀 CODEATLAS ENTERPRISE v2.1.4 ONLINE`);
-console.log(`📡 Auto-Indexing: WATCHING PATH [${process.cwd()}]`);
+console.log(`📡 Auto-Indexing: WATCHING ${watchPaths.length} PROJECTS`);
+watchPaths.forEach(p => console.log(`   - ${p}`));
 console.log(`🛡️  Security: FIREBASE ADMIN ACTIVE`);
 console.log(`${'='.repeat(50)}\n`);
 
