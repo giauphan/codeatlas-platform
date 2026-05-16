@@ -239,6 +239,49 @@ const server = new McpServer({
   version: "2.1.3",
 });
 
+// Setup Express app to serve as both MCP SSE and REST API
+const app = express();
+app.use(express.json());
+
+// Enable CORS for dashboard
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
+// REST API: Get analysis data
+app.get("/api/analysis", async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'] as string;
+    await checkAuth(apiKey);
+    const loaded = loadAnalysis();
+    if (!loaded) return res.status(404).json({ error: "No analysis found" });
+    res.json(loaded);
+  } catch (err: any) {
+    res.status(401).json({ error: err.message });
+  }
+});
+
+// REST API: Trigger re-index
+app.post("/api/reindex", async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'] as string;
+    await checkAuth(apiKey);
+    const projectPath = process.env.CODEATLAS_PROJECT_DIR || process.cwd();
+    const analyzer = new CodeAnalyzer(projectPath, 5000);
+    const result = await analyzer.analyzeProject();
+    const codeatlasDir = path.join(projectPath, ".codeatlas");
+    if (!fs.existsSync(codeatlasDir)) fs.mkdirSync(codeatlasDir, { recursive: true });
+    fs.writeFileSync(path.join(codeatlasDir, "analysis.json"), JSON.stringify(result, null, 2));
+    res.json({ success: true, stats: getStats(result as any) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Tool -1: Analyze a project
 server.tool(
   "analyze",
