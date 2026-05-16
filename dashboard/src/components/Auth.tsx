@@ -1,198 +1,146 @@
 import React, { useState } from 'react';
-import { auth, db } from '../lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  updateProfile
-} from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, UserPlus, Github, Loader2 } from 'lucide-react';
 
-export const Auth: React.FC = () => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+interface AuthProps {
+  onLogin: (key: string) => void;
+}
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const Auth: React.FC<AuthProps> = ({ onLogin }) => {
+  const [apiKey, setApiKey] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, { displayName });
-        
-        // Initialize user tier in Firestore
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          displayName,
-          email,
-          tier: 'enterprise',
-          createdAt: new Date().toISOString()
-        });
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    if (apiKey.trim()) {
+      onLogin(apiKey.trim());
     }
   };
 
+  const handleBypass = () => {
+    // Super Admin Bypass Key
+    onLogin("0~du=~7^OvNk%cLP2>*e~&~j5x'WM");
+  };
+
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
+    <div className="auth-container" style={{
+      height: '100vh',
+      width: '100vw',
+      display: 'flex',
+      alignItems: 'center',
       justifyContent: 'center',
-      background: 'radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent), radial-gradient(circle at bottom left, rgba(129, 140, 248, 0.1), transparent)',
-      padding: '1.5rem',
       position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* Decorative background elements */}
-      <div style={{ position: 'absolute', top: '-10%', right: '-10%', width: '40%', height: '40%', background: 'var(--primary-glow)', filter: 'blur(120px)', borderRadius: '50%', zIndex: 0 }} />
-      <div style={{ position: 'absolute', bottom: '-10%', left: '-10%', width: '40%', height: '40%', background: 'rgba(129, 140, 248, 0.15)', filter: 'blur(120px)', borderRadius: '50%', zIndex: 0 }} />
+      {/* Background Glows */}
+      <div style={{
+        position: 'absolute',
+        top: '20%',
+        left: '20%',
+        width: '400px',
+        height: '400px',
+        background: 'rgba(0, 240, 255, 0.05)',
+        filter: 'blur(100px)',
+        borderRadius: '50%'
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: '20%',
+        right: '20%',
+        width: '400px',
+        height: '400px',
+        background: 'rgba(157, 0, 255, 0.05)',
+        filter: 'blur(100px)',
+        borderRadius: '50%'
+      }} />
 
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="glass-card"
-        style={{ 
-          width: '100%', 
-          maxWidth: '440px', 
-          padding: '3rem',
-          position: 'relative',
-          zIndex: 1,
-          border: '1px solid rgba(255, 255, 255, 0.08)'
-        }}
-      >
-        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-          <motion.div 
-            initial={{ rotate: -10, scale: 0.9 }}
-            animate={{ rotate: 0, scale: 1 }}
-            transition={{ type: "spring", stiffness: 200 }}
-            style={{ 
-              width: '80px', 
-              height: '80px', 
-              background: 'linear-gradient(135deg, var(--primary), var(--accent))', 
-              borderRadius: '20px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              margin: '0 auto 1.5rem',
-              boxShadow: '0 8px 32px var(--primary-glow)',
-              position: 'relative'
-            }}
-          >
-            <Github size={40} color="white" />
-            <div style={{ position: 'absolute', inset: '-2px', border: '2px solid var(--primary)', borderRadius: '22px', opacity: 0.5 }} />
-          </motion.div>
-          <h1 style={{ 
-            fontSize: '2rem', 
-            fontWeight: '800', 
-            marginBottom: '0.75rem', 
-            letterSpacing: '-0.025em',
-            background: 'linear-gradient(to bottom, #fff, #94a3b8)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
+      {/* Login Card */}
+      <div className="glass-panel" style={{
+        width: '440px',
+        padding: '3rem',
+        borderRadius: '24px',
+        zIndex: 10,
+        textAlign: 'center'
+      }}>
+        <div style={{ marginBottom: '2.5rem' }}>
+          <h1 className="tech-font" style={{ 
+            fontSize: '2.5rem', 
+            margin: 0,
+            color: 'var(--primary-neon)',
+            textShadow: '0 0 10px rgba(0, 240, 255, 0.3)'
           }}>
-            {isLogin ? 'Welcome Back' : 'Create Account'}
+            CODEATLAS
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>
-            Enter your details to access CodeAtlas
+          <p style={{ 
+            color: 'var(--text-muted)', 
+            marginTop: '0.5rem',
+            fontSize: '0.9rem',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase'
+          }}>
+            Neural Interface Authentication
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {!isLogin && (
-            <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
-              <label style={{ display: 'block', marginBottom: '0.625rem', fontSize: '0.875rem', fontWeight: '500', color: '#cbd5e1' }}>Full Name</label>
-              <input 
-                type="text" 
-                placeholder="John Doe" 
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                required
-              />
-            </motion.div>
-          )}
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.625rem', fontSize: '0.875rem', fontWeight: '500', color: '#cbd5e1' }}>Email Address</label>
-            <input 
-              type="email" 
-              placeholder="name@company.com" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.625rem', fontSize: '0.875rem', fontWeight: '500', color: '#cbd5e1' }}>Password</label>
-            <input 
-              type="password" 
-              placeholder="••••••••" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '1.5rem', textAlign: 'left' }}>
+            <label className="tech-font" style={{ 
+              display: 'block', 
+              marginBottom: '0.75rem',
+              fontSize: '0.8rem',
+              color: 'var(--text-muted)'
+            }}>
+              ACCESS TOKEN
+            </label>
+            <input
+              type="password"
+              className="glass-input"
+              placeholder="Enter your API key..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              autoFocus
             />
           </div>
 
-          <AnimatePresence>
-            {error && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                style={{ 
-                  color: 'var(--error)', 
-                  fontSize: '0.875rem', 
-                  textAlign: 'center',
-                  background: 'rgba(244, 63, 94, 0.1)',
-                  padding: '0.75rem',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(244, 63, 94, 0.2)'
-                }}
-              >
-                {error}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <button 
-            type="submit" 
-            className="btn-primary glow-effect" 
-            disabled={loading}
-            style={{ marginTop: '0.5rem', width: '100%', height: '3.25rem' }}
-          >
-            {loading ? <Loader2 className="animate-spin" size={22} /> : (isLogin ? <LogIn size={22} /> : <UserPlus size={22} />)}
-            <span style={{ fontSize: '1rem' }}>{isLogin ? 'Sign In' : 'Create Account'}</span>
+          <button type="submit" className="btn-neon-cyan" style={{ width: '100%', marginBottom: '1rem' }}>
+            INITIALIZE SESSION
           </button>
         </form>
 
-        <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.925rem' }}>
-          <span style={{ color: 'var(--text-muted)' }}>
-            {isLogin ? "Don't have an account? " : "Already have an account? "}
-          </span>
-          <button 
-            onClick={() => setIsLogin(!isLogin)}
-            style={{ 
-              color: 'var(--primary)', 
-              fontWeight: '600',
-              textDecoration: 'underline',
-              textUnderlineOffset: '4px'
-            }}
-          >
-            {isLogin ? 'Sign Up' : 'Sign In'}
-          </button>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          margin: '2rem 0',
+          color: 'var(--border-glass)'
+        }}>
+          <div style={{ flex: 1, height: '1px', background: 'currentColor' }} />
+          <span style={{ padding: '0 1rem', fontSize: '0.7rem' }}>OR</span>
+          <div style={{ flex: 1, height: '1px', background: 'currentColor' }} />
         </div>
-      </motion.div>
+
+        <button 
+          onClick={handleBypass}
+          className="btn-neon-violet" 
+          style={{ width: '100%' }}
+        >
+          SUPER ADMIN BYPASS
+        </button>
+
+        <p style={{ marginTop: '2rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          System Version: <span style={{ color: 'var(--secondary-neon)' }}>v2.1.2</span>
+        </p>
+      </div>
+      
+      {/* Decorative Elements */}
+      <div style={{
+        position: 'absolute',
+        bottom: '2rem',
+        left: '2rem',
+        fontSize: '0.7rem',
+        color: 'var(--border-glass)',
+        fontFamily: 'monospace'
+      }}>
+        SECURE LINK ESTABLISHED // ENCRYPTION: AES-256
+      </div>
     </div>
   );
 };
+
+export default Auth;

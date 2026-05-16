@@ -1,24 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
 :root {
-  --background: #020617;
-  --surface: rgba(15, 23, 42, 0.6);
-  --surface-hover: rgba(30, 41, 59, 0.8);
-  --primary: #38bdf8;
-  --primary-glow: rgba(56, 189, 248, 0.3);
-  --accent: #818cf8;
-  --text: #f8fafc;
-  --text-muted: #94a3b8;
-  --border: rgba(255, 255, 255, 0.1);
-  --border-focus: rgba(56, 189, 248, 0.5);
-  --error: #f43f5e;
-  --success: #10b981;
-  --card-bg: rgba(15, 23, 42, 0.4);
-  --card-blur: 16px;
+  /* Colors - Deep Space Palette */
+  --background: #0A0C10;
+  --surface-glass: rgba(16, 20, 29, 0.6);
+  --primary-neon: #00F0FF;
+  --secondary-neon: #9D00FF;
+  --text-main: #E2E2E8;
+  --text-muted: #B9CACB;
+  --border-glass: rgba(255, 255, 255, 0.1);
+  --error: #FFB4AB;
+  
+  /* Effects */
+  --blur-intense: 20px;
+  --glow-primary: 0 0 15px rgba(0, 240, 255, 0.3);
+  --glow-secondary: 0 0 15px rgba(157, 0, 255, 0.3);
+  --rim-light: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
 }
 
 * {
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -26,116 +28,109 @@ body {
   padding: 0;
   background-color: var(--background);
   background-image: 
-    radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 100% 100%, rgba(129, 140, 248, 0.05) 0%, transparent 50%);
-  color: var(--text);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-x: hidden;
+    radial-gradient(circle at 10% 10%, rgba(0, 240, 255, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 90% 90%, rgba(157, 0, 255, 0.03) 0%, transparent 40%);
+  color: var(--text-main);
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
   min-height: 100vh;
 }
 
-button {
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: inherit;
-  font-family: inherit;
+h1, h2, h3, .tech-font {
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: -0.02em;
 }
 
-input {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 0.875rem 1.25rem;
-  border-radius: 12px;
-  font-size: 1rem;
-  width: 100%;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+/* Glassmorphism Components */
+.glass-panel {
+  background: var(--surface-glass);
+  backdrop-filter: blur(var(--blur-intense));
+  -webkit-backdrop-filter: blur(var(--blur-intense));
+  border: 1px solid var(--border-glass);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
 }
 
-input:focus {
-  outline: none;
-  border-color: var(--border-focus);
-  background: rgba(0, 0, 0, 0.3);
-  box-shadow: 0 0 0 4px var(--primary-glow);
+.rim-lit {
+  border-image: var(--rim-light) 1;
 }
 
-.glass-card {
-  background: var(--card-bg);
-  backdrop-filter: blur(var(--card-blur));
-  -webkit-backdrop-filter: blur(var(--card-blur));
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  color: white;
-  padding: 0.875rem 1.75rem;
-  border-radius: 12px;
+/* Custom Buttons */
+.btn-neon-cyan {
+  background: var(--primary-neon);
+  color: #000;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
   font-weight: 600;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.625rem;
-  box-shadow: 0 4px 12px var(--primary-glow);
+  font-family: 'Space Grotesk', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.3s ease;
+  box-shadow: var(--glow-primary);
+  border: none;
+  cursor: pointer;
 }
 
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px var(--primary-glow);
+.btn-neon-cyan:hover {
+  transform: scale(1.02);
   filter: brightness(1.1);
 }
 
-.btn-primary:disabled {
-  opacity: 0.6;
-  transform: none;
-  cursor: not-allowed;
+.btn-neon-violet {
+  background: transparent;
+  color: var(--secondary-neon);
+  border: 1px solid var(--secondary-neon);
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-family: 'Space Grotesk', sans-serif;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+  cursor: pointer;
 }
 
-.btn-secondary {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 0.875rem 1.75rem;
+.btn-neon-violet:hover {
+  background: rgba(157, 0, 255, 0.1);
+  box-shadow: var(--glow-secondary);
+}
+
+/* Input Fields */
+.glass-input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-glass);
+  color: var(--text-main);
+  padding: 1rem;
   border-radius: 12px;
-  font-weight: 600;
   transition: all 0.3s ease;
 }
 
-.btn-secondary:hover {
-  background: var(--surface-hover);
-  border-color: var(--border-focus);
+.glass-input:focus {
+  outline: none;
+  border-color: var(--primary-neon);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 10px;
+/* Layout Utilities */
+.sidebar {
+  width: 280px;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
 }
 
-::-webkit-scrollbar-track {
-  background: var(--background);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 5px;
-  border: 2px solid var(--background);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+.main-content {
+  margin-left: 280px;
+  height: 100vh;
+  position: relative;
 }
 
 /* Animations */
-@keyframes pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+@keyframes bloom {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; filter: brightness(1.2); }
+  100% { opacity: 0.8; }
 }
 
-.glow-effect {
-  animation: pulse-glow 2s infinite;
+.animate-bloom {
+  animation: bloom 3s infinite ease-in-out;
 }

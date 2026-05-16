@@ -22,7 +22,12 @@ import {
   Activity, 
   Clock,
   ShieldCheck,
-  Loader2
+  Loader2,
+  LayoutDashboard,
+  Database,
+  Cpu,
+  Globe,
+  Zap
 } from 'lucide-react';
 
 interface ApiKey {
@@ -47,14 +52,12 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    // Real-time stats updates
     const unsubscribeStats = onSnapshot(doc(db, 'users', user.uid), (docSnapshot: any) => {
       if (docSnapshot.exists() && docSnapshot.data().stats) {
         setStats(docSnapshot.data().stats);
       }
     });
 
-    // Real-time activity logs
     const actQuery = query(
       collection(db, 'users', user.uid, 'activity'),
       orderBy('timestamp', 'desc'),
@@ -114,7 +117,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const deleteKey = async (id: string) => {
-    if (!user || !confirm('Are you sure you want to delete this API Key?')) return;
+    if (!user || !confirm('Confirm terminal key deletion? This action is irreversible.')) return;
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'keys', id));
     } catch (err) {
@@ -129,323 +132,216 @@ export const Dashboard: React.FC = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--background)', position: 'relative' }}>
-      <div style={{ position: 'fixed', top: 0, right: 0, width: '50vw', height: '50vh', background: 'radial-gradient(circle at 70% 30%, rgba(56, 189, 248, 0.08), transparent 70%)', zIndex: 0 }} />
-      <div style={{ position: 'fixed', bottom: 0, left: 0, width: '50vw', height: '50vh', background: 'radial-gradient(circle at 30% 70%, rgba(129, 140, 248, 0.08), transparent 70%)', zIndex: 0 }} />
-
-      <nav style={{ 
-        borderBottom: '1px solid var(--border)', 
-        padding: '1rem 3rem', 
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--background)' }}>
+      
+      {/* SIDEBAR: Glassmorphism Navigation */}
+      <aside className="sidebar glass-panel rim-lit" style={{ 
+        padding: '2rem 1.5rem', 
         display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        background: 'rgba(2, 6, 23, 0.8)',
-        backdropFilter: 'blur(12px)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100
+        flexDirection: 'column',
+        gap: '2.5rem',
+        zIndex: 50
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            style={{ 
-              width: '40px', 
-              height: '40px', 
-              background: 'linear-gradient(135deg, var(--primary), var(--accent))', 
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px var(--primary-glow)'
-            }}>
-            <ShieldCheck size={24} color="white" />
-          </motion.div>
-          <span style={{ fontWeight: '800', fontSize: '1.5rem', letterSpacing: '-0.025em', background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            CodeAtlas
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 0.5rem' }}>
+          <div style={{ 
+            width: '40px', height: '40px', 
+            background: 'var(--primary-neon)', 
+            borderRadius: '12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: 'var(--glow-primary)'
+          }}>
+            <ShieldCheck size={24} color="#000" />
+          </div>
+          <span className="tech-font" style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>
+            CODEATLAS
           </span>
         </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <div style={{ 
-            padding: '0.25rem 0.75rem', 
-            borderRadius: '12px', 
-            fontSize: '0.75rem', 
-            fontWeight: '800', 
-            textTransform: 'uppercase',
-            background: 'rgba(56, 189, 248, 0.15)',
-            border: '1px solid var(--primary)',
-            color: 'var(--primary)',
-            letterSpacing: '0.05em'
-          }}>
-            Enterprise Edition
-          </div>
 
-          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '0.875rem', fontWeight: '700', color: '#f1f5f9' }}>{user?.displayName}</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user?.email}</span>
-          </div>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {[
+            { icon: LayoutDashboard, label: 'Control Center', active: true },
+            { icon: Database, label: 'Knowledge Graph' },
+            { icon: Cpu, label: 'Logic Models' },
+            { icon: Globe, label: 'Cloud Index' },
+          ].map((item, i) => (
+            <motion.div
+              key={i}
+              whileHover={{ x: 5 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '1rem',
+                padding: '0.875rem 1rem', borderRadius: '12px',
+                cursor: 'pointer',
+                background: item.active ? 'rgba(0, 240, 255, 0.1)' : 'transparent',
+                color: item.active ? 'var(--primary-neon)' : 'var(--text-muted)',
+                border: item.active ? '1px solid rgba(0, 240, 255, 0.2)' : '1px solid transparent'
+              }}
+            >
+              <item.icon size={20} />
+              <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{item.label}</span>
+            </motion.div>
+          ))}
+        </nav>
+
+        <div style={{ marginTop: 'auto', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '16px' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>LOGGED IN AS</div>
+          <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#fff' }}>{user?.displayName}</div>
           <button 
-            onClick={() => auth.signOut()} 
+            onClick={() => auth.signOut()}
             style={{ 
-              color: 'var(--text-muted)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.625rem',
-              padding: '0.625rem 1rem',
-              borderRadius: '10px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid var(--border)',
-              transition: 'all 0.2s'
-            }}
-            className="hover-bg"
-          >
-            <LogOut size={18} />
-            <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>Sign Out</span>
+              marginTop: '1rem', width: '100%', 
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              color: '#ff4b4b', background: 'transparent', border: 'none', cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}>
+            <LogOut size={16} /> SIGN OUT
           </button>
         </div>
-      </nav>
+      </aside>
 
-      <main style={{ padding: '3rem 2rem', maxWidth: '1100px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
-        <header style={{ marginBottom: '4rem' }}>
-          <motion.h1 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{ 
-              fontSize: '3.5rem', 
-              fontWeight: '900', 
-              marginBottom: '1rem', 
-              letterSpacing: '-0.05em',
-              background: 'linear-gradient(to bottom right, #fff 30%, #475569)', 
-              WebkitBackgroundClip: 'text', 
-              WebkitTextFillColor: 'transparent' 
-            }}>
-            API Key Dashboard
-          </motion.h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '1.25rem', maxWidth: '600px', lineHeight: '1.6' }}>
-            Securely manage your access tokens for the CodeAtlas ecosystem.
-          </p>
+      {/* MAIN CONTENT AREA */}
+      <main className="main-content" style={{ flex: 1, padding: '2.5rem 3rem', overflowY: 'auto' }}>
+        
+        {/* Header Section */}
+        <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div>
+            <motion.h1 
+              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+              style={{ fontSize: '3rem', margin: 0, fontWeight: 800 }} className="tech-font"
+            >
+              Control Center
+            </motion.h1>
+            <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+              Orchestrating enterprise intelligence & secure access tokens.
+            </p>
+          </div>
+          <div style={{ 
+            padding: '0.5rem 1rem', borderRadius: '8px', 
+            background: 'rgba(157, 0, 255, 0.1)', border: '1px solid var(--secondary-neon)',
+            color: 'var(--secondary-neon)', fontWeight: 700, fontSize: '0.8rem', letterSpacing: '0.05em'
+          }}>
+            ENTERPRISE v2.1.2
+          </div>
         </header>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2.5rem', alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-            <section>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <Key size={28} color="var(--primary)" />
-                  Active Keys
-                </h2>
-                <div style={{ padding: '0.375rem 1rem', background: 'rgba(56, 189, 248, 0.1)', borderRadius: '20px', border: '1px solid var(--primary-glow)', color: 'var(--primary)', fontSize: '0.875rem', fontWeight: '600' }}>
-                  {keys.length} Total
-                </div>
-              </div>
+        {/* Floating Stats Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '3rem' }}>
+          {[
+            { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), icon: Activity, color: 'var(--primary-neon)' },
+            { label: 'Neural Entities', value: '337', icon: Database, color: 'var(--secondary-neon)' },
+            { label: 'Graph Health', value: '98%', icon: Zap, color: '#FFB400' },
+          ].map((stat, i) => (
+            <div key={i} className="glass-panel" style={{ padding: '1.5rem', borderRadius: '20px', position: 'relative', overflow: 'hidden' }}>
+              <stat.icon size={48} style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.05, color: stat.color }} />
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{stat.label}</div>
+              <div style={{ fontSize: '2.2rem', fontWeight: 800, marginTop: '0.5rem', color: '#fff' }}>{stat.value}</div>
+            </div>
+          ))}
+        </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <AnimatePresence mode="popLayout">
-                  {keys.map((apiKey: ApiKey) => (
-                    <motion.div 
-                      key={apiKey.id}
-                      layout
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="glass-card"
-                      style={{ padding: '1.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.05)' }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '700', color: '#f8fafc' }}>{apiKey.name}</h3>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.75rem' }}>
-                          <div style={{ 
-                            background: 'rgba(0,0,0,0.3)', 
-                            padding: '0.5rem 1rem', 
-                            borderRadius: '10px', 
-                            border: '1px solid var(--border)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '1rem'
-                          }}>
-                            <code style={{ 
-                              color: 'var(--primary)',
-                              fontSize: '1rem',
-                              fontFamily: 'JetBrains Mono, monospace',
-                              letterSpacing: '0.05em'
-                            }}>
-                              {apiKey.key}
-                            </code>
-                            <button 
-                              onClick={() => copyToClipboard(apiKey.key, apiKey.id)}
-                              style={{ 
-                                color: copiedId === apiKey.id ? 'var(--success)' : 'var(--text-muted)',
-                                transition: 'all 0.2s',
-                                padding: '0.25rem'
-                              }}
-                            >
-                              {copiedId === apiKey.id ? <Check size={18} /> : <Copy size={18} />}
-                            </button>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '2rem', marginTop: '1.25rem', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Clock size={16} />
-                            Created {apiKey.createdAt?.toDate().toLocaleDateString() || 'Recently'}
-                          </span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Activity size={16} />
-                            Last active: {apiKey.lastUsed ? apiKey.lastUsed.toDate().toLocaleString() : 'Never'}
-                          </span>
-                        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '2.5rem' }}>
+          
+          {/* API Keys List */}
+          <section>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 className="tech-font" style={{ fontSize: '1.4rem', margin: 0 }}>ACTIVE TOKENS</h2>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{keys.length} total keys</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <AnimatePresence mode="popLayout">
+                {keys.map((apiKey) => (
+                  <motion.div
+                    key={apiKey.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+                    className="glass-panel rim-lit"
+                    style={{ padding: '1.5rem', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.75rem' }}>{apiKey.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <code style={{ 
+                          background: 'rgba(0,0,0,0.3)', padding: '0.5rem 1rem', borderRadius: '8px', 
+                          color: 'var(--primary-neon)', fontFamily: 'monospace', fontSize: '0.95rem' 
+                        }}>
+                          {apiKey.key}
+                        </code>
+                        <button 
+                          onClick={() => copyToClipboard(apiKey.key, apiKey.id)}
+                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: copiedId === apiKey.id ? 'var(--primary-neon)' : 'var(--text-muted)' }}
+                        >
+                          {copiedId === apiKey.id ? <Check size={18} /> : <Copy size={18} />}
+                        </button>
                       </div>
-                      
-                      <button 
-                        onClick={() => deleteKey(apiKey.id)}
-                        style={{ 
-                          color: '#475569', 
-                          padding: '0.75rem',
-                          borderRadius: '12px',
-                          transition: 'all 0.2s'
-                        }}
-                        className="hover-error"
-                      >
-                        <Trash2 size={22} />
-                      </button>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-
-                {keys.length === 0 && (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    style={{ 
-                      padding: '5rem 2rem', 
-                      textAlign: 'center', 
-                      background: 'rgba(255,255,255,0.02)',
-                      border: '2px dashed var(--border)', 
-                      borderRadius: '24px',
-                      color: 'var(--text-muted)'
-                    }}>
-                    <Key size={56} style={{ marginBottom: '1.5rem', opacity: 0.2, margin: '0 auto' }} />
-                    <p style={{ fontSize: '1.125rem' }}>No API keys yet. Create one to get started.</p>
+                      <div style={{ marginTop: '1rem', display: 'flex', gap: '1.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <Clock size={14} /> {apiKey.createdAt?.toDate().toLocaleDateString()}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <Zap size={14} /> {apiKey.lastUsed ? 'Recently used' : 'Unused'}
+                        </span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => deleteKey(apiKey.id)}
+                      className="hover-error"
+                      style={{ padding: '0.75rem', borderRadius: '12px', color: '#475569', transition: 'all 0.2s', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                    >
+                      <Trash2 size={20} />
+                    </button>
                   </motion.div>
-                )}
-              </div>
-            </section>
-          </div>
+                ))}
+              </AnimatePresence>
 
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            <section className="glass-card" style={{ padding: '2rem', border: '1px solid var(--primary-glow)' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <Plus size={24} color="var(--primary)" />
-                New Key
-              </h2>
-              <form onSubmit={createKey} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Key Identifier</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Production API" 
-                    value={newKeyName}
-                    onChange={(e) => setNewKeyName(e.target.value)}
-                    required
-                  />
+              {keys.length === 0 && (
+                <div style={{ padding: '4rem', textAlign: 'center', opacity: 0.3 }}>
+                  <Key size={48} style={{ margin: '0 auto 1rem' }} />
+                  <p>No active session tokens found.</p>
                 </div>
-                <button type="submit" className="btn-primary glow-effect" disabled={loading} style={{ width: '100%', height: '3.25rem' }}>
-                  {loading ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />}
-                  Generate Token
+              )}
+            </div>
+          </section>
+
+          {/* Right Column: Actions & Logs */}
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            
+            {/* Generate Key Form */}
+            <section className="glass-panel" style={{ padding: '1.5rem', borderRadius: '24px' }}>
+              <h3 className="tech-font" style={{ fontSize: '1.1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Plus size={20} /> NEW TERMINAL KEY
+              </h3>
+              <form onSubmit={createKey} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <input 
+                  type="text" className="glass-input" placeholder="Identifier (e.g. VS Code)" 
+                  value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} required
+                />
+                <button type="submit" className="btn-neon-cyan" style={{ width: '100%' }} disabled={loading}>
+                  {loading ? <Loader2 className="animate-spin" size={20} /> : 'GENERATE TOKEN'}
                 </button>
               </form>
             </section>
 
-            <section className="glass-card" style={{ padding: '2rem' }}>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                <Activity size={20} color="var(--primary)" />
-                Usage Overview
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                {[
-                  { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), change: 'Global' },
-                  { label: 'Last Active', value: (stats.lastActivity as any)?.toDate().toLocaleTimeString() || 'None', change: 'Real-time' },
-                  { label: 'System Health', value: '100%', change: 'Optimal' }
-                ].map((stat, i) => (
-                  <div key={i}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{stat.label}</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--success)' }}>
-                        {stat.change}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '800' }}>{stat.value}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="glass-card" style={{ padding: '2rem' }}>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                <Clock size={20} color="var(--primary)" />
-                Recent Activity
+            {/* Recent Activity Logs */}
+            <section className="glass-panel" style={{ padding: '1.5rem', borderRadius: '24px', flex: 1 }}>
+              <h3 className="tech-font" style={{ fontSize: '1.1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Activity size={20} /> SYSTEM LOGS
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {activities.map((act) => (
-                  <div key={act.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: '1rem', position: 'relative', paddingBottom: '0.5rem' }}>
-                    <div style={{ position: 'absolute', left: '-5px', top: '0', width: '8px', height: '8px', borderRadius: '50%', background: act.success !== false ? 'var(--success)' : 'var(--error)' }} />
-                    <div style={{ fontSize: '0.875rem', fontWeight: '700' }}>{act.tool}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{act.timestamp?.toDate().toLocaleTimeString()}</div>
+                  <div key={act.id} style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: act.success !== false ? 'var(--primary-neon)' : 'var(--error)', marginTop: '4px', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#fff' }}>{act.tool}</div>
+                      <div style={{ color: 'var(--text-muted)' }}>{act.timestamp?.toDate().toLocaleTimeString()}</div>
+                    </div>
                   </div>
                 ))}
               </div>
             </section>
           </aside>
         </div>
-
-        <section style={{ marginTop: '5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem' }}>
-            <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <Activity size={28} color="var(--primary)" />
-                System Activity
-              </h2>
-              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>Requests per hour across all active keys</p>
-            </div>
-          </div>
-          <div style={{ 
-            height: '240px', 
-            background: 'rgba(15, 23, 42, 0.3)', 
-            border: '1px solid var(--border)',
-            borderRadius: '24px',
-            display: 'flex',
-            alignItems: 'flex-end',
-            padding: '2rem',
-            gap: '0.75rem',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '2rem', opacity: 0.1, pointerEvents: 'none' }}>
-              {[1,2,3,4].map(i => <div key={i} style={{ borderTop: '1px solid #fff', width: '100%' }} />)}
-            </div>
-            
-            {[40, 70, 45, 90, 65, 80, 30, 95, 50, 75, 60, 85, 55, 70, 90, 40, 60, 80, 100, 70, 50, 85, 95, 65].map((h, i) => (
-              <motion.div 
-                key={i}
-                initial={{ height: 0 }}
-                animate={{ height: `${h}%` }}
-                transition={{ delay: i * 0.02, duration: 0.5 }}
-                style={{ 
-                  flex: 1, 
-                  background: 'linear-gradient(to top, var(--primary), var(--accent))', 
-                  borderRadius: '6px 6px 2px 2px',
-                  opacity: 0.6,
-                  boxShadow: h > 80 ? '0 0 15px var(--primary-glow)' : 'none'
-                }}
-                whileHover={{ opacity: 1, scaleY: 1.05 }}
-              />
-            ))}
-          </div>
-        </section>
       </main>
 
       <style>{`
-        .hover-bg:hover { background: rgba(255,255,255,0.08) !important; color: white !important; }
-        .hover-error:hover { color: var(--error) !important; background: rgba(244, 63, 94, 0.1) !important; }
+        .hover-error:hover { color: #ff4b4b !important; background: rgba(255, 75, 75, 0.1) !important; }
         .animate-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.3] - 2026-05-16
+
+### Added
+- **Neural Interface UI**: Major modernization of the dashboard using a premium Glassmorphism design system.
+- **Glassmorphic Components**: Implemented high-fidelity panels, sidebars, and metrics cards with 20px backdrop blur and rim-lighting.
+- **Typography Upgrade**: Integrated Space Grotesk (headers) and Inter (data) for a cinematic tech aesthetic.
+- **Enhanced Visuals**: Added Neon Cyan and Electric Violet accents with bloom/glow effects.
+- **Neural Loading Screen**: Implemented a futuristic system initialization sequence in `App.tsx`.
+
+### Changed
+- Refactored `Dashboard.tsx` to use a fixed glass sidebar and floating stats grid.
+- Redesigned `Auth.tsx` with a floating glass card and Super Admin bypass integration.
+
 ## [2.1.2] - 2026-05-16
 
 ### Added
