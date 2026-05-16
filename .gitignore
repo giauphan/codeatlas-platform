@@ -4,7 +4,8 @@ out/
 .vscode-test/
 *.vsix
 mcp-server/
-package-lock.json
+# pnpm logs
+pnpm-debug.log*
 
 # IDE & AI config (may contain local paths or tokens)
 .gemini/
@@ -18,6 +19,10 @@ CLAUDE.md
 .env
 .env.*
 .npmrc
+*.json
+!package.json
+!tsconfig.json
+!composer.json
 
 # Oracle Wallet (Allowed for private repo)
 !wallet/
