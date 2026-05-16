@@ -12,6 +12,8 @@ import express from "express";
 import * as admin from "firebase-admin";
 import { CodeAnalyzer } from "./src/analyzer/parser.js";
 import { AnalysisResult } from "./src/analyzer/types.js";
+import { OracleMemoryService } from "./src/oracleDatabase.js";
+import { SecurityScanner } from "./src/securityScanner.js";
 
 // Initialize Firebase Admin
 // Note: You should set GOOGLE_APPLICATION_CREDENTIALS env var or initialize with a service account
@@ -677,12 +679,11 @@ server.tool(
     project: z.string().optional().describe("Project name or path"),
     businessRule: z.string().optional().describe("Optional: A new business rule to add to the memory (e.g. 'VIP users get free shipping')"),
     changeDescription: z.string().optional().describe("Optional: Description of what was just changed (for the changelog)"),
+    enableEnterpriseSync: z.boolean().optional().describe("If true, syncs data to Oracle 26ai Knowledge Graph (Pro/Plus feature). Default is false."),
   },
-  async ({ project, businessRule, changeDescription }: { project?: string; businessRule?: string; changeDescription?: string }) => {
+  async ({ project, businessRule, changeDescription, enableEnterpriseSync }: { project?: string; businessRule?: string; changeDescription?: string; enableEnterpriseSync?: boolean }) => {
     const tier = await checkAuth();
-    if (tier === 'free') {
-      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
-    }
+    // Allow basic sync for everyone, but gate Oracle sync later
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -902,6 +903,27 @@ server.tool(
     ].filter(Boolean).join("\n");
 
     fs.writeFileSync(path.join(memoryDir, "conventions.md"), conventionsContent);
+
+    // === 7. Sync to Oracle 26ai (Enterprise Knowledge Graph) — Gated and Default False ===
+    if (enableEnterpriseSync) {
+      if (tier === 'free') {
+        console.error("Skipping Oracle sync: Enterprise features require Pro/Plus plan.");
+      } else {
+        try {
+          console.error(`Syncing Knowledge Graph for ${loaded.projectName} to Oracle 26ai...`);
+          await OracleMemoryService.saveSemanticMemory(loaded.projectName, nodes);
+          await OracleMemoryService.saveRelationalMemory(loaded.projectName, links);
+          if (businessRule) {
+            await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "BUSINESS_RULE", businessRule);
+          }
+          if (changeDescription) {
+            await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "CHANGE_LOG", changeDescription);
+          }
+        } catch (oracleErr) {
+          console.error("Failed to sync to Oracle:", oracleErr);
+        }
+      }
+    }
 
     const result = {
       success: true,
@@ -1399,6 +1421,137 @@ server.tool(
         .map((e) => e.file!)
         .filter((f, i, arr) => arr.indexOf(f) === i),
       message: `Generated ${dType} diagram for '${keyword}': ${traceNodes.length} nodes, ${dedupLinks.length} call relationships. Entry points: ${entryPoints.map((n) => n.label).join(", ")}`,
+    };
+
+    return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+  }
+);
+
+// Tool 11: Detect Architectural Smells — Knowledge Graph Reasoning
+server.tool(
+  "detect_architectural_smells",
+  "Knowledge Graph Reasoning: Use Oracle 26ai Graph features to automatically detect architectural weaknesses, circular dependencies, God objects, and dead code.",
+  {
+    project: z.string().optional().describe("Project name or path"),
+  },
+  async ({ project }: { project?: string }) => {
+    const tier = await checkAuth();
+    if (tier === 'free') {
+      return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
+    }
+    const loaded = loadAnalysis(project);
+    if (!loaded) {
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
+    }
+
+    try {
+      const smells = await OracleMemoryService.detectArchitecturalSmells(loaded.projectName);
+      if (!smells) {
+        return { content: [{ type: "text" as const, text: "Failed to run graph reasoning on Oracle 26ai. Ensure graph tables are initialized." }] };
+      }
+
+      const result = {
+        project: loaded.projectName,
+        timestamp: new Date().toISOString(),
+        findings: {
+          circularDependencies: {
+            count: smells.circularDependencies.length,
+            details: smells.circularDependencies,
+            impact: "High - Causes tight coupling and build issues."
+          },
+          godObjects: {
+            count: smells.godObjects.length,
+            details: smells.godObjects,
+            impact: "Medium - Violates Single Responsibility Principle, hard to maintain."
+          },
+          deadCode: {
+            count: smells.deadCode.length,
+            details: smells.deadCode,
+            impact: "Low - Increases codebase size and cognitive load."
+          }
+        },
+        recommendation: "Review high-impact findings (Circular Dependencies) first. Refactor God Objects into smaller services."
+      };
+
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    } catch (err: any) {
+      return { content: [{ type: "text" as const, text: `Oracle Graph Reasoning failed: ${err.message}` }] };
+    }
+  }
+);
+
+// Tool 12: Scan Enterprise Vulnerabilities — Full security & architecture audit for all projects
+server.tool(
+  "scan_enterprise_vulnerabilities",
+  "Enterprise Scanner: Automatically scan all analyzed projects for bugs, security vulnerabilities (hardcoded secrets, unsafe functions), and architectural problems. Enforces subscription plan limits.",
+  {
+    maxProjects: z.number().optional().describe("Maximum number of projects to scan (default: all)"),
+  },
+  async ({ maxProjects }: { maxProjects?: number }) => {
+    const tier = await checkAuth();
+    if (tier === 'free') {
+      return { content: [{ type: "text" as const, text: "Enterprise Scan is a premium feature. Please upgrade to Pro/Plus to scan your projects for security and architectural risks." }] };
+    }
+    const projects = discoverProjects();
+    
+    if (projects.length === 0) {
+      return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
+    }
+
+    // Plan limits
+    let limit = projects.length;
+    if (tier === 'free') limit = 1;
+    if (maxProjects && maxProjects < limit) limit = maxProjects;
+
+    const scanResults: any[] = [];
+    const projectsToScan = projects.slice(0, limit);
+
+    for (const p of projectsToScan) {
+      try {
+        const loaded = loadAnalysis(p.dir);
+        if (!loaded) continue;
+
+        // 1. Static Security Scan
+        const securityFindings = SecurityScanner.scan(loaded.analysis);
+
+        // 2. Knowledge Graph Reasoning (Smells)
+        const archSmells = await OracleMemoryService.detectArchitecturalSmells(p.name);
+
+        scanResults.push({
+          projectName: p.name,
+          projectPath: p.dir,
+          tier,
+          security: {
+            criticalCount: securityFindings.filter(f => f.severity === 'CRITICAL').length,
+            highCount: securityFindings.filter(f => f.severity === 'HIGH').length,
+            findings: securityFindings
+          },
+          architecture: archSmells ? {
+            circularDependencies: archSmells.circularDependencies.length,
+            godObjects: archSmells.godObjects.length,
+            deadCode: archSmells.deadCode.length
+          } : "Oracle Graph data not available",
+          summary: securityFindings.length > 0 || (archSmells && archSmells.circularDependencies.length > 0)
+            ? "⚠️ Action required: Risks detected."
+            : "✅ Healthy: No significant issues found."
+        });
+      } catch (err: any) {
+        scanResults.push({
+          projectName: p.name,
+          error: `Scan failed: ${err.message}`
+        });
+      }
+    }
+
+    const result = {
+      timestamp: new Date().toISOString(),
+      tier,
+      projectsScanned: projectsToScan.length,
+      totalProjectsDiscovered: projects.length,
+      results: scanResults,
+      message: tier === 'free' && projects.length > 1 
+        ? "Free plan limit: Only scanned the first project. Upgrade to Plus/Pro for full enterprise scan."
+        : `Successfully scanned ${projectsToScan.length} projects.`
     };
 
     return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };

@@ -119,6 +119,40 @@ export class OracleMemoryService {
   }
 
   /**
+   * Tầng 3: Relational Memory - Lưu trữ quan hệ (Knowledge Graph)
+   */
+  static async saveRelationalMemory(project: string, links: any[]) {
+    try {
+      const pool = await this.init();
+      const connection = await pool.getConnection();
+      
+      try {
+        const sql = `
+          MERGE INTO ai_relational_memory trg
+          USING (SELECT :src AS source_id, :tgt AS target_id, :project AS project_name, :type AS relationship_type FROM DUAL) src
+          ON (trg.source_id = src.source_id AND trg.target_id = src.target_id AND trg.relationship_type = src.relationship_type)
+          WHEN NOT MATCHED THEN INSERT (source_id, target_id, project_name, relationship_type)
+          VALUES (src.source_id, src.target_id, src.project_name, src.relationship_type)
+        `;
+        
+        const binds = links.map(l => ({
+          src: `${project}_${l.source}`,
+          tgt: `${project}_${l.target}`,
+          project,
+          type: l.type
+        }));
+
+        await connection.executeMany(sql, binds, { autoCommit: true });
+        
+      } finally {
+        await connection.close();
+      }
+    } catch (err) {
+      console.error("Error saving relational memory:", err);
+    }
+  }
+
+  /**
    * Truy vấn bằng AI Vector Search (Native Oracle 26ai)
    */
   static async searchSemanticMemory(project: string, query: string, limit: number = 5) {
@@ -144,6 +178,78 @@ export class OracleMemoryService {
     } catch (err) {
       console.error("Error searching semantic memory:", err);
       return [];
+    }
+  }
+
+  /**
+   * Suy luận trên Knowledge Graph (Oracle 23ai/26ai Graph Features)
+   * Tìm kiếm các "Code Smell" kiến trúc: Circular Dependencies, God Objects, Dead Code
+   */
+  static async detectArchitecturalSmells(project: string) {
+    try {
+      const pool = await this.init();
+      const connection = await pool.getConnection();
+      
+      try {
+        const smells: any = {
+          circularDependencies: [],
+          godObjects: [],
+          deadCode: []
+        };
+
+        // 1. Tìm Circular Dependencies (Chu trình trong đồ thị)
+        // Sử dụng SQL Graph (Oracle 23ai+)
+        const circularSql = `
+          SELECT DISTINCT entity_name, file_path
+          FROM GRAPH_TABLE ( ai_knowledge_graph
+            MATCH (a)-[e IS ai_relational_memory]->{1,5}(a)
+            WHERE a.project_name = :project
+            COLUMNS (a.entity_name, a.file_path)
+          )
+        `;
+        const circularRes = await connection.execute(circularSql, { project });
+        smells.circularDependencies = circularRes.rows;
+
+        // 2. Tìm God Objects (Các thực thể có quá nhiều kết nối đến - In-degree cao)
+        const godSql = `
+          SELECT entity_name, entity_type, file_path, in_degree
+          FROM (
+            SELECT target_id, count(*) as in_degree
+            FROM ai_relational_memory
+            WHERE project_name = :project
+            GROUP BY target_id
+          ) r
+          JOIN ai_semantic_memory s ON r.target_id = s.id
+          WHERE in_degree > 15
+          ORDER BY in_degree DESC
+          FETCH FIRST 10 ROWS ONLY
+        `;
+        const godRes = await connection.execute(godSql, { project });
+        smells.godObjects = godRes.rows;
+
+        // 3. Tìm Dead Code (Các thực thể không có ai gọi đến và không phải entry point)
+        const deadSql = `
+          SELECT entity_name, file_path
+          FROM ai_semantic_memory s
+          WHERE project_name = :project
+            AND entity_type IN ('function', 'class')
+            AND NOT EXISTS (
+              SELECT 1 FROM ai_relational_memory r 
+              WHERE r.target_id = s.id
+            )
+          FETCH FIRST 20 ROWS ONLY
+        `;
+        const deadRes = await connection.execute(deadSql, { project });
+        smells.deadCode = deadRes.rows;
+
+        return smells;
+        
+      } finally {
+        await connection.close();
+      }
+    } catch (err) {
+      console.error("Error detecting smells:", err);
+      return null;
     }
   }
 }

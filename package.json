@@ -12,7 +12,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx index.ts"
+    "dev": "tsx index.ts",
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
