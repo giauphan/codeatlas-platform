@@ -71,7 +71,8 @@ export class CodeAnalyzer {
       functions: Array.from(this.nodes.values()).filter(n => n.type === 'function').length,
       classes: Array.from(this.nodes.values()).filter(n => n.type === 'class').length,
       dependencies: this.links.filter(l => l.type === 'import').length,
-      circularDeps: circularDepsCount
+      circularDeps: circularDepsCount,
+      deadCode: 0
     };
 
     return {
