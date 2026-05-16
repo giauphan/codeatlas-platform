@@ -41,4 +41,5 @@ jobs:
           npm run build
 
       - name: Run analyzer tests
+        working-directory: ./
         run: npm test
