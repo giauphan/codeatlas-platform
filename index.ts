@@ -1577,10 +1577,15 @@ async function main() {
     // SSE Mode - for remote server deployment
     const app = express();
 
-    // Serve static files from dashboard directory
-    const dashboardPath = path.join(process.cwd(), "dashboard");
-    if (fs.existsSync(dashboardPath)) {
-      app.use(express.static(dashboardPath));
+    // Serve static files from built dashboard
+    const dashboardDistPath = path.join(process.cwd(), "dashboard", "dist");
+    if (fs.existsSync(dashboardDistPath)) {
+      app.use(express.static(dashboardDistPath));
+      
+      // SPA support: redirect all non-API routes to index.html
+      app.get(/^\/(?!sse|messages|api).*/, (req, res) => {
+        res.sendFile(path.join(dashboardDistPath, "index.html"));
+      });
     }
 
     // Authentication middleware
