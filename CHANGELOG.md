@@ -2,6 +2,11 @@
 
 All notable changes to CodeAtlas are documented here.
 
+## [1.8.2] - 2026-05-16
+
+### Fixed
+- Resolved Firebase environment variable TypeScript errors by adding `vite-env.d.ts` and updating `tsconfig.json` in the dashboard.
+
 ## [1.8.1] - 2026-05-07
 
 ### Added

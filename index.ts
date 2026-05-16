@@ -205,7 +205,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 // Create MCP server
 const server = new McpServer({
   name: "codeatlas-enterprise",
-  version: "1.8.1",
+  version: "1.8.2",
 });
 
 // Tool 0: List all discovered projects
