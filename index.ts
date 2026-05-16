@@ -234,9 +234,51 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 }
 
 // Create MCP server
+import chokidar from 'chokidar';
+import { exec } from 'child_process';
+
 const server = new McpServer({
-  name: "codeatlas-enterprise",
-  version: "2.1.3",
+  name: "codeatlas",
+  version: "1.5.0",
+});
+
+// Auto-Indexing Logic
+const projectRoot = process.cwd();
+let isAutoIndexing = false;
+
+const triggerAutoIndex = () => {
+  if (isAutoIndexing) return;
+  isAutoIndexing = true;
+  console.log('[Auto-Index] Change detected, re-indexing...');
+  
+  exec('npx tsx run_indexing.ts', (error, stdout, stderr) => {
+    isAutoIndexing = false;
+    if (error) {
+      console.error(`[Auto-Index] Error: ${error.message}`);
+      return;
+    }
+    console.log('[Auto-Index] Success: Codebase updated.');
+  });
+};
+
+// Watch for changes in source files
+const watcher = chokidar.watch(['**/*.ts', '**/*.js', '**/*.tsx', '**/*.jsx'], {
+  ignored: [
+    /(^|[\/\\])\../, // ignore dotfiles
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/build/**',
+    '**/.codeatlas/**'
+  ],
+  persistent: true,
+  ignoreInitial: true,
+  cwd: projectRoot
+});
+
+watcher.on('change', (path) => {
+  console.log(`[Watcher] File changed: ${path}`);
+  // Debounce indexing to avoid hammering the CPU
+  setTimeout(triggerAutoIndex, 2000);
 });
 
 // Setup Express app to serve as both MCP SSE and REST API

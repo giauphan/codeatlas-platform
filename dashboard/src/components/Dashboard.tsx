@@ -32,13 +32,17 @@ import {
   ShieldCheck,
   LayoutDashboard,
   RefreshCw,
-  Terminal
+  Terminal,
+  Filter,
+  Layers,
+  Code2,
+  Box
 } from 'lucide-react';
 
-// API Configuration - Optimized for Nginx Proxy
+// API Configuration
 const API_BASE = window.location.origin.includes('localhost') 
   ? 'http://localhost:8080' 
-  : window.location.origin; // Use the same origin, Nginx will proxy /api to :8080
+  : window.location.origin;
 
 const SUPER_ADMIN_KEY = '0~du=~7^OvNk%cLP2>*e~&~j5x\'WM';
 
@@ -79,7 +83,6 @@ export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({ totalRequests: 0 });
   const user = auth.currentUser;
 
-  // Fetch Real Analysis Data with Caching
   const fetchAnalysis = async () => {
     try {
       const resp = await fetch(`${API_BASE}/api/analysis`, {
@@ -167,17 +170,10 @@ export const Dashboard: React.FC = () => {
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--background)', color: '#fff', overflow: 'hidden' }}>
       
-      {/* SIDEBAR - Fixed layout issues */}
+      {/* SIDEBAR */}
       <aside className="glass-panel" style={{ 
-        width: '300px', 
-        minWidth: '300px',
-        padding: '2.5rem 1.5rem', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '2.5rem',
-        borderRight: '1px solid rgba(255,255,255,0.1)',
-        height: '100vh',
-        boxSizing: 'border-box'
+        width: '300px', minWidth: '300px', padding: '2.5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '2.5rem',
+        borderRight: '1px solid rgba(255,255,255,0.1)', height: '100vh', boxSizing: 'border-box'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 0.5rem' }}>
           <div style={{ width: '45px', height: '45px', background: 'var(--primary-neon)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--glow-primary)' }}>
@@ -220,16 +216,10 @@ export const Dashboard: React.FC = () => {
         </div>
       </aside>
 
-      {/* MAIN AREA - Fixed scroll and spacing */}
+      {/* MAIN AREA */}
       <main style={{ flex: 1, height: '100vh', overflowY: 'auto', padding: '3rem 4rem', boxSizing: 'border-box' }}>
         <AnimatePresence mode="wait">
-          <motion.div 
-            key={activeTab} 
-            initial={{ opacity: 0, y: 15 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.3 }}
-          >
+          <motion.div key={activeTab} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.3 }}>
             {renderContent()}
           </motion.div>
         </AnimatePresence>
@@ -238,10 +228,12 @@ export const Dashboard: React.FC = () => {
       <style>{`
         .glass-panel { background: rgba(13, 17, 23, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
         .tech-font { font-family: 'Inter', system-ui, -apple-system, sans-serif; letter-spacing: -0.02em; }
-        .glass-input { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.875rem 1rem; borderRadius: 12px; width: 100%; transition: all 0.3s; }
+        .glass-input { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.875rem 1rem; border-radius: 12px; width: 100%; transition: all 0.3s; }
         .glass-input:focus { outline: none; border-color: var(--primary-neon); box-shadow: 0 0 15px rgba(0, 240, 255, 0.1); }
         .animate-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .filter-chip { padding: 0.5rem 1rem; border-radius: 10px; background: rgba(255,255,255,0.05); cursor: pointer; border: 1px solid transparent; font-size: 0.8rem; font-weight: 700; transition: all 0.3s; color: var(--text-muted); display: flex; alignItems: center; gap: 0.5rem; }
+        .filter-chip.active { background: rgba(0, 240, 255, 0.1); border-color: var(--primary-neon); color: var(--primary-neon); }
       `}</style>
     </div>
   );
@@ -311,41 +303,131 @@ const ControlCenterView: React.FC<any> = ({ stats, keys, analysis, createKey, de
 
 const KnowledgeGraphView: React.FC<{ analysis: AnalysisData | null }> = ({ analysis }) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilters, setActiveFilters] = useState(['module', 'function', 'class', 'variable']);
   
-  const nodes = useMemo(() => {
+  const filteredNodes = useMemo(() => {
     if (!analysis) return [];
-    return analysis.graph.nodes.slice(0, 40).map((n, i) => ({
-      ...n,
-      x: 100 + (i % 8) * 120 + Math.random() * 40,
-      y: 100 + Math.floor(i / 8) * 120 + Math.random() * 40
-    }));
-  }, [analysis]);
+    return analysis.graph.nodes.filter(n => {
+      const typeMatch = activeFilters.includes(n.type || 'function');
+      const searchMatch = n.label.toLowerCase().includes(searchQuery.toLowerCase());
+      return typeMatch && searchMatch;
+    });
+  }, [analysis, searchQuery, activeFilters]);
+
+  const nodes = useMemo(() => {
+    if (filteredNodes.length === 0) return [];
+    
+    // Logic Layout Cụm (Cluster-based Layout)
+    const centerX = 550;
+    const centerY = 350;
+    
+    return filteredNodes.slice(0, 150).map((n, i) => {
+      const isModule = n.type === 'module';
+      const angle = (i * 2 * Math.PI) / (isModule ? 10 : 30);
+      const radius = isModule ? 80 : 200 + (Math.floor(i/30) * 80);
+      
+      return {
+        ...n,
+        x: centerX + Math.cos(angle) * radius + (Math.sin(i) * 20),
+        y: centerY + Math.sin(angle) * radius + (Math.cos(i) * 20)
+      };
+    });
+  }, [filteredNodes]);
+
+  const links = useMemo(() => {
+    if (!analysis || nodes.length === 0) return [];
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    return analysis.graph.links
+      .filter(l => nodeMap.has(l.source) && nodeMap.has(l.target))
+      .map(l => ({
+        source: nodeMap.get(l.source),
+        target: nodeMap.get(l.target)
+      }));
+  }, [analysis, nodes]);
+
+  const toggleFilter = (type: string) => {
+    setActiveFilters(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
+  };
 
   return (
     <div style={{ height: 'calc(100vh - 8rem)', display: 'flex', flexDirection: 'column' }}>
-      <header style={{ marginBottom: '2.5rem' }}>
-        <h1 className="tech-font" style={{ fontSize: '2.5rem', margin: 0, fontWeight: 800 }}>Knowledge Network</h1>
-        <p style={{ color: 'var(--text-muted)' }}>Mapping {analysis?.stats?.totalModules || 0} modules and {analysis?.stats?.totalFunctions || 0} logic entities.</p>
+      <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 className="tech-font" style={{ fontSize: '2.5rem', margin: 0, fontWeight: 800 }}>Knowledge Network</h1>
+          <p style={{ color: 'var(--text-muted)' }}>Interactive neural mapping of <span style={{ color: 'var(--primary-neon)' }}>{analysis?.stats?.totalModules || 0}</span> logic clusters.</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {[
+            { id: 'module', label: 'Modules', icon: Box, color: '#00F0FF' },
+            { id: 'function', label: 'Functions', icon: Code2, color: '#FF00A8' },
+            { id: 'class', label: 'Classes', icon: Layers, color: '#FFB400' },
+            { id: 'variable', label: 'Variables', icon: Activity, color: '#00FF94' },
+          ].map(f => (
+            <div key={f.id} className={`filter-chip ${activeFilters.includes(f.id) ? 'active' : ''}`} onClick={() => toggleFilter(f.id)}>
+              <f.icon size={14} /> {f.label}
+            </div>
+          ))}
+        </div>
       </header>
-      <div className="glass-panel" style={{ flex: 1, borderRadius: '32px', position: 'relative', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
-        {!analysis ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1.5rem' }}>
-            <Loader2 className="animate-spin" size={48} color="var(--primary-neon)" />
-            <div style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Initializing Neural Network...</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem', flex: 1, minHeight: 0 }}>
+        {/* Graph Area */}
+        <div className="glass-panel" style={{ borderRadius: '32px', position: 'relative', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(5, 8, 15, 0.6)' }}>
+          <div style={{ position: 'absolute', top: '2rem', left: '2rem', zIndex: 10, width: '350px' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--text-muted)' }} />
+              <input type="text" className="glass-input" placeholder="Search functions, modules..." style={{ paddingLeft: '3rem', background: 'rgba(0,0,0,0.5)' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
           </div>
-        ) : (
+
           <svg width="100%" height="100%" viewBox="0 0 1100 700">
             <defs>
               <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <linearGradient id="linkGradient" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="rgba(0, 240, 255, 0.1)" /><stop offset="100%" stopColor="rgba(157, 0, 255, 0.1)" /></linearGradient>
             </defs>
-            {nodes.map((node, i) => (
-              <g key={node.id} onMouseEnter={() => setHoveredId(node.id)} onMouseLeave={() => setHoveredId(null)} style={{ cursor: 'pointer' }}>
-                <motion.circle cx={node.x} cy={node.y} r={hoveredId === node.id ? 10 : 6} fill={hoveredId === node.id ? 'var(--primary-neon)' : 'rgba(255,255,255,0.2)'} filter={hoveredId === node.id ? 'url(#glow)' : 'none'} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.02 }} />
-                <text x={node.x + 15} y={node.y + 5} fill={hoveredId === node.id ? '#fff' : 'rgba(255,255,255,0.4)'} style={{ fontSize: '11px', fontWeight: 700 }}>{node.label}</text>
-              </g>
+            {links.map((link, i) => (
+              <motion.line key={`link-${i}`} x1={link.source.x} y1={link.source.y} x2={link.target.x} y2={link.target.y} stroke="url(#linkGradient)" strokeWidth="1" initial={{ opacity: 0 }} animate={{ opacity: 0.3 }} />
             ))}
+            {nodes.map((node, i) => {
+              const color = node.type === 'module' ? '#00F0FF' : node.type === 'class' ? '#FFB400' : '#FF00A8';
+              return (
+                <g key={node.id} onMouseEnter={() => setHoveredId(node.id)} onMouseLeave={() => setHoveredId(null)} style={{ cursor: 'pointer' }}>
+                  <motion.circle cx={node.x} cy={node.y} r={hoveredId === node.id ? 10 : node.type === 'module' ? 8 : 4} fill={hoveredId === node.id ? color : `${color}66`} filter={hoveredId === node.id ? 'url(#glow)' : 'none'} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.005 }} />
+                  {(hoveredId === node.id || node.type === 'module') && (
+                    <text x={node.x + 15} y={node.y + 5} fill="#fff" style={{ fontSize: node.type === 'module' ? '12px' : '10px', fontWeight: 800, pointerEvents: 'none', textShadow: '0 0 10px #000' }}>{node.label}</text>
+                  )}
+                </g>
+              );
+            })}
           </svg>
-        )}
+        </div>
+
+        {/* Stats Sidebar */}
+        <div className="glass-panel" style={{ borderRadius: '32px', padding: '2rem', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <h3 className="tech-font" style={{ fontSize: '1.25rem', fontWeight: 800 }}>Entity Overview</h3>
+          {[
+            { label: 'Modules', count: analysis?.stats?.totalModules || 0, icon: Box, color: '#00F0FF' },
+            { label: 'Functions', count: analysis?.stats?.totalFunctions || 0, icon: Code2, color: '#FF00A8' },
+            { label: 'Classes', count: analysis?.stats?.totalClasses || 0, icon: Layers, color: '#FFB400' },
+            { label: 'Variables', count: analysis?.stats?.totalVariables || 0, icon: Activity, color: '#00FF94' },
+          ].map((item, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', background: 'rgba(255,255,255,0.03)', padding: '1.25rem', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ width: '40px', height: '40px', background: `${item.color}15`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.color }}><item.icon size={20} /></div>
+              <div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 900 }}>{item.count}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>{item.label}</div>
+              </div>
+            </div>
+          ))}
+          <div style={{ marginTop: 'auto', padding: '1.5rem', background: 'rgba(0, 240, 255, 0.05)', borderRadius: '20px', border: '1px solid rgba(0, 240, 255, 0.1)' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary-neon)', marginBottom: '0.5rem' }}>INDEX COVERAGE</div>
+            <div style={{ height: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px', overflow: 'hidden' }}>
+              <motion.div initial={{ width: 0 }} animate={{ width: '85%' }} transition={{ duration: 1 }} style={{ height: '100%', background: 'var(--primary-neon)', boxShadow: '0 0 10px var(--primary-neon)' }} />
+            </div>
+            <div style={{ textAlign: 'right', fontSize: '0.7rem', marginTop: '0.5rem', color: 'var(--primary-neon)', fontWeight: 800 }}>85% SCANNED</div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -374,53 +456,133 @@ const LogicModelsView: React.FC<{ analysis: any }> = ({ analysis }) => (
   </div>
 );
 
-const CloudIndexView: React.FC<{ analysis: any, isIndexing: boolean, onReindex: () => void }> = ({ analysis, isIndexing, onReindex }) => (
-  <div style={{ height: 'calc(100vh - 8rem)' }}>
-    <header style={{ marginBottom: '3.5rem' }}>
-      <h1 className="tech-font" style={{ fontSize: '2.5rem', margin: 0, fontWeight: 800 }}>Neural Index</h1>
-      <p style={{ color: 'var(--text-muted)' }}>Global codebase indexing status and vector synchronization.</p>
-    </header>
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '3rem' }}>
-      <div className="glass-panel" style={{ padding: '2.5rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem', marginBottom: '3rem' }}>
-          {[
-            { label: 'Files Scanned', value: analysis?.stats?.totalFiles || 0, icon: Globe },
-            { label: 'Neural Nodes', value: analysis?.graph?.nodes?.length || 0, icon: Server },
-            { label: 'Sync Status', value: isIndexing ? 'Syncing...' : 'Synced', icon: HardDrive },
-          ].map((item, i) => (
-            <div key={i} style={{ textAlign: 'center' }}>
-              <item.icon size={28} color="var(--primary-neon)" style={{ marginBottom: '0.75rem' }} />
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.25rem' }}>{item.label}</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 900 }}>{item.value}</div>
+const CloudIndexView: React.FC<{ analysis: any, isIndexing: boolean, onReindex: () => void }> = ({ analysis, isIndexing, onReindex }) => {
+  const [autoIndex, setAutoIndex] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  return (
+    <div style={{ height: 'calc(100vh - 8rem)', display: 'flex', flexDirection: 'column' }}>
+      <header style={{ marginBottom: '2.5rem' }}>
+        <h1 className="tech-font" style={{ fontSize: '2.5rem', margin: 0, fontWeight: 800 }}>Neural Indexing</h1>
+        <p style={{ color: 'var(--text-muted)' }}>Configure codebase indexing settings to enable structural and semantic search.</p>
+      </header>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '3rem', flex: 1, minHeight: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          
+          {/* MAIN INDEXING PANEL (ROO-CODE STYLE) */}
+          <div className="glass-panel" style={{ padding: '2.5rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13, 17, 23, 0.4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2.5rem' }}>
+              <div style={{ 
+                width: '24px', height: '24px', border: '2px solid var(--primary-neon)', borderRadius: '6px', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                background: autoIndex ? 'var(--primary-neon)' : 'transparent'
+              }} onClick={() => setAutoIndex(!autoIndex)}>
+                {autoIndex && <Check size={16} color="#000" strokeWidth={4} />}
+              </div>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>Enable Codebase Indexing</span>
+              <div style={{ padding: '0.25rem 0.6rem', borderRadius: '100px', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                <Activity size={12} style={{ display: 'inline', marginRight: '4px' }} /> i
+              </div>
             </div>
-          ))}
+
+            <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.75rem', textTransform: 'uppercase' }}>Status</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ 
+                  width: '12px', height: '12px', borderRadius: '50%', 
+                  background: isIndexing ? 'var(--primary-neon)' : 'rgba(255,255,255,0.2)',
+                  boxShadow: isIndexing ? '0 0 10px var(--primary-neon)' : 'none'
+                }} />
+                <span style={{ fontWeight: 600, color: isIndexing ? '#fff' : 'var(--text-muted)' }}>
+                  {isIndexing ? 'Scanning source files...' : autoIndex ? 'Standby - Watching for changes' : 'Code indexing is disabled'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div style={{ cursor: 'pointer' }} onClick={() => setShowAdvanced(!showAdvanced)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#fff', fontWeight: 700 }}>
+                  <motion.div animate={{ rotate: showAdvanced ? 90 : 0 }}>{"> "}</motion.div> Setup
+                </div>
+              </div>
+              
+              <div style={{ cursor: 'pointer' }} onClick={() => setShowAdvanced(!showAdvanced)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#fff', fontWeight: 700 }}>
+                  <motion.div animate={{ rotate: showAdvanced ? 90 : 0 }}>{"> "}</motion.div> Advanced Configuration
+                </div>
+              </div>
+
+              {showAdvanced && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                  Indexing Depth: Level 4 (Full Analysis)<br/>
+                  Exclusions: node_modules, .git, build, dist<br/>
+                  Target: /home/biibon/CodeAtlas
+                </motion.div>
+              )}
+            </div>
+
+            <div style={{ marginTop: '3rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn-neon-cyan" style={{ padding: '0.75rem 2rem' }} onClick={onReindex} disabled={isIndexing}>
+                {isIndexing ? <Loader2 className="animate-spin" size={20} /> : 'Save & Index Now'}
+              </button>
+            </div>
+          </div>
+
+          {/* LOG CONSOLE */}
+          <div className="glass-panel" style={{ flex: 1, padding: '1.5rem', borderRadius: '24px', background: '#05080f', border: '1px solid rgba(255,255,255,0.05)', fontFamily: 'monospace' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--primary-neon)' }}>INDEXING_LOG_STREAM</span>
+              <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)' }}>NODE_01</span>
+            </div>
+            <div style={{ fontSize: '0.9rem', color: 'rgba(0, 240, 255, 0.8)', lineHeight: 1.6 }}>
+              {isIndexing ? (
+                <motion.div animate={{ opacity: [0.5, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}>
+                  [SCAN] Crawling directory structure...<br/>
+                  [PARS] Analyzing 286 AST nodes...<br/>
+                  [GRAPH] Updating Knowledge Network links...<br/>
+                  [EMBED] Generating semantic vectors...
+                </motion.div>
+              ) : (
+                <>
+                  [READY] System monitoring active<br/>
+                  [INFO] Last index: {new Date().toLocaleTimeString()}<br/>
+                  [INFO] Vector database synchronized (85% coverage)
+                </>
+              )}
+            </div>
+          </div>
         </div>
-        <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '20px', padding: '2rem', fontFamily: 'monospace', fontSize: '0.95rem', color: 'var(--primary-neon)', minHeight: '220px', border: '1px solid rgba(255,255,255,0.05)' }}>
-          <div style={{ opacity: 0.6, marginBottom: '0.75rem' }}>[SYS] NEURAL INDEX v2.1.3 READY</div>
-          {isIndexing ? (
-            <motion.div animate={{ opacity: [0.6, 1] }} transition={{ repeat: Infinity, duration: 0.6 }}>
-              {"> "} SCANNING SOURCE FILES...<br/>
-              {"> "} EXTRACTING NEURAL ENTITIES...<br/>
-              {"> "} MAPPING LOGIC RELATIONSHIPS...<br/>
-              {"> "} SYNCING TO ORACLE CLOUD...
-            </motion.div>
-          ) : (
-            <div>{"> "} ALL SYSTEMS NOMINAL<br/>{"> "} VECTOR SYNC COMPLETE<br/>{"> "} CACHE INTEGRITY: 100%</div>
-          )}
+
+        {/* SIDEBAR STATS */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="glass-panel" style={{ padding: '2rem', borderRadius: '28px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <h3 className="tech-font" style={{ fontSize: '1.1rem', marginBottom: '1.5rem', fontWeight: 800 }}>Index Statistics</h3>
+            {[
+              { label: 'Scanned Files', value: analysis?.stats?.totalFiles || 0, icon: Globe },
+              { label: 'Neural Nodes', value: analysis?.graph?.nodes?.length || 0, icon: Server },
+              { label: 'Logic Units', value: analysis?.stats?.totalFunctions || 0, icon: Cpu },
+            ].map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ color: 'var(--primary-neon)' }}><item.icon size={20} /></div>
+                <div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>{item.value}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>{item.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '24px', background: 'rgba(255, 180, 0, 0.05)', border: '1px solid rgba(255, 180, 0, 0.1)' }}>
+            <div style={{ color: '#FFB400', fontSize: '0.8rem', fontWeight: 800, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Zap size={14} /> ADVISORY
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'rgba(255, 180, 0, 0.8)', margin: 0, lineHeight: 1.4 }}>
+              Automatic indexing is optimized for local development. For large enterprise monorepos, use the "Selective Scan" in Advanced Configuration.
+            </p>
+          </div>
         </div>
       </div>
-      <aside className="glass-panel" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '1.25rem', alignSelf: 'start' }}>
-        <h3 className="tech-font" style={{ fontSize: '1.25rem', fontWeight: 800 }}>INDEX CONTROLS</h3>
-        <button onClick={onReindex} className="btn-neon-cyan" style={{ width: '100%', height: '56px', fontSize: '1rem', fontWeight: 800, gap: '0.75rem' }} disabled={isIndexing}>
-          {isIndexing ? <RefreshCw className="animate-spin" size={22} /> : <Search size={22} />} FULL RE-INDEX
-        </button>
-        <button style={{ width: '100%', background: 'rgba(255,255,255,0.03)', color: '#fff', padding: '1rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', fontWeight: 700, transition: 'all 0.3s' }}>
-          CLEAR PERSISTENCE
-        </button>
-        <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(255, 180, 0, 0.05)', borderRadius: '14px', border: '1px solid rgba(255, 180, 0, 0.1)', color: '#FFB400', fontSize: '0.8rem', lineHeight: 1.4 }}>
-          <strong>WARNING:</strong> Re-indexing large codebases may increase latency for active tokens.
-        </div>
-      </aside>
     </div>
-  </div>
-);
+  );
+};
