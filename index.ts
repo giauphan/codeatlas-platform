@@ -21,7 +21,8 @@ import { SecurityScanner } from "./src/securityScanner.js";
 dotenv.config();
 
 // Initialize Firebase Admin
-if (!getApps().length) {
+const apps = getApps();
+if (!apps || apps.length === 0) {
   try {
     // If GOOGLE_APPLICATION_CREDENTIALS is set, initializeApp() works automatically.
     // Otherwise, we could use cert() if we have a path.
