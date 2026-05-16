@@ -71,11 +71,15 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Control Center');
-  const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisData | null>(() => {
+    const cached = localStorage.getItem('ca_analysis_cache');
+    return cached ? JSON.parse(cached) : null;
+  });
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState({ totalRequests: 0 });
   const user = auth.currentUser;
 
+  // Fetch Real Analysis Data with Caching
   const fetchAnalysis = async () => {
     try {
       const resp = await fetch(`${API_BASE}/api/analysis`, {
@@ -84,6 +88,7 @@ export const Dashboard: React.FC = () => {
       if (resp.ok) {
         const data = await resp.json();
         setAnalysis(data);
+        localStorage.setItem('ca_analysis_cache', JSON.stringify(data));
       }
     } catch (err) {
       console.error("Failed to fetch analysis:", err);
