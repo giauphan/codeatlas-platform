@@ -9,23 +9,29 @@ import * as path from "path";
 import * as http from "http";
 import * as url from "url";
 import express from "express";
-import * as admin from "firebase-admin";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import * as dotenv from "dotenv";
 import { CodeAnalyzer } from "./src/analyzer/parser.js";
 import { AnalysisResult } from "./src/analyzer/types.js";
 import { OracleMemoryService } from "./src/oracleDatabase.js";
 import { SecurityScanner } from "./src/securityScanner.js";
 
+// Load environment variables
+dotenv.config();
+
 // Initialize Firebase Admin
-// Note: You should set GOOGLE_APPLICATION_CREDENTIALS env var or initialize with a service account
-if (!admin.apps.length) {
+if (!getApps().length) {
   try {
-    admin.initializeApp();
+    // If GOOGLE_APPLICATION_CREDENTIALS is set, initializeApp() works automatically.
+    // Otherwise, we could use cert() if we have a path.
+    initializeApp();
   } catch (e) {
     console.error("Firebase Admin initialization failed. Ensure GOOGLE_APPLICATION_CREDENTIALS is set.");
   }
 }
 
-const db = admin.firestore();
+const db = getFirestore();
 
 // RAM Cache for checkAuth
 const authCache = new Map<string, { tier: string, expires: number }>();
@@ -84,7 +90,7 @@ async function checkAuth(apiKey?: string): Promise<string> {
 
     // Update lastUsed timestamp (only on cache miss to optimize DB writes)
     await keyDoc.ref.update({
-      lastUsed: admin.firestore.FieldValue.serverTimestamp()
+      lastUsed: FieldValue.serverTimestamp()
     });
 
     return tier;

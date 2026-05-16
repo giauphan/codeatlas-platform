@@ -25,6 +25,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
     "@typescript-eslint/typescript-estree": "^8.0.0",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "firebase-admin": "^12.1.0",
     "glob": "^10.3.10",

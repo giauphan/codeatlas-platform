@@ -13,7 +13,12 @@ CodeAtlas Enterprise is a production-grade, standalone server that transforms yo
 ## 🚀 Linux Server Setup
 
 ### 1. Prerequisites
-- **Node.js**: v20.0.0 or higher
+- **Node.js**: v20.0.0 or higher.
+  - Install via NodeSource (Recommended for Linux):
+    ```bash
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    ```
 - **Oracle Instant Client**: Required for **Thick Mode** connectivity.
   - Download and extract to `/opt/oracle/instantclient`
   - Set `LD_LIBRARY_PATH` and `ORACLE_HOME`
