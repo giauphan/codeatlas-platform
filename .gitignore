@@ -27,3 +27,5 @@ CLAUDE.md
 !wallet/*.jks
 !wallet/*.ora
 !wallet/*.properties
+.rooignore
+.clinerules

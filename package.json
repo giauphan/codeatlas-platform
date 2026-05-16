@@ -114,6 +114,8 @@
     "pretest": "npm run compile",
     "lint": "eslint src --ext ts",
     "test": "node --experimental-vm-modules node_modules/tsx/dist/cli.mjs src/test/analyzer.test.ts",
+    "test:e2e": "node --experimental-vm-modules node_modules/tsx/dist/cli.mjs src/test/mcp-e2e.test.ts",
+    "test:vscode": "npm run compile && node out/src/test/runTest.js",
     "build:webview": "vite build",
     "build:extension": "node esbuild.js",
     "build": "npm run build:webview && npm run build:extension"
@@ -131,6 +133,11 @@
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.19.2",
     "eslint": "^8.47.0",
+    "glob": "^8.1.0",
+    "mocha": "^10.2.0",
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.1",
+    "@vscode/test-electron": "^2.3.8",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^4.4.9"
