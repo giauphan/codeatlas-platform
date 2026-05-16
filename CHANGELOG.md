@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.1.4] - 2026-05-16
+## [2.1.6] - 2026-05-16
+
+### Changed
+- **Security Hardening**: Removed the weak hardcoded admin bypass key (`ca_enterprise_9999`).
+- **Secure Authentication**: Implemented a secure 48-character hex key in `.env` for Admin access.
+- **Privacy Protection**: Suppressed sensitive key logging in `checkAuth` to prevent accidental exposure in console logs.
+
+## [2.1.5] - 2026-05-16
 
 ### Added
 - **Auto-Indexing Engine**: Integrated Chokidar file watcher to automatically trigger codebase re-indexing on local file changes.

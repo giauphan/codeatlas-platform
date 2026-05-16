@@ -60,8 +60,9 @@ async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: string; 
     throw new Error("Unauthorized: API Key is required. Set CODEATLAS_API_KEY env var or provide x-api-key header.");
   }
 
-  // 1. Super Admin Bypass
-  console.error(`[Auth Debug] Incoming: "${keyToVerify}", Expected: "${process.env.CODEATLAS_API_KEY}"`);
+  // 1. Super Admin Bypass (via .env)
+  console.error(`[Auth Debug] Incoming key check...`);
+  
   if (process.env.CODEATLAS_API_KEY && keyToVerify === process.env.CODEATLAS_API_KEY) {
     console.error(`[Auth Debug] Super Admin Bypass Success!`);
     return { tier: 'enterprise', uid: 'admin', keyId: 'admin' }; 
@@ -236,10 +237,19 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 }
 
 // Create MCP server
-const server = new McpServer({
-  name: "codeatlas-enterprise",
-  version: "2.1.4",
-});
+const server = new McpServer(
+  {
+    name: "CodeAtlas",
+    version: "2.1.6",
+  },
+  {
+    capabilities: {
+      resources: {},
+      tools: {},
+      logging: {},
+    },
+  }
+);
 
 // Auto-Indexing Logic
 const projectRoot = process.cwd();

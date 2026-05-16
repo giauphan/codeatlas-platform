@@ -79,6 +79,14 @@ export const Dashboard: React.FC = () => {
     const cached = localStorage.getItem('ca_analysis_cache');
     return cached ? JSON.parse(cached) : null;
   });
+  const [isIndexingEnabled, setIsIndexingEnabled] = useState(() => {
+    const saved = localStorage.getItem('codeatlas_indexing_enabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('codeatlas_indexing_enabled', JSON.stringify(isIndexingEnabled));
+  }, [isIndexingEnabled]);
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState({ totalRequests: 0 });
   const user = auth.currentUser;
@@ -254,8 +262,8 @@ const ControlCenterView: React.FC<any> = ({ stats, keys, analysis, createKey, de
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem', marginBottom: '4rem' }}>
       {[
         { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), icon: Activity, color: 'var(--primary-neon)' },
-        { label: 'Neural Entities', value: (analysis?.stats?.totalFunctions || analysis?.stats?.totalClasses || 0).toLocaleString(), icon: Database, color: 'var(--secondary-neon)' },
-        { label: 'Scanned Files', value: (analysis?.stats?.totalFiles || analysis?.stats?.totalFilesAnalyzed || 0).toLocaleString(), icon: Globe, color: '#00FF94' },
+        { label: 'Neural Entities', value: (analysis?.stats?.totalFunctions || analysis?.stats?.totalClasses || analysis?.entityCounts?.functions || 0).toLocaleString(), icon: Database, color: 'var(--secondary-neon)' },
+        { label: 'Scanned Files', value: (analysis?.totalFilesAnalyzed || analysis?.stats?.totalFiles || 0).toLocaleString(), icon: Globe, color: '#00FF94' },
       ].map((stat, i) => (
         <div key={i} className="glass-panel" style={{ padding: '2rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', position: 'relative' }}>
           <stat.icon size={32} color={stat.color} style={{ marginBottom: '1.25rem', opacity: 0.8 }} />
@@ -559,9 +567,9 @@ const CloudIndexView: React.FC<{ analysis: any, isIndexing: boolean, onReindex: 
           <div className="glass-panel" style={{ padding: '2rem', borderRadius: '28px', border: '1px solid rgba(255,255,255,0.05)' }}>
             <h3 className="tech-font" style={{ fontSize: '1.1rem', marginBottom: '1.5rem', fontWeight: 800 }}>Index Statistics</h3>
             {[
-              { label: 'Scanned Files', value: analysis?.stats?.totalFiles || analysis?.stats?.totalFilesAnalyzed || 0, icon: Globe },
+              { label: 'Scanned Files', value: analysis?.totalFilesAnalyzed || analysis?.stats?.totalFiles || 0, icon: Globe },
               { label: 'Neural Nodes', value: analysis?.graph?.nodes?.length || 0, icon: Server },
-              { label: 'Logic Units', value: analysis?.stats?.totalFunctions || analysis?.stats?.totalClasses || 0, icon: Cpu },
+              { label: 'Logic Units', value: analysis?.stats?.totalFunctions || analysis?.stats?.totalClasses || analysis?.entityCounts?.functions || 0, icon: Cpu },
             ].map((item, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div style={{ color: 'var(--primary-neon)' }}><item.icon size={20} /></div>
