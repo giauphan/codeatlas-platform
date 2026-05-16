@@ -40,10 +40,15 @@ async function checkAuth(apiKey?: string): Promise<string> {
   const keyToVerify = apiKey || process.env.CODEATLAS_API_KEY;
 
   if (!keyToVerify) {
-    throw new Error("Unauthorized: API Key is required (either via header/query or CODEATLAS_API_KEY env var).");
+    throw new Error("Unauthorized: API Key is required. Set CODEATLAS_API_KEY env var or provide x-api-key header.");
   }
 
-  // Check RAM Cache
+  // 1. Super Admin Bypass: If the key matches the environment variable exactly, grant 'pro' tier
+  if (process.env.CODEATLAS_API_KEY && keyToVerify === process.env.CODEATLAS_API_KEY) {
+    return 'pro'; 
+  }
+
+  // 2. Check RAM Cache
   const cached = authCache.get(keyToVerify);
   if (cached && cached.expires > Date.now()) {
     return cached.tier;
