@@ -262,8 +262,8 @@ const ControlCenterView: React.FC<any> = ({ stats, keys, analysis, createKey, de
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem', marginBottom: '4rem' }}>
       {[
         { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), icon: Activity, color: 'var(--primary-neon)' },
-        { label: 'Neural Entities', value: analysis?.stats.totalFunctions.toLocaleString() || '---', icon: Database, color: 'var(--secondary-neon)' },
-        { label: 'Codebase (LOC)', value: analysis?.stats.loc.toLocaleString() || '---', icon: Terminal, color: '#00FF94' },
+        { label: 'Neural Entities', value: analysis?.stats?.totalFunctions?.toLocaleString() || '---', icon: Database, color: 'var(--secondary-neon)' },
+        { label: 'Codebase (LOC)', value: analysis?.stats?.loc?.toLocaleString() || '---', icon: Terminal, color: '#00FF94' },
       ].map((stat, i) => (
         <div key={i} className="glass-panel" style={{ padding: '2rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', position: 'relative' }}>
           <stat.icon size={32} color={stat.color} style={{ marginBottom: '1.25rem', opacity: 0.8 }} />
@@ -325,7 +325,7 @@ const KnowledgeGraphView: React.FC<{ analysis: AnalysisData | null }> = ({ analy
     <div style={{ height: 'calc(100vh - 8rem)', display: 'flex', flexDirection: 'column' }}>
       <header style={{ marginBottom: '2.5rem' }}>
         <h1 className="tech-font" style={{ fontSize: '2.5rem', margin: 0, fontWeight: 800 }}>Knowledge Network</h1>
-        <p style={{ color: 'var(--text-muted)' }}>Mapping {analysis?.stats.totalModules || 0} modules and {analysis?.stats.totalFunctions || 0} logic entities.</p>
+        <p style={{ color: 'var(--text-muted)' }}>Mapping {analysis?.stats?.totalModules || 0} modules and {analysis?.stats?.totalFunctions || 0} logic entities.</p>
       </header>
       <div className="glass-panel" style={{ flex: 1, borderRadius: '32px', position: 'relative', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)' }}>
         {!analysis ? (
@@ -359,8 +359,8 @@ const LogicModelsView: React.FC<{ analysis: any }> = ({ analysis }) => (
     </header>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '2rem' }}>
       {[
-        { name: 'Knowledge Graph', value: `${analysis?.stats.totalModules || 0} Modules`, icon: Network, color: 'var(--primary-neon)', desc: 'Active structural relationship mapping.' },
-        { name: 'Function Registry', value: `${analysis?.stats.totalFunctions || 0} Entities`, icon: Cpu, color: 'var(--secondary-neon)', desc: 'Full indexing of logic units and variables.' },
+        { name: 'Knowledge Graph', value: `${analysis?.stats?.totalModules || 0} Modules`, icon: Network, color: 'var(--primary-neon)', desc: 'Active structural relationship mapping.' },
+        { name: 'Function Registry', value: `${analysis?.stats?.totalFunctions || 0} Entities`, icon: Cpu, color: 'var(--secondary-neon)', desc: 'Full indexing of logic units and variables.' },
         { name: 'Oracle 26ai Link', value: 'Active', icon: Zap, color: '#00FF94', desc: 'Secure connection to Oracle AI cluster.' },
       ].map((engine, i) => (
         <div key={i} className="glass-panel rim-lit" style={{ padding: '2.5rem', borderRadius: '28px', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -384,8 +384,8 @@ const CloudIndexView: React.FC<{ analysis: any, isIndexing: boolean, onReindex: 
       <div className="glass-panel" style={{ padding: '2.5rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.05)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem', marginBottom: '3rem' }}>
           {[
-            { label: 'Files Scanned', value: analysis?.stats.totalFiles || 0, icon: Globe },
-            { label: 'Neural Nodes', value: analysis?.graph.nodes.length || 0, icon: Server },
+            { label: 'Files Scanned', value: analysis?.stats?.totalFiles || 0, icon: Globe },
+            { label: 'Neural Nodes', value: analysis?.graph?.nodes?.length || 0, icon: Server },
             { label: 'Sync Status', value: isIndexing ? 'Syncing...' : 'Synced', icon: HardDrive },
           ].map((item, i) => (
             <div key={i} style={{ textAlign: 'center' }}>
