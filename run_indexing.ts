@@ -3,7 +3,8 @@ import * as fs from "fs";
 import * as path from "path";
 
 async function run() {
-  const projectPath = "/home/biibon/CodeAtlas";
+  // Tự động lấy thư mục hiện tại để chạy trên bất kỳ server nào
+  const projectPath = process.cwd();
   console.log(`Starting analysis for: ${projectPath}`);
   
   const analyzer = new CodeAnalyzer(projectPath, 5000);
