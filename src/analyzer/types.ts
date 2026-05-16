@@ -35,6 +35,7 @@ export interface EntityCounts {
   classes: number;
   dependencies: number;
   circularDeps: number;
+  deadCode: number;
 }
 
 export interface AnalysisResult {

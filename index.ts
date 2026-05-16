@@ -24,9 +24,17 @@ dotenv.config();
 const apps = getApps();
 if (!apps || apps.length === 0) {
   try {
-    // If GOOGLE_APPLICATION_CREDENTIALS is set, initializeApp() works automatically.
-    // Otherwise, we could use cert() if we have a path.
-    initializeApp();
+    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || "./atlas-intelligence-node-firebase-adminsdk-fbsvc-6c9d06254d.json";
+    const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
+    
+    if (!fs.existsSync(absolutePath)) {
+      console.error(`Firebase Service Account not found at: ${absolutePath}`);
+    }
+
+    initializeApp({
+      credential: cert(absolutePath),
+      projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
+    });
   } catch (e) {
     console.error("Firebase Admin initialization failed. Ensure GOOGLE_APPLICATION_CREDENTIALS is set.");
   }
@@ -51,7 +59,9 @@ async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: string; 
   }
 
   // 1. Super Admin Bypass
+  console.error(`[Auth Debug] Incoming: "${keyToVerify}", Expected: "${process.env.CODEATLAS_API_KEY}"`);
   if (process.env.CODEATLAS_API_KEY && keyToVerify === process.env.CODEATLAS_API_KEY) {
+    console.error(`[Auth Debug] Super Admin Bypass Success!`);
     return { tier: 'enterprise', uid: 'admin', keyId: 'admin' }; 
   }
 
@@ -68,6 +78,7 @@ async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: string; 
       .get();
 
     if (keysSnapshot.empty) {
+      console.error(`[Auth] Key not found in Firestore: ${keyToVerify.substring(0, 10)}...`);
       throw new Error("Unauthorized: Invalid API Key.");
     }
 
@@ -91,10 +102,11 @@ async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: string; 
       lastUsed: FieldValue.serverTimestamp()
     });
 
+    console.error(`[Auth] Success: User ${authData.uid} logged in via key ${authData.keyId}`);
     return authData;
   } catch (err: any) {
     if (err.message.includes("Unauthorized")) throw err;
-    console.error("Auth Error:", err.message);
+    console.error(`[Auth Error] Project: ${process.env.VITE_FIREBASE_PROJECT_ID}, Error: ${err.message}`);
     throw new Error(`Authentication service unavailable: ${err.message}`);
   }
 }
@@ -127,7 +139,7 @@ async function logActivity(auth: { uid: string; keyId: string }, tool: string, p
 }
 
 interface AnalysisResultLocal extends AnalysisResult {
-  stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number };
+  stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
 }
 
 /** Helper: get unified stats from analysis (handles both old and new format) */
@@ -141,6 +153,7 @@ function getStats(analysis: AnalysisResultLocal) {
     classes: ec?.classes ?? st?.classes ?? 0,
     dependencies: ec?.dependencies ?? st?.dependencies ?? 0,
     circularDeps: ec?.circularDeps ?? st?.circularDeps ?? 0,
+    deadCode: ec?.deadCode ?? st?.deadCode ?? 0,
   };
 }
 
@@ -1501,7 +1514,7 @@ server.tool(
 // Tool 12: Scan Enterprise Vulnerabilities — Full security & architecture audit for all projects
 server.tool(
   "scan_enterprise_vulnerabilities",
-  "Enterprise Scanner: Automatically scan all analyzed projects for bugs, security vulnerabilities (hardcoded secrets, unsafe functions), and architectural problems. Enforces subscription plan limits.",
+  "Enterprise Scanner: Automatically scan all analyzed projects for bugs, security vulnerabilities (hardcoded secrets, unsafe functions), and architectural problems. Features Admin Insights and Security Scoring.",
   {
     maxProjects: z.number().optional().describe("Maximum number of projects to scan (default: all)"),
   },
@@ -1514,60 +1527,59 @@ server.tool(
       return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
     }
 
-    // Enterprise Plan: Full scanning enabled
-    let limit = projects.length;
-    if (maxProjects && maxProjects < limit) limit = maxProjects;
-
+    const isEnterprise = auth.tier === 'enterprise';
     const scanResults: any[] = [];
+    const limit = maxProjects || (isEnterprise ? projects.length : 3);
     const projectsToScan = projects.slice(0, limit);
 
     for (const p of projectsToScan) {
       try {
-        const loaded = loadAnalysis(p.dir);
+        const loaded = loadAnalysis(p.name);
         if (!loaded) continue;
 
-        // 1. Static Security Scan
-        const securityFindings = SecurityScanner.scan(loaded.analysis);
-
-        // 2. Knowledge Graph Reasoning (Smells)
-        const archSmells = await OracleMemoryService.detectArchitecturalSmells(p.name);
+        const vulnerabilities = SecurityScanner.scan(loaded.analysis);
+        
+        // Enterprise-only Risk Assessment
+        const stats = getStats(loaded.analysis as any);
+        const circularDeps = stats.circularDeps || 0;
+        const deadCode = stats.deadCode || 0;
+        
+        const riskLevel = vulnerabilities.length > 10 ? "CRITICAL" : (vulnerabilities.length > 0 ? "HIGH" : "LOW");
+        const securityScore = Math.max(0, 100 - (vulnerabilities.length * 5) - (circularDeps * 2));
 
         scanResults.push({
-          projectName: p.name,
-          projectPath: p.dir,
-          tier: auth.tier,
-          security: {
-            criticalCount: securityFindings.filter(f => f.severity === 'CRITICAL').length,
-            highCount: securityFindings.filter(f => f.severity === 'HIGH').length,
-            findings: securityFindings
-          },
-          architecture: archSmells ? {
-            circularDependencies: archSmells.circularDependencies.length,
-            godObjects: archSmells.godObjects.length,
-            deadCode: archSmells.deadCode.length
-          } : "Oracle Graph data not available",
-          summary: securityFindings.length > 0 || (archSmells && archSmells.circularDependencies.length > 0)
-            ? "⚠️ Action required: Risks detected."
-            : "✅ Healthy: No significant issues found."
+          project: p.name,
+          riskLevel,
+          securityScore: isEnterprise ? securityScore : "Upgrade to view",
+          vulnerabilities: vulnerabilities.length,
+          circularDependencies: circularDeps,
+          deadCode: deadCode,
+          adminInsights: isEnterprise ? `Project health is ${securityScore > 80 ? 'EXCELLENT' : 'NEEDS ATTENTION'}. Priority: ${riskLevel}.` : null,
+          details: { vulnerabilities }
         });
       } catch (err: any) {
-        scanResults.push({
-          projectName: p.name,
-          error: `Scan failed: ${err.message}`
+        scanResults.push({ 
+          project: p.name, 
+          error: `Scan failed: ${err.message}` 
         });
       }
     }
 
-    const result = {
+    const finalReport = {
       timestamp: new Date().toISOString(),
-      tier: 'enterprise',
+      tier: auth.tier,
       projectsScanned: projectsToScan.length,
       totalProjectsDiscovered: projects.length,
       results: scanResults,
-      message: `Successfully scanned ${projectsToScan.length} projects with Enterprise Edition.`
+      enterpriseStatus: isEnterprise ? "ACTIVE (Admin Enabled)" : "INACTIVE"
     };
 
-    return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    return { 
+      content: [{ 
+        type: "text" as const, 
+        text: JSON.stringify(finalReport, null, 2)
+      }] 
+    };
   }
 );
 
