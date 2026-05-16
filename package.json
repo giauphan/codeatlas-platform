@@ -1,160 +1,34 @@
 {
   "name": "codeatlas-enterprise",
   "displayName": "CodeAtlas Enterprise (Oracle 26ai Edition)",
-  "description": "AI-powered code analysis with MCP server — gives AI assistants deep understanding of your codebase with persistent memory across conversations",
-  "version": "1.8.2",
+  "description": "AI-powered codebase insights — MCP Server and Remote API",
+  "version": "2.0.0",
   "private": true,
-  "publisher": "giauphan",
-  "icon": "resources/icon.png",
   "license": "UNLICENSED",
+  "type": "module",
   "bin": {
-    "codeatlas-mcp": "dist/extension.js"
-  },
-  "keywords": [
-    "code analysis",
-    "graph",
-    "visualization",
-    "AI",
-    "architecture"
-  ],
-  "badges": [],
-  "galleryBanner": {
-    "color": "#0a0a1a",
-    "theme": "dark"
-  },
-  "engines": {
-    "vscode": "^1.80.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "codeatlas.analyzeProject",
-        "title": "CodeAtlas: Analyze Project"
-      },
-      {
-        "command": "codeatlas.openPanel",
-        "title": "CodeAtlas: Open Insights Panel"
-      }
-    ],
-    "configuration": {
-      "title": "CodeAtlas",
-      "properties": {
-        "codeatlas.maxFiles": {
-          "type": "number",
-          "default": 5000,
-          "description": "Maximum number of files to analyze (set to 0 for unlimited). All data is saved; UI display is controlled by initialNodeLimit."
-        },
-        "codeatlas.excludedDirectories": {
-          "type": "array",
-          "default": [
-            "node_modules",
-            "dist",
-            "out",
-            ".git",
-            "__pycache__",
-            ".venv",
-            "vendor",
-            "storage"
-          ],
-          "description": "Directories to exclude from analysis"
-        },
-        "codeatlas.excludedFiles": {
-          "type": "array",
-          "default": [
-            "_ide_helper.php",
-            "_ide_helper_models.php",
-            ".phpstorm.meta.php"
-          ],
-          "description": "File names to exclude from analysis (e.g. generated stubs)"
-        },
-        "codeatlas.autoAnalyze": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically re-analyze on file save"
-        },
-        "codeatlas.fileExtensions": {
-          "type": "array",
-          "default": [
-            ".ts",
-            ".tsx",
-            ".js",
-            ".jsx",
-            ".py",
-            ".php"
-          ],
-          "description": "File extensions to include in analysis"
-        },
-        "codeatlas.graphPhysics": {
-          "type": "string",
-          "enum": [
-            "relaxed",
-            "default",
-            "tight"
-          ],
-          "default": "default",
-          "description": "Graph force simulation intensity"
-        },
-        "codeatlas.initialNodeLimit": {
-          "type": "number",
-          "default": 100,
-          "description": "Maximum number of nodes to load initially in the graph view. Set to 0 to load all nodes at once."
-        }
-      }
-    }
+    "codeatlas-mcp": "dist/index.js"
   },
   "scripts": {
-    "vscode:prepublish": "npm run build",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile",
-    "lint": "eslint src --ext ts",
-    "test": "node --experimental-vm-modules node_modules/tsx/dist/cli.mjs src/test/analyzer.test.ts",
-    "test:e2e": "node --experimental-vm-modules node_modules/tsx/dist/cli.mjs src/test/mcp-e2e.test.ts",
-    "test:vscode": "npm run compile && node out/src/test/runTest.js",
-    "build:webview": "vite build",
-    "build:extension": "node esbuild.js",
-    "build": "npm run build:webview && npm run build:extension"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx index.ts"
   },
   "devDependencies": {
-    "@types/express": "^4.17.17",
-    "@types/node": "18.x",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
     "@types/oracledb": "^6.10.3",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@types/vscode": "^1.80.0",
-    "@typescript-eslint/eslint-plugin": "^8.59.0",
-    "@typescript-eslint/parser": "^8.59.0",
-    "@vitejs/plugin-react": "^4.0.0",
-    "@vscode/vsce": "^3.7.1",
-    "esbuild": "^0.19.2",
-    "eslint": "^8.47.0",
-    "glob": "^8.1.0",
-    "mocha": "^10.2.0",
-    "@types/glob": "^8.1.0",
-    "@types/mocha": "^10.0.1",
-    "@vscode/test-electron": "^2.3.8",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
-    "vite": "^4.4.9"
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@typescript-eslint/typescript-estree": "^8.59.0",
-    "dotenv": "^17.4.2",
-    "express": "^4.18.2",
-    "firebase-admin": "^13.8.0",
-    "lucide-react": "^0.268.0",
-    "oracledb": "^6.10.0",
-    "php-parser": "^3.5.1",
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "@typescript-eslint/typescript-estree": "^8.0.0",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.1.0",
+    "glob": "^10.3.10",
+    "oracledb": "^6.5.0",
     "py-ast": "^1.9.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-force-graph-2d": "^1.24.1",
-    "zod": "^4.3.6"
+    "zod": "^3.22.4"
   }
 }

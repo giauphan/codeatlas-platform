@@ -2,6 +2,22 @@
 
 All notable changes to CodeAtlas are documented here.
 
+## [2.0.0] - 2026-05-16
+
+### Changed
+- **Pure MCP/API Architecture**: Removed VS Code extension code entirely. The project is now a standalone MCP server and HTTP API provider.
+- **Standalone Dashboard**: Maintained the web dashboard as a standalone interface connecting to the API.
+- **Dependency Update**: Added missing dependencies (`@modelcontextprotocol/sdk`, `express`, `firebase-admin`, `zod`) to the root `package.json`.
+- **ESM Migration**: Updated project to use ES Modules (`"type": "module"`) for better compatibility with modern Node.js and MCP SDK.
+
+## [1.9.0] - 2026-05-16
+
+### Changed
+- **Architectural Migration**: Moved core analysis logic to the server-side to support remote MCP deployment.
+- **Thin Client Extension**: Refactored the VS Code extension to be a thin client. It now fetches analysis data from a remote MCP server instead of performing local file parsing.
+- **Removed Local Logic**: Stripped `src/analyzer` and database connectivity logic from the extension build.
+- **Remote Configuration**: Added `codeatlas.remoteMcpUrl` and `codeatlas.apiKey` settings.
+
 ## [1.8.2] - 2026-05-16
 
 ### Fixed

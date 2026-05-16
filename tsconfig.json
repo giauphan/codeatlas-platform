@@ -5,7 +5,7 @@
     "lib": ["ES2022", "DOM"],
     "sourceMap": true,
     "rootDir": ".",
-    "outDir": "out",
+    "outDir": "dist",
     "strict": true,
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,

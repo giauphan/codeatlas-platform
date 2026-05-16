@@ -10,6 +10,8 @@ import * as http from "http";
 import * as url from "url";
 import express from "express";
 import * as admin from "firebase-admin";
+import { CodeAnalyzer } from "./src/analyzer/parser.js";
+import { AnalysisResult } from "./src/analyzer/types.js";
 
 // Initialize Firebase Admin
 // Note: You should set GOOGLE_APPLICATION_CREDENTIALS env var or initialize with a service account
@@ -56,7 +58,7 @@ async function checkAuth(apiKey?: string): Promise<string> {
     }
 
     const keyDoc = keysSnapshot.docs[0];
-    
+
     // Get tier from users/{uid} document instead of the key itself
     // Path: users/{uid}/keys/{keyId}
     const userRef = keyDoc.ref.parent.parent;
@@ -86,38 +88,16 @@ async function checkAuth(apiKey?: string): Promise<string> {
   }
 }
 
-interface GraphNode {
-  id: string;
-  label: string;
-  type: string;
-  color?: string;
-  filePath?: string;
-  line?: number;
-  val?: number;
-}
-
-interface GraphLink {
-  source: string;
-  target: string;
-  type: string;
-  label?: string;
-}
-
-interface AnalysisResult {
-  graph: { nodes: GraphNode[]; links: GraphLink[] };
-  insights: any[];
+interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number };
-  entityCounts?: { modules: number; functions: number; classes: number; dependencies: number; circularDeps: number };
-  totalFilesAnalyzed?: number;
-  totalFilesSkipped?: number;
 }
 
 /** Helper: get unified stats from analysis (handles both old and new format) */
-function getStats(analysis: AnalysisResult) {
+function getStats(analysis: AnalysisResultLocal) {
   const ec = analysis.entityCounts;
   const st = analysis.stats;
   return {
-    files: st?.files ?? ec?.modules ?? analysis.totalFilesAnalyzed ?? 0,
+    files: st?.files ?? analysis.totalFilesAnalyzed ?? ec?.modules ?? 0,
     modules: ec?.modules ?? st?.files ?? analysis.totalFilesAnalyzed ?? 0,
     functions: ec?.functions ?? st?.functions ?? 0,
     classes: ec?.classes ?? st?.classes ?? 0,
@@ -205,8 +185,55 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 // Create MCP server
 const server = new McpServer({
   name: "codeatlas-enterprise",
-  version: "1.8.2",
+  version: "2.0.0",
 });
+
+// Tool -1: Analyze a project
+server.tool(
+  "analyze",
+  "Perform deep code analysis on a local project directory. Generates .codeatlas/analysis.json.",
+  {
+    path: z.string().describe("Absolute path to the project directory to analyze"),
+    maxFiles: z.number().optional().describe("Maximum files to analyze (default: 5000)"),
+  },
+  async ({ path: projectPath, maxFiles }: { path: string; maxFiles?: number }) => {
+    await checkAuth();
+    
+    if (!fs.existsSync(projectPath)) {
+      return { content: [{ type: "text" as const, text: `Error: Directory does not exist: ${projectPath}` }] };
+    }
+
+    try {
+      const analyzer = new CodeAnalyzer(projectPath, maxFiles || 5000);
+      const result = await analyzer.analyzeProject();
+
+      // Ensure .codeatlas directory exists
+      const codeatlasDir = path.join(projectPath, ".codeatlas");
+      if (!fs.existsSync(codeatlasDir)) {
+        fs.mkdirSync(codeatlasDir, { recursive: true });
+      }
+
+      // Save analysis.json
+      fs.writeFileSync(
+        path.join(codeatlasDir, "analysis.json"),
+        JSON.stringify(result, null, 2)
+      );
+
+      const stats = getStats(result as AnalysisResultLocal);
+      const summary = `Analysis complete for ${path.basename(projectPath)}:
+- Modules: ${stats.modules}
+- Functions: ${stats.functions}
+- Classes: ${stats.classes}
+- Dependencies: ${stats.dependencies}
+- Total files: ${result.totalFilesAnalyzed}
+- Files skipped: ${result.totalFilesSkipped}`;
+
+      return { content: [{ type: "text" as const, text: summary }] };
+    } catch (error: any) {
+      return { content: [{ type: "text" as const, text: `Analysis failed: ${error.message}` }] };
+    }
+  }
+);
 
 // Tool 0: List all discovered projects
 server.tool(
@@ -220,7 +247,7 @@ server.tool(
     }
     const projects = discoverProjects();
     if (projects.length === 0) {
-      return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'CodeAtlas: Analyze Project' in VS Code first." }] };
+      return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
     }
 
     const result = {
@@ -245,11 +272,11 @@ server.tool(
     type: z.enum(["all", "module", "class", "function", "variable"]).optional().describe("Filter by entity type"),
     limit: z.number().optional().describe("Max results to return (default: 100)"),
   },
-  async ({ project, type, limit }) => {
+  async ({ project, type, limit }: { project?: string; type?: string; limit?: number }) => {
     const tier = await checkAuth();
     const loaded = loadAnalysis(project);
     if (!loaded) {
-      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' in VS Code first." }] };
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
     }
 
     let nodes = loaded.analysis.graph.nodes;
@@ -299,14 +326,14 @@ server.tool(
     relationship: z.enum(["all", "import", "call", "contains", "implements"]).optional().describe("Filter by relationship type"),
     limit: z.number().optional().describe("Max results (default: 100)"),
   },
-  async ({ project, source, target, relationship, limit }) => {
+  async ({ project, source, target, relationship, limit }: { project?: string; source?: string; target?: string; relationship?: string; limit?: number }) => {
     const tier = await checkAuth();
     if (tier === 'free') {
       return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
     }
     const loaded = loadAnalysis(project);
     if (!loaded) {
-      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
     }
 
     const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
@@ -368,7 +395,7 @@ server.tool(
     }
     const loaded = loadAnalysis();
     if (!loaded) {
-      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
     }
 
     const stats = getStats(loaded.analysis);
@@ -392,14 +419,14 @@ server.tool(
     query: z.string().describe("Search query (case-insensitive, partial match)"),
     type: z.enum(["all", "module", "class", "function", "variable"]).optional().describe("Filter by entity type"),
   },
-  async ({ project, query, type }) => {
+  async ({ project, query, type }: { project?: string; query: string; type?: string }) => {
     const tier = await checkAuth();
     if (tier === 'free') {
       return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
     }
     const loaded = loadAnalysis(project);
     if (!loaded) {
-      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
     }
 
     let nodes = loaded.analysis.graph.nodes;
@@ -460,15 +487,11 @@ server.tool(
     project: z.string().optional().describe("Project name or path"),
     filePath: z.string().describe("File path (partial match, e.g. 'User.php' or 'src/models')"),
   },
-  async ({ project, filePath }) => {
+  async ({ project, filePath }: { project?: string; filePath: string }) => {
     const tier = await checkAuth();
-    // get_file_entities is restricted to 50 files for free tier, but allowed.
-    // However, the requirement says "Chỉ cho phép: 'generate_system_flow' và 'get_project_structure'".
-    // But it also says "Giới hạn 'get_file_entities' ... tối đa 50 files".
-    // I will allow it but with the limit.
     const loaded = loadAnalysis(project);
     if (!loaded) {
-      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
     }
 
     const q = filePath.toLowerCase().replace(/\\/g, "/");
@@ -525,11 +548,11 @@ server.tool(
     feature: z.string().optional().describe("Feature keyword to focus the diagram on (e.g. 'auth', 'crawl', 'payment'). Only used when scope='feature'"),
     maxNodes: z.number().optional().describe("Maximum nodes in diagram (default: 60). Reduce for large projects"),
   },
-  async ({ project, scope, feature, maxNodes }) => {
+  async ({ project, scope, feature, maxNodes }: { project?: string; scope?: string; feature?: string; maxNodes?: number }) => {
     await checkAuth();
     const loaded = loadAnalysis(project);
     if (!loaded) {
-      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
     }
 
     const max = maxNodes || 60;
@@ -587,7 +610,6 @@ server.tool(
     });
 
     // Build Mermaid diagram
-    const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 40);
     const nodeIdMap = new Map<string, string>();
     let counter = 0;
 
@@ -656,14 +678,14 @@ server.tool(
     businessRule: z.string().optional().describe("Optional: A new business rule to add to the memory (e.g. 'VIP users get free shipping')"),
     changeDescription: z.string().optional().describe("Optional: Description of what was just changed (for the changelog)"),
   },
-  async ({ project, businessRule, changeDescription }) => {
+  async ({ project, businessRule, changeDescription }: { project?: string; businessRule?: string; changeDescription?: string }) => {
     const tier = await checkAuth();
     if (tier === 'free') {
       return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
     }
     const loaded = loadAnalysis(project);
     if (!loaded) {
-      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
     }
 
     const memoryDir = path.join(loaded.projectDir, ".agents", "memory");
@@ -916,14 +938,14 @@ server.tool(
     keyword: z.string().describe("Feature keyword to trace (e.g. 'auth', 'crawl', 'payment', 'upload')"),
     depth: z.number().optional().describe("How many hops to follow from matching nodes (default: 2)"),
   },
-  async ({ project, keyword, depth }) => {
+  async ({ project, keyword, depth }: { project?: string; keyword: string; depth?: number }) => {
     const tier = await checkAuth();
     if (tier === 'free') {
       return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
     }
     const loaded = loadAnalysis(project);
     if (!loaded) {
-      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
     }
 
     const maxDepth = depth || 2;
@@ -1024,14 +1046,6 @@ server.tool(
         return b.entityCount - a.entityCount;
       });
 
-    // Build a reading order (dependency-sorted)
-    const fileModuleIds = new Map<string, string>();
-    for (const node of traceNodes) {
-      if (node.type === "module" && node.filePath) {
-        fileModuleIds.set(node.filePath, node.id);
-      }
-    }
-
     const result = {
       keyword,
       project: loaded.projectName,
@@ -1066,14 +1080,14 @@ server.tool(
     depth: z.number().optional().describe("How many call hops to follow (default: 3)"),
     maxNodes: z.number().optional().describe("Maximum nodes in diagram (default: 40)"),
   },
-  async ({ project, keyword, diagramType, depth, maxNodes }) => {
+  async ({ project, keyword, diagramType, depth, maxNodes }: { project?: string; keyword: string; diagramType?: 'flowchart' | 'sequence'; depth?: number; maxNodes?: number }) => {
     const tier = await checkAuth();
     if (tier === 'free') {
       return { content: [{ type: "text" as const, text: "This feature requires a paid plan. Please upgrade at https://codeatlas.dev/pricing" }] };
     }
     const loaded = loadAnalysis(project);
     if (!loaded) {
-      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'CodeAtlas: Analyze Project' first." }] };
+      return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
     }
 
     const q = keyword.toLowerCase();
@@ -1423,6 +1437,20 @@ async function main() {
         await transport.handlePostMessage(req, res);
       } else {
         res.status(400).send("No active SSE connection");
+      }
+    });
+
+    // HTTP API for the VS Code Extension Thin Client
+    app.get("/api/analysis", async (req, res) => {
+      const projectDir = req.query.project as string;
+      try {
+        const loaded = loadAnalysis(projectDir);
+        if (!loaded) {
+          return res.status(404).send("Project analysis not found. Run 'analyze' tool first.");
+        }
+        res.json(loaded.analysis);
+      } catch (e: any) {
+        res.status(500).send(e.message);
       }
     });
 

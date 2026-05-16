@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse } from '@typescript-eslint/typescript-estree';
-import { GraphData, GraphNode, GraphLink, AnalysisResult, AIInsight, AnalysisManifest, FolderInfo, ChunkData, CrossChunkLinks } from './types';
-import { PythonParser } from './pythonParser';
-import { PhpParser } from './phpParser';
+import { GraphData, GraphNode, GraphLink, AnalysisResult, AIInsight, AnalysisManifest, FolderInfo, ChunkData, CrossChunkLinks } from './types.js';
+import { PythonParser } from './pythonParser.js';
+import { PhpParser } from './phpParser.js';
 
 export class CodeAnalyzer {
   private workspaceRoot: string;
