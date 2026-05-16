@@ -35,10 +35,10 @@ import {
   Terminal
 } from 'lucide-react';
 
-// API Configuration - Optimized for atlas.genrostore.com
+// API Configuration - Optimized for Nginx Proxy
 const API_BASE = window.location.origin.includes('localhost') 
   ? 'http://localhost:8080' 
-  : `${window.location.protocol}//${window.location.hostname}:8080`; // Direct port access for now
+  : window.location.origin; // Use the same origin, Nginx will proxy /api to :8080
 
 const SUPER_ADMIN_KEY = '0~du=~7^OvNk%cLP2>*e~&~j5x\'WM';
 
