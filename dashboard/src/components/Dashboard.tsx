@@ -8,6 +8,7 @@ import {
   onSnapshot, 
   query, 
   orderBy,
+  limit,
   serverTimestamp 
 } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,14 +39,34 @@ export const Dashboard: React.FC = () => {
   const [newKeyName, setNewKeyName] = useState('');
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [userTier, setUserTier] = useState<string>('free');
+  const [userTier, setUserTier] = useState<string>('enterprise');
+  const [stats, setStats] = useState({ totalRequests: 0, lastActivity: null });
+  const [activities, setActivities] = useState<any[]>([]);
   const user = auth.currentUser;
 
   useEffect(() => {
     if (!user) return;
 
-    // Enterprise edition: Always set tier to enterprise in UI
-    setUserTier('enterprise');
+    // Real-time stats updates
+    const unsubscribeStats = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+      if (doc.exists() && doc.data().stats) {
+        setStats(doc.data().stats);
+      }
+    });
+
+    // Real-time activity logs
+    const actQuery = query(
+      collection(db, 'users', user.uid, 'activity'),
+      orderBy('timestamp', 'desc'),
+      limit(10)
+    );
+    const unsubscribeActivities = onSnapshot(actQuery, (snapshot) => {
+      const actData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setActivities(actData);
+    });
 
     const q = query(
       collection(db, 'users', user.uid, 'keys'),
@@ -61,6 +82,8 @@ export const Dashboard: React.FC = () => {
     });
 
     return () => {
+      unsubscribeStats();
+      unsubscribeActivities();
       unsubscribeKeys();
     };
   }, [user]);
@@ -342,22 +365,39 @@ export const Dashboard: React.FC = () => {
             <section className="glass-card" style={{ padding: '2rem' }}>
               <h3 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                 <Activity size={20} color="var(--primary)" />
-                Global Usage
+                Usage Overview
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 {[
-                  { label: 'Total Requests', value: '1,284', change: '+12%' },
-                  { label: 'Avg Latency', value: '42ms', change: '-5%' },
-                  { label: 'Error Rate', value: '0.02%', change: '0%' }
+                  { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), change: '' },
+                  { label: 'Last Active', value: (stats.lastActivity as any)?.toDate().toLocaleTimeString() || 'None', change: '' },
+                  { label: 'System Health', value: '100%', change: 'Optimal' }
                 ].map((stat, i) => (
                   <div key={i}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                       <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{stat.label}</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: stat.change.startsWith('+') ? 'var(--success)' : (stat.change === '0%' ? 'var(--text-muted)' : 'var(--primary)') }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--success)' }}>
                         {stat.change}
                       </span>
                     </div>
                     <div style={{ fontSize: '1.5rem', fontWeight: '800' }}>{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Activity Feed */}
+            <section className="glass-card" style={{ padding: '2rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                <Clock size={20} color="var(--primary)" />
+                Recent Activity
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {activities.map((act) => (
+                  <div key={act.id} style={{ borderLeft: '2px solid var(--border)', paddingLeft: '1rem', position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: '-5px', top: '0', width: '8px', height: '8px', borderRadius: '50%', background: act.success ? 'var(--success)' : 'var(--error)' }} />
+                    <div style={{ fontSize: '0.875rem', fontWeight: '700' }}>{act.tool}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{act.timestamp?.toDate().toLocaleTimeString()}</div>
                   </div>
                 ))}
               </div>

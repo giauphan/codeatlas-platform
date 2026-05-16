@@ -42,22 +42,22 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  * Instead of environment variables, we query the 'keys' collection group
  * to find if the provided key exists in any user's account.
  */
-async function checkAuth(apiKey?: string): Promise<string> {
+async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: string; keyId: string }> {
   const keyToVerify = apiKey || process.env.CODEATLAS_API_KEY;
 
   if (!keyToVerify) {
     throw new Error("Unauthorized: API Key is required. Set CODEATLAS_API_KEY env var or provide x-api-key header.");
   }
 
-  // 1. Super Admin Bypass: If the key matches the environment variable exactly, grant 'pro' tier
+  // 1. Super Admin Bypass
   if (process.env.CODEATLAS_API_KEY && keyToVerify === process.env.CODEATLAS_API_KEY) {
-    return 'pro'; 
+    return { tier: 'enterprise', uid: 'admin', keyId: 'admin' }; 
   }
 
   // 2. Check RAM Cache
-  const cached = authCache.get(keyToVerify);
+  const cached = authCache.get(keyToVerify) as any;
   if (cached && cached.expires > Date.now()) {
-    return cached.tier;
+    return cached;
   }
 
   try {
@@ -71,31 +71,57 @@ async function checkAuth(apiKey?: string): Promise<string> {
     }
 
     const keyDoc = keysSnapshot.docs[0];
-
-    // Get tier from users/{uid} document instead of the key itself
-    // Path: users/{uid}/keys/{keyId}
     const userRef = keyDoc.ref.parent.parent;
     if (!userRef) {
       throw new Error("Unauthorized: Invalid key ownership structure.");
     }
 
-    const userDoc = await userRef.get();
-    // Update Cache - For Enterprise deployment, everyone gets enterprise tier
-    authCache.set(keyToVerify, {
+    const authData = {
       tier: 'enterprise',
+      uid: userRef.id,
+      keyId: keyDoc.id,
       expires: Date.now() + CACHE_TTL
-    });
+    };
 
-    // Update lastUsed timestamp (only on cache miss to optimize DB writes)
+    authCache.set(keyToVerify, authData);
+
+    // Update lastUsed timestamp
     await keyDoc.ref.update({
       lastUsed: FieldValue.serverTimestamp()
     });
 
-    return 'enterprise';
+    return authData;
   } catch (err: any) {
     if (err.message.includes("Unauthorized")) throw err;
     console.error("Auth Error:", err.message);
     throw new Error(`Authentication service unavailable: ${err.message}`);
+  }
+}
+
+/**
+ * Log activity to Firestore for the dashboard
+ */
+async function logActivity(auth: { uid: string; keyId: string }, tool: string, params: any, success: boolean = true) {
+  if (auth.uid === 'admin') return; // Don't log super admin
+  try {
+    await db.collection('users').doc(auth.uid).collection('activity').add({
+      keyId: auth.keyId,
+      tool,
+      params: JSON.stringify(params),
+      success,
+      timestamp: FieldValue.serverTimestamp()
+    });
+
+    // Increment global stats for user
+    const statsRef = db.collection('users').doc(auth.uid);
+    await statsRef.set({
+      stats: {
+        totalRequests: FieldValue.increment(1),
+        lastActivity: FieldValue.serverTimestamp()
+      }
+    }, { merge: true });
+  } catch (err) {
+    console.error("Failed to log activity:", err);
   }
 }
 
@@ -208,7 +234,8 @@ server.tool(
     maxFiles: z.number().optional().describe("Maximum files to analyze (default: 5000)"),
   },
   async ({ path: projectPath, maxFiles }: { path: string; maxFiles?: number }) => {
-    await checkAuth();
+    const auth = await checkAuth();
+    await logActivity(auth, "analyze", { path: projectPath, maxFiles });
     
     if (!fs.existsSync(projectPath)) {
       return { content: [{ type: "text" as const, text: `Error: Directory does not exist: ${projectPath}` }] };
@@ -335,7 +362,8 @@ server.tool(
     limit: z.number().optional().describe("Max results (default: 100)"),
   },
   async ({ project, source, target, relationship, limit }: { project?: string; source?: string; target?: string; relationship?: string; limit?: number }) => {
-    await checkAuth();
+    const auth = await checkAuth();
+    await logActivity(auth, "get_dependencies", { project, source, target, relationship, limit });
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -394,7 +422,8 @@ server.tool(
   "Get AI-generated code insights including refactoring suggestions, security issues, and maintainability analysis.",
   {},
   async () => {
-    await checkAuth();
+    const auth = await checkAuth();
+    await logActivity(auth, "get_insights", {});
     const loaded = loadAnalysis();
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -422,7 +451,8 @@ server.tool(
     type: z.enum(["all", "module", "class", "function", "variable"]).optional().describe("Filter by entity type"),
   },
   async ({ project, query, type }: { project?: string; query: string; type?: string }) => {
-    await checkAuth();
+    const auth = await checkAuth();
+    await logActivity(auth, "search_entities", { project, query, type });
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -486,8 +516,9 @@ server.tool(
     project: z.string().optional().describe("Project name or path"),
     filePath: z.string().describe("File path (partial match, e.g. 'User.php' or 'src/models')"),
   },
-  async ({ project, filePath }: { project?: string; filePath: string }) => {
-    const tier = await checkAuth();
+  async ({ filePath, project }: { project?: string; filePath: string }) => {
+    const auth = await checkAuth();
+    await logActivity(auth, "get_file_entities", { filePath, project });
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -546,7 +577,8 @@ server.tool(
     maxNodes: z.number().optional().describe("Maximum nodes in diagram (default: 60). Reduce for large projects"),
   },
   async ({ project, scope, feature, maxNodes }: { project?: string; scope?: string; feature?: string; maxNodes?: number }) => {
-    await checkAuth();
+    const auth = await checkAuth();
+    await logActivity(auth, "generate_system_flow", { project, scope, feature, maxNodes });
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -677,8 +709,8 @@ server.tool(
     enableEnterpriseSync: z.boolean().optional().describe("If true, syncs data to Oracle 26ai Knowledge Graph (Pro/Plus feature). Default is false."),
   },
   async ({ project, businessRule, changeDescription, enableEnterpriseSync }: { project?: string; businessRule?: string; changeDescription?: string; enableEnterpriseSync?: boolean }) => {
-    const tier = await checkAuth();
-    // Allow basic sync for everyone, but gate Oracle sync later
+    const auth = await checkAuth();
+    await logActivity(auth, "sync_system_memory", { project, businessRule, changeDescription, enableEnterpriseSync });
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -951,10 +983,9 @@ server.tool(
     keyword: z.string().describe("Feature keyword to trace (e.g. 'auth', 'crawl', 'payment', 'upload')"),
     depth: z.number().optional().describe("How many hops to follow from matching nodes (default: 2)"),
   },
-  async ({ project, keyword, depth }: { project?: string; keyword: string; depth?: number }) => {
-    const tier = await checkAuth();
-    if (tier === 'free') {
-    }
+  async ({ keyword, project, depth }: { keyword: string; project?: string; depth?: number }) => {
+    const auth = await checkAuth();
+    await logActivity(auth, "trace_feature_flow", { keyword, project, depth });
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -1093,9 +1124,8 @@ server.tool(
     maxNodes: z.number().optional().describe("Maximum nodes in diagram (default: 40)"),
   },
   async ({ project, keyword, diagramType, depth, maxNodes }: { project?: string; keyword: string; diagramType?: 'flowchart' | 'sequence'; depth?: number; maxNodes?: number }) => {
-    const tier = await checkAuth();
-    if (tier === 'free') {
-    }
+    const auth = await checkAuth();
+    await logActivity(auth, "generate_feature_flow_diagram", { project, keyword, diagramType, depth, maxNodes });
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -1424,9 +1454,8 @@ server.tool(
     project: z.string().optional().describe("Project name or path"),
   },
   async ({ project }: { project?: string }) => {
-    const tier = await checkAuth();
-    if (tier === 'free') {
-    }
+    const auth = await checkAuth();
+    await logActivity(auth, "detect_architectural_smells", { project });
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
