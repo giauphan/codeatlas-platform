@@ -2,6 +2,17 @@
 
 All notable changes to CodeAtlas are documented here.
 
+## [2.1.0] - 2026-05-16
+
+### Added
+- **Real-time Activity Telemetry**: Implemented `logActivity` system that records all tool executions to Firestore for live monitoring.
+- **Enterprise Dashboard UI**: Completely revamped the dashboard with a premium glassmorphism design, real-time usage stats, and live activity feeds.
+- **Enterprise Vulnerability Scanner**: Unlocked the full security and architectural audit tool for all enterprise users.
+
+### Fixed
+- **JSX Syntax & TypeScript Errors**: Resolved multiple structural and type mismatch issues in `Dashboard.tsx` and `index.ts`.
+- **Authentication Flow**: Standardized `checkAuth` to return rich user metadata, enabling secure multi-tenant activity tracking.
+
 ## [2.0.0] - 2026-05-16
 
 ### Changed

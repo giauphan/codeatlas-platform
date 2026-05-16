@@ -33,7 +33,7 @@ export const Auth: React.FC = () => {
         await setDoc(doc(db, 'users', userCredential.user.uid), {
           displayName,
           email,
-          tier: 'free',
+          tier: 'enterprise',
           createdAt: new Date().toISOString()
         });
       }

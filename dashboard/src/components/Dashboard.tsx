@@ -48,7 +48,7 @@ export const Dashboard: React.FC = () => {
     if (!user) return;
 
     // Real-time stats updates
-    const unsubscribeStats = onSnapshot(doc(db, 'users', user.uid), (docSnapshot) => {
+    const unsubscribeStats = onSnapshot(doc(db, 'users', user.uid), (docSnapshot: any) => {
       if (docSnapshot.exists() && docSnapshot.data().stats) {
         setStats(docSnapshot.data().stats);
       }
@@ -60,8 +60,8 @@ export const Dashboard: React.FC = () => {
       orderBy('timestamp', 'desc'),
       limit(10)
     );
-    const unsubscribeActivities = onSnapshot(actQuery, (snapshot) => {
-      const actData = snapshot.docs.map(doc => ({
+    const unsubscribeActivities = onSnapshot(actQuery, (snapshot: any) => {
+      const actData = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
       }));
@@ -73,8 +73,8 @@ export const Dashboard: React.FC = () => {
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribeKeys = onSnapshot(q, (snapshot) => {
-      const keysData = snapshot.docs.map((doc) => ({
+    const unsubscribeKeys = onSnapshot(q, (snapshot: any) => {
+      const keysData = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
       })) as ApiKey[];

@@ -222,7 +222,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 // Create MCP server
 const server = new McpServer({
   name: "codeatlas-enterprise",
-  version: "2.0.0",
+  version: "2.1.0",
 });
 
 // Tool -1: Analyze a project
@@ -1505,10 +1505,8 @@ server.tool(
     maxProjects: z.number().optional().describe("Maximum number of projects to scan (default: all)"),
   },
   async ({ maxProjects }: { maxProjects?: number }) => {
-    const tier = await checkAuth();
-    if (tier === 'free') {
-      return { content: [{ type: "text" as const, text: "Enterprise Scan is a premium feature. Please upgrade to Pro/Plus to scan your projects for security and architectural risks." }] };
-    }
+    const auth = await checkAuth();
+    await logActivity(auth, "scan_enterprise_vulnerabilities", { maxProjects });
     const projects = discoverProjects();
     
     if (projects.length === 0) {
@@ -1536,7 +1534,7 @@ server.tool(
         scanResults.push({
           projectName: p.name,
           projectPath: p.dir,
-          tier,
+          tier: auth.tier,
           security: {
             criticalCount: securityFindings.filter(f => f.severity === 'CRITICAL').length,
             highCount: securityFindings.filter(f => f.severity === 'HIGH').length,
