@@ -2,14 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.1.8] - 2026-05-16
+## [2.1.9] - 2026-05-16
 
 ### Fixed
-- **SSE Session Management**: Implemented `Map`-based session management in `index.ts` to support concurrent connections and reconnections, resolving "session not found" errors.
-- **Cloudflare/Proxy Compatibility**: Added `X-Accel-Buffering: no` and explicit stream headers to prevent buffering issues in production environments.
-- **Lint Fix**: Removed non-existent `server.disconnect` call.
+- **App Architecture**: Resolved shadowing of the global `app` instance in `main()`, ensuring all REST API routes (/api/*) are correctly registered and accessible.
+- **Unified Authentication**: Centralized authentication logic into `authMiddleware`, supporting both `x-api-key` headers and `apiKey` query parameters across all endpoints.
 
-## [2.1.6] - 2026-05-16
+## [2.1.8] - 2026-05-16
 
 ### Added
 - **Auto-Indexing Engine**: Integrated Chokidar file watcher to automatically trigger codebase re-indexing on local file changes.

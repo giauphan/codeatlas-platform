@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.8",
+    version: "2.1.9",
   },
   {
     capabilities: {
@@ -329,32 +329,47 @@ app.use((req, res, next) => {
   next();
 });
 
-// REST API: Get analysis data
-app.get("/api/analysis", async (req, res) => {
+// Authentication middleware for ALL API routes
+const authMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Support both header and query param for flexibility (Dashboard vs MCP)
+  const clientKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string);
   try {
-    const apiKey = req.headers['x-api-key'] as string;
-    await checkAuth(apiKey);
+    const auth = await checkAuth(clientKey);
+    (req as any).auth = auth; // Attach auth result to request
+    next();
+  } catch (err: any) {
+    res.status(401).json({ error: err.message });
+  }
+};
+
+// REST API: Get analysis data
+app.get("/api/analysis", authMiddleware, async (req, res) => {
+  try {
     const loaded = loadAnalysis();
     if (!loaded) return res.status(404).json({ error: "No analysis found" });
     res.json(loaded);
   } catch (err: any) {
-    res.status(401).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
 // REST API: Trigger re-index
-app.post("/api/reindex", async (req, res) => {
+app.post("/api/reindex", authMiddleware, async (req, res) => {
   try {
-    const apiKey = req.headers['x-api-key'] as string;
-    await checkAuth(apiKey);
     const projectPath = process.env.CODEATLAS_PROJECT_DIR || process.cwd();
+    console.error(`[API] Triggering re-index for: ${projectPath}`);
+    
     const analyzer = new CodeAnalyzer(projectPath, 5000);
     const result = await analyzer.analyzeProject();
+    
     const codeatlasDir = path.join(projectPath, ".codeatlas");
     if (!fs.existsSync(codeatlasDir)) fs.mkdirSync(codeatlasDir, { recursive: true });
+    
     fs.writeFileSync(path.join(codeatlasDir, "analysis.json"), JSON.stringify(result, null, 2));
+    
     res.json({ success: true, stats: getStats(result as any) });
   } catch (err: any) {
+    console.error(`[API] Re-index failed: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1709,7 +1724,7 @@ async function main() {
 
   if (port) {
     // SSE Mode - for remote server deployment
-    const app = express();
+    // (Using the global 'app' instance defined above)
 
     // Serve static files from built dashboard
     const dashboardDistPath = path.join(process.cwd(), "dashboard", "dist");
@@ -1722,16 +1737,9 @@ async function main() {
       });
     }
 
-    // Authentication middleware
-    app.use(async (req, res, next) => {
-      const clientKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string);
-      try {
-        await checkAuth(clientKey);
-        next();
-      } catch (err: any) {
-        res.status(401).send(err.message);
-      }
-    });
+    // Auth middleware for SSE endpoints
+    app.use("/sse", authMiddleware);
+    app.use("/messages", authMiddleware);
 
     // Multi-session support for concurrent users/reconnections
     const transports = new Map<string, SSEServerTransport>();
