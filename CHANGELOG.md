@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.1] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Immersive Fullscreen Graph Canvas**: Added native HTML5 Fullscreen API support to enable interactive edge-to-edge network visualization.
+- **Dynamic Resize Optimization**: Integrated state-driven CSS style triggers that automatically adjust parent layout border-radii, boundaries, and background backing properties to `#0A0C10` on entering fullscreen mode.
+- **Glassmorphic Fullscreen HUD Integration**: Embedded a beautifully styled fullscreen toggle button utilizing Lucide `Maximize2` and `Minimize2` icons, separated by a professional design separator.
+- **Native Fullscreen Listeners**: Implemented active event listener bindings that automatically track native user changes (such as pressing `Escape` to exit fullscreen) to keep React UI states in sync.
+
 ## [2.4.0] - 2026-05-17
 
 ### Added / Changed / Fixed

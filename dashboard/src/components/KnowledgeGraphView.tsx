@@ -5,7 +5,9 @@ import {
   Code2, 
   Layers, 
   Activity, 
-  Search 
+  Search,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 interface AnalysisData {
@@ -48,9 +50,38 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const svgRef = React.useRef<SVGSVGElement>(null);
+  const graphContainerRef = React.useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState({ x: 550, y: 350 });
+
+  // Toggle fullscreen mode using HTML5 Fullscreen API
+  const toggleFullscreen = () => {
+    if (!graphContainerRef.current) return;
+    
+    if (!document.fullscreenElement) {
+      graphContainerRef.current.requestFullscreen()
+        .then(() => setIsFullscreen(true))
+        .catch(err => console.error("Error entering fullscreen:", err));
+    } else {
+      document.exitFullscreen()
+        .then(() => setIsFullscreen(false))
+        .catch(err => console.error("Error exiting fullscreen:", err));
+    }
+  };
+
+  // Sync fullscreen state with Escape key exit or native changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   const filteredNodes = useMemo(() => {
     if (!analysis || !analysis.graph || !analysis.graph.nodes) return [];
@@ -279,7 +310,17 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem', flex: 1, minHeight: 0 }}>
         {/* Interactive Physics Graph with Zoom/Pan */}
-        <div className="glass-panel" style={{ borderRadius: '32px', position: 'relative', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(5, 8, 15, 0.65)' }}>
+        <div 
+          ref={graphContainerRef}
+          className="glass-panel" 
+          style={{ 
+            borderRadius: isFullscreen ? '0px' : '32px', 
+            position: 'relative', 
+            overflow: 'hidden', 
+            border: isFullscreen ? 'none' : '1px solid rgba(255,255,255,0.05)', 
+            background: isFullscreen ? '#0A0C10' : 'rgba(5, 8, 15, 0.65)' 
+          }}
+        >
           <div style={{ position: 'absolute', top: '2rem', left: '2rem', zIndex: 10, width: '350px' }}>
             <div style={{ position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '1.25rem', top: '1.1rem', color: 'var(--text-muted)' }} />
@@ -309,6 +350,31 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
             padding: '0.4rem',
             borderRadius: '12px'
           }}>
+            {/* Fullscreen Toggle Button */}
+            <button 
+              onClick={toggleFullscreen}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: 'none',
+                color: '#fff',
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+              }}
+              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary-neon)'; e.currentTarget.style.color = '#000'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = '#fff'; }}
+            >
+              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
+
+            <span style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.15)', margin: '0 2px' }} />
+
             <button 
               onClick={() => setZoom(z => Math.min(6, z * 1.15))}
               style={{
