@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.18",
+    version: "2.1.19",
   },
   {
     capabilities: {
@@ -1769,19 +1769,34 @@ async function main() {
         console.error(`[SSE] Session established: ${sessionId}`);
       }
 
-      // Cleanup on connection close
+      // Send a heartbeat ping every 15 seconds to prevent proxy/load balancer timeouts
+      const heartbeatInterval = setInterval(() => {
+        if (!res.writableEnded) {
+          res.write(":\n\n"); // SSE comment - keeps the HTTP connection active
+        }
+      }, 15000);
+
+      // Cleanup on connection close with a 3-minute grace period
       res.on("close", async () => {
+        clearInterval(heartbeatInterval);
         if (sessionId) {
-          console.error(`[SSE] Session closed: ${sessionId}`);
-          transports.delete(sessionId);
-        }
-        try {
-          await transport.close();
-        } catch (err) {
-          // Ignore
-        }
-        if ((server as any)._transport === transport) {
-          (server as any)._transport = undefined;
+          console.error(`[SSE] Session connection closed: ${sessionId}. Keeping session alive for 3-minute grace period.`);
+          
+          // Keep the session in the map for a 3-minute grace period to prevent immediate 404 errors
+          setTimeout(async () => {
+            if (transports.has(sessionId)) {
+              console.error(`[SSE] Grace period expired. Cleaning up session: ${sessionId}`);
+              transports.delete(sessionId);
+              try {
+                await transport.close();
+              } catch (err) {
+                // Ignore
+              }
+              if ((server as any)._transport === transport) {
+                (server as any)._transport = undefined;
+              }
+            }
+          }, 180000); // 3 minutes
         }
       });
 

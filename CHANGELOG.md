@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.19] - 2026-05-17
+
+### Added / Fixed
+- **SSE Heartbeat Keep-Alive (15s)**: Introduced an automated 15-second heartbeat ping comment (`:\n\n`) on the `/sse` stream to prevent intermediate reverse proxies (Nginx, Cloudflare, Oracle Load Balancer) from prematurely terminating active client stream connections due to idleness.
+- **Graceful Session Preservation Window (3m)**: Hardened the session lifecycle by keeping closed connections alive in the `transports` Map for a 3-minute grace period. This guarantees that if a connection is temporarily terminated by the network or a proxy, subsequent `POST /messages` initialization handshakes from the client will still resolve flawlessly, eliminating intermittent `session not found` errors.
+
 ## [2.1.18] - 2026-05-17
 
 ### Fixed
