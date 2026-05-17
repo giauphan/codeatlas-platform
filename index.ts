@@ -9,7 +9,7 @@ import * as path from "path";
 import * as http from "http";
 import * as url from "url";
 import chokidar from 'chokidar';
-import { execFile } from 'child_process';
+import { spawn } from 'child_process';
 import express from "express";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -257,13 +257,18 @@ const triggerAutoIndex = () => {
   isAutoIndexing = true;
   console.log('[Auto-Index] Change detected, re-indexing...');
   
-  execFile('npx', ['tsx', 'run_indexing.ts'], { shell: process.platform === 'win32' }, (error, stdout, stderr) => {
+  const child = spawn('npx', ['tsx', 'run_indexing.ts'], { shell: process.platform === 'win32' });
+  child.on('error', (error) => {
     isAutoIndexing = false;
-    if (error) {
-      console.error(`[Auto-Index] Error: ${error.message}`);
-      return;
+    console.error(`[Auto-Index] Error: ${error.message}`);
+  });
+  child.on('close', (code) => {
+    isAutoIndexing = false;
+    if (code === 0) {
+      console.log('[Auto-Index] Success: Codebase updated.');
+    } else {
+      console.error(`[Auto-Index] Error: Process exited with code ${code}`);
     }
-    console.log('[Auto-Index] Success: Codebase updated.');
   });
 };
 
@@ -299,12 +304,16 @@ function startWatcher() {
       const cwd = project?.dir || process.cwd();
       const indexingScript = path.join(projectRoot, 'run_indexing.ts');
       
-      execFile('npx', ['tsx', indexingScript], { cwd, shell: process.platform === 'win32' }, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`[Auto-Index] ❌ Error indexing ${projectName}: ${error.message}`);
-          return;
+      const child = spawn('npx', ['tsx', indexingScript], { cwd, shell: process.platform === 'win32' });
+      child.on('error', (error) => {
+        console.error(`[Auto-Index] ❌ Error indexing ${projectName}: ${error.message}`);
+      });
+      child.on('close', (code) => {
+        if (code === 0) {
+          console.log(`[Auto-Index] ✅ ${projectName} updated and synced to DB.`);
+        } else {
+          console.error(`[Auto-Index] ❌ Error indexing ${projectName}: Process exited with code ${code}`);
         }
-        console.log(`[Auto-Index] ✅ ${projectName} updated and synced to DB.`);
       });
     }, 2000);
   });
