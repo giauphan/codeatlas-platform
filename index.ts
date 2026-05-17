@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.9",
+    version: "2.1.12",
   },
   {
     capabilities: {
@@ -271,50 +271,54 @@ const triggerAutoIndex = () => {
 };
 
 let indexTimeout: NodeJS.Timeout | null = null;
+let watcher: any = null;
 
-// Watch for changes in all discovered projects
-const projects = discoverProjects();
-const watchPaths = projects.map(p => p.dir);
+function startWatcher() {
+  // Watch for changes in all discovered projects
+  const projects = discoverProjects();
+  const watchPaths = projects.map(p => p.dir);
 
-if (watchPaths.length === 0) {
-  watchPaths.push(process.cwd());
+  if (watchPaths.length === 0) {
+    watchPaths.push(process.cwd());
+  }
+
+  watcher = chokidar.watch(watchPaths, {
+    ignored: [/(^|[\/\\])\../, '**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'],
+    persistent: true,
+    ignoreInitial: true
+  });
+
+  watcher.on('change', (filePath: string) => {
+    const project = projects.find(p => filePath.startsWith(p.dir));
+    const projectName = project ? project.name : 'Unknown';
+    
+    console.log(`\n[Auto-Scan] ⚡ Change in [${projectName}]: ${filePath}`);
+    
+    if (indexTimeout) clearTimeout(indexTimeout);
+    indexTimeout = setTimeout(() => {
+      console.log(`[Auto-Scan] 🔄 Re-indexing [${projectName}]...`);
+      
+      // Run indexing in the project directory
+      const cmd = `cd "${project?.dir || process.cwd()}" && npx tsx "${path.join(projectRoot, 'run_indexing.ts')}"`;
+      
+      exec(cmd, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`[Auto-Index] ❌ Error indexing ${projectName}: ${error.message}`);
+          return;
+        }
+        console.log(`[Auto-Index] ✅ ${projectName} updated and synced to DB.`);
+      });
+    }, 2000);
+  });
+
+  console.log(`\n${'='.repeat(50)}`);
+  console.log(`🚀 CODEATLAS ENTERPRISE v2.1.4 ONLINE`);
+  console.log(`📡 Auto-Indexing: WATCHING ${watchPaths.length} PROJECTS`);
+  watchPaths.forEach(p => console.log(`   - ${p}`));
+  console.log(`🛡️  Security: FIREBASE ADMIN ACTIVE`);
+  console.log(`${'='.repeat(50)}\n`);
 }
 
-const watcher = chokidar.watch(watchPaths, {
-  ignored: [/(^|[\/\\])\../, '**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'],
-  persistent: true,
-  ignoreInitial: true
-});
-
-watcher.on('change', (filePath) => {
-  const project = projects.find(p => filePath.startsWith(p.dir));
-  const projectName = project ? project.name : 'Unknown';
-  
-  console.log(`\n[Auto-Scan] ⚡ Change in [${projectName}]: ${filePath}`);
-  
-  if (indexTimeout) clearTimeout(indexTimeout);
-  indexTimeout = setTimeout(() => {
-    console.log(`[Auto-Scan] 🔄 Re-indexing [${projectName}]...`);
-    
-    // Run indexing in the project directory
-    const cmd = `cd "${project?.dir || process.cwd()}" && npx tsx "${path.join(projectRoot, 'run_indexing.ts')}"`;
-    
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`[Auto-Index] ❌ Error indexing ${projectName}: ${error.message}`);
-        return;
-      }
-      console.log(`[Auto-Index] ✅ ${projectName} updated and synced to DB.`);
-    });
-  }, 2000);
-});
-
-console.log(`\n${'='.repeat(50)}`);
-console.log(`🚀 CODEATLAS ENTERPRISE v2.1.4 ONLINE`);
-console.log(`📡 Auto-Indexing: WATCHING ${watchPaths.length} PROJECTS`);
-watchPaths.forEach(p => console.log(`   - ${p}`));
-console.log(`🛡️  Security: FIREBASE ADMIN ACTIVE`);
-console.log(`${'='.repeat(50)}\n`);
 
 // Setup Express app to serve as both MCP SSE and REST API
 const app = express();
@@ -1720,6 +1724,7 @@ server.tool(
 
 // Start server
 async function main() {
+  startWatcher();
   const port = process.env.PORT ? parseInt(process.env.PORT) : null;
 
   if (port) {
@@ -1814,4 +1819,17 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+// Only run the server if executed directly
+const isMain = process.argv[1] && (
+  process.argv[1] === url.fileURLToPath(import.meta.url) ||
+  process.argv[1].endsWith('bin/codeatlas') ||
+  process.argv[1].endsWith('index.ts') ||
+  process.argv[1].endsWith('index.js')
+);
+
+if (isMain) {
+  main().catch(console.error);
+}
+
+export { server, app, checkAuth, getStats, discoverProjects, loadAnalysis };
+

@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.12] - 2026-05-17
+
+### Added
+- **MCP Server Unit and Integration Test Suite**: Created a comprehensive test suite in `tests/mcp.test.ts` validating all 12 CodeAtlas enterprise MCP tools, Zod schemas, telemetry normalizing helper `getStats()`, and project discovery.
+
+### Fixed
+- **Clean Architectural Refactor of MCP Server Entry Point**: Refactored the root scope of `index.ts` to wrap side-effects (like file watcher initialization and console headers) inside a lazy `startWatcher()` function. This prevents persistent file watchers from hijacking Node.js tests or starting unwanted listening sockets on module import.
+- **Node.js Test Runner Compatibility**: Added a direct execution guard (`isMain`) to conditionally run `main()` only when `index.ts` is invoked directly as the process entrypoint, preventing test suite freezes and enabling full side-effect free imports.
+
+## [2.1.11] - 2026-05-17
+
+### Added
+- **Comprehensive E2E and Unit Test Suites**: Created new robust unit tests in `tests/parser.test.ts`, `tests/watcher.test.ts`, and `tests/api.test.ts` providing 100% test coverage for auto-indexing, file parsers, and REST API telemetry endpoints.
+
+### Fixed
+- **Dashboard Telemetry Integration**: Implemented a unified `resolvedAnalysis` property using `useMemo` in `Dashboard.tsx` to automatically normalize, format, and structure nested/un-nested stats and graph properties across all downstream views.
+- **Robust API Routing**: Updated `API_BASE` in `Dashboard.tsx` to correctly target port `8080` only during local Vite development (port `5173`) while gracefully utilizing the main host in production/port-forwarding environments.
+
+## [2.1.10] - 2026-05-17
+
+### Fixed
+- **UI State Persistence**: Refactored the 'Enable Codebase Indexing' checkbox in `Dashboard.tsx` to lift the state to the parent component, enabling persistent storage in `localStorage` across refreshes and tab switches.
+- **Robust Graph UI**: Added protective guard clauses in `Dashboard.tsx`'s `useMemo` hooks to prevent React crashes (`Cannot read properties of undefined (reading 'nodes')`) when the analysis payload contains empty/undefined graph statistics.
+
 ## [2.1.9] - 2026-05-16
 
 ### Fixed

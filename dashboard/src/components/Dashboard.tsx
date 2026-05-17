@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 
 // API Configuration
-const API_BASE = window.location.origin.includes('localhost') 
+const API_BASE = window.location.origin.includes('localhost:5173') 
   ? 'http://localhost:8080' 
   : window.location.origin;
 
@@ -55,14 +55,24 @@ interface ApiKey {
 }
 
 interface AnalysisData {
-  stats: {
-    totalFiles: number;
-    totalModules: number;
-    totalClasses: number;
-    totalFunctions: number;
-    totalVariables: number;
-    loc: number;
+  stats?: {
+    totalFiles?: number;
+    totalModules?: number;
+    totalClasses?: number;
+    totalFunctions?: number;
+    totalVariables?: number;
+    loc?: number;
   };
+  entityCounts?: {
+    modules?: number;
+    functions?: number;
+    classes?: number;
+    variables?: number;
+    dependencies?: number;
+    circularDeps?: number;
+    deadCode?: number;
+  };
+  totalFilesAnalyzed?: number;
   graph: {
     nodes: any[];
     links: any[];
@@ -155,21 +165,51 @@ export const Dashboard: React.FC = () => {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
+  const resolvedAnalysis = useMemo(() => {
+    if (!analysis) return null;
+    
+    // Extract base analysis object if it's nested
+    let base = analysis as any;
+    if ('analysis' in analysis && (analysis as any).analysis) {
+      base = (analysis as any).analysis;
+    }
+    
+    // Normalize stats
+    const rawStats = base.stats || {};
+    const entityCounts = base.entityCounts || {};
+    const totalFilesAnalyzed = base.totalFilesAnalyzed || rawStats.totalFiles || 0;
+    
+    const normalizedStats = {
+      totalFiles: totalFilesAnalyzed,
+      totalModules: entityCounts.modules || rawStats.totalModules || 0,
+      totalClasses: entityCounts.classes || rawStats.totalClasses || 0,
+      totalFunctions: entityCounts.functions || rawStats.totalFunctions || 0,
+      totalVariables: entityCounts.variables || rawStats.totalVariables || 0,
+      loc: rawStats.loc || 0
+    };
+    
+    return {
+      ...base,
+      stats: normalizedStats,
+      totalFilesAnalyzed
+    };
+  }, [analysis]);
+
   const renderContent = () => {
     switch(activeTab) {
       case 'Control Center':
         return <ControlCenterView 
-          stats={stats} keys={keys} analysis={analysis}
+          stats={stats} keys={keys} analysis={resolvedAnalysis}
           createKey={createKey} deleteKey={(id: string) => deleteDoc(doc(db, 'users', user!.uid, 'keys', id))} 
           copyToClipboard={(t: string, id: string) => { navigator.clipboard.writeText(t); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); }}
           copiedId={copiedId} newKeyName={newKeyName} setNewKeyName={setNewKeyName} loading={loading}
         />;
       case 'Knowledge Graph':
-        return <KnowledgeGraphView analysis={analysis} />;
+        return <KnowledgeGraphView analysis={resolvedAnalysis} />;
       case 'Logic Models':
-        return <LogicModelsView analysis={analysis} />;
+        return <LogicModelsView analysis={resolvedAnalysis} />;
       case 'Cloud Index':
-        return <CloudIndexView analysis={analysis} isIndexing={isIndexing} onReindex={handleReindex} isIndexingEnabled={isIndexingEnabled} setIsIndexingEnabled={setIsIndexingEnabled} />;
+        return <CloudIndexView analysis={resolvedAnalysis} isIndexing={isIndexing} onReindex={handleReindex} isIndexingEnabled={isIndexingEnabled} setIsIndexingEnabled={setIsIndexingEnabled} />;
       default:
         return null;
     }
