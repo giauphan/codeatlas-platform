@@ -169,7 +169,7 @@ export const Dashboard: React.FC = () => {
       case 'Logic Models':
         return <LogicModelsView analysis={analysis} />;
       case 'Cloud Index':
-        return <CloudIndexView analysis={analysis} isIndexing={isIndexing} onReindex={handleReindex} />;
+        return <CloudIndexView analysis={analysis} isIndexing={isIndexing} onReindex={handleReindex} isIndexingEnabled={isIndexingEnabled} setIsIndexingEnabled={setIsIndexingEnabled} />;
       default:
         return null;
     }
@@ -464,8 +464,7 @@ const LogicModelsView: React.FC<{ analysis: any }> = ({ analysis }) => (
   </div>
 );
 
-const CloudIndexView: React.FC<{ analysis: any, isIndexing: boolean, onReindex: () => void }> = ({ analysis, isIndexing, onReindex }) => {
-  const [autoIndex, setAutoIndex] = useState(false);
+const CloudIndexView: React.FC<{ analysis: any, isIndexing: boolean, onReindex: () => void, isIndexingEnabled: boolean, setIsIndexingEnabled: (v: boolean) => void }> = ({ analysis, isIndexing, onReindex, isIndexingEnabled, setIsIndexingEnabled }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   return (
@@ -484,9 +483,9 @@ const CloudIndexView: React.FC<{ analysis: any, isIndexing: boolean, onReindex: 
               <div style={{ 
                 width: '24px', height: '24px', border: '2px solid var(--primary-neon)', borderRadius: '6px', 
                 display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                background: autoIndex ? 'var(--primary-neon)' : 'transparent'
-              }} onClick={() => setAutoIndex(!autoIndex)}>
-                {autoIndex && <Check size={16} color="#000" strokeWidth={4} />}
+                background: isIndexingEnabled ? 'var(--primary-neon)' : 'transparent'
+              }} onClick={() => setIsIndexingEnabled(!isIndexingEnabled)}>
+                {isIndexingEnabled && <Check size={16} color="#000" strokeWidth={4} />}
               </div>
               <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>Enable Codebase Indexing</span>
               <div style={{ padding: '0.25rem 0.6rem', borderRadius: '100px', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
@@ -503,7 +502,7 @@ const CloudIndexView: React.FC<{ analysis: any, isIndexing: boolean, onReindex: 
                   boxShadow: isIndexing ? '0 0 10px var(--primary-neon)' : 'none'
                 }} />
                 <span style={{ fontWeight: 600, color: isIndexing ? '#fff' : 'var(--text-muted)' }}>
-                  {isIndexing ? 'Scanning source files...' : autoIndex ? 'Standby - Watching for changes' : 'Code indexing is disabled'}
+                  {isIndexing ? 'Scanning source files...' : isIndexingEnabled ? 'Standby - Watching for changes' : 'Code indexing is disabled'}
                 </span>
               </div>
             </div>
