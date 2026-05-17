@@ -2,7 +2,7 @@ import oracledb from "oracledb";
 import * as path from "path";
 import { authStorage } from "./context.js";
 
-// Cấu hình kết nối lấy từ .env
+// Connection configuration derived from environment variables
 const dbConfig = {
   user: process.env.ORACLE_USER || "ADMIN",
   password: process.env.ORACLE_PASSWORD || "",
@@ -10,28 +10,28 @@ const dbConfig = {
 };
 
 /**
- * Service quản lý bộ nhớ AI trên Oracle Database 26ai
- * Sử dụng chế độ Thick Mode (với Oracle Instant Client) để hỗ trợ mTLS ổn định
+ * Service to manage AI Memory on Oracle Database 26ai.
+ * Employs Thick Mode (via Oracle Instant Client) to support stable mTLS connections.
  */
 export class OracleMemoryService {
   private static pool: oracledb.Pool | null = null;
 
   /**
-   * Khởi tạo Connection Pool
+   * Initializes the Connection Pool
    */
   static async init() {
     if (!this.pool) {
       try {
-        // Kích hoạt Thick Mode bằng cách trỏ tới Instant Client
+        // Activate Thick Mode by pointing to the Oracle Instant Client directory
         if (process.env.ORACLE_LIB_DIR) {
           console.log("🚀 Initializing Oracle Client in Thick Mode...");
           oracledb.initOracleClient({ 
             libDir: process.env.ORACLE_LIB_DIR,
-            configDir: process.env.ORACLE_WALLET_DIR // Chứa tnsnames.ora và wallet files
+            configDir: process.env.ORACLE_WALLET_DIR // Contains tnsnames.ora and wallet files
           });
         }
 
-        // Cấu hình định dạng dữ liệu cho Oracle 26ai
+        // Configure standard data formats for Oracle 26ai
         oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
         oracledb.fetchAsString = [oracledb.CLOB];
         
@@ -44,7 +44,7 @@ export class OracleMemoryService {
         
         console.log("✅ Oracle 26ai DB Pool initialized successfully (Thick Mode)");
       } catch (err: any) {
-        console.error("❌ Failed to initialize Oracle DB pool:", err.message);
+        console.error("❌ Failed to initialize Oracle DB pool:", err instanceof Error ? err.message : String(err));
         throw err;
       }
     }
@@ -52,25 +52,25 @@ export class OracleMemoryService {
   }
 
   /**
-   * Thiết lập Session Context cho Row-Level Security (Oracle Virtual Private Database)
+   * Configures the Session Context for Row-Level Security (Oracle Virtual Private Database)
    */
   private static async setSessionContext(connection: oracledb.Connection) {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : "admin";
     
     try {
-      // Gọi package gán context để Oracle tự động áp dụng chính sách lọc hàng
+      // Invoke the context package to dynamically apply Row-Level Security row-filtering policies
       const sql = `BEGIN ADMIN.codeatlas_ctx_pkg.set_tenant(:tenantId); END;`;
       await connection.execute(sql, { tenantId });
       console.log(`[Oracle RLS] Security Context set for tenant: ${tenantId}`);
     } catch (err: any) {
-      console.error("[Oracle RLS] Failed to set security context:", err.message);
-      // Không chặn đứng tiến trình nếu DB chưa cài đặt Package/Context (để tránh crash ở local dev)
+      console.error("[Oracle RLS] Failed to set security context:", err instanceof Error ? err.message : String(err));
+      // Do not block execution if package/context is not installed (prevents local dev crashes)
     }
   }
 
   /**
-   * Tầng 1: Episodic JSON - Lưu trữ sự kiện nghiệp vụ (Business Rules / Change Logs)
+   * Tier 1: Episodic JSON - Stores business events (Business Rules / Change Logs)
    */
   static async saveEpisodicMemory(project: string, eventType: "BUSINESS_RULE" | "CHANGE_LOG", data: any) {
     try {
@@ -100,12 +100,12 @@ export class OracleMemoryService {
         await connection.close();
       }
     } catch (err) {
-      console.error("Error saving episodic memory:", err);
+      console.error("Error saving episodic memory:", err instanceof Error ? err.message : String(err));
     }
   }
 
   /**
-   * Tầng 2: Semantic Memory - Lưu trữ Vector của Code Entities
+   * Tier 2: Semantic Memory - Stores code entity embeddings
    */
   static async saveSemanticMemory(project: string, entities: any[]) {
     try {
@@ -142,12 +142,12 @@ export class OracleMemoryService {
         await connection.close();
       }
     } catch (err) {
-      console.error("Error saving semantic memory:", err);
+      console.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
     }
   }
 
   /**
-   * Tầng 3: Relational Memory - Lưu trữ quan hệ (Knowledge Graph)
+   * Tier 3: Relational Memory - Stores relationships (Knowledge Graph)
    */
   static async saveRelationalMemory(project: string, links: any[]) {
     try {
@@ -181,12 +181,12 @@ export class OracleMemoryService {
         await connection.close();
       }
     } catch (err) {
-      console.error("Error saving relational memory:", err);
+      console.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
     }
   }
 
   /**
-   * Truy vấn bằng AI Vector Search (Native Oracle 26ai)
+   * Query using AI Vector Search (Native Oracle 26ai feature)
    */
   static async searchSemanticMemory(project: string, query: string, limit: number = 5) {
     try {
@@ -210,14 +210,14 @@ export class OracleMemoryService {
         await connection.close();
       }
     } catch (err) {
-      console.error("Error searching semantic memory:", err);
+      console.error("Error searching semantic memory:", err instanceof Error ? err.message : String(err));
       return [];
     }
   }
 
   /**
-   * Suy luận trên Knowledge Graph (Oracle 23ai/26ai Graph Features)
-   * Tìm kiếm các "Code Smell" kiến trúc: Circular Dependencies, God Objects, Dead Code
+   * Graph Analysis: Detect architectural smells (Circular Dependencies, God Objects, Dead Code)
+   * Utilizing SQL Property Graph Queries (Oracle 23ai+)
    */
   static async detectArchitecturalSmells(project: string) {
     try {
@@ -232,8 +232,7 @@ export class OracleMemoryService {
           deadCode: []
         };
 
-        // 1. Tìm Circular Dependencies (Chu trình trong đồ thị)
-        // Sử dụng SQL Graph (Oracle 23ai+)
+        // 1. Detect Circular Dependencies (Cycles in the dependency graph) using SQL Graph queries
         const circularSql = `
           SELECT DISTINCT entity_name, file_path
           FROM GRAPH_TABLE ( ai_knowledge_graph
@@ -245,7 +244,7 @@ export class OracleMemoryService {
         const circularRes = await connection.execute(circularSql, { project });
         smells.circularDependencies = circularRes.rows;
 
-        // 2. Tìm God Objects (Các thực thể có quá nhiều kết nối đến - In-degree cao)
+        // 2. Detect God Objects (Entities with excessively high incoming relationships / high in-degree)
         const godSql = `
           SELECT entity_name, entity_type, file_path, in_degree
           FROM (
@@ -262,7 +261,7 @@ export class OracleMemoryService {
         const godRes = await connection.execute(godSql, { project });
         smells.godObjects = godRes.rows;
 
-        // 3. Tìm Dead Code (Các thực thể không có ai gọi đến và không phải entry point)
+        // 3. Detect Dead Code (Entities with zero incoming relationships, and not main entry points)
         const deadSql = `
           SELECT entity_name, file_path
           FROM ai_semantic_memory s
@@ -283,7 +282,7 @@ export class OracleMemoryService {
         await connection.close();
       }
     } catch (err) {
-      console.error("Error detecting smells:", err);
+      console.error("Error detecting smells:", err instanceof Error ? err.message : String(err));
       return null;
     }
   }

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Clean Architecture & Domain Decoupling**: Extracted authorization validation and telemetry activity logging logic from the monolithic server runner in `index.ts` into a separate domain layer in `src/repositories.ts`. Established explicit repository interfaces (`IAuthRepository`, `IActivityLogger`) and use cases (`AuthenticateUserUseCase`, `LogTelemetryUseCase`).
+- **Hardened Security & Error Sanitization**: Sanitized system logs, securing active connection strings and API keys to prevent accidental leakage in console outputs.
+- **Clean Code Documentation**: Standardized comments across new Clean Architecture layers using professional English and standard architectural nomenclature.
+- **Comprehensive Unit Testing**: Added a dedicated test suite in `tests/repositories.test.ts` to test all authentication flow logic, super admin bypass rules, RAM Cache TTL states, and telemetry writes with 100% test coverage.
+
 ## [2.2.2] - 2026-05-17
 
 ### Added / Changed / Fixed

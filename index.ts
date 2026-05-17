@@ -12,7 +12,12 @@ import chokidar from 'chokidar';
 import { exec } from 'child_process';
 import express from "express";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { 
+  FirestoreAuthRepository, 
+  FirestoreActivityLogger, 
+  AuthenticateUserUseCase, 
+  LogTelemetryUseCase 
+} from "./src/repositories.js";
 import * as dotenv from "dotenv";
 import { CodeAnalyzer } from "./src/analyzer/parser.js";
 import { AnalysisResult } from "./src/analyzer/types.js";
@@ -43,102 +48,32 @@ if (!apps || apps.length === 0) {
   }
 }
 
-const db = getFirestore();
-
-// RAM Cache for checkAuth
-const authCache = new Map<string, { tier: string, expires: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const authRepo = new FirestoreAuthRepository();
+const activityLogger = new FirestoreActivityLogger();
+const authenticateUseCase = new AuthenticateUserUseCase(authRepo);
+const logTelemetryUseCase = new LogTelemetryUseCase(activityLogger);
 
 /**
- * Security: Verify API Key from Firestore
- * Instead of environment variables, we query the 'keys' collection group
- * to find if the provided key exists in any user's account.
+ * Security: Verify API Key using Clean Architecture Use Case
  */
 async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: string; keyId: string }> {
-  const keyToVerify = apiKey || process.env.CODEATLAS_API_KEY;
-
-  if (!keyToVerify) {
-    throw new Error("Unauthorized: API Key is required. Set CODEATLAS_API_KEY env var or provide x-api-key header.");
-  }
-
-  // 1. Super Admin Bypass (via .env)
-  console.error(`[Auth Debug] Incoming key check...`);
-  
-  if (process.env.CODEATLAS_API_KEY && keyToVerify === process.env.CODEATLAS_API_KEY) {
-    console.error(`[Auth Debug] Super Admin Bypass Success!`);
-    return { tier: 'enterprise', uid: 'admin', keyId: 'admin' }; 
-  }
-
-  // 2. Check RAM Cache
-  const cached = authCache.get(keyToVerify) as any;
-  if (cached && cached.expires > Date.now()) {
-    return cached;
-  }
-
-  try {
-    const keysSnapshot = await db.collectionGroup('keys')
-      .where('key', '==', keyToVerify)
-      .limit(1)
-      .get();
-
-    if (keysSnapshot.empty) {
-      console.error(`[Auth] Key not found in Firestore: ${keyToVerify.substring(0, 10)}...`);
-      throw new Error("Unauthorized: Invalid API Key.");
-    }
-
-    const keyDoc = keysSnapshot.docs[0];
-    const userRef = keyDoc.ref.parent.parent;
-    if (!userRef) {
-      throw new Error("Unauthorized: Invalid key ownership structure.");
-    }
-
-    const authData = {
-      tier: 'enterprise',
-      uid: userRef.id,
-      keyId: keyDoc.id,
-      expires: Date.now() + CACHE_TTL
-    };
-
-    authCache.set(keyToVerify, authData);
-
-    // Update lastUsed timestamp
-    await keyDoc.ref.update({
-      lastUsed: FieldValue.serverTimestamp()
-    });
-
-    console.error(`[Auth] Success: User ${authData.uid} logged in via key ${authData.keyId}`);
-    return authData;
-  } catch (err: any) {
-    if (err.message.includes("Unauthorized")) throw err;
-    console.error(`[Auth Error] Project: ${process.env.VITE_FIREBASE_PROJECT_ID}, Error: ${err.message}`);
-    throw new Error(`Authentication service unavailable: ${err.message}`);
-  }
+  const keyToVerify = apiKey || process.env.CODEATLAS_API_KEY || "";
+  const result = await authenticateUseCase.execute(keyToVerify, process.env.CODEATLAS_API_KEY);
+  return {
+    tier: result.tier,
+    uid: result.uid,
+    keyId: result.keyId
+  };
 }
 
 /**
- * Log activity to Firestore for the dashboard
+ * Log activity using Clean Architecture Use Case
  */
 async function logActivity(auth: { uid: string; keyId: string }, tool: string, params: any, success: boolean = true) {
-  if (auth.uid === 'admin') return; // Don't log super admin
   try {
-    await db.collection('users').doc(auth.uid).collection('activity').add({
-      keyId: auth.keyId,
-      tool,
-      params: JSON.stringify(params),
-      success,
-      timestamp: FieldValue.serverTimestamp()
-    });
-
-    // Increment global stats for user
-    const statsRef = db.collection('users').doc(auth.uid);
-    await statsRef.set({
-      stats: {
-        totalRequests: FieldValue.increment(1),
-        lastActivity: FieldValue.serverTimestamp()
-      }
-    }, { merge: true });
-  } catch (err) {
-    console.error("Failed to log activity:", err);
+    await logTelemetryUseCase.execute(auth.uid, auth.keyId, tool, params, success);
+  } catch (err: any) {
+    console.error("Failed to log activity:", err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -261,7 +196,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.2.2",
+    version: "2.3.0",
   },
   {
     capabilities: {
@@ -1824,7 +1759,7 @@ async function main() {
         const sessionServer = new McpServer(
           {
             name: "CodeAtlas",
-            version: "2.2.2",
+            version: "2.3.0",
           },
           {
             capabilities: {
