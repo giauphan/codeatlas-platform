@@ -95,14 +95,28 @@ export const Dashboard: React.FC = () => {
   });
   const user = auth.currentUser;
 
+  const getAuthHeaders = async () => {
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      const token = await currentUser.getIdToken();
+      return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+    }
+    return {
+      'x-api-key': SUPER_ADMIN_KEY,
+      'Content-Type': 'application/json'
+    };
+  };
+
   const fetchAnalysis = async (projectDir?: string) => {
     try {
       const url = projectDir 
         ? `${API_BASE}/api/analysis?projectDir=${encodeURIComponent(projectDir)}`
         : `${API_BASE}/api/analysis`;
-      const resp = await fetch(url, {
-        headers: { 'x-api-key': SUPER_ADMIN_KEY }
-      });
+      const headers = await getAuthHeaders();
+      const resp = await fetch(url, { headers });
       if (resp.ok) {
         const data = await resp.json();
         setAnalysis(data);
@@ -115,9 +129,8 @@ export const Dashboard: React.FC = () => {
 
   const fetchProjects = async () => {
     try {
-      const resp = await fetch(`${API_BASE}/api/projects`, {
-        headers: { 'x-api-key': SUPER_ADMIN_KEY }
-      });
+      const headers = await getAuthHeaders();
+      const resp = await fetch(`${API_BASE}/api/projects`, { headers });
       if (resp.ok) {
         const data = await resp.json();
         setProjects(data);
@@ -142,9 +155,11 @@ export const Dashboard: React.FC = () => {
   const handleReindex = async () => {
     setIsIndexing(true);
     try {
+      const headers = await getAuthHeaders();
       const resp = await fetch(`${API_BASE}/api/reindex`, {
         method: 'POST',
-        headers: { 'x-api-key': SUPER_ADMIN_KEY }
+        headers,
+        body: JSON.stringify({ projectDir: selectedProjectDir })
       });
       if (resp.ok) await fetchAnalysis(selectedProjectDir);
     } catch (err) {

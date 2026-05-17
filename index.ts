@@ -12,6 +12,7 @@ import chokidar from 'chokidar';
 import { exec } from 'child_process';
 import express from "express";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { 
   FirestoreAuthRepository, 
   FirestoreActivityLogger, 
@@ -57,6 +58,9 @@ const logTelemetryUseCase = new LogTelemetryUseCase(activityLogger);
  * Security: Verify API Key using Clean Architecture Use Case
  */
 async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: string; keyId: string }> {
+  if (process.env.CODEATLAS_MULTI_TENANT === "true" && !apiKey) {
+    throw new Error("Authentication API key is required");
+  }
   const keyToVerify = apiKey || process.env.CODEATLAS_API_KEY || "";
   const result = await authenticateUseCase.execute(keyToVerify, process.env.CODEATLAS_API_KEY);
   return {
@@ -102,19 +106,43 @@ function discoverProjects(tenantId?: string): { name: string; dir: string; analy
   const searchDirs: string[] = [];
 
   // Multi-Tenant Isolation
-  if (process.env.CODEATLAS_MULTI_TENANT === "true" && tenantId && tenantId !== "admin") {
-    const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || "/var/codeatlas/tenants";
-    const userDir = path.join(tenantRoot, tenantId);
-    if (fs.existsSync(userDir)) {
-      try {
-        const userProjects = fs.readdirSync(userDir);
-        for (const p of userProjects) {
-          const fullPath = path.join(userDir, p);
-          if (fs.statSync(fullPath).isDirectory()) {
-            searchDirs.push(fullPath);
+  if (process.env.CODEATLAS_MULTI_TENANT === "true") {
+    if (tenantId && tenantId !== "admin") {
+      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || "/var/codeatlas/tenants";
+      const userDir = path.join(tenantRoot, tenantId);
+      if (fs.existsSync(userDir)) {
+        try {
+          const userProjects = fs.readdirSync(userDir);
+          for (const p of userProjects) {
+            const fullPath = path.join(userDir, p);
+            if (fs.statSync(fullPath).isDirectory()) {
+              searchDirs.push(fullPath);
+            }
           }
+        } catch { /* skip */ }
+      }
+    } else if (tenantId === "admin") {
+      // Super Admin bypass: can see single-tenant folders / home directory
+      const homeDir = process.env.HOME || process.env.USERPROFILE || "/home";
+      if (process.env.CODEATLAS_PROJECT_DIR) {
+        searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
+      }
+      searchDirs.push(process.cwd());
+      try {
+        const homeDirs = fs.readdirSync(homeDir);
+        for (const d of homeDirs) {
+          if (d.startsWith(".")) continue;
+          const fullPath = path.join(homeDir, d);
+          try {
+            if (fs.statSync(fullPath).isDirectory()) {
+              searchDirs.push(fullPath);
+            }
+          } catch { /* skip */ }
         }
       } catch { /* skip */ }
+    } else {
+      // Multi-tenant active, but no valid session/tenant credentials -> do not fall back, return empty
+      return [];
     }
   } else {
     // Single-Tenant or Local Dev Mode
@@ -196,7 +224,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.5.2",
+    version: "2.5.3",
   },
   {
     capabilities: {
@@ -286,14 +314,38 @@ app.use(express.json());
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
 // Authentication middleware for ALL API routes
 const authMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  // Support both header and query param for flexibility (Dashboard vs MCP)
+  // 1. Support Firebase ID Token (Bearer Token) for Dashboard
+  const authHeader = req.headers["authorization"];
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.substring(7);
+    try {
+      const decodedToken = await getAuth().verifyIdToken(token);
+      const auth = {
+        tier: "enterprise",
+        uid: decodedToken.uid,
+        keyId: "firebase-session"
+      };
+      (req as any).auth = auth;
+      
+      // Gán auth context cho toàn bộ luồng bất đồng bộ bên dưới
+      authStorage.run(auth, () => {
+        next();
+      });
+      return;
+    } catch (err: any) {
+      res.status(401).json({ error: `Invalid Firebase ID Token: ${err.message}` });
+      return;
+    }
+  }
+
+  // 2. Support both header and query param for flexibility (Dashboard legacy vs MCP)
   const clientKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string);
   try {
     const auth = await checkAuth(clientKey);
@@ -335,7 +387,22 @@ app.get("/api/analysis", authMiddleware, async (req, res) => {
 // REST API: Trigger re-index
 app.post("/api/reindex", authMiddleware, async (req, res) => {
   try {
-    const projectPath = process.env.CODEATLAS_PROJECT_DIR || process.cwd();
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+    const bodyProjectDir = req.body.projectDir as string | undefined;
+
+    let projectPath = bodyProjectDir || process.env.CODEATLAS_PROJECT_DIR || process.cwd();
+
+    // In multi-tenant mode, strictly validate that they own/can access this project directory!
+    if (process.env.CODEATLAS_MULTI_TENANT === "true" && tenantId && tenantId !== "admin") {
+      const userProjects = discoverProjects(tenantId);
+      const match = userProjects.find(p => p.dir === projectPath);
+      if (!match) {
+        return res.status(403).json({ error: "Access denied: You do not own or have access to this project directory" });
+      }
+      projectPath = match.dir;
+    }
+
     console.error(`[API] Triggering re-index for: ${projectPath}`);
     
     const analyzer = new CodeAnalyzer(projectPath, 5000);
@@ -1772,7 +1839,7 @@ async function main() {
         const sessionServer = new McpServer(
           {
             name: "CodeAtlas",
-            version: "2.5.2",
+            version: "2.5.3",
           },
           {
             capabilities: {

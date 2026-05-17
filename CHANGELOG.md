@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.3] - 2026-05-17
+
+### Fixed / Changed
+- **Fixed Multi-Tenant Project Leak Bug**: Replaced the hardcoded `SUPER_ADMIN_KEY` for fetching projects in `Dashboard.tsx` with dynamic, authenticated Firebase user ID Bearer tokens (`Authorization: Bearer <ID_TOKEN>`).
+- **Hardened Multi-Tenant Isolation Boundaries**: Updated the `authMiddleware` in `index.ts` to decode and verify Firebase ID tokens using `firebase-admin`, preventing standard users from bypassing boundaries to access super-admin (/home) directory structures.
+- **Harden Reindex Endpoint**: Secured the `/api/reindex` route to strictly validate that the requested `projectDir` lies within the authenticated tenant's directory.
+
 ## [2.5.2] - 2026-05-17
 
 ### Fixed / Changed
