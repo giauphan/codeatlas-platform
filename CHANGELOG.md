@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.7.4] - 2026-05-17
+
+### Fixed
+- **PR Merge & Branch Lifecycle Management**: Verified, reviewed, and successfully merged Pull Request #1 (`Fix Command Injection in Auto-Indexing Watcher`) into `main`. Safely deleted the stale remote branch `fix-command-injection-index-2713636837679567816` from GitHub and pruned the local environment.
+- **System Stability Verification**: Confirmed flawless build status and type safety for both the MCP Server (root) and the Neural Dashboard (dashboard/), with 100% of integration test suites executing successfully.
+
 ## [2.7.3] - 2026-05-17
 
 ### Added / Changed / Fixed

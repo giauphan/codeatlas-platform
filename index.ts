@@ -63,6 +63,10 @@ const logTelemetryUseCase = new LogTelemetryUseCase(activityLogger);
  * Security: Verify API Key using Clean Architecture Use Case
  */
 async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: string; keyId: string }> {
+  const contextAuth = authStorage.getStore();
+  if (contextAuth) {
+    return contextAuth;
+  }
   if (process.env.CODEATLAS_MULTI_TENANT === "true" && !apiKey) {
     throw new Error("Authentication API key is required");
   }
@@ -235,7 +239,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.7.3",
+    version: "2.7.4",
   },
   {
     capabilities: {
@@ -508,8 +512,9 @@ server.tool(
   {},
   async () => {
     // Enterprise edition: full access enabled
-    const auth = authStorage.getStore();
-    const projects = discoverProjects(auth?.uid);
+    const auth = await checkAuth();
+    await logActivity(auth, "list_projects", {});
+    const projects = discoverProjects(auth.uid);
     if (projects.length === 0) {
       return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
     }
@@ -537,7 +542,8 @@ server.tool(
     limit: z.number().optional().describe("Max results to return (default: 100)"),
   },
   async ({ project, type, limit }: { project?: string; type?: string; limit?: number }) => {
-    const tier = await checkAuth();
+    const auth = await checkAuth();
+    await logActivity(auth, "get_project_structure", { project, type, limit });
     const loaded = loadAnalysis(project);
     if (!loaded) {
       return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
@@ -1873,7 +1879,7 @@ async function main() {
         const sessionServer = new McpServer(
           {
             name: "CodeAtlas",
-            version: "2.7.3",
+            version: "2.7.4",
           },
           {
             capabilities: {
