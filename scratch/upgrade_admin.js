@@ -24,6 +24,7 @@ async function upgradeUser(email) {
     const userDoc = usersSnapshot.docs[0];
     await userDoc.ref.update({
       tier: 'enterprise',
+      role: 'admin',
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 

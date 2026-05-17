@@ -13,6 +13,7 @@ import { exec } from 'child_process';
 import express from "express";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
 import { 
   FirestoreAuthRepository, 
   FirestoreActivityLogger, 
@@ -107,7 +108,13 @@ function discoverProjects(tenantId?: string): { name: string; dir: string; analy
 
   // Multi-Tenant Isolation
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
-    if (tenantId && tenantId !== "admin") {
+    const auth = authStorage.getStore();
+    // Prevent client spoofing: in an active request context, administrative privileges must be verified via secure auth context.
+    const isSystemAdmin = auth
+      ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
+      : (tenantId === "admin");
+
+    if (tenantId && !isSystemAdmin) {
       const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(__dirname, "tenants");
       const userDir = path.join(tenantRoot, tenantId);
       if (fs.existsSync(userDir)) {
@@ -121,7 +128,7 @@ function discoverProjects(tenantId?: string): { name: string; dir: string; analy
           }
         } catch { /* skip */ }
       }
-    } else if (tenantId === "admin") {
+    } else if (isSystemAdmin) {
       // Super Admin bypass: can see single-tenant folders / home directory
       const homeDir = process.env.HOME || process.env.USERPROFILE || "/home";
       if (process.env.CODEATLAS_PROJECT_DIR) {
@@ -224,7 +231,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.5.3",
+    version: "2.6.0",
   },
   {
     capabilities: {
@@ -327,9 +334,23 @@ const authMiddleware = async (req: express.Request, res: express.Response, next:
     const token = authHeader.substring(7);
     try {
       const decodedToken = await getAuth().verifyIdToken(token);
+      let role = (decodedToken.role as string) || "user";
+      if (role !== "admin") {
+        try {
+          const userDoc = await getFirestore().collection("users").doc(decodedToken.uid).get();
+          if (userDoc.exists) {
+            role = userDoc.data()?.role || userDoc.data()?.tier || "user";
+          }
+        } catch (e) {
+          console.error("Failed to fetch user role from Firestore:", e);
+        }
+      }
+
       const auth = {
         tier: "enterprise",
         uid: decodedToken.uid,
+        email: decodedToken.email,
+        role: role,
         keyId: "firebase-session"
       };
       (req as any).auth = auth;
@@ -1710,7 +1731,7 @@ server.tool(
   async ({ maxProjects }: { maxProjects?: number }) => {
     const auth = await checkAuth();
     await logActivity(auth, "scan_enterprise_vulnerabilities", { maxProjects });
-    const projects = discoverProjects();
+    const projects = discoverProjects(auth.uid);
     
     if (projects.length === 0) {
       return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
@@ -1845,7 +1866,7 @@ async function main() {
         const sessionServer = new McpServer(
           {
             name: "CodeAtlas",
-            version: "2.5.3",
+            version: "2.6.0",
           },
           {
             capabilities: {

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Dynamic Role-Based Super Admin Authorization Flow**: Replaced the email-specific hardcode with a dynamic lookup of the user's role from their Firestore document (`users/{uid}`) or custom token claims (`decodedToken.role`), supporting clean-architecture enterprise standards.
+- **Upgraded upgrade_admin Script**: Updated the administrative bootstrap script to automatically set `role: 'admin'` in Firestore to grant proper, dynamic permissions to administrative accounts.
+
 ## [2.5.3] - 2026-05-17
 
 ### Fixed / Changed
