@@ -14,21 +14,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
 
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies (Root)
-        run: npm ci
+        run: pnpm install
 
       - name: TypeScript type check
         run: npx tsc --noEmit --skipLibCheck
 
       - name: Build Main Server
-        run: npm run build
+        run: pnpm run build
 
       - name: Install dependencies (Dashboard)
         run: |
@@ -42,4 +49,4 @@ jobs:
 
       - name: Run analyzer tests
         working-directory: ./
-        run: npm test
+        run: pnpm test
