@@ -108,7 +108,7 @@ function discoverProjects(tenantId?: string): { name: string; dir: string; analy
   // Multi-Tenant Isolation
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
     if (tenantId && tenantId !== "admin") {
-      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || "/var/codeatlas/tenants";
+      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(__dirname, "tenants");
       const userDir = path.join(tenantRoot, tenantId);
       if (fs.existsSync(userDir)) {
         try {
