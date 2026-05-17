@@ -43,6 +43,12 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
   const [activeFilters, setActiveFilters] = useState(['module', 'function', 'class', 'variable']);
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   
+  // Interactive Viewport Pan & Zoom States
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
   const svgRef = React.useRef<SVGSVGElement>(null);
   const [mousePos, setMousePos] = useState({ x: 550, y: 350 });
 
@@ -149,7 +155,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
           n.vx += (dx / distToCenter) * 0.08;
           n.vy += (dy / distToCenter) * 0.08;
 
-          // Drag lock
+          // Drag lock in transformed space
           if (n.id === draggedNodeId) {
             n.x = mousePos.x;
             n.y = mousePos.y;
@@ -190,24 +196,55 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
       }));
   }, [analysis, simNodes]);
 
-  // Handle Drag-and-Drop Coordinates inside SVG
+  // Handle Drag-and-Drop Coordinates inside SVG (supports transformed zoom/pan)
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (isPanning) {
+      setPan({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y
+      });
+      return;
+    }
+
     if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     
-    // Scale coordinate to SVG viewBox (1100x700)
-    const x = ((e.clientX - rect.left) / rect.width) * 1100;
-    const y = ((e.clientY - rect.top) / rect.height) * 700;
-    setMousePos({ x, y });
+    // Scale screen coordinate to SVG viewBox (1100x700)
+    const rawX = ((e.clientX - rect.left) / rect.width) * 1100;
+    const rawY = ((e.clientY - rect.top) / rect.height) * 700;
+    
+    // Transform coordinates back to node coordinate space considering Zoom and Pan
+    const transformedX = (rawX - pan.x) / zoom;
+    const transformedY = (rawY - pan.y) / zoom;
+    
+    setMousePos({ x: transformedX, y: transformedY });
   };
 
   const handleNodeMouseDown = (nodeId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     e.preventDefault();
     setDraggedNodeId(nodeId);
   };
 
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    const target = e.target as SVGElement;
+    if (target.id === 'svg-bg' || target.tagName === 'svg') {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    }
+  };
+
   const handleMouseUp = () => {
     setDraggedNodeId(null);
+    setIsPanning(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    const zoomFactor = 1.08;
+    const nextZoom = e.deltaY < 0 ? zoom * zoomFactor : zoom / zoomFactor;
+    // Keep zoom within standard readable boundaries (0.2x macro to 6x micro view)
+    setZoom(Math.max(0.2, Math.min(6, nextZoom)));
   };
 
   const toggleFilter = (type: string) => {
@@ -241,7 +278,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem', flex: 1, minHeight: 0 }}>
-        {/* Interactive Physics Graph */}
+        {/* Interactive Physics Graph with Zoom/Pan */}
         <div className="glass-panel" style={{ borderRadius: '32px', position: 'relative', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(5, 8, 15, 0.65)' }}>
           <div style={{ position: 'absolute', top: '2rem', left: '2rem', zIndex: 10, width: '350px' }}>
             <div style={{ position: 'relative' }}>
@@ -251,9 +288,101 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
           </div>
 
           {/* Guide Legend */}
-          <div style={{ position: 'absolute', bottom: '2rem', left: '2rem', zIndex: 10, background: 'rgba(0,0,0,0.4)', padding: '0.75rem 1.25rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', gap: '1rem' }}>
-            <div>🖱️ Click & Drag nodes to float</div>
-            <div>⚡ Live Physics Active</div>
+          <div style={{ position: 'absolute', bottom: '2rem', left: '2rem', zIndex: 10, background: 'rgba(0,0,0,0.4)', padding: '0.75rem 1.25rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>🖱️ <span>Click & Drag background to Pan</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>🔍 <span>Scroll mouse wheel to Zoom</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>⚡ <span>Drag individual nodes to inspect</span></div>
+          </div>
+
+          {/* Floating Zoom & Pan Controls */}
+          <div style={{ 
+            position: 'absolute', 
+            bottom: '2rem', 
+            right: '2rem', 
+            zIndex: 10, 
+            display: 'flex', 
+            alignItems: 'center',
+            gap: '0.5rem',
+            background: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            padding: '0.4rem',
+            borderRadius: '12px'
+          }}>
+            <button 
+              onClick={() => setZoom(z => Math.min(6, z * 1.15))}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: 'none',
+                color: '#fff',
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+                fontFamily: 'monospace',
+                fontSize: '1.1rem'
+              }}
+              title="Zoom In"
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary-neon)'; e.currentTarget.style.color = '#000'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = '#fff'; }}
+            >
+              +
+            </button>
+            <button 
+              onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: 'none',
+                color: 'var(--text-muted)',
+                padding: '0 0.75rem',
+                height: '32px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+                fontFamily: 'Space Grotesk, sans-serif',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}
+              title="Reset Viewport"
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button 
+              onClick={() => setZoom(z => Math.max(0.2, z / 1.15))}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: 'none',
+                color: '#fff',
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+                fontFamily: 'monospace',
+                fontSize: '1.1rem'
+              }}
+              title="Zoom Out"
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary-neon)'; e.currentTarget.style.color = '#000'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = '#fff'; }}
+            >
+              -
+            </button>
           </div>
 
           <svg 
@@ -261,9 +390,17 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
             width="100%" 
             height="100%" 
             viewBox="0 0 1100 700"
+            onWheel={handleWheel}
+            onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseUp}
-            style={{ userSelect: 'none' }}
+            onMouseUp={handleMouseUp}
+            style={{ 
+              userSelect: 'none', 
+              cursor: isPanning ? 'grabbing' : (draggedNodeId ? 'grabbing' : 'grab'),
+              width: '100%',
+              height: '100%'
+            }}
           >
             <defs>
               <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
@@ -280,123 +417,136 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
               </linearGradient>
             </defs>
 
-            {/* Neural Links (Spring lines) */}
-            {simulatedLinks.map((link, i) => (
-              <line 
-                key={`link-${i}`} 
-                x1={link.source.x} 
-                y1={link.source.y} 
-                x2={link.target.x} 
-                y2={link.target.y} 
-                stroke="url(#linkGradient)" 
-                strokeWidth={hoveredId === link.source.id || hoveredId === link.target.id ? "2.5" : "1.2"} 
-                strokeOpacity={hoveredId === link.source.id || hoveredId === link.target.id ? "0.9" : "0.45"}
-                style={{ transition: 'stroke-width 0.2s, stroke-opacity 0.2s' }}
-              />
-            ))}
+            {/* Background invisible rect to capture pan clicks/drag events anywhere on empty space */}
+            <rect 
+              id="svg-bg"
+              width="1100" 
+              height="700" 
+              fill="transparent" 
+              style={{ pointerEvents: 'all' }}
+            />
 
-            {/* Glowing signal pulses flowing along links */}
-            {simulatedLinks.slice(0, 30).map((link, i) => {
-              // Add a floating signal pulse to random links
-              if (i % 3 !== 0) return null;
-              return (
-                <circle key={`pulse-${i}`} r="3" fill="#00F0FF">
-                  <animateMotion 
-                    dur={`${2 + (i % 3) * 1.5}s`} 
-                    repeatCount="indefinite"
-                    path={`M ${link.source.x} ${link.source.y} L ${link.target.x} ${link.target.y}`}
-                  />
-                </circle>
-              );
-            })}
+            {/* Scale/Pan Transformed Viewport Group */}
+            <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+              
+              {/* Neural Links (Spring lines) */}
+              {simulatedLinks.map((link, i) => (
+                <line 
+                  key={`link-${i}`} 
+                  x1={link.source.x} 
+                  y1={link.source.y} 
+                  x2={link.target.x} 
+                  y2={link.target.y} 
+                  stroke="url(#linkGradient)" 
+                  strokeWidth={hoveredId === link.source.id || hoveredId === link.target.id ? "2.5" : "1.2"} 
+                  strokeOpacity={hoveredId === link.source.id || hoveredId === link.target.id ? "0.9" : "0.45"}
+                  style={{ transition: 'stroke-width 0.2s, stroke-opacity 0.2s' }}
+                />
+              ))}
 
-            {/* Neural Nodes */}
-            {simNodes.map((node, i) => {
-              const isModule = node.type === 'module';
-              const color = node.type === 'module' 
-                ? '#00F0FF' 
-                : node.type === 'class' 
-                  ? '#FFB400' 
-                  : node.type === 'variable' 
-                    ? '#00FF94' 
-                    : '#FF00A8';
-
-              const radius = isModule ? 9 : node.type === 'class' ? 6.5 : node.type === 'variable' ? 4 : 5.5;
-              const isHovered = hoveredId === node.id;
-
-              return (
-                <g 
-                  key={node.id} 
-                  onMouseEnter={() => setHoveredId(node.id)} 
-                  onMouseLeave={() => setHoveredId(null)}
-                  onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
-                  style={{ cursor: draggedNodeId === node.id ? 'grabbing' : 'grab' }}
-                >
-                  {/* Outer Orbit Halo Ring for Modules */}
-                  {isModule && (
-                    <circle 
-                      cx={node.x} 
-                      cy={node.y} 
-                      r="18" 
-                      fill="none" 
-                      stroke={`${color}22`} 
-                      strokeWidth="1.5"
-                      strokeDasharray="4 2"
-                    >
-                      <animateTransform
-                        attributeName="transform"
-                        type="rotate"
-                        from={`0 ${node.x} ${node.y}`}
-                        to={`360 ${node.x} ${node.y}`}
-                        dur="10s"
-                        repeatCount="indefinite"
-                      />
-                    </circle>
-                  )}
-
-                  {/* Node Glow Shadow Backing */}
-                  {isHovered && (
-                    <circle 
-                      cx={node.x} 
-                      cy={node.y} 
-                      r={radius + 6} 
-                      fill={color} 
-                      opacity="0.3"
-                      filter="url(#glow)"
+              {/* Glowing signal pulses flowing along links */}
+              {simulatedLinks.slice(0, 30).map((link, i) => {
+                // Add a floating signal pulse to random links
+                if (i % 3 !== 0) return null;
+                return (
+                  <circle key={`pulse-${i}`} r="3" fill="#00F0FF">
+                    <animateMotion 
+                      dur={`${2 + (i % 3) * 1.5}s`} 
+                      repeatCount="indefinite"
+                      path={`M ${link.source.x} ${link.source.y} L ${link.target.x} ${link.target.y}`}
                     />
-                  )}
+                  </circle>
+                );
+              })}
 
-                  {/* Core Node Dot */}
-                  <circle 
-                    cx={node.x} 
-                    cy={node.y} 
-                    r={isHovered ? radius + 2.5 : radius} 
-                    fill={isHovered ? color : `${color}cc`} 
-                    stroke="rgba(0,0,0,0.6)"
-                    strokeWidth="1.5"
-                    style={{ transition: 'r 0.15s, fill 0.15s' }}
-                  />
+              {/* Neural Nodes */}
+              {simNodes.map((node, i) => {
+                const isModule = node.type === 'module';
+                const color = node.type === 'module' 
+                  ? '#00F0FF' 
+                  : node.type === 'class' 
+                    ? '#FFB400' 
+                    : node.type === 'variable' 
+                      ? '#00FF94' 
+                      : '#FF00A8';
 
-                  {/* Floating Text Labels */}
-                  {(isHovered || isModule) && (
-                    <text 
-                      x={node.x + 14} 
-                      y={node.y + 4} 
-                      fill={isHovered ? '#fff' : 'rgba(255,255,255,0.7)'} 
-                      style={{ 
-                        fontSize: isModule ? '11.5px' : '10px', 
-                        fontWeight: isHovered ? 800 : 600, 
-                        pointerEvents: 'none', 
-                        fontFamily: 'monospace',
-                        textShadow: '0 1px 4px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.9)'
-                      }}
-                    >
-                      {node.label}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
+                const radius = isModule ? 9 : node.type === 'class' ? 6.5 : node.type === 'variable' ? 4 : 5.5;
+                const isHovered = hoveredId === node.id;
+
+                return (
+                  <g 
+                    key={node.id} 
+                    onMouseEnter={() => setHoveredId(node.id)} 
+                    onMouseLeave={() => setHoveredId(null)}
+                    onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
+                    style={{ cursor: draggedNodeId === node.id ? 'grabbing' : 'grab' }}
+                  >
+                    {/* Outer Orbit Halo Ring for Modules */}
+                    {isModule && (
+                      <circle 
+                        cx={node.x} 
+                        cy={node.y} 
+                        r="18" 
+                        fill="none" 
+                        stroke={`${color}22`} 
+                        strokeWidth="1.5"
+                        strokeDasharray="4 2"
+                      >
+                        <animateTransform
+                          attributeName="transform"
+                          type="rotate"
+                          from={`0 ${node.x} ${node.y}`}
+                          to={`360 ${node.x} ${node.y}`}
+                          dur="10s"
+                          repeatCount="indefinite"
+                        />
+                      </circle>
+                    )}
+
+                    {/* Node Glow Shadow Backing */}
+                    {isHovered && (
+                      <circle 
+                        cx={node.x} 
+                        cy={node.y} 
+                        r={radius + 6} 
+                        fill={color} 
+                        opacity="0.3"
+                        filter="url(#glow)"
+                      />
+                    )}
+
+                    {/* Core Node Dot */}
+                    <circle 
+                      cx={node.x} 
+                      cy={node.y} 
+                      r={isHovered ? radius + 2.5 : radius} 
+                      fill={isHovered ? color : `${color}cc`} 
+                      stroke="rgba(0,0,0,0.6)"
+                      strokeWidth="1.5"
+                      style={{ transition: 'r 0.15s, fill 0.15s' }}
+                    />
+
+                    {/* Floating Text Labels */}
+                    {(isHovered || isModule) && (
+                      <text 
+                        x={node.x + 14} 
+                        y={node.y + 4} 
+                        fill={isHovered ? '#fff' : 'rgba(255,255,255,0.7)'} 
+                        style={{ 
+                          fontSize: isModule ? '11.5px' : '10px', 
+                          fontWeight: isHovered ? 800 : 600, 
+                          pointerEvents: 'none', 
+                          fontFamily: 'monospace',
+                          textShadow: '0 1px 4px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.9)'
+                        }}
+                      >
+                        {node.label}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </g>
           </svg>
         </div>
 

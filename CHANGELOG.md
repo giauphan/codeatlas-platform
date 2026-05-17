@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Interactive Knowledge Graph Zoom & Pan**: Integrated responsive mouse wheel zoom mechanics (scale from 0.2x macro overview to 6.0x micro-inspection) and empty background drag-to-pan dragging.
+- **Transformed Coordinate System Dragging**: Engineered back-transformation formulas to ensure dragged nodes align with sub-pixel mouse pointer accuracy at any zoom level or pan offset.
+- **Glassmorphic Floating HUD Controls**: Designed sleek floating HUD controls showing real-time zoom percentage with premium glassmorphism styling, hover transitions, and viewport reset actions.
+- **Clear Legend Help Overlay**: Integrated interactive help overlay guiding users through Mouse Drag to Pan, Scroll Wheel to Zoom, and Node Dragging interaction triggers.
+
 ## [2.3.0] - 2026-05-17
 
 ### Added / Changed / Fixed
