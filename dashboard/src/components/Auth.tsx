@@ -11,7 +11,6 @@ import {
   Mail, 
   Lock, 
   LogIn, 
-  Globe,
   Loader2,
   ChevronRight,
   Info
@@ -136,24 +135,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           )}
         </AnimatePresence>
 
-        {/* Secure connection disclaimer */}
-        <div style={{ display: 'flex', alignItems: 'center', margin: '2.5rem 0', color: 'rgba(255,255,255,0.1)' }}>
-          <div style={{ flex: 1, height: '1px', background: 'currentColor' }} />
-          <span style={{ padding: '0 1rem', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 800 }}>SECURE CONNECTION</span>
-          <div style={{ flex: 1, height: '1px', background: 'currentColor' }} />
-        </div>
-
-        <footer style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.75rem', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>
-          SECURE LINK // AES-256-GCM // NODE-ID: {Math.random().toString(16).slice(2, 10).toUpperCase()}
-        </footer>
-      </div>
-
-      {/* Side Decorations */}
-      <div style={{ position: 'absolute', bottom: '2rem', left: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 700 }}>
-        <Globe size={14} /> CLOUD SYNC: ACTIVE
-      </div>
-      <div style={{ position: 'absolute', bottom: '2rem', right: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 700 }}>
-        ORACLE 26ai LINK: ESTABLISHED <div style={{ width: '6px', height: '6px', background: '#00FF94', borderRadius: '50%', boxShadow: '0 0 8px #00FF94' }} />
       </div>
 
       <style>{`
