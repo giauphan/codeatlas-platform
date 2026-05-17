@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.19",
+    version: "2.1.20",
   },
   {
     capabilities: {
@@ -312,7 +312,7 @@ function startWatcher() {
   });
 
   console.log(`\n${'='.repeat(50)}`);
-  console.log(`🚀 CODEATLAS ENTERPRISE v2.1.19 ONLINE`);
+  console.log(`🚀 CODEATLAS ENTERPRISE v2.1.20 ONLINE`);
   console.log(`📡 Auto-Indexing: WATCHING ${watchPaths.length} PROJECTS`);
   watchPaths.forEach(p => console.log(`   - ${p}`));
   console.log(`🛡️  Security: FIREBASE ADMIN ACTIVE`);
@@ -1801,14 +1801,15 @@ async function main() {
       });
 
       // Failsafe: Ensure server is disconnected from any previous transport before connecting a new one
-      if ((server as any)._transport) {
+      const underlyingServer = (server as any).server;
+      if (underlyingServer && underlyingServer._transport) {
         console.error("[SSE] Server was already connected to an active transport. Cleaning up the stale transport...");
         try {
           await server.close();
         } catch (err) {
           // Ignore
         }
-        (server as any)._transport = undefined;
+        underlyingServer._transport = undefined;
       }
 
       await server.connect(transport);

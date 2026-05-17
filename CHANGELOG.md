@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.20] - 2026-05-17
+
+### Fixed
+- **McpServer Underlying Transport Failsafe Check**: Patched the server-side failsafe check in `/sse` GET handler to correctly target the internal `.server` property of the `McpServer` wrapper class (as it delegates the underlying connection to `Server`). This eliminates the `"Already connected to a transport. Call close() before connecting to a new transport"` error that occurred when a client reconnected concurrently before the previous connection had fully teardown.
+- **Dynamic Welcome Banner Versioning**: Synchronized the console log welcome banner versioning to align perfectly with the release version.
+
 ## [2.1.19] - 2026-05-17
 
 ### Added / Fixed
