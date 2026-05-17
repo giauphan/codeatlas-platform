@@ -18,6 +18,10 @@ export const DocumentationView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'quickstart' | 'architecture' | 'mcp' | 'graph'>('quickstart');
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
+  const backendUrl = window.location.origin.includes('localhost:5173')
+    ? 'http://localhost:8080'
+    : window.location.origin;
+
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedText(id);
@@ -268,7 +272,7 @@ export const DocumentationView: React.FC = () => {
                       </tr>
                       <tr>
                         <td style={{ padding: '12px', fontWeight: 700, color: '#fff' }}>URL</td>
-                        <td style={{ padding: '12px', color: 'var(--primary-neon)', fontFamily: 'monospace' }}>http://localhost:8080/sse</td>
+                        <td style={{ padding: '12px', color: 'var(--primary-neon)', fontFamily: 'monospace' }}>{backendUrl}/sse</td>
                       </tr>
                     </tbody>
                   </table>
