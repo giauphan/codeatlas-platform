@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.7.1] - 2026-05-17
+
+### Fixed
+- **Token Verification & Validation Bug**: Fixed a bug where entering any arbitrary key or token in the "TOKEN" authentication tab would allow standard users to bypass client-side validation and enter a broken dashboard UI. The login screen now calls the projects endpoint (`/api/projects`) to perform pre-login authentication verification, properly returning security warnings for invalid keys.
+
+## [2.7.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Enterprise-Grade Token & API Key Session Isolation**: Replaced the hardcoded super admin backdoor access button with a dynamic, secure, and ephemeral Token/API Key session manager in the browser. Storing access tokens inside `sessionStorage` avoids cross-tab session hijacking or persistence vulnerabilities on shared machines.
+- **Removed Buggy Registry Flow**: Eliminated the user signup ("CREATE" node) flow from the React portal entirely, locking access to pre-registered nodes and Enterprise API Key initializations.
+- **Migrated Local Cache Persistence**: Transitioned all local file structures, project preferences, and system analysis cache items from `localStorage` to `sessionStorage` to seal local directory path leakage risks.
+
 ## [2.6.0] - 2026-05-17
 
 ### Added / Changed / Fixed

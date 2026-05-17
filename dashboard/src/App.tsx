@@ -28,9 +28,35 @@ function App() {
   }, []);
 
   const handleBypassLogin = async (key: string) => {
-    if (key.trim()) {
+    if (!key.trim()) return;
+
+    const API_BASE = window.location.origin.includes('localhost:5173') 
+      ? 'http://localhost:8080' 
+      : window.location.origin;
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/projects`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': key.trim()
+        }
+      });
+
+      if (!resp.ok) {
+        let errMsg = 'Invalid API Key or Token';
+        try {
+          const errData = await resp.json();
+          if (errData && errData.error) errMsg = errData.error;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
       sessionStorage.setItem('ca_api_key', key.trim());
       setUser({ uid: 'api-key-session', email: 'api-key-user@codeatlas.local', isApiKeySession: true });
+    } catch (err: any) {
+      console.error("Token validation failed:", err);
+      throw err;
     }
   };
 

@@ -29,9 +29,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleTokenSubmit = (e: React.FormEvent) => {
+  const handleTokenSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (apiKey.trim()) onLogin(apiKey.trim());
+    if (!apiKey.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await onLogin(apiKey.trim());
+    } catch (err: any) {
+      setError(err.message || 'Invalid API Key or Token');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -58,13 +67,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
       <div className="glass-panel" style={{ width: '460px', padding: '3.5rem', borderRadius: '32px', zIndex: 10, border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
         <header style={{ textAlign: 'center', marginBottom: '3rem' }}>
-          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
-            <div style={{ width: '64px', height: '64px', background: 'var(--primary-neon)', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--glow-primary)' }}>
-              <Shield size={36} color="#000" />
-            </div>
-          </motion.div>
-          <h1 className="tech-font" style={{ fontSize: '2.5rem', margin: 0, fontWeight: 900, letterSpacing: '-0.02em' }}>CODEATLAS</h1>
-          <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', fontSize: '0.85rem', fontWeight: 700, letterSpacing: '0.1em' }}>NEURAL INTERFACE v2.1.3</p>
+          <h1 className="tech-font" style={{ fontSize: '2rem', letterSpacing: '0.15em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', margin: '0 0 0.5rem 0' }}>
+            CODEATLAS <Shield style={{ color: 'var(--primary-neon)' }} size={28} />
+          </h1>
+          <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', letterSpacing: '0.3em', margin: 0, fontWeight: 800 }}>NEURAL REASONING MATRIX</p>
         </header>
 
         {/* Tab Switcher */}
@@ -75,11 +81,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           ].map((tab) => (
             <button
               key={tab.id}
+              disabled={loading}
               onClick={() => { setMode(tab.id as any); setError(null); }}
               style={{
-                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
                 background: mode === tab.id ? 'rgba(255,255,255,0.1)' : 'transparent',
-                color: mode === tab.id ? '#fff' : 'var(--text-muted)'
+                color: mode === tab.id ? '#fff' : 'var(--text-muted)',
+                opacity: loading ? 0.5 : 1
               }}
             >
               <tab.icon size={14} /> {tab.label}
@@ -94,10 +102,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
                   <Key size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                  <input type="password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} required autoFocus />
+                  <input type="password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required autoFocus />
                 </div>
               </div>
-              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800 }}>INITIALIZE SESSION</button>
+              {error && <div style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
+              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800 }} disabled={loading}>
+                {loading ? <Loader2 className="animate-spin" size={24} /> : 'INITIALIZE SESSION'}
+              </button>
             </motion.form>
           ) : (
             <motion.form key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleAuthSubmit}>
