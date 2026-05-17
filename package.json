@@ -11,10 +11,10 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx index.ts",
-    "test": "node --import tsx --test tests/*.test.ts",
-    "db-init": "tsx scripts/db-init.ts"
+    "start": "LD_LIBRARY_PATH=./instantclient node dist/index.js",
+    "dev": "LD_LIBRARY_PATH=./instantclient tsx index.ts",
+    "test": "LD_LIBRARY_PATH=./instantclient node --import tsx --test tests/*.test.ts",
+    "db-init": "LD_LIBRARY_PATH=./instantclient tsx scripts/db-init.ts"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
