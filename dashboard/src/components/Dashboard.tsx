@@ -315,8 +315,8 @@ const KnowledgeGraphView: React.FC<{ analysis: AnalysisData | null }> = ({ analy
   const [activeFilters, setActiveFilters] = useState(['module', 'function', 'class', 'variable']);
   
   const filteredNodes = useMemo(() => {
-    if (!analysis) return [];
-    return analysis.graph.nodes.filter(n => {
+    if (!analysis || !analysis.graph || !analysis.graph.nodes) return [];
+    return analysis.graph.nodes.filter((n: any) => {
       const typeMatch = activeFilters.includes(n.type || 'function');
       const searchMatch = n.label.toLowerCase().includes(searchQuery.toLowerCase());
       return typeMatch && searchMatch;
@@ -344,10 +344,10 @@ const KnowledgeGraphView: React.FC<{ analysis: AnalysisData | null }> = ({ analy
   }, [filteredNodes]);
 
   const links = useMemo(() => {
-    if (!analysis || nodes.length === 0) return [];
+    if (!analysis || !analysis.graph || !analysis.graph.links || nodes.length === 0) return [];
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
     return analysis.graph.links
-      .filter(l => nodeMap.has(l.source) && nodeMap.has(l.target))
+      .filter((l: any) => nodeMap.has(l.source) && nodeMap.has(l.target))
       .map(l => ({
         source: nodeMap.get(l.source),
         target: nodeMap.get(l.target)
