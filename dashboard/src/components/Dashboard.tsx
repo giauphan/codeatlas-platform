@@ -121,9 +121,15 @@ export const Dashboard: React.FC = () => {
         const data = await resp.json();
         setAnalysis(data);
         localStorage.setItem('ca_analysis_cache', JSON.stringify(data));
+      } else {
+        // Clear cached stale data if backend rejects access (404/403 boundary violation)
+        setAnalysis(null);
+        localStorage.removeItem('ca_analysis_cache');
       }
     } catch (err) {
       console.error("Failed to fetch analysis:", err);
+      setAnalysis(null);
+      localStorage.removeItem('ca_analysis_cache');
     }
   };
 
@@ -134,15 +140,36 @@ export const Dashboard: React.FC = () => {
       if (resp.ok) {
         const data = await resp.json();
         setProjects(data);
-        if (data.length > 0 && !selectedProjectDir) {
-          const defaultDir = data[0].dir;
-          setSelectedProjectDir(defaultDir);
-          localStorage.setItem('ca_selected_project_dir', defaultDir);
-          fetchAnalysis(defaultDir);
+        if (data.length > 0) {
+          // If the selected project is not in the list, default to the first one
+          const hasSelected = data.some((p: any) => p.dir === selectedProjectDir);
+          if (!hasSelected || !selectedProjectDir) {
+            const defaultDir = data[0].dir;
+            setSelectedProjectDir(defaultDir);
+            localStorage.setItem('ca_selected_project_dir', defaultDir);
+            fetchAnalysis(defaultDir);
+          }
+        } else {
+          // Reset project states if the user has no projects
+          setSelectedProjectDir('');
+          localStorage.removeItem('ca_selected_project_dir');
+          setAnalysis(null);
+          localStorage.removeItem('ca_analysis_cache');
         }
+      } else {
+        setProjects([]);
+        setSelectedProjectDir('');
+        localStorage.removeItem('ca_selected_project_dir');
+        setAnalysis(null);
+        localStorage.removeItem('ca_analysis_cache');
       }
     } catch (err) {
       console.error("Failed to fetch projects:", err);
+      setProjects([]);
+      setSelectedProjectDir('');
+      localStorage.removeItem('ca_selected_project_dir');
+      setAnalysis(null);
+      localStorage.removeItem('ca_analysis_cache');
     }
   };
 
@@ -170,7 +197,16 @@ export const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      // Clear user states on logout immediately
+      setProjects([]);
+      setAnalysis(null);
+      setSelectedProjectDir('');
+      localStorage.removeItem('ca_analysis_cache');
+      localStorage.removeItem('ca_selected_project_dir');
+      return;
+    }
+    
     fetchProjects();
     if (selectedProjectDir) {
       fetchAnalysis(selectedProjectDir);

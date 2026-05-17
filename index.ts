@@ -375,10 +375,16 @@ app.get("/api/projects", authMiddleware, async (req, res) => {
 // REST API: Get analysis data
 app.get("/api/analysis", authMiddleware, async (req, res) => {
   try {
-    const projectDir = req.query.projectDir as string | undefined;
+    const projectDir = (req.query.projectDir as string) || (req.query.project as string);
     const loaded = loadAnalysis(projectDir);
     if (!loaded) return res.status(404).json({ error: "No analysis found" });
-    res.json(loaded);
+    
+    // Support legacy thin client format (which only expects the inner analysis object)
+    if (req.query.project && !req.query.projectDir) {
+      res.json(loaded.analysis);
+    } else {
+      res.json(loaded);
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1924,20 +1930,6 @@ async function main() {
       } else {
         console.error(`[SSE] Critical: session not found. Requested: "${sessionId || ''}". No active transports available.`);
         res.status(404).send("Session not found");
-      }
-    });
-
-    // HTTP API for the VS Code Extension Thin Client
-    app.get("/api/analysis", async (req, res) => {
-      const projectDir = req.query.project as string;
-      try {
-        const loaded = loadAnalysis(projectDir);
-        if (!loaded) {
-          return res.status(404).send("Project analysis not found. Run 'analyze' tool first.");
-        }
-        res.json(loaded.analysis);
-      } catch (e: any) {
-        res.status(500).send(e.message);
       }
     });
 

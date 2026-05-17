@@ -87,6 +87,10 @@ describe('SaaS Multi-Tenancy Security & VPD Integration', () => {
     // Discover projects for an non-existent tenant
     const projectsT3 = discoverProjects('tenant_non_existent');
     assert.strictEqual(projectsT3.length, 0);
+
+    // Discover projects with missing or empty tenantId in multi-tenant mode -> should return [] to prevent leaks
+    const projectsLeakCheck = discoverProjects(undefined);
+    assert.strictEqual(projectsLeakCheck.length, 0, 'Must return empty array to prevent leaks when tenantId is missing');
   });
 
   test('should load analysis securely based on the request context', () => {
