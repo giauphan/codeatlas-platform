@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.1] - 2026-05-17
+
+### Fixed / Changed
+- **Removed Irrelevant Local Quickstart Tab**: Refactored the dashboard documentation view, removing local developer server-management instructions (`npm run dev`, `npm run build`, `npm run test`) to fully focus on MCP client configuration settings.
+- **Dynamic Secure Markdown Documentation HTTP Endpoint**: Added a secure Express route (`/api/docs/quick-setup`) to serve the system guide `QUICK_SETUP.md` dynamically.
+- **Fixed Browser Path Security Error**: Rewrote the "Open Markdown Guide" HUD anchor link in the dashboard to load via the new secure HTTP API endpoint, eliminating browser `file:///` path security block errors.
+
 ## [2.5.0] - 2026-05-17
 
 ### Added / Changed / Fixed

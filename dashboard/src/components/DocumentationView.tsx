@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
-  Terminal, 
   Settings, 
   Layers, 
   HelpCircle, 
@@ -15,7 +14,7 @@ import {
 } from 'lucide-react';
 
 export const DocumentationView: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'quickstart' | 'architecture' | 'mcp' | 'graph'>('quickstart');
+  const [activeSubTab, setActiveSubTab] = useState<'mcp' | 'architecture' | 'graph'>('mcp');
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   const backendUrl = window.location.origin.includes('localhost:5173')
@@ -88,7 +87,7 @@ export const DocumentationView: React.FC = () => {
 
         <div style={{ display: 'flex', gap: '1rem' }}>
           <a
-            href="file:///home/biibon/CodeAtlas/docs/QUICK_SETUP.md"
+            href={`${backendUrl}/api/docs/quick-setup`}
             target="_blank"
             rel="noreferrer"
             style={{
@@ -115,9 +114,8 @@ export const DocumentationView: React.FC = () => {
       {/* TABS SELECTOR */}
       <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '2px', gap: '2rem' }}>
         {[
-          { id: 'quickstart', label: 'Quick Start', icon: Terminal },
-          { id: 'architecture', label: 'Architecture', icon: Layers },
           { id: 'mcp', label: 'MCP Editor Config', icon: Settings },
+          { id: 'architecture', label: 'Architecture', icon: Layers },
           { id: 'graph', label: 'Interactive Guide', icon: HelpCircle },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -152,50 +150,6 @@ export const DocumentationView: React.FC = () => {
       {/* TAB CONTENT PANEL */}
       <div style={{ background: 'rgba(13, 17, 23, 0.45)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px', padding: '2.5rem', minHeight: '400px' }}>
         
-        {activeSubTab === 'quickstart' && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginBottom: '0.75rem' }}>One-Command Quickstart</h2>
-              <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '1.5rem' }}>
-                Start the backend server alongside the static frontend compiler in one concurrent watch task:
-              </p>
-
-              <div style={{ position: 'relative', background: 'rgba(0,0,0,0.4)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', padding: '1.5rem', fontFamily: 'monospace', fontSize: '0.95rem', color: 'var(--primary-neon)', overflowX: 'auto' }}>
-                <code>npm run build && npx pm2 restart 0</code>
-                {renderCopyButton('npm run build && npx pm2 restart 0', 'quick_start')}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginTop: '1rem' }}>
-              <div style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '18px' }}>
-                <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
-                  <span style={{ width: '8px', height: '8px', background: 'var(--primary-neon)', borderRadius: '50%' }}></span>
-                  Developer Mode
-                </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1rem' }}>
-                  Run live watchers on files and compile instantly as you write code:
-                </p>
-                <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '10px', padding: '10px 15px', fontSize: '0.85rem', fontFamily: 'monospace', color: '#ffb86c' }}>
-                  npm run dev
-                </div>
-              </div>
-
-              <div style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '18px' }}>
-                <h3 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
-                  <span style={{ width: '8px', height: '8px', background: '#50fa7b', borderRadius: '50%' }}></span>
-                  Test Verification
-                </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1rem' }}>
-                  Validate architecture smells, firebase integrations, and secure schemas:
-                </p>
-                <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '10px', padding: '10px 15px', fontSize: '0.85rem', fontFamily: 'monospace', color: '#50fa7b' }}>
-                  npm run test
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
         {activeSubTab === 'architecture' && (
           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <div>

@@ -196,7 +196,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.5.0",
+    version: "2.5.1",
   },
   {
     capabilities: {
@@ -1772,7 +1772,7 @@ async function main() {
         const sessionServer = new McpServer(
           {
             name: "CodeAtlas",
-            version: "2.5.0",
+            version: "2.5.1",
           },
           {
             capabilities: {
@@ -1869,6 +1869,20 @@ async function main() {
           return res.status(404).send("Project analysis not found. Run 'analyze' tool first.");
         }
         res.json(loaded.analysis);
+      } catch (e: any) {
+        res.status(500).send(e.message);
+      }
+    });
+
+    // Secure endpoint to serve markdown documentation
+    app.get("/api/docs/quick-setup", (req, res) => {
+      try {
+        const docPath = path.join(process.cwd(), "docs", "QUICK_SETUP.md");
+        if (!fs.existsSync(docPath)) {
+          return res.status(404).send("Documentation guide not found.");
+        }
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.sendFile(docPath);
       } catch (e: any) {
         res.status(500).send(e.message);
       }
