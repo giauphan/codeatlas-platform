@@ -37,9 +37,17 @@ interface AnalysisData {
 
 interface KnowledgeGraphViewProps {
   analysis: AnalysisData | null;
+  projects?: { name: string; dir: string }[];
+  selectedProjectDir?: string;
+  onProjectChange?: (dir: string) => void;
 }
 
-export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis }) => {
+export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ 
+  analysis,
+  projects,
+  selectedProjectDir,
+  onProjectChange
+}) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState(['module', 'function', 'class', 'variable']);
@@ -321,11 +329,41 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ analysis
             background: isFullscreen ? '#0A0C10' : 'rgba(5, 8, 15, 0.65)' 
           }}
         >
-          <div style={{ position: 'absolute', top: '2rem', left: '2rem', zIndex: 10, width: '350px' }}>
-            <div style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', top: '2rem', left: '2rem', zIndex: 10, display: 'flex', gap: '1rem', width: 'auto', maxWidth: 'calc(100% - 4rem)' }}>
+            <div style={{ position: 'relative', width: '260px' }}>
               <Search size={18} style={{ position: 'absolute', left: '1.25rem', top: '1.1rem', color: 'var(--text-muted)' }} />
               <input type="text" className="glass-input" placeholder="Search logic clusters..." style={{ paddingLeft: '3.25rem', background: 'rgba(0,0,0,0.6)', borderRadius: '16px' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
+
+            {projects && projects.length > 0 && (
+              <div style={{ position: 'relative', width: '220px' }}>
+                <select
+                  value={selectedProjectDir}
+                  onChange={(e) => onProjectChange && onProjectChange(e.target.value)}
+                  className="glass-input"
+                  style={{
+                    appearance: 'none',
+                    paddingRight: '2.5rem',
+                    background: 'rgba(0, 0, 0, 0.6)',
+                    borderRadius: '16px',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: '#fff',
+                  }}
+                >
+                  {projects.map((p) => (
+                    <option key={p.dir} value={p.dir} style={{ background: '#0D1117', color: '#fff' }}>
+                      📁 {p.name}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ position: 'absolute', right: '1.25rem', top: '1.1rem', pointerEvents: 'none', color: 'var(--primary-neon)', fontSize: '0.75rem', fontWeight: 800 }}>
+                  ▼
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Guide Legend */}

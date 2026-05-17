@@ -196,7 +196,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.4.1",
+    version: "2.5.0",
   },
   {
     capabilities: {
@@ -308,10 +308,23 @@ const authMiddleware = async (req: express.Request, res: express.Response, next:
   }
 };
 
+// REST API: Get all discovered projects
+app.get("/api/projects", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+    const projects = discoverProjects(tenantId);
+    res.json(projects.map(p => ({ name: p.name, dir: p.dir, modifiedAt: p.modifiedAt })));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // REST API: Get analysis data
 app.get("/api/analysis", authMiddleware, async (req, res) => {
   try {
-    const loaded = loadAnalysis();
+    const projectDir = req.query.projectDir as string | undefined;
+    const loaded = loadAnalysis(projectDir);
     if (!loaded) return res.status(404).json({ error: "No analysis found" });
     res.json(loaded);
   } catch (err: any) {
@@ -1759,7 +1772,7 @@ async function main() {
         const sessionServer = new McpServer(
           {
             name: "CodeAtlas",
-            version: "2.4.1",
+            version: "2.5.0",
           },
           {
             capabilities: {

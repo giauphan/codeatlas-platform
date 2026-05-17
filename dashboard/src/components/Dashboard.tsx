@@ -17,7 +17,8 @@ import {
   Globe, 
   Network, 
   ShieldCheck, 
-  LayoutDashboard 
+  LayoutDashboard,
+  BookOpen
 } from 'lucide-react';
 
 // Decoupled sub-views
@@ -25,6 +26,7 @@ import { ControlCenterView } from './ControlCenterView';
 import { KnowledgeGraphView } from './KnowledgeGraphView';
 import { LogicModelsView } from './LogicModelsView';
 import { CloudIndexView } from './CloudIndexView';
+import { DocumentationView } from './DocumentationView';
 
 // API Configuration
 const API_BASE = window.location.origin.includes('localhost:5173') 
@@ -87,11 +89,18 @@ export const Dashboard: React.FC = () => {
 
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState({ totalRequests: 0 });
+  const [projects, setProjects] = useState<{ name: string; dir: string }[]>([]);
+  const [selectedProjectDir, setSelectedProjectDir] = useState<string>(() => {
+    return localStorage.getItem('ca_selected_project_dir') || '';
+  });
   const user = auth.currentUser;
 
-  const fetchAnalysis = async () => {
+  const fetchAnalysis = async (projectDir?: string) => {
     try {
-      const resp = await fetch(`${API_BASE}/api/analysis`, {
+      const url = projectDir 
+        ? `${API_BASE}/api/analysis?projectDir=${encodeURIComponent(projectDir)}`
+        : `${API_BASE}/api/analysis`;
+      const resp = await fetch(url, {
         headers: { 'x-api-key': SUPER_ADMIN_KEY }
       });
       if (resp.ok) {
@@ -104,6 +113,32 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const fetchProjects = async () => {
+    try {
+      const resp = await fetch(`${API_BASE}/api/projects`, {
+        headers: { 'x-api-key': SUPER_ADMIN_KEY }
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setProjects(data);
+        if (data.length > 0 && !selectedProjectDir) {
+          const defaultDir = data[0].dir;
+          setSelectedProjectDir(defaultDir);
+          localStorage.setItem('ca_selected_project_dir', defaultDir);
+          fetchAnalysis(defaultDir);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch projects:", err);
+    }
+  };
+
+  const handleProjectChange = (dir: string) => {
+    setSelectedProjectDir(dir);
+    localStorage.setItem('ca_selected_project_dir', dir);
+    fetchAnalysis(dir);
+  };
+
   const handleReindex = async () => {
     setIsIndexing(true);
     try {
@@ -111,7 +146,7 @@ export const Dashboard: React.FC = () => {
         method: 'POST',
         headers: { 'x-api-key': SUPER_ADMIN_KEY }
       });
-      if (resp.ok) await fetchAnalysis();
+      if (resp.ok) await fetchAnalysis(selectedProjectDir);
     } catch (err) {
       console.error("Re-index failed:", err);
     } finally {
@@ -121,7 +156,12 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-    fetchAnalysis();
+    fetchProjects();
+    if (selectedProjectDir) {
+      fetchAnalysis(selectedProjectDir);
+    } else {
+      fetchAnalysis();
+    }
 
     const unsubscribeStats = onSnapshot(doc(db, 'users', user.uid), (snap: any) => {
       if (snap.exists() && snap.data().stats) setStats(snap.data().stats);
@@ -209,7 +249,14 @@ export const Dashboard: React.FC = () => {
           />
         );
       case 'Knowledge Graph':
-        return <KnowledgeGraphView analysis={resolvedAnalysis} />;
+        return (
+          <KnowledgeGraphView 
+            analysis={resolvedAnalysis} 
+            projects={projects}
+            selectedProjectDir={selectedProjectDir}
+            onProjectChange={handleProjectChange}
+          />
+        );
       case 'Logic Models':
         return <LogicModelsView analysis={resolvedAnalysis} />;
       case 'Cloud Index':
@@ -222,6 +269,8 @@ export const Dashboard: React.FC = () => {
             setIsIndexingEnabled={setIsIndexingEnabled} 
           />
         );
+      case 'Documentation':
+        return <DocumentationView />;
       default:
         return null;
     }
@@ -248,6 +297,7 @@ export const Dashboard: React.FC = () => {
             { icon: Network, label: 'Knowledge Graph' },
             { icon: Cpu, label: 'Logic Models' },
             { icon: Globe, label: 'Cloud Index' },
+            { icon: BookOpen, label: 'Documentation' },
           ].map((item) => (
             <motion.div
               key={item.label}

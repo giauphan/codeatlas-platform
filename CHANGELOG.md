@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Multi-Project Swapping Engine**: Engineered active directory discovery (`/api/projects`) and real-time project switching for live codebase graphs in the Knowledge Network.
+- **Glassmorphic Project Selector**: Integrated a gorgeous select dropdown beside the graph search input inside the Knowledge Network SVG canvas to fluidly query project analytics.
+- **Project Switcher Documentation**: Added a comprehensive `MULTI_PROJECT_SWITCHER.md` document detailing installation, configuration, internal routing mechanisms, and client dashboard integration.
+
 ## [2.4.1] - 2026-05-17
 
 ### Added / Changed / Fixed
