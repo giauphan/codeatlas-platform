@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.16",
+    version: "2.1.17",
   },
   {
     capabilities: {
@@ -1770,12 +1770,31 @@ async function main() {
       }
 
       // Cleanup on connection close
-      res.on("close", () => {
+      res.on("close", async () => {
         if (sessionId) {
           console.error(`[SSE] Session closed: ${sessionId}`);
           transports.delete(sessionId);
         }
+        try {
+          await transport.close();
+        } catch (err) {
+          // Ignore
+        }
+        if ((server as any)._transport === transport) {
+          (server as any)._transport = undefined;
+        }
       });
+
+      // Failsafe: Ensure server is disconnected from any previous transport before connecting a new one
+      if ((server as any)._transport) {
+        console.error("[SSE] Server was already connected to an active transport. Cleaning up the stale transport...");
+        try {
+          await server.close();
+        } catch (err) {
+          // Ignore
+        }
+        (server as any)._transport = undefined;
+      }
 
       await server.connect(transport);
     });

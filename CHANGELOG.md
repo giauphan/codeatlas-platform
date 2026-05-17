@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.17] - 2026-05-17
+
+### Fixed
+- **Multi-Session Active Transport Locking**: Integrated proper lifecycle management for `SSEServerTransport` within the Express `/sse` connection pipeline. We now call `transport.close()` inside the connection's `res.on("close")` handler and safely reset the global `McpServer._transport` reference. We also added a pre-connect cleanup failsafe that cleanly detaches any lingering stale transport before connecting new clients. This prevents subsequent connection requests from throwing `Already connected to a transport. Call close() before connecting to a new transport, or use a separate Protocol instance per connection.` (HTTP 500) errors.
+
 ## [2.1.16] - 2026-05-17
 
 ### Fixed
