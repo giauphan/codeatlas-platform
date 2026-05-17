@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.2] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Dashboard Modular Clean Architecture Refactoring**: Decoupled the giant monolithic `Dashboard.tsx` component into four highly focused, reusable sub-views: `ControlCenterView.tsx`, `KnowledgeGraphView.tsx`, `LogicModelsView.tsx`, and `CloudIndexView.tsx` under a clean architecture model.
+- **Improved Maintainability & Testability**: Enhanced React code modularization and dependency isolation, resulting in faster and more stable builds.
+
+## [2.2.1] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Interactive Force-Directed Neural Network Dashboard**: Refactored the static SVG Knowledge Graph view to support a fully fluid, requestAnimationFrame-driven force-directed layout simulation.
+- **Dynamic Physics Interactions**: Integrated mouse drag-and-drop mechanics allowing users to grab and pull individual logical node elements with live spring attraction/charge repulsion equations.
+- **Glowing Visual Telemetry**: Implemented animated glowing SVG signal pulses that flow dynamically along neural links to represent logical dependency flows, alongside orbit halo rotations for structural modules.
+- **Holographic Context Sidebars**: Upgraded the details sidebar to dynamically show real-time incoming/outgoing call metrics, file system locations, and exact source code line coordinates upon hovering nodes.
+
 ## [2.2.0] - 2026-05-17
 
 ### Added / Changed / Fixed
