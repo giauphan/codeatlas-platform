@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.2] - 2026-05-17
+
+### Fixed / Changed
+- **Added Remote API Key Setup in Documentation**: Updated the dashboard MCP integration guide (`DocumentationView.tsx`) to show exactly how to configure the `CODEATLAS_API_KEY` for VS Code (via `env` and `args` options) and added `?apiKey=YOUR_API_KEY_HERE` to the Cursor AI SSE URL table row.
+
 ## [2.5.1] - 2026-05-17
 
 ### Fixed / Changed

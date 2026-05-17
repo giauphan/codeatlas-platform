@@ -196,7 +196,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.5.1",
+    version: "2.5.2",
   },
   {
     capabilities: {
@@ -1772,7 +1772,7 @@ async function main() {
         const sessionServer = new McpServer(
           {
             name: "CodeAtlas",
-            version: "2.5.1",
+            version: "2.5.2",
           },
           {
             capabilities: {
