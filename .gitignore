@@ -24,13 +24,7 @@ CLAUDE.md
 !tsconfig.json
 !composer.json
 
-# Oracle Wallet (Allowed for private repo)
-!wallet/
-!wallet/*.pem
-!wallet/*.p12
-!wallet/*.sso
-!wallet/*.jks
-!wallet/*.ora
-!wallet/*.properties
+# Oracle Wallet
+wallet/
 .rooignore
-.clinerules
+.clinerulesatlas-intelligence-node-firebase-adminsdk-fbsvc-6c9d06254d.json

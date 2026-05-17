@@ -18,13 +18,17 @@ interface AnalysisResultLocal {
 // Initialize Firebase for Sync
 const apps = getApps();
 if (!apps.length) {
-  const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || "./atlas-intelligence-node-firebase-adminsdk-fbsvc-6c9d06254d.json";
-  const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
-  if (fs.existsSync(absolutePath)) {
-    initializeApp({
-      credential: cert(absolutePath),
-      projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
-    });
+  const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (serviceAccountPath) {
+    const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
+    if (fs.existsSync(absolutePath)) {
+      initializeApp({
+        credential: cert(absolutePath),
+        projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
+      });
+    }
+  } else {
+    console.warn("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Firebase may not be initialized properly.");
   }
 }
 const db = getFirestore();

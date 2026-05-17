@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.7.3] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Credentials & Wallet Secret Hardening**: Removed hardcoded Firebase Admin SDK credential JSON file and sensitive Oracle Wallet materials from Git tracking. All credentials now safely load via environment variables (`GOOGLE_APPLICATION_CREDENTIALS` and `TNS_ADMIN`).
+- **SSE Session Ownership Verification**: Implemented multi-session ownership verification for Server-Sent Events `/sse` and `/messages`, completely preventing unauthorized session hijacking or cross-user SSE data access.
+- **Oracle VPD Production Fail-Closed Policy**: Enforced dynamic fail-closed behavior for Oracle RLS/VPD security context binding in production environments to guarantee complete tenant boundary isolation.
+
+## [2.7.2] - 2026-05-17
+
+### Fixed
+- **Command Injection Mitigation**: Hardened the auto-indexing project watcher, refactoring insecure dynamic shell `exec` calls to secure, parameterized `execFile` invocations.
+
 ## [2.7.1] - 2026-05-17
 
 ### Fixed

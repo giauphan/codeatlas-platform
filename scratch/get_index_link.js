@@ -4,7 +4,11 @@ import * as dotenv from "dotenv";
 
 dotenv.config();
 
-const serviceAccountPath = "./atlas-intelligence-node-firebase-adminsdk-fbsvc-6c9d06254d.json";
+const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+if (!serviceAccountPath) {
+  throw new Error("GOOGLE_APPLICATION_CREDENTIALS environment variable not set.");
+}
+
 initializeApp({
   credential: cert(serviceAccountPath),
   projectId: "atlas-intelligence-node"

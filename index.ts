@@ -34,17 +34,21 @@ dotenv.config();
 const apps = getApps();
 if (!apps || apps.length === 0) {
   try {
-    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || "./atlas-intelligence-node-firebase-adminsdk-fbsvc-6c9d06254d.json";
-    const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
-    
-    if (!fs.existsSync(absolutePath)) {
-      console.error(`Firebase Service Account not found at: ${absolutePath}`);
-    }
+    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    if (serviceAccountPath) {
+      const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
+      
+      if (!fs.existsSync(absolutePath)) {
+        console.error(`Firebase Service Account not found at: ${absolutePath}`);
+      }
 
-    initializeApp({
-      credential: cert(absolutePath),
-      projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
-    });
+      initializeApp({
+        credential: cert(absolutePath),
+        projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
+      });
+    } else {
+      console.warn("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Firebase Admin initialization skipped.");
+    }
   } catch (e) {
     console.error("Firebase Admin initialization failed. Ensure GOOGLE_APPLICATION_CREDENTIALS is set.");
   }
@@ -231,7 +235,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.7.2",
+    version: "2.7.3",
   },
   {
     capabilities: {
@@ -1822,6 +1826,7 @@ async function main() {
     // Multi-session support for concurrent users/reconnections
     const transports = new Map<string, SSEServerTransport>();
     const sessionServers = new Map<string, McpServer>();
+    const sessionOwnership = new Map<string, string>();
 
     app.get("/sse", async (req, res) => {
       console.error("[SSE] New connection request");
@@ -1847,6 +1852,7 @@ async function main() {
           const oldServer = sessionServers.get(sessionId);
           transports.delete(sessionId);
           sessionServers.delete(sessionId);
+          sessionOwnership.delete(sessionId);
           if (oldServer) {
             try {
               await oldServer.close();
@@ -1867,7 +1873,7 @@ async function main() {
         const sessionServer = new McpServer(
           {
             name: "CodeAtlas",
-            version: "2.7.2",
+            version: "2.7.3",
           },
           {
             capabilities: {
@@ -1881,6 +1887,12 @@ async function main() {
 
         transports.set(sessionId, transport);
         sessionServers.set(sessionId, sessionServer);
+        
+        const auth = (req as any).auth;
+        if (auth && auth.uid) {
+          sessionOwnership.set(sessionId, auth.uid);
+        }
+        
         console.error(`[SSE] Session established: ${sessionId}`);
 
         // Send a heartbeat ping every 15 seconds to prevent proxy/load balancer timeouts
@@ -1902,6 +1914,7 @@ async function main() {
               transports.delete(sessionId);
               const oldServer = sessionServers.get(sessionId);
               sessionServers.delete(sessionId);
+              sessionOwnership.delete(sessionId);
               if (oldServer) {
                 try {
                   await oldServer.close();
@@ -1929,25 +1942,16 @@ async function main() {
       let sessionId = req.query.sessionId as string;
       let transport = sessionId ? transports.get(sessionId) : undefined;
 
-      // Resilient Fallback: If sessionId is missing or not found, but active connections exist
-      if (!transport && transports.size > 0) {
-        console.error(`[SSE] Session not found or empty (requested: "${sessionId || ''}"). Active sessions in map: ${transports.size}. Attempting fallback...`);
-        if (transports.size === 1) {
-          // Exactly one session exists, use it as fallback
-          sessionId = Array.from(transports.keys())[0];
-          transport = transports.get(sessionId);
-          console.error(`[SSE] Fallback succeeded: resolved message to the single active session "${sessionId}"`);
-        } else {
-          // Multiple sessions exist, fall back to the most recently created session
-          const sessions = Array.from(transports.entries());
-          const lastSession = sessions[sessions.length - 1];
-          sessionId = lastSession[0];
-          transport = lastSession[1];
-          console.error(`[SSE] Fallback succeeded: resolved message to the most recently active session "${sessionId}"`);
-        }
-      }
-
       if (transport) {
+        const auth = (req as any).auth;
+        const ownerUid = sessionOwnership.get(sessionId);
+        
+        if (ownerUid && ownerUid !== auth?.uid) {
+          console.error(`[SSE] Security: session ownership mismatch. Session ${sessionId} belongs to ${ownerUid}, but request is from ${auth?.uid || 'unauthenticated'}`);
+          res.status(403).send("Forbidden: session ownership mismatch");
+          return;
+        }
+
         await transport.handlePostMessage(req, res, req.body);
       } else {
         console.error(`[SSE] Critical: session not found. Requested: "${sessionId || ''}". No active transports available.`);

@@ -66,6 +66,9 @@ export class OracleMemoryService {
     } catch (err: any) {
       console.error("[Oracle RLS] Failed to set security context:", err instanceof Error ? err.message : String(err));
       // Do not block execution if package/context is not installed (prevents local dev crashes)
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
     }
   }
 
