@@ -49,7 +49,27 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
-      setError(err.message.replace('Firebase: ', ''));
+      console.error("Firebase auth error:", err);
+      let friendlyMsg = err.message || 'Đăng nhập không thành công. Vui lòng thử lại.';
+      
+      const errorCode = err.code || '';
+      if (errorCode === 'auth/invalid-credential' || err.message?.includes('auth/invalid-credential')) {
+        friendlyMsg = 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
+      } else if (errorCode === 'auth/user-not-found' || err.message?.includes('auth/user-not-found')) {
+        friendlyMsg = 'Tài khoản không tồn tại trong hệ thống. Vui lòng đăng ký hoặc liên hệ admin.';
+      } else if (errorCode === 'auth/wrong-password' || err.message?.includes('auth/wrong-password')) {
+        friendlyMsg = 'Mật khẩu nhập vào không chính xác. Vui lòng kiểm tra lại.';
+      } else if (errorCode === 'auth/invalid-email' || err.message?.includes('auth/invalid-email')) {
+        friendlyMsg = 'Định dạng địa chỉ email không hợp lệ.';
+      } else if (errorCode === 'auth/user-disabled' || err.message?.includes('auth/user-disabled')) {
+        friendlyMsg = 'Tài khoản của bạn đã bị tạm khóa hoặc vô hiệu hóa.';
+      } else if (errorCode === 'auth/too-many-requests' || err.message?.includes('auth/too-many-requests')) {
+        friendlyMsg = 'Tài khoản đã bị tạm khóa do nhập sai nhiều lần. Vui lòng thử lại sau ít phút.';
+      } else {
+        friendlyMsg = err.message.replace('Firebase: ', '');
+      }
+
+      setError(friendlyMsg);
     } finally {
       setLoading(false);
     }
