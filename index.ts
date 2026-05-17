@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.12",
+    version: "2.1.14",
   },
   {
     capabilities: {
@@ -1759,20 +1759,23 @@ async function main() {
       res.setHeader('X-Accel-Buffering', 'no');
       
       const transport = new SSEServerTransport("/messages", res);
-      await server.connect(transport);
-
-      // Store transport by sessionId (available on the transport instance)
+      
+      // Store transport by sessionId immediately to prevent race conditions during initialize
       const sessionId = (transport as any).sessionId;
       if (sessionId) {
         transports.set(sessionId, transport);
         console.error(`[SSE] Session established: ${sessionId}`);
+      }
 
-        // Cleanup on connection close
-        res.on("close", () => {
+      // Cleanup on connection close
+      res.on("close", () => {
+        if (sessionId) {
           console.error(`[SSE] Session closed: ${sessionId}`);
           transports.delete(sessionId);
-        });
-      }
+        }
+      });
+
+      await server.connect(transport);
     });
 
     app.post("/messages", async (req, res) => {
@@ -1820,11 +1823,16 @@ async function main() {
 }
 
 // Only run the server if executed directly
-const isMain = process.argv[1] && (
+const isMain = (process.argv[1] && (
   process.argv[1] === url.fileURLToPath(import.meta.url) ||
   process.argv[1].endsWith('bin/codeatlas') ||
   process.argv[1].endsWith('index.ts') ||
   process.argv[1].endsWith('index.js')
+)) || (
+  process.env.pm_exec_path && (
+    process.env.pm_exec_path.endsWith('index.js') ||
+    process.env.pm_exec_path.endsWith('index.ts')
+  )
 );
 
 if (isMain) {

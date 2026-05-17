@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.14] - 2026-05-17
+
+### Fixed
+- **PM2 Container Script Execution Detection**: Hardened the `isMain` direct-execution check in `index.ts` to inspect `process.env.pm_exec_path` as a fallback. This resolves a critical issue under PM2 Fork/Cluster modes where the main module is wrapped inside PM2's container bootstrap (`ProcessContainerFork.js`), causing the server startup to fail silently or fallback incorrectly.
+
+## [2.1.13] - 2026-05-17
+
+### Fixed
+- **SSE Connection Initialization Race Condition**: Resolved a critical race condition in the SSE `/sse` route handler by immediately storing the newly constructed `SSEServerTransport` in the `transports` Map *before* awaiting `server.connect(transport)`. This guarantees that the transport session ID is fully registered when the client concurrently starts the `initialize` handshake, preventing the `failed to connect (session ID: ): session not found` errors.
+
 ## [2.1.12] - 2026-05-17
 
 ### Added
