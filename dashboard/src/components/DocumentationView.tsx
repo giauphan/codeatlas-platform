@@ -226,7 +226,7 @@ export const DocumentationView: React.FC = () => {
                       </tr>
                       <tr>
                         <td style={{ padding: '12px', fontWeight: 700, color: '#fff' }}>URL</td>
-                        <td style={{ padding: '12px', color: 'var(--primary-neon)', fontFamily: 'monospace' }}>{backendUrl}/sse</td>
+                        <td style={{ padding: '12px', color: 'var(--primary-neon)', fontFamily: 'monospace' }}>{backendUrl}/sse?apiKey=YOUR_API_KEY_HERE</td>
                       </tr>
                     </tbody>
                   </table>
@@ -237,18 +237,42 @@ export const DocumentationView: React.FC = () => {
                     <ArrowRight size={16} /> 2. VS Code (Gemini / Antigravity)
                   </h3>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: '1.5' }}>
-                    Add this server configuration block inside your <code>.gemini/settings.json</code>:
+                    Add this server configuration block inside your <code>.gemini/settings.json</code> using either the <strong>environment variable</strong> option (recommended) or the <strong>argument</strong> option:
                   </p>
-                  <div style={{ position: 'relative', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1.5rem', fontFamily: 'monospace', fontSize: '0.85rem', color: '#ff79c6', overflowX: 'auto' }}>
-                    <pre style={{ margin: 0 }}>{`{
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div>
+                      <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.5rem' }}>Option A: Environment Variable (Recommended)</div>
+                      <div style={{ position: 'relative', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1.5rem', fontFamily: 'monospace', fontSize: '0.85rem', color: '#ff79c6', overflowX: 'auto' }}>
+                        <pre style={{ margin: 0 }}>{`{
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "@giauphan/codeatlas-mcp"],
+      "env": {
+        "CODEATLAS_API_KEY": "YOUR_API_KEY_HERE"
+      }
     }
   }
 }`}</pre>
-                    {renderCopyButton(`{\n  "mcpServers": {\n    "codeatlas": {\n      "command": "npx",\n      "args": ["-y", "@giauphan/codeatlas-mcp"]\n    }\n  }\n}`, 'vscode_mcp')}
+                        {renderCopyButton(`{\n  "mcpServers": {\n    "codeatlas": {\n      "command": "npx",\n      "args": ["-y", "@giauphan/codeatlas-mcp"],\n      "env": {\n        "CODEATLAS_API_KEY": "YOUR_API_KEY_HERE"\n      }\n    }\n  }\n}`, 'vscode_mcp_env')}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.5rem' }}>Option B: CLI Argument</div>
+                      <div style={{ position: 'relative', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1.5rem', fontFamily: 'monospace', fontSize: '0.85rem', color: '#ff79c6', overflowX: 'auto' }}>
+                        <pre style={{ margin: 0 }}>{`{
+  "mcpServers": {
+    "codeatlas": {
+      "command": "npx",
+      "args": ["-y", "@giauphan/codeatlas-mcp", "--apiKey=YOUR_API_KEY_HERE"]
+    }
+  }
+}`}</pre>
+                        {renderCopyButton(`{\n  "mcpServers": {\n    "codeatlas": {\n      "command": "npx",\n      "args": ["-y", "@giauphan/codeatlas-mcp", "--apiKey=YOUR_API_KEY_HERE"]\n    }\n  }\n}`, 'vscode_mcp_arg')}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
