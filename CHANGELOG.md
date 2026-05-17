@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.21] - 2026-05-17
+
+### Added / Fixed
+- **Dynamic Multi-Session Isolated McpServer**: Architecturally redesigned the MCP server to dynamically instantiate and register tools on an isolated `McpServer` instance *per SSE connection*. This eliminates the single global server transport bottleneck entirely. Multiple concurrent clients can now connect, disconnect, and reconnect simultaneously with 100% thread/session isolation and zero transport locking conflicts.
+- **Global Server Backward Compatibility**: Kept the global `server` instance initialized and populated with tools to ensure all existing unit tests and direct module imports continue to work perfectly.
+
 ## [2.1.20] - 2026-05-17
 
 ### Fixed

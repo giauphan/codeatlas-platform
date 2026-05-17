@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.20",
+    version: "2.1.21",
   },
   {
     capabilities: {
@@ -250,6 +250,8 @@ const server = new McpServer(
     },
   }
 );
+
+registerTools(server);
 
 // Auto-Indexing Logic
 const projectRoot = process.cwd();
@@ -312,7 +314,7 @@ function startWatcher() {
   });
 
   console.log(`\n${'='.repeat(50)}`);
-  console.log(`🚀 CODEATLAS ENTERPRISE v2.1.20 ONLINE`);
+  console.log(`🚀 CODEATLAS ENTERPRISE v2.1.21 ONLINE`);
   console.log(`📡 Auto-Indexing: WATCHING ${watchPaths.length} PROJECTS`);
   watchPaths.forEach(p => console.log(`   - ${p}`));
   console.log(`🛡️  Security: FIREBASE ADMIN ACTIVE`);
@@ -378,9 +380,10 @@ app.post("/api/reindex", authMiddleware, async (req, res) => {
   }
 });
 
-// Tool -1: Analyze a project
-server.tool(
-  "analyze",
+export function registerTools(server: McpServer) {
+  // Tool -1: Analyze a project
+  server.tool(
+    "analyze",
   "Perform deep code analysis on a local project directory. Generates .codeatlas/analysis.json.",
   {
     path: z.string().describe("Absolute path to the project directory to analyze"),
@@ -1721,6 +1724,7 @@ server.tool(
     };
   }
 );
+}
 
 // Start server
 async function main() {
@@ -1748,6 +1752,7 @@ async function main() {
 
     // Multi-session support for concurrent users/reconnections
     const transports = new Map<string, SSEServerTransport>();
+    const sessionServers = new Map<string, McpServer>();
 
     app.get("/sse", async (req, res) => {
       console.error("[SSE] New connection request");
@@ -1764,22 +1769,61 @@ async function main() {
       
       // Store transport by sessionId immediately to prevent race conditions during initialize
       const sessionId = (transport as any).sessionId;
+      
       if (sessionId) {
-        transports.set(sessionId, transport);
-        console.error(`[SSE] Session established: ${sessionId}`);
-      }
-
-      // Send a heartbeat ping every 15 seconds to prevent proxy/load balancer timeouts
-      const heartbeatInterval = setInterval(() => {
-        if (!res.writableEnded) {
-          res.write(":\n\n"); // SSE comment - keeps the HTTP connection active
+        // If a session with this ID already exists, clean up its server and transport first to avoid conflicts
+        if (transports.has(sessionId)) {
+          console.error(`[SSE] Session ${sessionId} already exists. Cleaning up the old connection before establishing new one.`);
+          const oldTransport = transports.get(sessionId);
+          const oldServer = sessionServers.get(sessionId);
+          transports.delete(sessionId);
+          sessionServers.delete(sessionId);
+          if (oldServer) {
+            try {
+              await oldServer.close();
+            } catch (err) {
+              // Ignore
+            }
+          }
+          if (oldTransport) {
+            try {
+              await oldTransport.close();
+            } catch (err) {
+              // Ignore
+            }
+          }
         }
-      }, 15000);
 
-      // Cleanup on connection close with a 3-minute grace period
-      res.on("close", async () => {
-        clearInterval(heartbeatInterval);
-        if (sessionId) {
+        // Dynamically create a session-specific server to isolate state and support concurrent clients
+        const sessionServer = new McpServer(
+          {
+            name: "CodeAtlas",
+            version: "2.1.21",
+          },
+          {
+            capabilities: {
+              resources: {},
+              tools: {},
+              logging: {},
+            },
+          }
+        );
+        registerTools(sessionServer);
+
+        transports.set(sessionId, transport);
+        sessionServers.set(sessionId, sessionServer);
+        console.error(`[SSE] Session established: ${sessionId}`);
+
+        // Send a heartbeat ping every 15 seconds to prevent proxy/load balancer timeouts
+        const heartbeatInterval = setInterval(() => {
+          if (!res.writableEnded) {
+            res.write(":\n\n"); // SSE comment - keeps the HTTP connection active
+          }
+        }, 15000);
+
+        // Cleanup on connection close with a 3-minute grace period
+        res.on("close", async () => {
+          clearInterval(heartbeatInterval);
           console.error(`[SSE] Session connection closed: ${sessionId}. Keeping session alive for 3-minute grace period.`);
           
           // Keep the session in the map for a 3-minute grace period to prevent immediate 404 errors
@@ -1787,32 +1831,29 @@ async function main() {
             if (transports.has(sessionId)) {
               console.error(`[SSE] Grace period expired. Cleaning up session: ${sessionId}`);
               transports.delete(sessionId);
+              const oldServer = sessionServers.get(sessionId);
+              sessionServers.delete(sessionId);
+              if (oldServer) {
+                try {
+                  await oldServer.close();
+                } catch (err) {
+                  // Ignore
+                }
+              }
               try {
                 await transport.close();
               } catch (err) {
                 // Ignore
               }
-              if ((server as any)._transport === transport) {
-                (server as any)._transport = undefined;
-              }
             }
           }, 180000); // 3 minutes
-        }
-      });
+        });
 
-      // Failsafe: Ensure server is disconnected from any previous transport before connecting a new one
-      const underlyingServer = (server as any).server;
-      if (underlyingServer && underlyingServer._transport) {
-        console.error("[SSE] Server was already connected to an active transport. Cleaning up the stale transport...");
-        try {
-          await server.close();
-        } catch (err) {
-          // Ignore
-        }
-        underlyingServer._transport = undefined;
+        await sessionServer.connect(transport);
+      } else {
+        console.error("[SSE] Critical: failed to retrieve sessionId from transport.");
+        res.status(500).send("Failed to initialize session");
       }
-
-      await server.connect(transport);
     });
 
     app.post("/messages", async (req, res) => {
