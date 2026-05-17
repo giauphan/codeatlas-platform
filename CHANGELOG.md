@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.16] - 2026-05-17
+
+### Fixed
+- **SSE Handshake Stream Consumption**: Passed the pre-parsed JSON request body (`req.body`) as the third parameter to `SSEServerTransport.handlePostMessage` in the `/messages` POST handler. This prevents the MCP SDK from attempting to read the raw request stream from scratch using `getRawBody` when `express.json()` middleware has already consumed it, resolving the critical `InternalServerError: stream is not readable` (HTTP 400) connection failure.
+
 ## [2.1.15] - 2026-05-17
 
 ### Fixed

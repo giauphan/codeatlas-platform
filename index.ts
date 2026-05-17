@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.15",
+    version: "2.1.16",
   },
   {
     capabilities: {
@@ -1785,7 +1785,7 @@ async function main() {
       const transport = transports.get(sessionId);
 
       if (transport) {
-        await transport.handlePostMessage(req, res);
+        await transport.handlePostMessage(req, res, req.body);
       } else {
         console.error(`[SSE] Session not found: ${sessionId}`);
         res.status(404).send("Session not found");
