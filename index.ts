@@ -18,6 +18,7 @@ import { CodeAnalyzer } from "./src/analyzer/parser.js";
 import { AnalysisResult } from "./src/analyzer/types.js";
 import { OracleMemoryService } from "./src/oracleDatabase.js";
 import { SecurityScanner } from "./src/securityScanner.js";
+import { authStorage } from "./src/context.js";
 
 // Load environment variables
 dotenv.config();
@@ -161,34 +162,47 @@ function getStats(analysis: AnalysisResultLocal) {
 }
 
 // Auto-discover all projects with .codeatlas/analysis.json
-function discoverProjects(): { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] {
+function discoverProjects(tenantId?: string): { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
-  const homeDir = process.env.HOME || process.env.USERPROFILE || "/home";
-
-  // Scan directories for .codeatlas/analysis.json
   const searchDirs: string[] = [];
 
-  // Add env var project if specified
-  if (process.env.CODEATLAS_PROJECT_DIR) {
-    searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
-  }
-
-  // Add cwd
-  searchDirs.push(process.cwd());
-
-  // Scan home directory children (max depth 2)
-  try {
-    const homeDirs = fs.readdirSync(homeDir);
-    for (const d of homeDirs) {
-      if (d.startsWith(".")) continue;
-      const fullPath = path.join(homeDir, d);
+  // Multi-Tenant Isolation
+  if (process.env.CODEATLAS_MULTI_TENANT === "true" && tenantId && tenantId !== "admin") {
+    const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || "/var/codeatlas/tenants";
+    const userDir = path.join(tenantRoot, tenantId);
+    if (fs.existsSync(userDir)) {
       try {
-        if (fs.statSync(fullPath).isDirectory()) {
-          searchDirs.push(fullPath);
+        const userProjects = fs.readdirSync(userDir);
+        for (const p of userProjects) {
+          const fullPath = path.join(userDir, p);
+          if (fs.statSync(fullPath).isDirectory()) {
+            searchDirs.push(fullPath);
+          }
         }
       } catch { /* skip */ }
     }
-  } catch { /* skip */ }
+  } else {
+    // Single-Tenant or Local Dev Mode
+    const homeDir = process.env.HOME || process.env.USERPROFILE || "/home";
+
+    if (process.env.CODEATLAS_PROJECT_DIR) {
+      searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
+    }
+    searchDirs.push(process.cwd());
+
+    try {
+      const homeDirs = fs.readdirSync(homeDir);
+      for (const d of homeDirs) {
+        if (d.startsWith(".")) continue;
+        const fullPath = path.join(homeDir, d);
+        try {
+          if (fs.statSync(fullPath).isDirectory()) {
+            searchDirs.push(fullPath);
+          }
+        } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+  }
 
   // Check each directory for .codeatlas/analysis.json
   const seen = new Set<string>();
@@ -216,16 +230,23 @@ function discoverProjects(): { name: string; dir: string; analysisPath: string; 
 }
 
 function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectName: string; projectDir: string } | null {
-  const projects = discoverProjects();
+  const auth = authStorage.getStore();
+  const tenantId = auth ? auth.uid : undefined;
+  
+  const projects = discoverProjects(tenantId);
   if (projects.length === 0) return null;
 
-  let target = projects[0]; // default: most recently modified
+  let target: { name: string; dir: string; analysisPath: string; modifiedAt: Date } | undefined = projects[0]; // default: most recently modified
 
   if (projectDir) {
     const match = projects.find(
       (p) => p.dir === projectDir || p.name.toLowerCase() === projectDir.toLowerCase()
     );
-    if (match) target = match;
+    if (match) {
+      target = match;
+    } else {
+      return null; // Explicitly requested project not owned by or visible to this tenant
+    }
   }
 
   try {
@@ -240,7 +261,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.21",
+    version: "2.2.0",
   },
   {
     capabilities: {
@@ -342,7 +363,11 @@ const authMiddleware = async (req: express.Request, res: express.Response, next:
   try {
     const auth = await checkAuth(clientKey);
     (req as any).auth = auth; // Attach auth result to request
-    next();
+    
+    // Gán auth context cho toàn bộ luồng bất đồng bộ bên dưới
+    authStorage.run(auth, () => {
+      next();
+    });
   } catch (err: any) {
     res.status(401).json({ error: err.message });
   }
@@ -436,7 +461,8 @@ server.tool(
   {},
   async () => {
     // Enterprise edition: full access enabled
-    const projects = discoverProjects();
+    const auth = authStorage.getStore();
+    const projects = discoverProjects(auth?.uid);
     if (projects.length === 0) {
       return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
     }
@@ -1798,7 +1824,7 @@ async function main() {
         const sessionServer = new McpServer(
           {
             name: "CodeAtlas",
-            version: "2.1.21",
+            version: "2.2.0",
           },
           {
             capabilities: {

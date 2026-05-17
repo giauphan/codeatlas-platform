@@ -1,5 +1,6 @@
 import oracledb from "oracledb";
 import * as path from "path";
+import { authStorage } from "./context.js";
 
 // Cấu hình kết nối lấy từ .env
 const dbConfig = {
@@ -51,26 +52,48 @@ export class OracleMemoryService {
   }
 
   /**
+   * Thiết lập Session Context cho Row-Level Security (Oracle Virtual Private Database)
+   */
+  private static async setSessionContext(connection: oracledb.Connection) {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : "admin";
+    
+    try {
+      // Gọi package gán context để Oracle tự động áp dụng chính sách lọc hàng
+      const sql = `BEGIN ADMIN.codeatlas_ctx_pkg.set_tenant(:tenantId); END;`;
+      await connection.execute(sql, { tenantId });
+      console.log(`[Oracle RLS] Security Context set for tenant: ${tenantId}`);
+    } catch (err: any) {
+      console.error("[Oracle RLS] Failed to set security context:", err.message);
+      // Không chặn đứng tiến trình nếu DB chưa cài đặt Package/Context (để tránh crash ở local dev)
+    }
+  }
+
+  /**
    * Tầng 1: Episodic JSON - Lưu trữ sự kiện nghiệp vụ (Business Rules / Change Logs)
    */
   static async saveEpisodicMemory(project: string, eventType: "BUSINESS_RULE" | "CHANGE_LOG", data: any) {
     try {
       const pool = await this.init();
       const connection = await pool.getConnection();
+      await this.setSessionContext(connection);
       
       try {
         const id = `${project}_${eventType}_${Date.now()}`;
+        const auth = authStorage.getStore();
+        const tenantId = auth ? auth.uid : "admin";
         
         const sql = `
-          INSERT INTO ai_episodic_memory (id, project_name, event_type, event_data)
-          VALUES (:id, :project, :eventType, :data)
+          INSERT INTO ai_episodic_memory (id, project_name, event_type, event_data, tenant_id)
+          VALUES (:id, :project, :eventType, :data, :tenantId)
         `;
         
         await connection.execute(sql, {
           id,
           project,
           eventType,
-          data: { val: data, type: oracledb.DB_TYPE_JSON }
+          data: { val: data, type: oracledb.DB_TYPE_JSON },
+          tenantId
         }, { autoCommit: true });
         
       } finally {
@@ -88,15 +111,19 @@ export class OracleMemoryService {
     try {
       const pool = await this.init();
       const connection = await pool.getConnection();
+      await this.setSessionContext(connection);
       
       try {
+        const auth = authStorage.getStore();
+        const tenantId = auth ? auth.uid : "admin";
+
         const sql = `
           MERGE INTO ai_semantic_memory trg
-          USING (SELECT :id AS id, :project AS project_name, :type AS entity_type, :name AS entity_name, :path AS file_path, :content AS content FROM DUAL) src
+          USING (SELECT :id AS id, :project AS project_name, :type AS entity_type, :name AS entity_name, :path AS file_path, :content AS content, :tenantId AS tenant_id FROM DUAL) src
           ON (trg.id = src.id)
           WHEN MATCHED THEN UPDATE SET trg.content = src.content
-          WHEN NOT MATCHED THEN INSERT (id, project_name, entity_type, entity_name, file_path, content)
-          VALUES (src.id, src.project_name, src.entity_type, src.entity_name, src.file_path, src.content)
+          WHEN NOT MATCHED THEN INSERT (id, project_name, entity_type, entity_name, file_path, content, tenant_id)
+          VALUES (src.id, src.project_name, src.entity_type, src.entity_name, src.file_path, src.content, src.tenant_id)
         `;
         
         const binds = entities.map(e => ({
@@ -105,7 +132,8 @@ export class OracleMemoryService {
           type: e.type,
           name: e.label,
           path: e.filePath || "",
-          content: `Entity: ${e.label}, Type: ${e.type}, Path: ${e.filePath}`
+          content: `Entity: ${e.label}, Type: ${e.type}, Path: ${e.filePath}`,
+          tenantId
         }));
 
         await connection.executeMany(sql, binds, { autoCommit: true });
@@ -125,21 +153,26 @@ export class OracleMemoryService {
     try {
       const pool = await this.init();
       const connection = await pool.getConnection();
+      await this.setSessionContext(connection);
       
       try {
+        const auth = authStorage.getStore();
+        const tenantId = auth ? auth.uid : "admin";
+
         const sql = `
           MERGE INTO ai_relational_memory trg
-          USING (SELECT :src AS source_id, :tgt AS target_id, :project AS project_name, :type AS relationship_type FROM DUAL) src
-          ON (trg.source_id = src.source_id AND trg.target_id = src.target_id AND trg.relationship_type = src.relationship_type)
-          WHEN NOT MATCHED THEN INSERT (source_id, target_id, project_name, relationship_type)
-          VALUES (src.source_id, src.target_id, src.project_name, src.relationship_type)
+          USING (SELECT :src AS source_id, :tgt AS target_id, :project AS project_name, :type AS relationship_type, :tenantId AS tenant_id FROM DUAL) src
+          ON (trg.source_id = src.source_id AND trg.target_id = src.target_id AND trg.relationship_type = src.relationship_type AND trg.tenant_id = src.tenant_id)
+          WHEN NOT MATCHED THEN INSERT (source_id, target_id, project_name, relationship_type, tenant_id)
+          VALUES (src.source_id, src.target_id, src.project_name, src.relationship_type, src.tenant_id)
         `;
         
         const binds = links.map(l => ({
           src: `${project}_${l.source}`,
           tgt: `${project}_${l.target}`,
           project,
-          type: l.type
+          type: l.type,
+          tenantId
         }));
 
         await connection.executeMany(sql, binds, { autoCommit: true });
@@ -159,6 +192,7 @@ export class OracleMemoryService {
     try {
       const pool = await this.init();
       const connection = await pool.getConnection();
+      await this.setSessionContext(connection);
       
       try {
         const sql = `
@@ -189,6 +223,7 @@ export class OracleMemoryService {
     try {
       const pool = await this.init();
       const connection = await pool.getConnection();
+      await this.setSessionContext(connection);
       
       try {
         const smells: any = {

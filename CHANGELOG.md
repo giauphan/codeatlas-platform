@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Airtight SaaS Multi-Tenant Isolation**: Implemented complete request-scoped isolation utilizing Node.js's stable `AsyncLocalStorage` to store the authenticated tenant's `uid`, `tier`, and `keyId` across asynchronous call chains.
+- **Oracle 26ai Virtual Private Database (VPD) & Row-Level Security (RLS) Integration**: Updated `OracleMemoryService` to automatically execute a private session context binding `ADMIN.codeatlas_ctx_pkg.set_tenant(:tenantId)` upon every database connection acquisition, enabling Oracle's kernel-level RLS policies to silently and securely partition tenant data. Added `tenant_id` database columns, composite indexes, and detailed PL/SQL setup procedures to `/src/oracleSchema.sql`.
+- **Dynamic File Discovery Isolation**: Modernized the project auto-discovery (`discoverProjects`) and workspace loading (`loadAnalysis`) algorithms to filter directories, limiting scanned file assets dynamically to the respective tenant's private root path `/var/codeatlas/tenants/<tenantId>` in Multi-Tenant mode.
+
 ## [2.1.21] - 2026-05-17
 
 ### Added / Fixed
