@@ -7,12 +7,20 @@ import { Loader2, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    // Check for an active API Key session in secure session storage
+    const savedApiKey = sessionStorage.getItem('ca_api_key');
+    if (savedApiKey) {
+      setUser({ uid: 'api-key-session', email: 'api-key-user@codeatlas.local', isApiKeySession: true });
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
       setLoading(false);
     });
 
@@ -20,21 +28,9 @@ function App() {
   }, []);
 
   const handleBypassLogin = async (key: string) => {
-    // If it's the super admin key, we attempt to log in with the admin service account 
-    // or set a local bypass state. For simplicity and persistence, we'll use a dummy 
-    // login or just notify the user if they need to setup the admin account.
-    if (key === "0~du=~7^OvNk%cLP2>*e~&~j5x'WM") {
-      try {
-        setLoading(true);
-        // Note: In production, this would be a secure token exchange.
-        // For now, we'll assume the user knows their firebase credentials if they have the key.
-        console.log("Super Admin Bypass Initiated...");
-        // You can add specific bypass logic here if needed.
-      } catch (err) {
-        console.error("Bypass failed", err);
-      } finally {
-        setLoading(false);
-      }
+    if (key.trim()) {
+      sessionStorage.setItem('ca_api_key', key.trim());
+      setUser({ uid: 'api-key-session', email: 'api-key-user@codeatlas.local', isApiKeySession: true });
     }
   };
 

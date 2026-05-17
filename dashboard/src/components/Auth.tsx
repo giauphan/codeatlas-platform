@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { auth } from '../lib/firebase';
 import { 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
   sendPasswordResetEmail 
 } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,9 +10,7 @@ import {
   Key, 
   Mail, 
   Lock, 
-  UserPlus, 
   LogIn, 
-  Cpu, 
   Globe,
   Loader2,
   ChevronRight,
@@ -25,7 +22,7 @@ interface AuthProps {
 }
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
-  const [mode, setMode] = useState<'token' | 'signin' | 'signup'>('token');
+  const [mode, setMode] = useState<'token' | 'signin'>('token');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -42,20 +39,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     setLoading(true);
     setError(null);
     try {
-      if (mode === 'signin') {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-      }
+      await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
       setError(err.message.replace('Firebase: ', ''));
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleBypass = () => {
-    onLogin("0~du=~7^OvNk%cLP2>*e~&~j5x'WM");
   };
 
   return (
@@ -83,7 +72,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           {[
             { id: 'token', label: 'TOKEN', icon: Key },
             { id: 'signin', label: 'SIGN IN', icon: LogIn },
-            { id: 'signup', label: 'CREATE', icon: UserPlus },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -117,7 +105,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
                   <div style={{ position: 'relative' }}>
-                    <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
+                     <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
                     <input type="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required />
                   </div>
                 </div>
@@ -131,23 +119,20 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               </div>
               {error && <div style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
               <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800 }} disabled={loading}>
-                {loading ? <Loader2 className="animate-spin" size={24} /> : mode === 'signin' ? 'ENTER SYSTEM' : 'REGISTER NODE'}
+                {loading ? <Loader2 className="animate-spin" size={24} /> : 'ENTER SYSTEM'}
               </button>
             </motion.form>
           )}
         </AnimatePresence>
 
+        {/* Secure connection disclaimer */}
         <div style={{ display: 'flex', alignItems: 'center', margin: '2.5rem 0', color: 'rgba(255,255,255,0.1)' }}>
           <div style={{ flex: 1, height: '1px', background: 'currentColor' }} />
-          <span style={{ padding: '0 1rem', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 800 }}>ADMINISTRATOR ONLY</span>
+          <span style={{ padding: '0 1rem', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 800 }}>SECURE CONNECTION</span>
           <div style={{ flex: 1, height: '1px', background: 'currentColor' }} />
         </div>
 
-        <button onClick={handleBypass} style={{ width: '100%', height: '50px', background: 'rgba(157, 0, 255, 0.08)', border: '1px solid rgba(157, 0, 255, 0.2)', color: 'var(--secondary-neon)', borderRadius: '14px', cursor: 'pointer', fontWeight: 800, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', transition: 'all 0.3s' }}>
-          <Cpu size={18} /> SUPER ADMIN BYPASS
-        </button>
-
-        <footer style={{ marginTop: '3rem', textAlign: 'center', fontSize: '0.75rem', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>
+        <footer style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.75rem', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>
           SECURE LINK // AES-256-GCM // NODE-ID: {Math.random().toString(16).slice(2, 10).toUpperCase()}
         </footer>
       </div>

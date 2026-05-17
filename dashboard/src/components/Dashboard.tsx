@@ -33,8 +33,6 @@ const API_BASE = window.location.origin.includes('localhost:5173')
   ? 'http://localhost:8080' 
   : window.location.origin;
 
-const SUPER_ADMIN_KEY = '0~du=~7^OvNk%cLP2>*e~&~j5x\'WM';
-
 interface ApiKey {
   id: string;
   name: string;
@@ -75,27 +73,36 @@ export const Dashboard: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Control Center');
   const [analysis, setAnalysis] = useState<AnalysisData | null>(() => {
-    const cached = localStorage.getItem('ca_analysis_cache');
+    const cached = sessionStorage.getItem('ca_analysis_cache');
     return cached ? JSON.parse(cached) : null;
   });
   const [isIndexingEnabled, setIsIndexingEnabled] = useState(() => {
-    const saved = localStorage.getItem('codeatlas_indexing_enabled');
+    const saved = sessionStorage.getItem('codeatlas_indexing_enabled');
     return saved !== null ? JSON.parse(saved) : true;
   });
 
   useEffect(() => {
-    localStorage.setItem('codeatlas_indexing_enabled', JSON.stringify(isIndexingEnabled));
+    sessionStorage.setItem('codeatlas_indexing_enabled', JSON.stringify(isIndexingEnabled));
   }, [isIndexingEnabled]);
 
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState({ totalRequests: 0 });
   const [projects, setProjects] = useState<{ name: string; dir: string }[]>([]);
   const [selectedProjectDir, setSelectedProjectDir] = useState<string>(() => {
-    return localStorage.getItem('ca_selected_project_dir') || '';
+    return sessionStorage.getItem('ca_selected_project_dir') || '';
   });
   const user = auth.currentUser;
 
   const getAuthHeaders = async () => {
+    // Check for active token key session first
+    const savedApiKey = sessionStorage.getItem('ca_api_key');
+    if (savedApiKey) {
+      return {
+        'x-api-key': savedApiKey,
+        'Content-Type': 'application/json'
+      };
+    }
+
     const currentUser = auth.currentUser;
     if (currentUser) {
       const token = await currentUser.getIdToken();
@@ -105,7 +112,6 @@ export const Dashboard: React.FC = () => {
       };
     }
     return {
-      'x-api-key': SUPER_ADMIN_KEY,
       'Content-Type': 'application/json'
     };
   };
@@ -120,16 +126,16 @@ export const Dashboard: React.FC = () => {
       if (resp.ok) {
         const data = await resp.json();
         setAnalysis(data);
-        localStorage.setItem('ca_analysis_cache', JSON.stringify(data));
+        sessionStorage.setItem('ca_analysis_cache', JSON.stringify(data));
       } else {
         // Clear cached stale data if backend rejects access (404/403 boundary violation)
         setAnalysis(null);
-        localStorage.removeItem('ca_analysis_cache');
+        sessionStorage.removeItem('ca_analysis_cache');
       }
     } catch (err) {
       console.error("Failed to fetch analysis:", err);
       setAnalysis(null);
-      localStorage.removeItem('ca_analysis_cache');
+      sessionStorage.removeItem('ca_analysis_cache');
     }
   };
 
@@ -146,36 +152,36 @@ export const Dashboard: React.FC = () => {
           if (!hasSelected || !selectedProjectDir) {
             const defaultDir = data[0].dir;
             setSelectedProjectDir(defaultDir);
-            localStorage.setItem('ca_selected_project_dir', defaultDir);
+            sessionStorage.setItem('ca_selected_project_dir', defaultDir);
             fetchAnalysis(defaultDir);
           }
         } else {
           // Reset project states if the user has no projects
           setSelectedProjectDir('');
-          localStorage.removeItem('ca_selected_project_dir');
+          sessionStorage.removeItem('ca_selected_project_dir');
           setAnalysis(null);
-          localStorage.removeItem('ca_analysis_cache');
+          sessionStorage.removeItem('ca_analysis_cache');
         }
       } else {
         setProjects([]);
         setSelectedProjectDir('');
-        localStorage.removeItem('ca_selected_project_dir');
+        sessionStorage.removeItem('ca_selected_project_dir');
         setAnalysis(null);
-        localStorage.removeItem('ca_analysis_cache');
+        sessionStorage.removeItem('ca_analysis_cache');
       }
     } catch (err) {
       console.error("Failed to fetch projects:", err);
       setProjects([]);
       setSelectedProjectDir('');
-      localStorage.removeItem('ca_selected_project_dir');
+      sessionStorage.removeItem('ca_selected_project_dir');
       setAnalysis(null);
-      localStorage.removeItem('ca_analysis_cache');
+      sessionStorage.removeItem('ca_analysis_cache');
     }
   };
 
   const handleProjectChange = (dir: string) => {
     setSelectedProjectDir(dir);
-    localStorage.setItem('ca_selected_project_dir', dir);
+    sessionStorage.setItem('ca_selected_project_dir', dir);
     fetchAnalysis(dir);
   };
 
@@ -202,8 +208,8 @@ export const Dashboard: React.FC = () => {
       setProjects([]);
       setAnalysis(null);
       setSelectedProjectDir('');
-      localStorage.removeItem('ca_analysis_cache');
-      localStorage.removeItem('ca_selected_project_dir');
+      sessionStorage.removeItem('ca_analysis_cache');
+      sessionStorage.removeItem('ca_selected_project_dir');
       return;
     }
     
@@ -371,7 +377,7 @@ export const Dashboard: React.FC = () => {
         <div style={{ marginTop: 'auto', padding: '1.25rem', background: 'rgba(0,0,0,0.25)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 700 }}>ENTERPRISE NODE</div>
           <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#fff', wordBreak: 'break-all' }}>{user?.email}</div>
-          <button onClick={() => auth.signOut()} style={{ marginTop: '1.5rem', width: '100%', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4b4b', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700 }}>
+          <button onClick={() => { sessionStorage.removeItem('ca_api_key'); auth.signOut(); window.location.reload(); }} style={{ marginTop: '1.5rem', width: '100%', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4b4b', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700 }}>
             <LogOut size={18} /> SIGN OUT
           </button>
         </div>
