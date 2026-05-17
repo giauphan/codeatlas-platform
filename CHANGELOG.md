@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.15] - 2026-05-17
+
+### Fixed
+- **MCP Client Redirection API Key Loss**: Appended the incoming `apiKey` query parameter directly to the message redirection URL returned by the SSE `/sse` handler (`/messages?apiKey=...`). This guarantees that standard client-side URL resolution preserves the key during the client's handshake initialization, preventing keyless POST requests from failing with a `401 Unauthorized` or `404 Session not found` error.
+
 ## [2.1.14] - 2026-05-17
 
 ### Fixed

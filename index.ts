@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.14",
+    version: "2.1.15",
   },
   {
     capabilities: {
@@ -1758,7 +1758,9 @@ async function main() {
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no');
       
-      const transport = new SSEServerTransport("/messages", res);
+      const apiKey = (req.query.apiKey as string) || (req.headers["x-api-key"] as string) || "";
+      const messagesUrl = apiKey ? `/messages?apiKey=${encodeURIComponent(apiKey)}` : "/messages";
+      const transport = new SSEServerTransport(messagesUrl, res);
       
       // Store transport by sessionId immediately to prevent race conditions during initialize
       const sessionId = (transport as any).sessionId;

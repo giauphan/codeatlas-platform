@@ -2,7 +2,7 @@
   "name": "codeatlas-enterprise",
   "displayName": "CodeAtlas Enterprise (Oracle 26ai Edition)",
   "description": "AI-powered codebase insights — MCP Server and Remote API",
-  "version": "2.1.14",
+  "version": "2.1.15",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
