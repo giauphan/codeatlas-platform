@@ -240,7 +240,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.1.17",
+    version: "2.1.18",
   },
   {
     capabilities: {
@@ -1800,13 +1800,31 @@ async function main() {
     });
 
     app.post("/messages", async (req, res) => {
-      const sessionId = req.query.sessionId as string;
-      const transport = transports.get(sessionId);
+      let sessionId = req.query.sessionId as string;
+      let transport = sessionId ? transports.get(sessionId) : undefined;
+
+      // Resilient Fallback: If sessionId is missing or not found, but active connections exist
+      if (!transport && transports.size > 0) {
+        console.error(`[SSE] Session not found or empty (requested: "${sessionId || ''}"). Active sessions in map: ${transports.size}. Attempting fallback...`);
+        if (transports.size === 1) {
+          // Exactly one session exists, use it as fallback
+          sessionId = Array.from(transports.keys())[0];
+          transport = transports.get(sessionId);
+          console.error(`[SSE] Fallback succeeded: resolved message to the single active session "${sessionId}"`);
+        } else {
+          // Multiple sessions exist, fall back to the most recently created session
+          const sessions = Array.from(transports.entries());
+          const lastSession = sessions[sessions.length - 1];
+          sessionId = lastSession[0];
+          transport = lastSession[1];
+          console.error(`[SSE] Fallback succeeded: resolved message to the most recently active session "${sessionId}"`);
+        }
+      }
 
       if (transport) {
         await transport.handlePostMessage(req, res, req.body);
       } else {
-        console.error(`[SSE] Session not found: ${sessionId}`);
+        console.error(`[SSE] Critical: session not found. Requested: "${sessionId || ''}". No active transports available.`);
         res.status(404).send("Session not found");
       }
     });

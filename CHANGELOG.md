@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.18] - 2026-05-17
+
+### Fixed
+- **Buggy Client Session ID Routing Fallback**: Implemented a highly resilient session routing fallback in the `/messages` POST handler. Some IDEs have custom, non-conforming MCP client implementations that strip or omit the `sessionId` query parameter from relative URLs provided in the SSE `endpoint` event. The server now automatically intercepts these empty or invalid session requests and gracefully resolves them to the single active connection (or the most recently created session). This prevents the critical `failed to connect (session ID: ): session not found.` (HTTP 404) handshake failure on non-standard clients.
+
 ## [2.1.17] - 2026-05-17
 
 ### Fixed
