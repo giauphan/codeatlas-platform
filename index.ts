@@ -312,7 +312,7 @@ function startWatcher() {
   });
 
   console.log(`\n${'='.repeat(50)}`);
-  console.log(`🚀 CODEATLAS ENTERPRISE v2.1.4 ONLINE`);
+  console.log(`🚀 CODEATLAS ENTERPRISE v2.1.19 ONLINE`);
   console.log(`📡 Auto-Indexing: WATCHING ${watchPaths.length} PROJECTS`);
   watchPaths.forEach(p => console.log(`   - ${p}`));
   console.log(`🛡️  Security: FIREBASE ADMIN ACTIVE`);
