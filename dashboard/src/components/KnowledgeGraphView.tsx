@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 interface AnalysisData {
+  analysis?: AnalysisData; // Support nested analysis response
   stats?: {
     totalFiles?: number;
     totalModules?: number;

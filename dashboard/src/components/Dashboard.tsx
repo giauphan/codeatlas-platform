@@ -42,6 +42,7 @@ interface ApiKey {
 }
 
 interface AnalysisData {
+  analysis?: AnalysisData; // Support nested analysis response
   stats?: {
     totalFiles?: number;
     totalModules?: number;
@@ -271,9 +272,9 @@ export const Dashboard: React.FC = () => {
     if (!analysis) return null;
     
     // Extract base analysis object if it's nested
-    let base = analysis as any;
-    if ('analysis' in analysis && (analysis as any).analysis) {
-      base = (analysis as any).analysis;
+    let base: AnalysisData = analysis;
+    if (analysis.analysis) {
+      base = analysis.analysis;
     }
     
     // Normalize stats
