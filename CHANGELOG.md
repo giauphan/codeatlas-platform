@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.6] - 2026-05-18
+
+### Fixed / Changed
+- **NPM Package Binary Name Fix**: Updated `package.json` in the `codeatlas-mcp-enterprise` client package to map `"bin"` directly to `"codeatlas-enterprise"`, aligning the binary name with the package name. This ensures that executing `npx -y codeatlas-enterprise` invokes our new secure Local-First JS script directly, instead of falling back to cached legacy packages or causing Supergateway 401 connection errors.
+
 ## [2.9.5] - 2026-05-18
 
 ### Changed / Removed / Security
