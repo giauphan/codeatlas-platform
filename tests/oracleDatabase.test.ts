@@ -1,8 +1,15 @@
-import { test, describe } from 'node:test';
+import { test, describe, mock, afterEach } from 'node:test';
 import assert from 'node:assert';
+import oracledb from 'oracledb';
 import { OracleMemoryService } from '../src/oracleDatabase.js';
 
 describe('OracleMemoryService', () => {
+  afterEach(() => {
+    mock.restoreAll();
+    // Reset pool
+    (OracleMemoryService as any).pool = null;
+  });
+
   test('should handle missing connection gracefully in detectArchitecturalSmells', async () => {
     // This will fail because no DB is connected, but we want to ensure it throws or returns null
     try {
@@ -18,5 +25,37 @@ describe('OracleMemoryService', () => {
     assert.strictEqual(typeof OracleMemoryService.saveRelationalMemory, 'function');
     assert.strictEqual(typeof OracleMemoryService.detectArchitecturalSmells, 'function');
     assert.strictEqual(typeof OracleMemoryService.saveSemanticMemory, 'function');
+  });
+
+  test('should throw error when pool creation fails during init()', async () => {
+    mock.method(oracledb, 'createPool', async () => {
+      throw new Error('Simulated pool creation error');
+    });
+
+    try {
+      await OracleMemoryService.init();
+      assert.fail('Should have thrown an error');
+    } catch (e: any) {
+      assert.strictEqual(e.message, 'Simulated pool creation error');
+    }
+  });
+
+  test('should initialize Oracle Client in Thick Mode if ORACLE_LIB_DIR is set', async () => {
+    const initClientMock = mock.method(oracledb, 'initOracleClient', () => {});
+    mock.method(oracledb, 'createPool', async () => ({}));
+
+    process.env.ORACLE_LIB_DIR = '/mock/lib/dir';
+    process.env.ORACLE_WALLET_DIR = '/mock/wallet/dir';
+
+    await OracleMemoryService.init();
+
+    assert.strictEqual(initClientMock.mock.calls.length, 1);
+    assert.deepStrictEqual(initClientMock.mock.calls[0].arguments[0], {
+      libDir: '/mock/lib/dir',
+      configDir: '/mock/wallet/dir'
+    });
+
+    delete process.env.ORACLE_LIB_DIR;
+    delete process.env.ORACLE_WALLET_DIR;
   });
 });
