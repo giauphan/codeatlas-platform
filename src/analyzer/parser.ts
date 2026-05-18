@@ -678,57 +678,38 @@ export class CodeAnalyzer {
     }
   }
 
-  /**
-   * Traverses the AST recursively to extract modules, functions, classes, and variables.
-   * Also detects function calls and updates links.
-   */
-  private traverseAST(
-    node: any, 
-    currentModuleId: string, 
-    filePath: string, 
-    currentScopeId: string,
-    fileImports: Map<string, string>
-  ) {
-    if (!node) return;
+  private handleImportDeclaration(node: any, currentModuleId: string, filePath: string, fileImports: Map<string, string>) {
+    const importPath = node.source?.value;
+    if (typeof importPath === 'string') {
+      const targetModuleId = this.resolveImportPath(importPath, filePath);
+      this.addLink({
+        source: currentModuleId,
+        target: targetModuleId,
+        type: 'import'
+      });
 
-    if (Array.isArray(node)) {
-      node.forEach(child => this.traverseAST(child, currentModuleId, filePath, currentScopeId, fileImports));
-      return;
-    }
-
-    let nextScopeId = currentScopeId;
-
-    if (node.type === 'ImportDeclaration') {
-      const importPath = node.source?.value;
-      if (typeof importPath === 'string') {
-        const targetModuleId = this.resolveImportPath(importPath, filePath);
-        this.addLink({
-          source: currentModuleId,
-          target: targetModuleId,
-          type: 'import'
-        });
-        
-        if (node.specifiers) {
-          for (const specifier of node.specifiers) {
-            if (specifier.local?.name) {
-              fileImports.set(specifier.local.name, targetModuleId);
-            }
+      if (node.specifiers) {
+        for (const specifier of node.specifiers) {
+          if (specifier.local?.name) {
+            fileImports.set(specifier.local.name, targetModuleId);
           }
         }
-        
-        // Ensure target module node exists (even if it's an external module for now)
-        if (!this.nodes.has(targetModuleId)) {
-          this.addNode({
-            id: targetModuleId,
-            label: importPath.split('/').pop() || importPath,
-            type: 'module',
-            color: '#7209b7' // external module color
-          });
-        }
+      }
+
+      // Ensure target module node exists (even if it's an external module for now)
+      if (!this.nodes.has(targetModuleId)) {
+        this.addNode({
+          id: targetModuleId,
+          label: importPath.split('/').pop() || importPath,
+          type: 'module',
+          color: '#7209b7' // external module color
+        });
       }
     }
+  }
 
-    if (node.type === 'FunctionDeclaration' && node.id?.name) {
+  private handleFunctionDeclaration(node: any, currentModuleId: string, filePath: string, currentScopeId: string): string {
+    if (node.id?.name) {
       const funcId = `function:${currentModuleId}:${node.id.name}`;
       this.addNode({
         id: funcId,
@@ -743,10 +724,13 @@ export class CodeAnalyzer {
         target: funcId,
         type: 'contains'
       });
-      nextScopeId = funcId;
+      return funcId;
     }
-    
-    if (node.type === 'ClassDeclaration' && node.id?.name) {
+    return currentScopeId;
+  }
+
+  private handleClassDeclaration(node: any, currentModuleId: string, filePath: string, currentScopeId: string): string {
+    if (node.id?.name) {
       const classId = `class:${currentModuleId}:${node.id.name}`;
       this.addNode({
         id: classId,
@@ -761,10 +745,13 @@ export class CodeAnalyzer {
         target: classId,
         type: 'contains'
       });
-      nextScopeId = classId;
+      return classId;
     }
+    return currentScopeId;
+  }
 
-    if (node.type === 'MethodDefinition' && node.key?.name) {
+  private handleMethodDefinition(node: any, currentModuleId: string, filePath: string, currentScopeId: string): string {
+    if (node.key?.name) {
       const methodId = `function:${currentModuleId}:${node.key.name}`;
       this.addNode({
         id: methodId,
@@ -779,10 +766,13 @@ export class CodeAnalyzer {
         target: methodId,
         type: 'contains'
       });
-      nextScopeId = methodId;
+      return methodId;
     }
+    return currentScopeId;
+  }
 
-    if (node.type === 'VariableDeclarator' && node.id?.name) {
+  private handleVariableDeclarator(node: any, currentModuleId: string, filePath: string, currentScopeId: string): string {
+    if (node.id?.name) {
       const varName = node.id.name;
       
       if (node.init && (node.init.type === 'ArrowFunctionExpression' || node.init.type === 'FunctionExpression')) {
@@ -800,7 +790,7 @@ export class CodeAnalyzer {
           target: funcId,
           type: 'contains'
         });
-        nextScopeId = funcId;
+        return funcId;
       } else if (currentScopeId === currentModuleId) {
         // Top-level variable
         const varId = `variable:${currentModuleId}:${varName}`;
@@ -819,40 +809,76 @@ export class CodeAnalyzer {
         });
       }
     }
+    return currentScopeId;
+  }
 
-    if (node.type === 'CallExpression') {
-      let calleeName = '';
-      let objectName = '';
-      if (node.callee.type === 'Identifier') {
-        calleeName = node.callee.name;
-      } else if (node.callee.type === 'MemberExpression' && node.callee.property?.name) {
-        calleeName = node.callee.property.name;
-        if (node.callee.object?.name) {
-          objectName = node.callee.object.name;
-        }
+  private handleCallExpression(node: any, currentModuleId: string, currentScopeId: string, fileImports: Map<string, string>) {
+    let calleeName = '';
+    let objectName = '';
+    if (node.callee.type === 'Identifier') {
+      calleeName = node.callee.name;
+    } else if (node.callee.type === 'MemberExpression' && node.callee.property?.name) {
+      calleeName = node.callee.property.name;
+      if (node.callee.object?.name) {
+        objectName = node.callee.object.name;
+      }
+    }
+
+    if (calleeName) {
+      let targetId = '';
+      if (objectName && fileImports.has(objectName)) {
+        // It's a method call on an imported namespace/object
+        const targetModule = fileImports.get(objectName);
+        targetId = `function:${targetModule}:${calleeName}`;
+      } else if (fileImports.has(calleeName)) {
+        // It's a direct call to an imported function
+        const targetModule = fileImports.get(calleeName);
+        targetId = `function:${targetModule}:${calleeName}`;
+      } else {
+        // It's a local call
+        targetId = `function:${currentModuleId}:${calleeName}`;
       }
 
-      if (calleeName) {
-        let targetId = '';
-        if (objectName && fileImports.has(objectName)) {
-          // It's a method call on an imported namespace/object
-          const targetModule = fileImports.get(objectName);
-          targetId = `function:${targetModule}:${calleeName}`;
-        } else if (fileImports.has(calleeName)) {
-          // It's a direct call to an imported function
-          const targetModule = fileImports.get(calleeName);
-          targetId = `function:${targetModule}:${calleeName}`;
-        } else {
-          // It's a local call
-          targetId = `function:${currentModuleId}:${calleeName}`;
-        }
-        
-        this.addLink({
-          source: currentScopeId,
-          target: targetId,
-          type: 'call'
-        });
-      }
+      this.addLink({
+        source: currentScopeId,
+        target: targetId,
+        type: 'call'
+      });
+    }
+  }
+
+  /**
+   * Traverses the AST recursively to extract modules, functions, classes, and variables.
+   * Also detects function calls and updates links.
+   */
+  private traverseAST(
+    node: any,
+    currentModuleId: string,
+    filePath: string,
+    currentScopeId: string,
+    fileImports: Map<string, string>
+  ) {
+    if (!node) return;
+
+    if (Array.isArray(node)) {
+      node.forEach(child => this.traverseAST(child, currentModuleId, filePath, currentScopeId, fileImports));
+      return;
+    }
+
+    let nextScopeId = currentScopeId;
+
+    if (node.type === 'ImportDeclaration') {
+      this.handleImportDeclaration(node, currentModuleId, filePath, fileImports);
+    } else if (node.type === 'FunctionDeclaration') {
+      nextScopeId = this.handleFunctionDeclaration(node, currentModuleId, filePath, currentScopeId);
+    } else if (node.type === 'ClassDeclaration') {
+      nextScopeId = this.handleClassDeclaration(node, currentModuleId, filePath, currentScopeId);
+    } else if (node.type === 'MethodDefinition') {
+      nextScopeId = this.handleMethodDefinition(node, currentModuleId, filePath, currentScopeId);
+    } else if (node.type === 'VariableDeclarator') {
+      nextScopeId = this.handleVariableDeclarator(node, currentModuleId, filePath, currentScopeId);
+    } else if (node.type === 'CallExpression') {
+      this.handleCallExpression(node, currentModuleId, currentScopeId, fileImports);
     }
 
     Object.keys(node).forEach(key => {

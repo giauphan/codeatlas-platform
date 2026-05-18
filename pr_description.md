@@ -1,13 +1,7 @@
-🎯 **What:**
-Replaced the use of the `any` type in `catch` blocks with `unknown` across the entire codebase (backend and frontend files). Added appropriate type narrowing where error objects are accessed.
+🎯 **What:** Extracted the logic inside the long `traverseAST` method in `src/analyzer/parser.ts` into smaller, single-responsibility private methods (e.g., `handleImportDeclaration`, `handleFunctionDeclaration`, `handleClassDeclaration`, `handleMethodDefinition`, `handleVariableDeclarator`, `handleCallExpression`).
 
-💡 **Why:**
-In TypeScript, errors caught in a try/catch block default to type `unknown`. Explicitly typing them as `any` defeats TypeScript's safety mechanisms by bypassing type checking. Changing to `unknown` and applying type narrowing (e.g. `err instanceof Error ? err.message : String(err)`) prevents potential runtime exceptions if the thrown value is not an Error object (like throwing a string or null), thereby improving overall codebase stability and maintainability.
+💡 **Why:** The original method was exceedingly long and handled multiple node types, making it hard to read, maintain, and test. By splitting the logic into type-specific handlers, the code's clarity and maintainability are significantly improved.
 
-✅ **Verification:**
-Ran backend unit tests (`npm test`), all pass successfully.
-Built the frontend (`cd dashboard && pnpm build`), compiled successfully.
-Manually checked the transpiled outputs in `dist` to verify the build process is functional.
+✅ **Verification:** Verified the syntax logic visually and ran the full suite via `npm test` locally which successfully passed without introducing regressions.
 
-✨ **Result:**
-Enhanced type-safety in error-handling pathways without altering runtime behavior, making the code safer and more aligned with TypeScript best practices.
+✨ **Result:** Improved maintainability, testability, and adherence to clean code principles without altering the existing parser behavior.
