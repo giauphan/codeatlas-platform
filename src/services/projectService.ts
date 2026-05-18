@@ -98,46 +98,18 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
         } catch { /* skip */ }
       }
     } else if (isSystemAdmin) {
-      const homeDir = process.env.HOME || process.env.USERPROFILE || "/home";
       if (process.env.CODEATLAS_PROJECT_DIR) {
         searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
       }
       searchDirs.push(process.cwd());
-      try {
-        const homeDirs = fs.readdirSync(homeDir);
-        for (const d of homeDirs) {
-          if (d.startsWith(".")) continue;
-          const fullPath = path.join(homeDir, d);
-          try {
-            if (fs.statSync(fullPath).isDirectory()) {
-              searchDirs.push(fullPath);
-            }
-          } catch { /* skip */ }
-        }
-      } catch { /* skip */ }
     } else {
       return [];
     }
   } else {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || "/home";
-
     if (process.env.CODEATLAS_PROJECT_DIR) {
       searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
     }
     searchDirs.push(process.cwd());
-
-    try {
-      const homeDirs = fs.readdirSync(homeDir);
-      for (const d of homeDirs) {
-        if (d.startsWith(".")) continue;
-        const fullPath = path.join(homeDir, d);
-        try {
-          if (fs.statSync(fullPath).isDirectory()) {
-            searchDirs.push(fullPath);
-          }
-        } catch { /* skip */ }
-      }
-    } catch { /* skip */ }
   }
 
   const seen = new Set<string>();
@@ -238,48 +210,18 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
         } catch { /* skip */ }
       }
     } else if (isSystemAdmin) {
-      const homeDir = process.env.HOME || process.env.USERPROFILE || "/home";
       if (process.env.CODEATLAS_PROJECT_DIR) {
         searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
       }
       searchDirs.push(process.cwd());
-      try {
-        const homeDirs = await fs.promises.readdir(homeDir);
-        for (const d of homeDirs) {
-          if (d.startsWith(".")) continue;
-          const fullPath = path.join(homeDir, d);
-          try {
-            const stat = await fs.promises.stat(fullPath);
-            if (stat.isDirectory()) {
-              searchDirs.push(fullPath);
-            }
-          } catch { /* skip */ }
-        }
-      } catch { /* skip */ }
     } else {
       return [];
     }
   } else {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || "/home";
-
     if (process.env.CODEATLAS_PROJECT_DIR) {
       searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
     }
     searchDirs.push(process.cwd());
-
-    try {
-      const homeDirs = await fs.promises.readdir(homeDir);
-      for (const d of homeDirs) {
-        if (d.startsWith(".")) continue;
-        const fullPath = path.join(homeDir, d);
-        try {
-          const stat = await fs.promises.stat(fullPath);
-          if (stat.isDirectory()) {
-            searchDirs.push(fullPath);
-          }
-        } catch { /* skip */ }
-      }
-    } catch { /* skip */ }
   }
 
   const seen = new Set<string>();
