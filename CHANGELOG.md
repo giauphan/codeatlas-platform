@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.9] - 2026-05-18
+
+### Fixed / Added
+- **Multi-Tenant Firestore Isolation**: Fixed the telemetry linkage bug where projects with identical names from different users could overwrite each other in the Firestore database. Telemetry documents are now uniquely identified using `${tenantId}_${projectName}`.
+- **Single-Tenant Project Discovery**: Hardened the discovery service to scan the `projects/` sub-directory when `CODEATLAS_MULTI_TENANT` is disabled, allowing projects synced to the server in single-tenant environments to be fully indexed and accessible via MCP tools.
+
 ## [2.9.8] - 2026-05-18
 
 ### Changed / Removed

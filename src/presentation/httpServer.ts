@@ -161,7 +161,8 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
       const apps = getApps();
       if (apps.length) {
         const db = getFirestore();
-        await db.collection('projects').doc(cleanProjectName).set({
+        const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+        await db.collection('projects').doc(docId).set({
           name: cleanProjectName,
           path: projectDir,
           stats: (analysis as any).stats || analysis.entityCounts || {},
@@ -249,7 +250,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.9.4",
+        version: "2.9.9",
       },
       {
         capabilities: {

@@ -109,6 +109,18 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
     }
     searchDirs.push(process.cwd());
+    const projectsDir = path.join(process.cwd(), "projects");
+    if (fs.existsSync(projectsDir)) {
+      try {
+        const subDirs = fs.readdirSync(projectsDir);
+        for (const p of subDirs) {
+          const fullPath = path.join(projectsDir, p);
+          if (fs.statSync(fullPath).isDirectory()) {
+            searchDirs.push(fullPath);
+          }
+        }
+      } catch { /* skip */ }
+    }
   }
 
   const seen = new Set<string>();
@@ -212,6 +224,21 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
     }
     searchDirs.push(process.cwd());
+    const projectsDir = path.join(process.cwd(), "projects");
+    if (await fileExists(projectsDir)) {
+      try {
+        const subDirs = await fs.promises.readdir(projectsDir);
+        for (const p of subDirs) {
+          const fullPath = path.join(projectsDir, p);
+          try {
+            const stat = await fs.promises.stat(fullPath);
+            if (stat.isDirectory()) {
+              searchDirs.push(fullPath);
+            }
+          } catch { /* skip */ }
+        }
+      } catch { /* skip */ }
+    }
   }
 
   const seen = new Set<string>();
