@@ -34,14 +34,15 @@ if (!apps || apps.length === 0) {
     if (serviceAccountPath) {
       const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
       
-      if (!fs.existsSync(absolutePath)) {
+      if (fs.existsSync(absolutePath)) {
+        initializeApp({
+          credential: cert(absolutePath),
+          projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
+        });
+      } else {
         console.error(`Firebase Service Account not found at: ${absolutePath}`);
+        console.warn("Skipping Firebase Admin initialization with explicit cert since file was not found.");
       }
-
-      initializeApp({
-        credential: cert(absolutePath),
-        projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
-      });
     } else {
       console.warn("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Firebase Admin initialization skipped.");
     }

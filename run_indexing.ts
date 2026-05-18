@@ -16,22 +16,32 @@ interface AnalysisResultLocal {
 }
 
 // Initialize Firebase for Sync
+let db: any = null;
 const apps = getApps();
 if (!apps.length) {
   const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   if (serviceAccountPath) {
     const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
     if (fs.existsSync(absolutePath)) {
-      initializeApp({
-        credential: cert(absolutePath),
-        projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
-      });
+      try {
+        initializeApp({
+          credential: cert(absolutePath),
+          projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
+        });
+      } catch (e) {
+        console.error("Failed to initialize Firebase Admin:", e);
+      }
+    } else {
+      console.warn(`Firebase Service Account not found at: ${absolutePath}`);
     }
   } else {
     console.warn("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Firebase may not be initialized properly.");
   }
 }
-const db = getFirestore();
+
+if (getApps().length > 0) {
+  db = getFirestore();
+}
 
 async function run() {
   const projectPath = process.cwd();
@@ -53,19 +63,23 @@ async function run() {
   );
 
   // 2. Sync to Firestore (Enterprise Database)
-  try {
-    await db.collection('projects').doc(projectName).set({
-      name: projectName,
-      path: projectPath,
-      stats: result.stats || result.entityCounts || {},
-      lastIndexed: new Date().toISOString(),
-      nodesCount: result.graph.nodes.length,
-      linksCount: result.graph.links.length,
-      status: 'synced'
-    }, { merge: true });
-    console.log(`✅ Synced ${projectName} to Firestore.`);
-  } catch (e) {
-    console.error(`❌ Firestore Sync Failed: ${e}`);
+  if (db) {
+    try {
+      await db.collection('projects').doc(projectName).set({
+        name: projectName,
+        path: projectPath,
+        stats: result.stats || result.entityCounts || {},
+        lastIndexed: new Date().toISOString(),
+        nodesCount: result.graph.nodes.length,
+        linksCount: result.graph.links.length,
+        status: 'synced'
+      }, { merge: true });
+      console.log(`✅ Synced ${projectName} to Firestore.`);
+    } catch (e) {
+      console.error(`❌ Firestore Sync Failed: ${e}`);
+    }
+  } else {
+    console.log("⚠️ Firebase Admin not initialized. Skipping Firestore sync.");
   }
 
   console.log("Analysis complete! Data saved to .codeatlas/analysis.json");

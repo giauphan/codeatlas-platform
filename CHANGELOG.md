@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.4] - 2026-05-18
+
+### Fixed / Changed
+- **Robust Firebase & Firestore Initialization**: Guarded index.ts and run_indexing.ts to safely handle missing or deleted Firebase credentials. Checked for file existence on disk before passing Google application credentials paths to cert(), avoiding fatal unhandled initialization crashes on startup.
+- **Fail-Safe Background Auto-Indexing**: Wrapped the background auto-scanner CLI to dynamically resolve and load the Firestore instance only if Firebase Admin initialized successfully, allowing indexing to proceed locally even without Firestore sync capabilities.
+
 ## [2.9.3] - 2026-05-18
 
 ### Changed / Refactored
