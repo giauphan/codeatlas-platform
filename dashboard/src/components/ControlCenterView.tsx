@@ -21,6 +21,8 @@ interface ControlCenterProps {
   newKeyName: string;
   setNewKeyName: (name: string) => void;
   loading: boolean;
+  createdKey?: string | null;
+  clearCreatedKey?: () => void;
 }
 
 export const ControlCenterView: React.FC<ControlCenterProps> = ({ 
@@ -33,7 +35,9 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
   copiedId, 
   newKeyName, 
   setNewKeyName, 
-  loading 
+  loading,
+  createdKey,
+  clearCreatedKey
 }) => {
   return (
     <>
@@ -72,26 +76,48 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
               <motion.div key={k.id} layout className="glass-panel rim-lit" style={{ padding: '1.5rem', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ overflow: 'hidden' }}>
                   <div style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: '0.5rem' }}>{k.name}</div>
-                  <code style={{ color: 'var(--primary-neon)', fontSize: '0.95rem', background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.75rem', borderRadius: '6px' }}>{k.key}</code>
+                  <code style={{ color: 'var(--primary-neon)', fontSize: '0.95rem', background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.75rem', borderRadius: '6px' }}>{k.keyPreview || k.key}</code>
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button onClick={() => copyToClipboard(k.key, k.id)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', padding: '0.75rem', borderRadius: '12px', cursor: 'pointer', color: copiedId === k.id ? 'var(--primary-neon)' : '#fff' }}>
-                    {copiedId === k.id ? <Check size={20} /> : <Copy size={20} />}
-                  </button>
+                  {k.key && (
+                    <button onClick={() => copyToClipboard(k.key, k.id)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', padding: '0.75rem', borderRadius: '12px', cursor: 'pointer', color: copiedId === k.id ? 'var(--primary-neon)' : '#fff' }}>
+                      {copiedId === k.id ? <Check size={20} /> : <Copy size={20} />}
+                    </button>
+                  )}
                   <button onClick={() => deleteKey(k.id)} style={{ background: 'rgba(255, 75, 75, 0.05)', border: 'none', padding: '0.75rem', borderRadius: '12px', cursor: 'pointer', color: '#ff4b4b' }}><Trash2 size={20} /></button>
                 </div>
               </motion.div>
             ))}
           </div>
         </section>
-        <aside className="glass-panel" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.05)', alignSelf: 'start' }}>
-          <h3 className="tech-font" style={{ fontSize: '1.25rem', marginBottom: '1.5rem', fontWeight: 800 }}>GENERATE TOKEN</h3>
-          <form onSubmit={createKey} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <input type="text" className="glass-input" placeholder="Identifier (e.g. CI/CD Pipeline)" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} required />
-            <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontSize: '1rem', fontWeight: 800 }} disabled={loading}>
-              {loading ? <RefreshCw className="animate-spin" size={20} /> : 'CREATE ACCESS TOKEN'}
-            </button>
-          </form>
+        <aside style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {createdKey && (
+            <div className="glass-panel" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid #00FF94', alignSelf: 'start', background: 'rgba(0, 255, 148, 0.05)' }}>
+              <h3 className="tech-font" style={{ fontSize: '1.25rem', marginBottom: '1rem', fontWeight: 800, color: '#00FF94' }}>TOKEN GENERATED</h3>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                Please copy this key immediately. For security reasons, <strong>it will never be shown again</strong>.
+              </p>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <code style={{ flex: 1, color: '#fff', fontSize: '0.95rem', background: 'rgba(0,0,0,0.4)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,255,148,0.2)', wordBreak: 'break-all' }}>{createdKey}</code>
+                <button
+                  onClick={() => { copyToClipboard(createdKey, 'new_key'); if (clearCreatedKey) setTimeout(clearCreatedKey, 5000); }}
+                  style={{ background: '#00FF94', border: 'none', padding: '1rem', borderRadius: '12px', cursor: 'pointer', color: '#000' }}
+                >
+                  {copiedId === 'new_key' ? <Check size={20} /> : <Copy size={20} />}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="glass-panel" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.05)', alignSelf: 'start' }}>
+            <h3 className="tech-font" style={{ fontSize: '1.25rem', marginBottom: '1.5rem', fontWeight: 800 }}>GENERATE TOKEN</h3>
+            <form onSubmit={createKey} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <input type="text" className="glass-input" placeholder="Identifier (e.g. CI/CD Pipeline)" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} required />
+              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontSize: '1rem', fontWeight: 800 }} disabled={loading}>
+                {loading ? <RefreshCw className="animate-spin" size={20} /> : 'CREATE ACCESS TOKEN'}
+              </button>
+            </form>
+          </div>
         </aside>
       </div>
     </>

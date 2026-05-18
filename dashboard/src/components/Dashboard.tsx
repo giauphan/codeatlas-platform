@@ -235,18 +235,31 @@ export const Dashboard: React.FC = () => {
     };
   }, [user]);
 
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+
   const createKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newKeyName.trim()) return;
     setLoading(true);
     try {
+      const rawKey = 'ca_' + crypto.randomUUID().replace(/-/g, '');
+      const encoder = new TextEncoder();
+      const data = encoder.encode(rawKey);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const keyPreview = rawKey.substring(0, 6) + '...' + rawKey.substring(rawKey.length - 4);
+
       await addDoc(collection(db, 'users', user.uid, 'keys'), {
         name: newKeyName,
-        key: 'ca_' + crypto.randomUUID().replace(/-/g, ''),
+        keyHash,
+        keyPreview,
         tier: 'enterprise',
         createdAt: serverTimestamp()
       });
       setNewKeyName('');
+      setCreatedKey(rawKey);
     } catch (err) { 
       console.error(err); 
     } finally { 
@@ -303,6 +316,8 @@ export const Dashboard: React.FC = () => {
             newKeyName={newKeyName} 
             setNewKeyName={setNewKeyName} 
             loading={loading}
+            createdKey={createdKey}
+            clearCreatedKey={() => setCreatedKey(null)}
           />
         );
       case 'Knowledge Graph':

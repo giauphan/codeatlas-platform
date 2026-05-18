@@ -1,4 +1,5 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import * as crypto from "crypto";
 
 /**
  * Domain Interface for User Authentication details
@@ -36,10 +37,23 @@ export class FirestoreAuthRepository implements IAuthRepository {
   async verifyKey(apiKey: string): Promise<AuthData | null> {
     try {
       const db = this.getDb();
-      const keysSnapshot = await db.collectionGroup('keys')
-        .where('key', '==', apiKey)
+
+      // Hash the key using SHA-256 to compare with stored keyHash
+      const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+
+      // First try to find by keyHash
+      let keysSnapshot = await db.collectionGroup('keys')
+        .where('keyHash', '==', keyHash)
         .limit(1)
         .get();
+
+      // Fallback for backwards compatibility with unhashed keys
+      if (keysSnapshot.empty) {
+        keysSnapshot = await db.collectionGroup('keys')
+          .where('key', '==', apiKey)
+          .limit(1)
+          .get();
+      }
 
       if (keysSnapshot.empty) {
         return null;
