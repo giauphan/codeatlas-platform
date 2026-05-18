@@ -494,14 +494,28 @@ export class CodeAnalyzer {
     // Build a simple scope tracker from functions list
     const sortedFunctions = [...result.functions].sort((a, b) => a.line - b.line);
     for (const call of result.calls) {
-      // Find which function this call is inside
+      // Find which function this call is inside using binary search
       let enclosingScope = moduleId;
-      for (let fi = sortedFunctions.length - 1; fi >= 0; fi--) {
-        if (sortedFunctions[fi].line <= call.line) {
-          enclosingScope = `function:${moduleId}:${sortedFunctions[fi].name}`;
-          break;
+      let left = 0;
+      let right = sortedFunctions.length - 1;
+      let match = -1;
+
+      const callLine = call.line;
+
+      while (left <= right) {
+        const mid = (left + right) >> 1;
+        if (sortedFunctions[mid].line <= callLine) {
+          match = mid;
+          left = mid + 1;
+        } else {
+          right = mid - 1;
         }
       }
+
+      if (match !== -1) {
+        enclosingScope = `function:${moduleId}:${sortedFunctions[match].name}`;
+      }
+
       const targetId = `function:${moduleId}:${call.name}`;
       // Don't add self-referencing calls
       if (enclosingScope !== targetId) {
