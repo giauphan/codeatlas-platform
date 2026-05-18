@@ -4,6 +4,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import * as fs from "fs";
 import * as path from "path";
 import { getAuth } from "firebase-admin/auth";
+import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { checkAuth, logActivity } from "../services/authService.js";
 import { 
@@ -148,6 +149,69 @@ app.post("/api/reindex", authMiddleware, async (req, res) => {
     res.json({ success: true, stats: getStats(result as any) });
   } catch (err: unknown) {
     console.error(`[API] Re-index failed: ${(err instanceof Error ? err.message : String(err))}`);
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
+  }
+});
+
+// REST API: Securely sync local AST analysis from Local-First gateway and sync telemetry
+app.post("/api/projects/sync", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+    
+    if (!tenantId) {
+      return res.status(401).json({ error: "Unauthorized: Missing tenant identification" });
+    }
+    
+    const { projectName, analysis } = req.body;
+    if (!projectName || !analysis) {
+      return res.status(400).json({ error: "Missing projectName or analysis data" });
+    }
+    
+    // Clean project name to avoid directory traversal
+    const cleanProjectName = path.basename(projectName);
+    
+    // Resolve project directory on the VPS
+    let projectDir: string;
+    if (process.env.CODEATLAS_MULTI_TENANT === "true") {
+      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+      projectDir = path.join(tenantRoot, tenantId, cleanProjectName);
+    } else {
+      projectDir = path.join(process.cwd(), "projects", cleanProjectName);
+    }
+    
+    const codeatlasDir = path.join(projectDir, ".codeatlas");
+    if (!(await fileExists(codeatlasDir))) {
+      await fs.promises.mkdir(codeatlasDir, { recursive: true });
+    }
+    
+    const analysisPath = path.join(codeatlasDir, "analysis.json");
+    await fs.promises.writeFile(analysisPath, JSON.stringify(analysis, null, 2));
+    
+    // Securely sync telemetry / database stats on server-side
+    try {
+      const apps = getApps();
+      if (apps.length) {
+        const db = getFirestore();
+        await db.collection('projects').doc(cleanProjectName).set({
+          name: cleanProjectName,
+          path: projectDir,
+          stats: (analysis as any).stats || analysis.entityCounts || {},
+          lastIndexed: new Date().toISOString(),
+          nodesCount: analysis.graph?.nodes?.length || 0,
+          linksCount: analysis.graph?.links?.length || 0,
+          status: 'synced',
+          tenantId: tenantId
+        }, { merge: true });
+        console.error(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
+      }
+    } catch (e) {
+      console.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
+    }
+    
+    res.json({ success: true, projectDir });
+  } catch (err: unknown) {
+    console.error(`[Sync API] Secure sync failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });

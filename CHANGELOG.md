@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.5] - 2026-05-18
+
+### Changed / Removed / Security
+- **Strict Client-Side Security Hardening**: Completely removed sensitive Firestore, Firebase Admin, and Oracle database integrations/schema definitions from the distributed local MCP package (`codeatlas-mcp-enterprise`).
+- **REST Sync Strategy**: Refactored background auto-scans to securely POST local AST `.codeatlas/analysis.json` data to the secure remote VPS server using standard Bearer Token HTTPS endpoints (`/api/projects/sync`), preventing exposure of database credentials and internal database structures in local installations.
+- **In-Process Watcher Pipeline**: Refactored the file watcher to run indexing dynamically in-process on change events, eliminating manual subprocesses and configuration overhead.
+- **Dependency Reduction**: Removed heavy native `oracledb` and `firebase-admin` packages from the client node dependencies, resulting in a lightweight, robust, compilation-error-free, and enterprise-secure client setup.
+
 ## [2.9.4] - 2026-05-18
 
 ### Fixed / Changed
