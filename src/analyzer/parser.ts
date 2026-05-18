@@ -604,12 +604,26 @@ export class CodeAnalyzer {
     }
 
     // Method calls — only link to functions already discovered in the graph
+    const functionNodesByName = new Map<string, string[]>();
+    for (const key of this.nodes.keys()) {
+      if (key.startsWith('function:')) {
+        const lastColonIdx = key.lastIndexOf(':');
+        if (lastColonIdx !== -1) {
+          const funcName = key.substring(lastColonIdx + 1);
+          let arr = functionNodesByName.get(funcName);
+          if (!arr) {
+            arr = [];
+            functionNodesByName.set(funcName, arr);
+          }
+          arr.push(key);
+        }
+      }
+    }
+
     for (const call of result.calls) {
       // Search all known function nodes to find a match
-      const possibleTargets = Array.from(this.nodes.keys()).filter(
-        id => id.startsWith('function:') && id.endsWith(`:${call.name}`)
-      );
-      if (possibleTargets.length > 0) {
+      const possibleTargets = functionNodesByName.get(call.name);
+      if (possibleTargets && possibleTargets.length > 0) {
         this.addLink({ source: moduleId, target: possibleTargets[0], type: 'call' });
       }
     }
