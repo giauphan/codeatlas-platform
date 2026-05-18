@@ -1,6 +1,0 @@
-[
-  {
-    "description": "Replaced execFile with spawn in index.ts to fix command injection vulnerability.",
-    "timestamp": "2023-10-27T10:00:00.000Z"
-  }
-]
