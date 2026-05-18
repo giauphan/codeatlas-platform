@@ -427,6 +427,7 @@ export class CodeAnalyzer {
       }
     }
 
+    const reversedClasses = [...result.classes].reverse();
     for (const func of result.functions) {
       const funcId = `function:${moduleId}:${func.name}`;
       this.addNode({
@@ -441,8 +442,7 @@ export class CodeAnalyzer {
       let linkSourceId = moduleId;
       if (func.indent && func.indent > 0) {
         // Find the most recent class defined before this function
-        const parentClass = [...result.classes]
-          .reverse()
+        const parentClass = reversedClasses
           .find(cls => cls.line < func.line);
         if (parentClass) {
           linkSourceId = `class:${moduleId}:${parentClass.name}`;
