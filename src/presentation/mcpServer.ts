@@ -10,7 +10,6 @@ import {
   fileExists, 
   AnalysisResultLocal 
 } from "../services/projectService.js";
-import { CodeAnalyzer } from "../analyzer/parser.js";
 import { OracleMemoryService } from "../oracleDatabase.js";
 import { SecurityScanner } from "../securityScanner.js";
 
@@ -27,39 +26,12 @@ export function registerTools(server: McpServer) {
       const auth = await checkAuth();
       await logActivity(auth, "analyze", { path: projectPath, maxFiles });
       
-      if (!(await fileExists(projectPath))) {
-        return { content: [{ type: "text" as const, text: `Error: Directory does not exist: ${projectPath}` }] };
-      }
-
-      try {
-        const analyzer = new CodeAnalyzer(projectPath, maxFiles || 5000);
-        const result = await analyzer.analyzeProject();
-
-        // Ensure .codeatlas directory exists
-        const codeatlasDir = path.join(projectPath, ".codeatlas");
-        if (!(await fileExists(codeatlasDir))) {
-          await fs.promises.mkdir(codeatlasDir, { recursive: true });
-        }
-
-        // Save analysis.json
-        await fs.promises.writeFile(
-          path.join(codeatlasDir, "analysis.json"),
-          JSON.stringify(result, null, 2)
-        );
-
-        const stats = getStats(result as AnalysisResultLocal);
-        const summary = `Analysis complete for ${path.basename(projectPath)}:
-- Modules: ${stats.modules}
-- Functions: ${stats.functions}
-- Classes: ${stats.classes}
-- Dependencies: ${stats.dependencies}
-- Total files: ${result.totalFilesAnalyzed}
-- Files skipped: ${result.totalFilesSkipped}`;
-
-        return { content: [{ type: "text" as const, text: summary }] };
-      } catch (error: unknown) {
-        return { content: [{ type: "text" as const, text: `Analysis failed: ${(error instanceof Error ? error.message : String(error))}` }] };
-      }
+      return { 
+        content: [{ 
+          type: "text" as const, 
+          text: `Local file indexing is disabled on this remote cloud API server. Please use your local 'codeatlas-enterprise' client package to index and sync your codebase AST.` 
+        }] 
+      };
     }
   );
 

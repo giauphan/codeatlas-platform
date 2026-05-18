@@ -15,7 +15,6 @@ import {
 } from "../services/projectService.js";
 import { authStorage } from "../context.js";
 import { registerTools } from "./mcpServer.js";
-import { CodeAnalyzer } from "../analyzer/parser.js";
 
 // Setup Express app to serve as both MCP SSE and REST API
 export const app = express();
@@ -117,40 +116,9 @@ app.get("/api/analysis", authMiddleware, async (req, res) => {
 
 // REST API: Trigger re-index
 app.post("/api/reindex", authMiddleware, async (req, res) => {
-  try {
-    const auth = authStorage.getStore();
-    const tenantId = auth ? auth.uid : undefined;
-    const bodyProjectDir = req.body.projectDir as string | undefined;
-
-    let projectPath = bodyProjectDir || process.env.CODEATLAS_PROJECT_DIR || process.cwd();
-
-    // In multi-tenant mode, strictly validate that they own/can access this project directory!
-    if (process.env.CODEATLAS_MULTI_TENANT === "true" && tenantId && tenantId !== "admin") {
-      const userProjects = await discoverProjectsAsync(tenantId);
-      const match = userProjects.find(p => p.dir === projectPath);
-      if (!match) {
-        return res.status(403).json({ error: "Access denied: You do not own or have access to this project directory" });
-      }
-      projectPath = match.dir;
-    }
-
-    console.error(`[API] Triggering re-index for: ${projectPath}`);
-    
-    const analyzer = new CodeAnalyzer(projectPath, 5000);
-    const result = await analyzer.analyzeProject();
-    
-    const codeatlasDir = path.join(projectPath, ".codeatlas");
-    if (!(await fileExists(codeatlasDir))) {
-      await fs.promises.mkdir(codeatlasDir, { recursive: true });
-    }
-    
-    await fs.promises.writeFile(path.join(codeatlasDir, "analysis.json"), JSON.stringify(result, null, 2));
-    
-    res.json({ success: true, stats: getStats(result as any) });
-  } catch (err: unknown) {
-    console.error(`[API] Re-index failed: ${(err instanceof Error ? err.message : String(err))}`);
-    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
-  }
+  res.status(400).json({ 
+    error: "Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-enterprise client to synchronize AST data." 
+  });
 });
 
 // REST API: Securely sync local AST analysis from Local-First gateway and sync telemetry

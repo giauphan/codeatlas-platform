@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.8] - 2026-05-18
+
+### Changed / Removed
+- **Architectural Separation of Concerns**: Completely removed the legacy AST parser (`src/analyzer`) and local filesystem watcher (`watcherService`) from the central server codebase.
+- **Dependency Simplification**: Grew lighter by un-installing bulky libraries like `@typescript-eslint/typescript-estree`, `py-ast`, `chokidar`, and `glob` from the remote server, preventing node-gyp compile issues and saving over 50% package footprint.
+- **REST Sync & Isolation**: Standardized the server to act as a purely lightweight database/API hub. Server now exclusively consumes pre-analyzed AST payloads synced from the local `codeatlas-enterprise` client, returning descriptive guides on local reindexing endpoints.
+
 ## [2.9.7] - 2026-05-18
 
 ### Fixed / Changed

@@ -1,4 +1,4 @@
-import { AnalysisResult } from "./analyzer/types.js";
+import { AnalysisResult, GraphNode } from "./services/types.js";
 import * as path from "path";
 
 export interface SecurityFinding {
@@ -20,7 +20,7 @@ export class SecurityScanner {
 
     // 1. Detect Hardcoded Secrets
     const secretKeywords = ["api_key", "secret", "password", "token", "private_key", "access_key"];
-    nodes.forEach(node => {
+    nodes.forEach((node: GraphNode) => {
       if (node.type === "variable") {
         const name = node.label.toLowerCase();
         if (secretKeywords.some(k => name.includes(k))) {
@@ -37,7 +37,7 @@ export class SecurityScanner {
 
     // 2. Detect Unsafe Functions (eval, exec, etc.)
     const unsafeFuncs = ["eval", "exec", "system", "child_process", "spawn", "shell_exec"];
-    nodes.forEach(node => {
+    nodes.forEach((node: GraphNode) => {
       if (node.type === "function") {
         const name = node.label.toLowerCase();
         if (unsafeFuncs.includes(name)) {
@@ -55,7 +55,7 @@ export class SecurityScanner {
     // 3. Detect Potential SQL Injection
     // Look for functions containing "query" or "execute" that are connected to variables
     // (Simplified heuristic for static analysis)
-    nodes.forEach(node => {
+    nodes.forEach((node: GraphNode) => {
       if (node.type === "function" && (node.label.includes("Query") || node.label.includes("execute"))) {
         // If it's a dynamic query (heuristic)
         findings.push({

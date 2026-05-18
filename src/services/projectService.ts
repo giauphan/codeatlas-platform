@@ -2,8 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { CodeAnalyzer } from "../analyzer/parser.js";
-import { AnalysisResult } from "../analyzer/types.js";
+import { AnalysisResult } from "./types.js";
 import { authStorage } from "../context.js";
 
 export interface AnalysisResultLocal extends AnalysisResult {
@@ -161,22 +160,13 @@ export function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; p
   }
 
   try {
-    const codeatlasDir = path.dirname(target.analysisPath);
     if (!fs.existsSync(target.analysisPath)) {
-      if (!fs.existsSync(codeatlasDir)) {
-        fs.mkdirSync(codeatlasDir, { recursive: true });
-      }
-      console.log(`[Auto-Scan] 🔄 Creating .codeatlas directory and scanning project dynamically (sync): ${target.dir}`);
-      const indexingScript = path.join(process.cwd(), 'run_indexing.ts');
-      // Import child_process dynamically
-      import("child_process").then(({ execSync }) => {
-        execSync(`npx tsx "${indexingScript}"`, { cwd: target!.dir, stdio: 'inherit' });
-      });
+      return null;
     }
     const data = fs.readFileSync(target.analysisPath, "utf-8");
     return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
   } catch (err) {
-    console.error(`[Auto-Scan] ❌ Dynamic sync scanning failed: ${err}`);
+    console.error(`[Server] Failed to read analysis file: ${err}`);
     return null;
   }
 }
@@ -273,48 +263,14 @@ export async function loadAnalysisAsync(projectDir?: string): Promise<{ analysis
   }
 
   try {
-    const codeatlasDir = path.dirname(target.analysisPath);
     if (!await fileExists(target.analysisPath)) {
-      if (!await fileExists(codeatlasDir)) {
-        await fs.promises.mkdir(codeatlasDir, { recursive: true });
-      }
-      console.log(`[Auto-Scan] 🔄 Scanning project dynamically (async): ${target.dir}`);
-      const analyzer = new CodeAnalyzer(target.dir, 5000);
-      const result = await analyzer.analyzeProject();
-      
-      // Save locally
-      await fs.promises.writeFile(
-        target.analysisPath,
-        JSON.stringify(result, null, 2)
-      );
-      
-      // Sync to Firestore in the background asynchronously
-      try {
-        const apps = getApps();
-        if (apps.length) {
-          const db = getFirestore();
-          await db.collection('projects').doc(target.name).set({
-            name: target.name,
-            path: target.dir,
-            stats: (result as any).stats || result.entityCounts || {},
-            lastIndexed: new Date().toISOString(),
-            nodesCount: result.graph.nodes.length,
-            linksCount: result.graph.links.length,
-            status: 'synced'
-          }, { merge: true });
-          console.log(`[Auto-Scan] ✅ Synced ${target.name} to Firestore.`);
-        }
-      } catch (e) {
-        console.error(`[Auto-Scan] ❌ Firestore Sync Failed: ${e}`);
-      }
-      
-      return { analysis: result, projectName: target.name, projectDir: target.dir };
+      return null;
     }
 
     const data = await fs.promises.readFile(target.analysisPath, "utf-8");
     return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
   } catch (err) {
-    console.error(`[Auto-Scan] ❌ Dynamic async scanning failed: ${err}`);
+    console.error(`[Server] Failed to read analysis file async: ${err}`);
     return null;
   }
 }

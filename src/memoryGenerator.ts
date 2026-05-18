@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { AnalysisResult } from './analyzer/types.js';
+import { AnalysisResult, GraphNode } from './services/types.js';
 
 /**
  * Auto-generates .agents/memory/ folder from analysis data.
@@ -21,8 +21,8 @@ export function generateMemory(workspaceRoot: string, analysis: AnalysisResult):
 
   const nodes = analysis.graph.nodes;
   const links = analysis.graph.links;
-  const nodeMap = new Map(nodes.map((n: any) => [n.id, n]));
-  const nodeNameMap = new Map(nodes.map((n: any) => [n.id, n.label]));
+  const nodeMap = new Map<string, GraphNode>(nodes.map((n: GraphNode) => [n.id, n]));
+  const nodeNameMap = new Map<string, string>(nodes.map((n: GraphNode) => [n.id, n.label]));
 
   const modules = nodes.filter((n: any) => n.type === 'module' && n.filePath);
   const classes = nodes.filter((n: any) => n.type === 'class');

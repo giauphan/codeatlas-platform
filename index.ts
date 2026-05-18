@@ -21,7 +21,6 @@ import {
   loadAnalysisAsync, 
   fileExists 
 } from "./src/services/projectService.js";
-import { startWatcher } from "./src/services/watcherService.js";
 
 // Load environment variables
 dotenv.config();
@@ -53,29 +52,6 @@ if (!apps || apps.length === 0) {
 
 // Start server
 async function main() {
-  startWatcher();
-
-  // Trigger background scan of all discovered projects on startup
-  discoverProjectsAsync().then(async (projectsList) => {
-    console.error(`[Auto-Scan] 🔍 Discovered ${projectsList.length} potential projects on startup.`);
-    for (const p of projectsList) {
-      const hasAnalysis = await fileExists(p.analysisPath);
-      if (!hasAnalysis) {
-        console.error(`[Auto-Scan] 🔄 Triggering initial background scan for: ${p.name}`);
-        // Run in background without awaiting, so server startup is instantaneous!
-        loadAnalysisAsync(p.dir).then((loaded) => {
-          if (loaded) {
-            console.error(`[Auto-Scan] ✅ Initial background scan complete for: ${p.name}`);
-          }
-        }).catch((err) => {
-          console.error(`[Auto-Scan] ❌ Initial background scan failed for ${p.name}: ${err}`);
-        });
-      }
-    }
-  }).catch((err) => {
-    console.error(`[Auto-Scan] ❌ Failed to discover projects for initial scan: ${err}`);
-  });
-
   const port = process.env.PORT ? parseInt(process.env.PORT) : null;
 
   if (port) {
