@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.7] - 2026-05-18
+
+### Fixed / Changed
+- **Stdio Stream Isolation**: Migrated all raw `console.log` statements in the client package (`codeatlas-enterprise`) to `console.error`. This prevents logs and diagnostics from polluting `stdout`, which is strictly reserved for JSON-RPC frame framing, resolving `invalid character '=' looking for beginning of value` errors during server initialization.
+
 ## [2.9.6] - 2026-05-18
 
 ### Fixed / Changed
