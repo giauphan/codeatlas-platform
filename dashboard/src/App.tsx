@@ -54,7 +54,7 @@ function App() {
 
       sessionStorage.setItem('ca_api_key', key.trim());
       setUser({ uid: 'api-key-session', email: 'api-key-user@codeatlas.local', isApiKeySession: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Token validation failed:", err);
       throw err;
     }

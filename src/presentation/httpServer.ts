@@ -63,8 +63,8 @@ export const authMiddleware = async (req: express.Request, res: express.Response
         next();
       });
       return;
-    } catch (err: any) {
-      res.status(401).json({ error: `Invalid Firebase ID Token: ${err.message}` });
+    } catch (err: unknown) {
+      res.status(401).json({ error: `Invalid Firebase ID Token: ${(err instanceof Error ? err.message : String(err))}` });
       return;
     }
   }
@@ -79,8 +79,8 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     authStorage.run(auth, () => {
       next();
     });
-  } catch (err: any) {
-    res.status(401).json({ error: err.message });
+  } catch (err: unknown) {
+    res.status(401).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 };
 
@@ -91,8 +91,8 @@ app.get("/api/projects", authMiddleware, async (req, res) => {
     const tenantId = auth ? auth.uid : undefined;
     const projects = await discoverProjectsAsync(tenantId);
     res.json(projects.map(p => ({ name: p.name, dir: p.dir, modifiedAt: p.modifiedAt })));
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -109,8 +109,8 @@ app.get("/api/analysis", authMiddleware, async (req, res) => {
     } else {
       res.json(loaded);
     }
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -146,9 +146,9 @@ app.post("/api/reindex", authMiddleware, async (req, res) => {
     await fs.promises.writeFile(path.join(codeatlasDir, "analysis.json"), JSON.stringify(result, null, 2));
     
     res.json({ success: true, stats: getStats(result as any) });
-  } catch (err: any) {
-    console.error(`[API] Re-index failed: ${err.message}`);
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    console.error(`[API] Re-index failed: ${(err instanceof Error ? err.message : String(err))}`);
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -312,8 +312,8 @@ app.get("/api/docs/quick-setup", (req, res) => {
     }
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.sendFile(docPath);
-  } catch (e: any) {
-    res.status(500).send(e.message);
+  } catch (e: unknown) {
+    res.status(500).send((e instanceof Error ? e.message : String(e)));
   }
 });
 

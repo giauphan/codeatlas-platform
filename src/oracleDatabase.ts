@@ -43,7 +43,7 @@ export class OracleMemoryService {
         });
         
         console.log("✅ Oracle 26ai DB Pool initialized successfully (Thick Mode)");
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("❌ Failed to initialize Oracle DB pool:", err instanceof Error ? err.message : String(err));
         throw err;
       }
@@ -63,7 +63,7 @@ export class OracleMemoryService {
       const sql = `BEGIN ADMIN.codeatlas_ctx_pkg.set_tenant(:tenantId); END;`;
       await connection.execute(sql, { tenantId });
       console.log(`[Oracle RLS] Security Context set for tenant: ${tenantId}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Oracle RLS] Failed to set security context:", err instanceof Error ? err.message : String(err));
       // Do not block execution if package/context is not installed (prevents local dev crashes)
       if (process.env.NODE_ENV === "production") {

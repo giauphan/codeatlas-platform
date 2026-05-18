@@ -57,8 +57,8 @@ export function registerTools(server: McpServer) {
 - Files skipped: ${result.totalFilesSkipped}`;
 
         return { content: [{ type: "text" as const, text: summary }] };
-      } catch (error: any) {
-        return { content: [{ type: "text" as const, text: `Analysis failed: ${error.message}` }] };
+      } catch (error: unknown) {
+        return { content: [{ type: "text" as const, text: `Analysis failed: ${(error instanceof Error ? error.message : String(error))}` }] };
       }
     }
   );
@@ -1238,8 +1238,8 @@ export function registerTools(server: McpServer) {
         };
 
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (err: any) {
-        return { content: [{ type: "text" as const, text: `Oracle Graph Reasoning failed: ${err.message}` }] };
+      } catch (err: unknown) {
+        return { content: [{ type: "text" as const, text: `Oracle Graph Reasoning failed: ${(err instanceof Error ? err.message : String(err))}` }] };
       }
     }
   );
@@ -1289,10 +1289,10 @@ export function registerTools(server: McpServer) {
             adminInsights: isEnterprise ? `Project health is ${securityScore > 80 ? 'EXCELLENT' : 'NEEDS ATTENTION'}. Priority: ${riskLevel}.` : null,
             details: { vulnerabilities }
           });
-        } catch (err: any) {
+        } catch (err: unknown) {
           scanResults.push({ 
             project: p.name, 
-            error: `Scan failed: ${err.message}` 
+            error: `Scan failed: ${(err instanceof Error ? err.message : String(err))}`
           });
         }
       }

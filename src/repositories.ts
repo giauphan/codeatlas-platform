@@ -71,7 +71,7 @@ export class FirestoreAuthRepository implements IAuthRepository {
         keyId: keyDoc.id,
         expires: 0 // Cache expiry will be handled by the cached wrapper
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[FirestoreAuthRepository] Verification error: ${msg}`);
       throw new Error(`Authentication store connection failed: ${msg}`);
@@ -85,7 +85,7 @@ export class FirestoreAuthRepository implements IAuthRepository {
       await keyRef.update({
         lastUsed: FieldValue.serverTimestamp()
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[FirestoreAuthRepository] Update last used error: ${msg}`);
     }
@@ -121,7 +121,7 @@ export class FirestoreActivityLogger implements IActivityLogger {
           lastActivity: FieldValue.serverTimestamp()
         }
       }, { merge: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[FirestoreActivityLogger] Failed to log activity: ${msg}`);
     }

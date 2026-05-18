@@ -37,7 +37,7 @@ export async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: s
 export async function logActivity(auth: { uid: string; keyId: string }, tool: string, params: any, success: boolean = true) {
   try {
     await logTelemetryUseCase.execute(auth.uid, auth.keyId, tool, params, success);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to log activity:", err instanceof Error ? err.message : String(err));
   }
 }
