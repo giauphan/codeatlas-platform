@@ -155,4 +155,32 @@ describe('Clean Architecture Repositories & Use Cases', () => {
       }
     );
   });
+
+  test('FirestoreAuthRepository.verifyKey should handle errors thrown during get() call', async () => {
+    const repo = new FirestoreAuthRepository();
+    // Override the private getDb method to simulate a Firestore get() failure
+    (repo as any).getDb = () => {
+      return {
+        collectionGroup: () => ({
+          where: () => ({
+            limit: () => ({
+              get: async () => {
+                throw new Error("Simulated Firestore get() Error");
+              }
+            })
+          })
+        })
+      };
+    };
+
+    await assert.rejects(
+      async () => {
+        await repo.verifyKey('test_key_123');
+      },
+      (err: any) => {
+        assert.strictEqual(err.message, "Authentication store connection failed: Simulated Firestore get() Error");
+        return true;
+      }
+    );
+  });
 });
