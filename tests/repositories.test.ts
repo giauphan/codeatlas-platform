@@ -5,7 +5,8 @@ import {
   LogTelemetryUseCase, 
   IAuthRepository, 
   IActivityLogger, 
-  AuthData 
+  AuthData,
+  FirestoreAuthRepository
 } from '../src/repositories.js';
 
 describe('Clean Architecture Repositories & Use Cases', () => {
@@ -131,5 +132,27 @@ describe('Clean Architecture Repositories & Use Cases', () => {
     assert.strictEqual(entry.tool, 'get_insights');
     assert.deepStrictEqual(entry.params, { project: 'test_project' });
     assert.strictEqual(entry.success, true);
+  });
+
+  test('FirestoreAuthRepository.verifyKey should handle and rethrow database errors', async () => {
+    const repo = new FirestoreAuthRepository();
+    // Override the private getDb method to simulate a Firestore connection failure
+    (repo as any).getDb = () => {
+      return {
+        collectionGroup: () => {
+          throw new Error("Simulated Firestore Error");
+        }
+      };
+    };
+
+    await assert.rejects(
+      async () => {
+        await repo.verifyKey('test_key_123');
+      },
+      (err: any) => {
+        assert.strictEqual(err.message, "Authentication store connection failed: Simulated Firestore Error");
+        return true;
+      }
+    );
   });
 });
