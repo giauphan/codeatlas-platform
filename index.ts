@@ -239,7 +239,7 @@ function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectN
 const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.7.4",
+    version: "2.8.0",
   },
   {
     capabilities: {

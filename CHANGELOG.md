@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.0] - 2026-05-18
+
+### Added / Changed
+- **Secure Cryptographic API Key Hashing**: Implemented cryptographic SHA-256 API key hashing on both the browser front-end (via Web Crypto `crypto.subtle`) and the Node backend server (via Node `crypto`). Plain-text API keys are never persisted in the Firestore database; only the cryptographically hashed string (`keyHash`) and a public key preview (`keyPreview`) are stored.
+- **Single-Exposure Secret Copying**: Configured the dashboard UI to display the newly generated API key exactly once upon creation for secure copying, after which the key is hidden forever.
+- **Unhashed Legacy Backwards Compatibility**: Implemented a robust fallback layer in the authentication store verification flow to support legacy unhashed API keys seamlessly.
+- **PR Merge & Branch Lifecycle Management**: Safely integrated and merged Pull Request #3 (`feat: Store and verify API keys using cryptographic hashing`) into `main`. Deleted the remote PR branch `hash-api-keys-5588962574063343813` and pruned the local environment.
+
 ## [2.7.4] - 2026-05-17
 
 ### Fixed
