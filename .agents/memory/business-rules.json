@@ -1,0 +1,5 @@
+[
+  {
+    "description": "Always use spawn with explicit argument arrays instead of exec or execFile when executing dynamic shell commands to prevent command injection."
+  }
+]
