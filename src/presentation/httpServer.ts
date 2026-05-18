@@ -162,7 +162,32 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
       if (apps.length) {
         const db = getFirestore();
         const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
-        await db.collection('projects').doc(docId).set({
+        const docRef = db.collection('projects').doc(docId);
+
+        // Runtime migration fallback: if docId is different from cleanProjectName, check if a legacy doc exists to migrate historical telemetry
+        if (tenantId) {
+          const legacyDocId = cleanProjectName;
+          const legacyRef = db.collection('projects').doc(legacyDocId);
+          try {
+            const [newDoc, legacyDoc] = await Promise.all([
+              docRef.get(),
+              legacyRef.get()
+            ]);
+            if (legacyDoc.exists && !newDoc.exists) {
+              const legacyData = legacyDoc.data() || {};
+              await docRef.set({
+                ...legacyData,
+                tenantId: tenantId
+              }, { merge: true });
+              await legacyRef.delete();
+              console.error(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
+            }
+          } catch (migrateErr) {
+            console.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
+          }
+        }
+
+        await docRef.set({
           name: cleanProjectName,
           path: projectDir,
           stats: (analysis as any).stats || analysis.entityCounts || {},
@@ -250,7 +275,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.9.9",
+        version: "2.9.10",
       },
       {
         capabilities: {

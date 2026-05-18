@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.10] - 2026-05-18
+
+### Added / Migration
+- **Runtime Telemetry Migration Fallback**: Added automatic backward-compatible runtime migration of legacy Firestore documents. When syncing under a tenant, the server automatically detects legacy non-prefixed documents, safely migrates and merges their historical telemetry data into the new isolated `${tenantId}_${projectName}` documents, and cleans up legacy duplicate documents.
+
 ## [2.9.9] - 2026-05-18
 
 ### Fixed / Added
