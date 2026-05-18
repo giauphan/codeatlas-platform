@@ -76,12 +76,12 @@ export class OracleMemoryService {
    * Tier 1: Episodic JSON - Stores business events (Business Rules / Change Logs)
    */
   static async saveEpisodicMemory(project: string, eventType: "BUSINESS_RULE" | "CHANGE_LOG", data: any) {
+    let connection;
     try {
       const pool = await this.init();
-      const connection = await pool.getConnection();
+      connection = await pool.getConnection();
       await this.setSessionContext(connection);
       
-      try {
         const id = `${project}_${eventType}_${Date.now()}`;
         const auth = authStorage.getStore();
         const tenantId = auth ? auth.uid : "admin";
@@ -99,11 +99,17 @@ export class OracleMemoryService {
           tenantId
         }, { autoCommit: true });
         
-      } finally {
-        await connection.close();
-      }
+
     } catch (err) {
       console.error("Error saving episodic memory:", err instanceof Error ? err.message : String(err));
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error("Error closing connection:", closeErr);
+        }
+      }
     }
   }
 
@@ -111,12 +117,12 @@ export class OracleMemoryService {
    * Tier 2: Semantic Memory - Stores code entity embeddings
    */
   static async saveSemanticMemory(project: string, entities: any[]) {
+    let connection;
     try {
       const pool = await this.init();
-      const connection = await pool.getConnection();
+      connection = await pool.getConnection();
       await this.setSessionContext(connection);
       
-      try {
         const auth = authStorage.getStore();
         const tenantId = auth ? auth.uid : "admin";
 
@@ -141,11 +147,17 @@ export class OracleMemoryService {
 
         await connection.executeMany(sql, binds, { autoCommit: true });
         
-      } finally {
-        await connection.close();
-      }
+
     } catch (err) {
       console.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error("Error closing connection:", closeErr);
+        }
+      }
     }
   }
 
@@ -153,12 +165,12 @@ export class OracleMemoryService {
    * Tier 3: Relational Memory - Stores relationships (Knowledge Graph)
    */
   static async saveRelationalMemory(project: string, links: any[]) {
+    let connection;
     try {
       const pool = await this.init();
-      const connection = await pool.getConnection();
+      connection = await pool.getConnection();
       await this.setSessionContext(connection);
       
-      try {
         const auth = authStorage.getStore();
         const tenantId = auth ? auth.uid : "admin";
 
@@ -180,11 +192,17 @@ export class OracleMemoryService {
 
         await connection.executeMany(sql, binds, { autoCommit: true });
         
-      } finally {
-        await connection.close();
-      }
+
     } catch (err) {
       console.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error("Error closing connection:", closeErr);
+        }
+      }
     }
   }
 
@@ -192,12 +210,12 @@ export class OracleMemoryService {
    * Query using AI Vector Search (Native Oracle 26ai feature)
    */
   static async searchSemanticMemory(project: string, query: string, limit: number = 5) {
+    let connection;
     try {
       const pool = await this.init();
-      const connection = await pool.getConnection();
+      connection = await pool.getConnection();
       await this.setSessionContext(connection);
       
-      try {
         const sql = `
           SELECT entity_name, entity_type, file_path, content
           FROM ai_semantic_memory
@@ -209,12 +227,18 @@ export class OracleMemoryService {
         const result = await connection.execute(sql, { project, query, limit });
         return result.rows;
         
-      } finally {
-        await connection.close();
-      }
+
     } catch (err) {
       console.error("Error searching semantic memory:", err instanceof Error ? err.message : String(err));
       return [];
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error("Error closing connection:", closeErr);
+        }
+      }
     }
   }
 
@@ -223,12 +247,12 @@ export class OracleMemoryService {
    * Utilizing SQL Property Graph Queries (Oracle 23ai+)
    */
   static async detectArchitecturalSmells(project: string) {
+    let connection;
     try {
       const pool = await this.init();
-      const connection = await pool.getConnection();
+      connection = await pool.getConnection();
       await this.setSessionContext(connection);
       
-      try {
         const smells: any = {
           circularDependencies: [],
           godObjects: [],
@@ -281,12 +305,18 @@ export class OracleMemoryService {
 
         return smells;
         
-      } finally {
-        await connection.close();
-      }
+
     } catch (err) {
       console.error("Error detecting smells:", err instanceof Error ? err.message : String(err));
       return null;
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error("Error closing connection:", closeErr);
+        }
+      }
     }
   }
 }
