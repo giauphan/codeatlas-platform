@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.3] - 2026-05-18
+
+### Changed / Refactored
+- **Clean Architecture Refactoring**: Decoupled the massive server file by separating presentation logic and application services cleanly. Express routing, security middleware, and Server-Sent Events (SSE) session management are extracted into the `src/presentation/httpServer.ts` adapter layer.
+- **Obsolete Tool Registrations Purged**: Purged duplicate code registration logic within the main server file in favor of the unified tool mappings defined inside the `src/presentation/mcpServer.ts` adapter layer.
+- **Thin Composition Root**: Index.ts is now streamlined to serve as a pure composition root that initializes application-wide configurations, triggers background scans, and spins up the selected transport (SSE or Stdio).
+
+## [2.9.2] - 2026-05-18
+
+### Changed / Added
+- **Automated Directory Discovery & Dynamic Codebase Auto-Scanning**: Removed the strict requirement for a pre-generated `.codeatlas/analysis.json` file during project discovery. Relaxed `discoverProjects` / `discoverProjectsAsync` to automatically identify any developer project directory by checking for standard metadata heuristics (such as `package.json`, `.git`, `.codeatlas`, or `README.md`).
+- **Dynamic Background Codebase Scanning**: Implemented an automated background scanner using `CodeAnalyzer`. If a project lacks a pre-existing analysis file, the server dynamically instantiates a parser, indexes the project, saves the resulting JSON locally, and optionally syncs telemetry metrics to Firestore asynchronously on the fly.
+- **Server Startup Indexing**: Added non-blocking background discovery and initial scanning on server startup (`main()`) to automatically index all candidate projects asynchronously without introducing boot delays.
+
+## [2.9.1] - 2026-05-18
+
+### Changed / Fixed
+- **Asynchronous File System Operations**: Fully refactored `loadAnalysis` and `discoverProjects` to non-blocking promised-based asynchronous counterparts (`loadAnalysisAsync` and `discoverProjectsAsync`).
+- **Asynchronous MCP Tools**: Updated all codebase intelligence tools (`sync_system_memory`, `trace_feature_flow`, `generate_feature_flow_diagram`, `detect_architectural_smells`, `scan_enterprise_vulnerabilities`) to asynchronously query project data and perform non-blocking filesystem I/O operations under high concurrent load.
+- **Dynamic SSE Server Versioning Alignment**: Bumped the version of dynamic session-specific MCP server instances to `"2.9.1"` in Server-Sent Events (SSE) mode, ensuring complete version alignment across dynamic and static server endpoints.
+
 ## [2.8.0] - 2026-05-18
 
 ### Added / Changed
