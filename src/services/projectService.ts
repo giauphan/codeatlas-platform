@@ -82,7 +82,8 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
       : (tenantId === "admin");
 
-    if (tenantId && !isSystemAdmin) {
+    // 1. If tenantId is provided, always add the tenant's own projects
+    if (tenantId) {
       const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
       const userDir = path.join(tenantRoot, tenantId);
       if (fs.existsSync(userDir)) {
@@ -96,12 +97,37 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
           }
         } catch { /* skip */ }
       }
-    } else if (isSystemAdmin) {
+    }
+
+    // 2. If system admin, also add system-wide and all tenants' directories
+    if (isSystemAdmin) {
       if (process.env.CODEATLAS_PROJECT_DIR) {
         searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
       }
       searchDirs.push(process.cwd());
-    } else {
+
+      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+      if (fs.existsSync(tenantRoot)) {
+        try {
+          const tenants = fs.readdirSync(tenantRoot);
+          for (const t of tenants) {
+            if (t === tenantId) continue;
+            const tDir = path.join(tenantRoot, t);
+            if (fs.statSync(tDir).isDirectory()) {
+              const tProjects = fs.readdirSync(tDir);
+              for (const p of tProjects) {
+                const fullPath = path.join(tDir, p);
+                if (fs.statSync(fullPath).isDirectory()) {
+                  searchDirs.push(fullPath);
+                }
+              }
+            }
+          }
+        } catch { /* skip */ }
+      }
+    }
+
+    if (!tenantId && !isSystemAdmin) {
       return [];
     }
   } else {
@@ -194,7 +220,8 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
       : (tenantId === "admin");
 
-    if (tenantId && !isSystemAdmin) {
+    // 1. If tenantId is provided, always add the tenant's own projects
+    if (tenantId) {
       const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
       const userDir = path.join(tenantRoot, tenantId);
       if (await fileExists(userDir)) {
@@ -211,12 +238,43 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           }
         } catch { /* skip */ }
       }
-    } else if (isSystemAdmin) {
+    }
+
+    // 2. If system admin, also add system-wide and all tenants' directories
+    if (isSystemAdmin) {
       if (process.env.CODEATLAS_PROJECT_DIR) {
         searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
       }
       searchDirs.push(process.cwd());
-    } else {
+
+      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+      if (await fileExists(tenantRoot)) {
+        try {
+          const tenants = await fs.promises.readdir(tenantRoot);
+          for (const t of tenants) {
+            if (t === tenantId) continue;
+            const tDir = path.join(tenantRoot, t);
+            try {
+              const tStat = await fs.promises.stat(tDir);
+              if (tStat.isDirectory()) {
+                const tProjects = await fs.promises.readdir(tDir);
+                for (const p of tProjects) {
+                  const fullPath = path.join(tDir, p);
+                  try {
+                    const stat = await fs.promises.stat(fullPath);
+                    if (stat.isDirectory()) {
+                      searchDirs.push(fullPath);
+                    }
+                  } catch { /* skip */ }
+                }
+              }
+            } catch { /* skip */ }
+          }
+        } catch { /* skip */ }
+      }
+    }
+
+    if (!tenantId && !isSystemAdmin) {
       return [];
     }
   } else {

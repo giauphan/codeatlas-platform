@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.11] - 2026-05-18
+
+### Fixed / Added
+- **Multi-Tenant Access Isolation Hierarchy**: Standardized project discovery for Multi-Tenant mode. Standard tenants can only discover projects within their own `tenants/{tenantId}/` workspace. System Administrators can view both their own user tenant projects, system-wide projects, and all projects synced across all other tenant workspaces.
+
 ## [2.9.10] - 2026-05-18
 
 ### Added / Migration
