@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "echo 'No tests for dashboard'"
+    "test": "vitest run"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -19,10 +19,15 @@
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.5.2",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "jsdom": "^24.0.0",
     "typescript": "^5.2.2",
-    "vite": "^5.2.11"
+    "vite": "^5.2.11",
+    "vitest": "^4.1.6"
   }
 }
