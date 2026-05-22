@@ -2,13 +2,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
+import { getApps } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 import { checkAuth, logActivity } from "../services/authService.js";
 import { 
   discoverProjectsAsync, 
   loadAnalysisAsync, 
   getStats, 
   fileExists, 
-  AnalysisResultLocal 
+  AnalysisResultLocal,
+  registerProject
 } from "../services/projectService.js";
 import { OracleMemoryService } from "../oracleDatabase.js";
 import { SecurityScanner } from "../securityScanner.js";
@@ -26,11 +29,12 @@ export function registerTools(server: McpServer) {
       const auth = await checkAuth();
       await logActivity(auth, "analyze", { path: projectPath, maxFiles });
       
-      return { 
-        content: [{ 
-          type: "text" as const, 
-          text: `Local file indexing is disabled on this remote cloud API server. Please use your local 'codeatlas-enterprise' client package to index and sync your codebase AST.` 
-        }] 
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-enterprise client to synchronize AST data.`
+        }],
+        isError: true
       };
     }
   );
@@ -1292,7 +1296,7 @@ export function registerTools(server: McpServer) {
 export const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.9.11",
+    version: "2.10.1",
   },
   {
     capabilities: {

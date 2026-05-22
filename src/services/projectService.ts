@@ -1,5 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as https from "https";
+import * as os from "os";
 import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { AnalysisResult } from "./types.js";
@@ -71,6 +73,128 @@ export async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
+let onProjectLoadedCallback: ((dir: string) => void) | null = null;
+export function registerOnProjectLoaded(cb: (dir: string) => void) {
+  onProjectLoadedCallback = cb;
+}
+
+export function registerProject(dir: string): void {
+  try {
+    const homeDir = os.homedir();
+    const configDir = path.join(homeDir, ".codeatlas");
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    const regPath = path.join(configDir, "registered_projects.json");
+    let projects: string[] = [];
+    if (fs.existsSync(regPath)) {
+      try {
+        const data = fs.readFileSync(regPath, "utf-8");
+        projects = JSON.parse(data);
+      } catch {
+        projects = [];
+      }
+    }
+    if (!Array.isArray(projects)) {
+      projects = [];
+    }
+    const absPath = path.resolve(dir);
+    if (!projects.includes(absPath)) {
+      projects.push(absPath);
+      fs.writeFileSync(regPath, JSON.stringify(projects, null, 2));
+      console.error(`[Project-Registry] 📝 Registered new project: ${absPath}`);
+    }
+  } catch (err) {
+    console.error(`[Project-Registry] ❌ Failed to register project: ${err}`);
+  }
+}
+
+export function scanForCodeatlasProjects(parentDir: string): string[] {
+  const discovered: string[] = [];
+  try {
+    if (!fs.existsSync(parentDir) || !fs.statSync(parentDir).isDirectory()) {
+      return [];
+    }
+    
+    // If the directory itself contains .codeatlas, it is a project
+    if (fs.existsSync(path.join(parentDir, ".codeatlas"))) {
+      discovered.push(path.resolve(parentDir));
+      return discovered;
+    }
+    
+    // Otherwise, scan subdirectories up to 2 levels deep
+    const entries = fs.readdirSync(parentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
+        const subPath = path.join(parentDir, entry.name);
+        if (fs.existsSync(path.join(subPath, ".codeatlas"))) {
+          discovered.push(path.resolve(subPath));
+        } else {
+          // Check 2nd level
+          try {
+            const subEntries = fs.readdirSync(subPath, { withFileTypes: true });
+            for (const subEntry of subEntries) {
+              if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+                const subSubPath = path.join(subPath, subEntry.name);
+                if (fs.existsSync(path.join(subSubPath, ".codeatlas"))) {
+                  discovered.push(path.resolve(subSubPath));
+                }
+              }
+            }
+          } catch { /* skip */ }
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${err}`);
+  }
+  return discovered;
+}
+
+export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<string[]> {
+  const discovered: string[] = [];
+  try {
+    if (!(await fileExists(parentDir))) {
+      return [];
+    }
+    const parentStat = await fs.promises.stat(parentDir);
+    if (!parentStat.isDirectory()) {
+      return [];
+    }
+    
+    if (await fileExists(path.join(parentDir, ".codeatlas"))) {
+      discovered.push(path.resolve(parentDir));
+      return discovered;
+    }
+    
+    const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
+        const subPath = path.join(parentDir, entry.name);
+        if (await fileExists(path.join(subPath, ".codeatlas"))) {
+          discovered.push(path.resolve(subPath));
+        } else {
+          // Check 2nd level
+          try {
+            const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
+            for (const subEntry of subEntries) {
+              if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+                const subSubPath = path.join(subPath, subEntry.name);
+                if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                  discovered.push(path.resolve(subSubPath));
+                }
+              }
+            }
+          } catch { /* skip */ }
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[Project-Discovery] ❌ Failed async scan for .codeatlas projects: ${err}`);
+  }
+  return discovered;
+}
+
 export function discoverProjects(tenantId?: string): { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
   const searchDirs: string[] = [];
@@ -134,7 +258,16 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
     if (process.env.CODEATLAS_PROJECT_DIR) {
       searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
     }
-    searchDirs.push(process.cwd());
+    
+    // Dynamically search process.cwd() for any projects configured with .codeatlas
+    const localProjects = scanForCodeatlasProjects(process.cwd());
+    searchDirs.push(...localProjects);
+    
+    // Fallback to process.cwd() if no subprojects were found with .codeatlas configuration
+    if (!searchDirs.includes(process.cwd())) {
+      searchDirs.push(process.cwd());
+    }
+
     const projectsDir = path.join(process.cwd(), "projects");
     if (fs.existsSync(projectsDir)) {
       try {
@@ -147,6 +280,22 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
         }
       } catch { /* skip */ }
     }
+
+    // Load globally registered projects
+    try {
+      const homeDir = os.homedir();
+      const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
+      if (fs.existsSync(regPath)) {
+        const registered = JSON.parse(fs.readFileSync(regPath, "utf-8"));
+        if (Array.isArray(registered)) {
+          for (const dir of registered) {
+            if (fs.existsSync(dir)) {
+              searchDirs.push(dir);
+            }
+          }
+        }
+      }
+    } catch { /* skip */ }
   }
 
   const seen = new Set<string>();
@@ -177,7 +326,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
   return projects;
 }
 
-export function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; projectName: string; projectDir: string } | null {
+export function loadAnalysis(projectDir?: string, force = false): { analysis: AnalysisResult; projectName: string; projectDir: string } | null {
   const auth = authStorage.getStore();
   const tenantId = auth ? auth.uid : undefined;
   
@@ -187,24 +336,41 @@ export function loadAnalysis(projectDir?: string): { analysis: AnalysisResult; p
   let target: { name: string; dir: string; analysisPath: string; modifiedAt: Date } | undefined = projects[0];
 
   if (projectDir) {
-    const match = projects.find(
-      (p) => p.dir === projectDir || p.name.toLowerCase() === projectDir.toLowerCase()
+    const absPath = path.resolve(projectDir);
+    let match = projects.find(
+      (p) => p.dir === absPath || p.name.toLowerCase() === projectDir.toLowerCase()
     );
     if (match) {
       target = match;
+      registerProject(target.dir);
+    } else if (fs.existsSync(absPath) && isProjectDirectory(absPath)) {
+      registerProject(absPath);
+      const reDiscovered = discoverProjects(tenantId);
+      match = reDiscovered.find((p) => p.dir === absPath);
+      if (match) {
+        target = match;
+      } else {
+        return null;
+      }
     } else {
       return null;
     }
+  } else if (target) {
+    registerProject(target.dir);
   }
 
   try {
+    if (onProjectLoadedCallback) {
+      onProjectLoadedCallback(target.dir);
+    }
     if (!fs.existsSync(target.analysisPath)) {
+      console.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
       return null;
     }
     const data = fs.readFileSync(target.analysisPath, "utf-8");
     return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
   } catch (err) {
-    console.error(`[Server] Failed to read analysis file: ${err}`);
+    console.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
     return null;
   }
 }
@@ -281,7 +447,16 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     if (process.env.CODEATLAS_PROJECT_DIR) {
       searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
     }
-    searchDirs.push(process.cwd());
+    
+    // Dynamically search process.cwd() for any projects configured with .codeatlas
+    const localProjects = await scanForCodeatlasProjectsAsync(process.cwd());
+    searchDirs.push(...localProjects);
+    
+    // Fallback to process.cwd() if no subprojects were found with .codeatlas configuration
+    if (!searchDirs.includes(process.cwd())) {
+      searchDirs.push(process.cwd());
+    }
+
     const projectsDir = path.join(process.cwd(), "projects");
     if (await fileExists(projectsDir)) {
       try {
@@ -297,6 +472,23 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
         }
       } catch { /* skip */ }
     }
+
+    // Load globally registered projects
+    try {
+      const homeDir = os.homedir();
+      const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
+      if (await fileExists(regPath)) {
+        const data = await fs.promises.readFile(regPath, "utf-8");
+        const registered = JSON.parse(data);
+        if (Array.isArray(registered)) {
+          for (const dir of registered) {
+            if (await fileExists(dir)) {
+              searchDirs.push(dir);
+            }
+          }
+        }
+      }
+    } catch { /* skip */ }
   }
 
   const seen = new Set<string>();
@@ -327,7 +519,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
   return projects;
 }
 
-export async function loadAnalysisAsync(projectDir?: string): Promise<{ analysis: AnalysisResult; projectName: string; projectDir: string } | null> {
+export async function loadAnalysisAsync(projectDir?: string, force = false): Promise<{ analysis: AnalysisResult; projectName: string; projectDir: string } | null> {
   const auth = authStorage.getStore();
   const tenantId = auth ? auth.uid : undefined;
   
@@ -337,25 +529,42 @@ export async function loadAnalysisAsync(projectDir?: string): Promise<{ analysis
   let target: { name: string; dir: string; analysisPath: string; modifiedAt: Date } | undefined = projects[0];
 
   if (projectDir) {
-    const match = projects.find(
-      (p) => p.dir === projectDir || p.name.toLowerCase() === projectDir.toLowerCase()
+    const absPath = path.resolve(projectDir);
+    let match = projects.find(
+      (p) => p.dir === absPath || p.name.toLowerCase() === projectDir.toLowerCase()
     );
     if (match) {
       target = match;
+      registerProject(target.dir);
+    } else if (await fileExists(absPath) && await isProjectDirectoryAsync(absPath)) {
+      registerProject(absPath);
+      const reDiscovered = await discoverProjectsAsync(tenantId);
+      match = reDiscovered.find((p) => p.dir === absPath);
+      if (match) {
+        target = match;
+      } else {
+        return null;
+      }
     } else {
       return null;
     }
+  } else if (target) {
+    registerProject(target.dir);
   }
 
   try {
+    if (onProjectLoadedCallback) {
+      onProjectLoadedCallback(target.dir);
+    }
     if (!await fileExists(target.analysisPath)) {
+      console.error(`[Auto-Scan] ❌ Dynamic async scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
       return null;
     }
 
     const data = await fs.promises.readFile(target.analysisPath, "utf-8");
     return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
   } catch (err) {
-    console.error(`[Server] Failed to read analysis file async: ${err}`);
+    console.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
     return null;
   }
 }

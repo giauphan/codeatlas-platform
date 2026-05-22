@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { generateMemory } from '../src/memoryGenerator.js';
-import { AnalysisResult, GraphData } from '../src/analyzer/types.js';
+import { AnalysisResult, GraphData } from '../src/types.js';
 
 describe('Memory Generator', () => {
   const workspaceRoot = path.join(process.cwd(), 'tests', 'mock_workspace');
@@ -33,7 +33,6 @@ describe('Memory Generator', () => {
       classes: 1,
       dependencies: 1,
       circularDeps: 0,
-      deadCode: 0,
     },
     totalFilesAnalyzed: 2,
     totalFilesSkipped: 0,

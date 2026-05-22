@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { SecurityScanner } from '../src/securityScanner.js';
-import { AnalysisResult } from '../src/analyzer/types.js';
+import { AnalysisResult } from '../src/types.js';
 
 describe('SecurityScanner', () => {
   test('should detect hardcoded secrets', () => {

@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.10.1] - 2026-05-22
+
+### Removed
+- **Unnecessary Files & Legacy Components**: Completely removed the legacy AST parser (`src/analyzer`) and local filesystem watcher (`watcherService`) from the central server codebase, delegating these local-first tasks entirely to the client enterprise MCP repo.
+
+## [2.10.0] - 2026-05-22
+
+### Added
+- **Automated Workspace Indexing and Watching**: Hooked in the `watcherService` and `CodeAnalyzer` into the server's lifecycle. The server now auto-scans active project workspaces for `.codeatlas` markers and watches for code changes in real-time, automatically triggering re-indexing on file edits.
+- **Dynamic Project Discovery**: Restored scanning logic for globally registered projects (~/.codeatlas/registered_projects.json) and nested directories to ensure that all workspace paths are indexed without manual server configuration.
+- **Triggerable Analyze MCP Tool**: Refactored the `analyze` tool to run the dynamic `CodeAnalyzer`, write the AST payload locally, and synchronize the telemetry to Firestore and CodeAtlas Cloud VPS on demand.
+
 ## [2.9.11] - 2026-05-18
 
 ### Fixed / Added
