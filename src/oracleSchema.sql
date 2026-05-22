@@ -1,20 +1,20 @@
--- Cấu trúc Database cho Tiered Memory Architecture (Oracle 26ai)
--- Hỗ trợ Bảo mật SaaS Multi-Tenant bằng Oracle Virtual Private Database (VPD)
+-- Database structure for Tiered Memory Architecture (Oracle 26ai)
+-- Supports SaaS Multi-Tenant Security using Oracle Virtual Private Database (VPD)
 
--- 1. Tầng Episodic Memory (Lưu sự kiện, JSON Relational Duality)
+-- 1. Episodic Memory Tier (Stores events, JSON Relational Duality)
 CREATE TABLE ai_episodic_memory (
     id VARCHAR2(255) PRIMARY KEY,
     project_name VARCHAR2(255) NOT NULL,
     event_type VARCHAR2(50) NOT NULL,
     event_data JSON, -- Oracle Native JSON datatype
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    tenant_id VARCHAR2(255) DEFAULT 'admin' NOT NULL -- ID khách hàng (uid từ Firebase Auth)
+    tenant_id VARCHAR2(255) DEFAULT 'admin' NOT NULL -- Client ID (uid from Firebase Auth)
 );
 
 CREATE INDEX idx_episodic_tenant_proj ON ai_episodic_memory(tenant_id, project_name);
 
--- 2. Tầng Semantic Memory (Kho sự kiện logic)
--- Chứa Vector Embedding để dùng AI Vector Search RAG
+-- 2. Semantic Memory Tier (Stores logical events and code entities)
+-- Contains Vector Embeddings for AI Vector Search RAG
 CREATE TABLE ai_semantic_memory (
     id VARCHAR2(255) PRIMARY KEY,
     project_name VARCHAR2(255) NOT NULL,
@@ -22,25 +22,25 @@ CREATE TABLE ai_semantic_memory (
     entity_name VARCHAR2(255),
     file_path VARCHAR2(1000),
     content CLOB,
-    embedding VECTOR(1536, FLOAT32), -- Vector 1536 chiều, FLOAT32 (OpenAI hoặc tương tự)
+    embedding VECTOR(4096, FLOAT32), -- 4096-dimensional Vector, FLOAT32 (NVIDIA nv-embed-v1)
     tenant_id VARCHAR2(255) DEFAULT 'admin' NOT NULL
 );
 
 CREATE INDEX idx_semantic_tenant_proj ON ai_semantic_memory(tenant_id, project_name);
 
--- 3. Tầng Relational / Knowledge Graph (Temporal Property Graph)
+-- 3. Relational / Knowledge Graph Tier (Temporal Property Graph)
 CREATE TABLE ai_relational_memory (
     source_id VARCHAR2(255),
     target_id VARCHAR2(255),
     project_name VARCHAR2(255),
     relationship_type VARCHAR2(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP, -- Phục vụ mô hình Temporal (Zep)
+    expires_at TIMESTAMP, -- For Temporal Graph model (Zep)
     tenant_id VARCHAR2(255) DEFAULT 'admin' NOT NULL,
     PRIMARY KEY(source_id, target_id, relationship_type, tenant_id)
 );
 
--- Tuỳ chọn: Kích hoạt Property Graph cho Oracle 23ai/26ai
+-- Optional: Enable Property Graph for Oracle 23ai/26ai
 CREATE PROPERTY GRAPH ai_knowledge_graph
     VERTEX TABLES (
         ai_semantic_memory KEY(id)
@@ -54,13 +54,13 @@ CREATE PROPERTY GRAPH ai_knowledge_graph
     );
 
 --------------------------------------------------------------------------------
--- CẤU HÌNH ORACLE VIRTUAL PRIVATE DATABASE (VPD) CHO SAAS MULTI-TENANCY
+-- ORACLE VIRTUAL PRIVATE DATABASE (VPD) CONFIGURATION FOR SAAS MULTI-TENANCY
 --------------------------------------------------------------------------------
 
--- Bước 1: Khởi tạo Security Context để lưu trữ tenant_id cho connection session hiện tại
+-- Step 1: Initialize Security Context to store tenant_id for the current connection session
 -- CREATE OR REPLACE CONTEXT codeatlas_ctx USING ADMIN.codeatlas_ctx_pkg;
 
--- Bước 2: Tạo Package gán context tenant_id
+-- Step 2: Create Package to set tenant_id context
 /*
 CREATE OR REPLACE PACKAGE codeatlas_ctx_pkg IS
     PROCEDURE set_tenant(p_tenant_id IN VARCHAR2);
@@ -76,7 +76,7 @@ END;
 /
 */
 
--- Bước 3: Tạo Policy Function trả về SQL predicate lọc dữ liệu
+-- Step 3: Create Policy Function returning the SQL predicate for row-level filtering
 /*
 CREATE OR REPLACE FUNCTION get_tenant_predicate(
     p_schema IN VARCHAR2,
@@ -84,24 +84,24 @@ CREATE OR REPLACE FUNCTION get_tenant_predicate(
 ) RETURN VARCHAR2 IS
     v_tenant_id VARCHAR2(255);
 BEGIN
-    -- Lấy tenant_id của session hiện tại
+    -- Get tenant_id of the current session
     v_tenant_id := SYS_CONTEXT('codeatlas_ctx', 'tenant_id');
     
-    -- Nếu chưa thiết lập Context, mặc định chặn truy cập để an toàn tuyệt đối
+    -- If context is not set, default to block access for maximum security
     IF v_tenant_id IS NULL THEN
         RETURN '1=0';
     ELSE
-        -- Tự động chèn điều kiện lọc ngầm: tenant_id = 'USER_UID'
+        -- Automatically append row-filtering condition: tenant_id = 'USER_UID'
         RETURN 'tenant_id = ''' || v_tenant_id || '''';
     END IF;
 END;
 /
 */
 
--- Bước 4: Đăng ký Security Policy cho 3 bảng dữ liệu chính
+-- Step 4: Register Security Policy for the 3 main tables
 /*
 BEGIN
-    -- 1. Bảng Episodic Memory
+    -- 1. Episodic Memory Table
     DBMS_RLS.ADD_POLICY(
         object_schema   => 'ADMIN',
         object_name     => 'ai_episodic_memory',
@@ -112,7 +112,7 @@ BEGIN
         update_check    => TRUE
     );
     
-    -- 2. Bảng Semantic Memory
+    -- 2. Semantic Memory Table
     DBMS_RLS.ADD_POLICY(
         object_schema   => 'ADMIN',
         object_name     => 'ai_semantic_memory',
@@ -123,7 +123,7 @@ BEGIN
         update_check    => TRUE
     );
     
-    -- 3. Bảng Relational Memory
+    -- 3. Relational Memory Table
     DBMS_RLS.ADD_POLICY(
         object_schema   => 'ADMIN',
         object_name     => 'ai_relational_memory',

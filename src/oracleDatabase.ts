@@ -114,6 +114,102 @@ export class OracleMemoryService {
   }
 
   /**
+   * Generates an embedding vector using NVIDIA NIM Embeddings API
+   */
+  private static async generateNvidiaEmbedding(text: string, inputType: 'passage' | 'query'): Promise<number[] | null> {
+    const apiKey = process.env.NVIDIA_API_KEY;
+    if (!apiKey) {
+      console.warn("[NVIDIA SDK] NVIDIA_API_KEY is not set. Skipping embedding generation.");
+      return null;
+    }
+
+    try {
+      const response = await fetch("https://integrate.api.nvidia.com/v1/embeddings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "nvidia/nv-embed-v1",
+          input: [text],
+          input_type: inputType,
+          encoding_format: "float",
+          truncate: "NONE"
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[NVIDIA SDK] API returned error ${response.status}: ${errText}`);
+        return null;
+      }
+
+      const data: any = await response.json();
+      if (data && data.data && data.data[0] && data.data[0].embedding) {
+        return data.data[0].embedding;
+      }
+      return null;
+    } catch (error) {
+      console.error("[NVIDIA SDK] Connection error to NVIDIA Embeddings API:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Generates embeddings in batches using NVIDIA NIM Embeddings API
+   */
+  private static async generateNvidiaEmbeddingsBatch(texts: string[], inputType: 'passage' | 'query'): Promise<number[][] | null> {
+    const apiKey = process.env.NVIDIA_API_KEY;
+    if (!apiKey) {
+      console.warn("[NVIDIA SDK] NVIDIA_API_KEY is not set. Skipping embedding generation.");
+      return null;
+    }
+
+    const results: number[][] = [];
+    const chunkSize = 50; // process 50 texts at a time to prevent payload size issues
+
+    for (let i = 0; i < texts.length; i += chunkSize) {
+      const chunk = texts.slice(i, i + chunkSize);
+      try {
+        const response = await fetch("https://integrate.api.nvidia.com/v1/embeddings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: "nvidia/nv-embed-v1",
+            input: chunk,
+            input_type: inputType,
+            encoding_format: "float",
+            truncate: "NONE"
+          })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error(`[NVIDIA SDK] API returned error ${response.status}: ${errText}`);
+          return null;
+        }
+
+        const data: any = await response.json();
+        if (data && data.data) {
+          const embeddings = data.data.map((item: any) => item.embedding);
+          results.push(...embeddings);
+        } else {
+          return null;
+        }
+      } catch (error) {
+        console.error("[NVIDIA SDK] Connection error to NVIDIA Embeddings API:", error);
+        return null;
+      }
+    }
+
+    return results;
+  }
+
+  /**
    * Tier 2: Semantic Memory - Stores code entity embeddings
    */
   static async saveSemanticMemory(project: string, entities: any[]) {
@@ -128,24 +224,32 @@ export class OracleMemoryService {
 
         const sql = `
           MERGE INTO ai_semantic_memory trg
-          USING (SELECT :id AS id, :project AS project_name, :type AS entity_type, :name AS entity_name, :path AS file_path, :content AS content, :tenantId AS tenant_id FROM DUAL) src
+          USING (SELECT :id AS id, :project AS project_name, :type AS entity_type, :name AS entity_name, :path AS file_path, :content AS content, :embedding AS embedding, :tenantId AS tenant_id FROM DUAL) src
           ON (trg.id = src.id)
-          WHEN MATCHED THEN UPDATE SET trg.content = src.content
-          WHEN NOT MATCHED THEN INSERT (id, project_name, entity_type, entity_name, file_path, content, tenant_id)
-          VALUES (src.id, src.project_name, src.entity_type, src.entity_name, src.file_path, src.content, src.tenant_id)
+          WHEN MATCHED THEN UPDATE SET trg.content = src.content, trg.embedding = src.embedding
+          WHEN NOT MATCHED THEN INSERT (id, project_name, entity_type, entity_name, file_path, content, embedding, tenant_id)
+          VALUES (src.id, src.project_name, src.entity_type, src.entity_name, src.file_path, src.content, src.embedding, src.tenant_id)
         `;
         
-        const binds = entities.map(e => ({
-          id: `${project}_${e.id}`,
-          project,
-          type: e.type,
-          name: e.label,
-          path: e.filePath || "",
-          content: `Entity: ${e.label}, Type: ${e.type}, Path: ${e.filePath}`,
-          tenantId
-        }));
+        // Generate embeddings for the entities chunk-by-chunk
+        const contents = entities.map(e => `Entity: ${e.label}, Type: ${e.type}, Path: ${e.filePath}`);
+        const embeddings = await this.generateNvidiaEmbeddingsBatch(contents, 'passage');
 
-        await connection.executeMany(sql, binds, { autoCommit: true });
+        const binds = entities.map((e, index) => {
+          const embeddingVector = embeddings && embeddings[index] ? embeddings[index] : null;
+          return {
+            id: `${project}_${e.id}`,
+            project,
+            type: e.type,
+            name: e.label,
+            path: e.filePath || "",
+            content: contents[index],
+            embedding: embeddingVector ? new Float32Array(embeddingVector) : null,
+            tenantId
+          };
+        });
+
+        await connection.executeMany(sql, binds as any[], { autoCommit: true });
         
 
     } catch (err) {
@@ -216,15 +320,22 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await this.setSessionContext(connection);
       
+        const queryVector = await this.generateNvidiaEmbedding(query, 'query');
+      
         const sql = `
           SELECT entity_name, entity_type, file_path, content
           FROM ai_semantic_memory
           WHERE project_name = :project
-          ORDER BY VECTOR_DISTANCE(embedding, VECTOR_EMBEDDING(my_model USING :query), COSINE)
+          ${queryVector ? 'ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)' : ''}
           FETCH FIRST :limit ROWS ONLY
         `;
         
-        const result = await connection.execute(sql, { project, query, limit });
+        const binds: any = { project, limit };
+        if (queryVector) {
+          binds.queryVector = new Float32Array(queryVector);
+        }
+        
+        const result = await connection.execute(sql, binds);
         return result.rows;
         
 

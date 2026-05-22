@@ -58,7 +58,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
       };
       (req as any).auth = auth;
       
-      // Gán auth context cho toàn bộ luồng bất đồng bộ bên dưới
+      // Assign auth context for the entire asynchronous flow below
       authStorage.run(auth, () => {
         next();
       });
@@ -75,7 +75,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     const auth = await checkAuth(clientKey);
     (req as any).auth = auth; // Attach auth result to request
     
-    // Gán auth context cho toàn bộ luồng bất đồng bộ bên dưới
+    // Assign auth context for the entire asynchronous flow below
     authStorage.run(auth, () => {
       next();
     });
