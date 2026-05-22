@@ -2,11 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.10.3] - 2026-05-22
+
+### Added
+- **NVIDIA API Key Env Config**: Added `NVIDIA_API_KEY` placeholder configuration variable to `.env.example` to support standard environment setup.
+
 ## [2.10.2] - 2026-05-22
 
 ### Changed / Fixed
 - **Source Comments in English**: Translated all Vietnamese database schema comments and code comments in the codebase to English to match formatting guidelines.
 - **Typecast connection.executeMany Binds**: Cast parameter binds to `any[]` in `oracleDatabase.ts` to satisfy the TypeScript compilation requirements.
+
 
 ## [2.10.1] - 2026-05-22
 
