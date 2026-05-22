@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.10.4] - 2026-05-22
+
+### Changed / Fixed
+- **Robust Client Binary Resolution in Integration Tests**: Improved sibling client binary lookup to gracefully skip startup E2E tests in environments where the client is not checked out (like CI runners).
+
 ## [2.10.3] - 2026-05-22
 
 ### Added
