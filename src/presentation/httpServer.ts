@@ -18,7 +18,8 @@ import { registerTools } from "./mcpServer.js";
 
 // Setup Express app to serve as both MCP SSE and REST API
 export const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Enable CORS for dashboard
 app.use((req, res, next) => {
