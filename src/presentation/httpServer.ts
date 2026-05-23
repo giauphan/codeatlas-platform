@@ -207,7 +207,20 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       }
     } catch (oracleErr: any) {
       console.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
-      errors.push(`Oracle DB cleanup failed: ${oracleErr.message || String(oracleErr)}`);
+      const errMsg = oracleErr.message || String(oracleErr);
+      // If it's a driver/library loading error (e.g. DPI-1047) or connection/network failure,
+      // log as a warning and do not block local cleanup, since the DB is unreachable anyway.
+      if (
+        errMsg.includes("DPI-1047") ||
+        errMsg.includes("NJS-511") ||
+        errMsg.includes("NJS-040") ||
+        errMsg.includes("connection") ||
+        errMsg.includes("connect")
+      ) {
+        console.warn(`[Delete Project] Non-blocking Oracle library/connection warning during delete: ${errMsg}`);
+      } else {
+        errors.push(`Oracle DB cleanup failed: ${errMsg}`);
+      }
     }
 
     const isForce = req.query.force === "true";
@@ -467,7 +480,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.11.6",
+        version: "2.11.7",
       },
       {
         capabilities: {

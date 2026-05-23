@@ -25,10 +25,23 @@ export class OracleMemoryService {
         // Activate Thick Mode by pointing to the Oracle Instant Client directory
         if (process.env.ORACLE_LIB_DIR) {
           console.log("🚀 Initializing Oracle Client in Thick Mode...");
-          oracledb.initOracleClient({ 
-            libDir: process.env.ORACLE_LIB_DIR,
-            configDir: process.env.ORACLE_WALLET_DIR // Contains tnsnames.ora and wallet files
-          });
+          try {
+            const initOptions: any = {
+              configDir: process.env.ORACLE_WALLET_DIR // Contains tnsnames.ora and wallet files
+            };
+            // On Linux, passing libDir is not supported in initOracleClient() and causes DPI-1047 or crash.
+            // Systems libraries must be configured via LD_LIBRARY_PATH or ldconfig on Linux.
+            if (process.platform !== "linux") {
+              initOptions.libDir = process.env.ORACLE_LIB_DIR;
+            }
+            oracledb.initOracleClient(initOptions);
+          } catch (initErr: any) {
+            if (initErr.message && initErr.message.includes("already initialized")) {
+              console.log("ℹ️ Oracle Client is already initialized.");
+            } else {
+              console.warn("⚠️ Warning initializing Oracle Client in Thick Mode:", initErr.message || String(initErr));
+            }
+          }
         }
 
         // Configure standard data formats for Oracle 26ai

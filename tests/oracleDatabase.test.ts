@@ -57,7 +57,20 @@ describe('OracleMemoryService', () => {
     process.env.ORACLE_LIB_DIR = '/mock/lib/dir';
     process.env.ORACLE_WALLET_DIR = '/mock/wallet/dir';
 
-    await OracleMemoryService.init();
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', {
+      value: 'darwin',
+      configurable: true
+    });
+
+    try {
+      await OracleMemoryService.init();
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      });
+    }
 
     assert.strictEqual(initClientMock.mock.calls.length, 1);
     assert.deepStrictEqual(initClientMock.mock.calls[0].arguments[0], {

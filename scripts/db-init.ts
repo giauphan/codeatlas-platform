@@ -25,10 +25,13 @@ async function run() {
   if (fs.existsSync(absoluteLibDir)) {
     try {
       console.log(`🚀 Initializing Oracle Client in Thick Mode from: ${absoluteLibDir}`);
-      oracledb.initOracleClient({
-        libDir: absoluteLibDir,
+      const initOptions: any = {
         configDir: absoluteConfigDir
-      });
+      };
+      if (process.platform !== "linux") {
+        initOptions.libDir = absoluteLibDir;
+      }
+      oracledb.initOracleClient(initOptions);
     } catch (err: any) {
       if (err.message.includes("already initialized")) {
         console.log("ℹ️ Oracle Client is already initialized.");

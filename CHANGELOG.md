@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.7] - 2026-05-23
+
+### Added / Fixed
+- Add unit tests for `force=true` project deletion override and connection failure warnings.
+- Fix unit tests for Oracle client Thick Mode initialization to run correctly on Linux platforms.
+
 ## [2.11.6] - 2026-05-23
 
 ### Added / Fixed

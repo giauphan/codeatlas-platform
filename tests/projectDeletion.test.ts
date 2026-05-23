@@ -223,7 +223,7 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
     // Temporarily make deleteProjectMemory throw an error
     mock.restoreAll();
     mock.method(OracleMemoryService, 'deleteProjectMemory', async (project: string, tenantId?: string) => {
-      throw new Error('Oracle DB connection lost');
+      throw new Error('Oracle DB constraint violation or execution failure');
     });
 
     const handler = getDeleteHandler();
@@ -594,6 +594,99 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
       delete process.env.CODEATLAS_PROJECT_DIR;
       cleanupDirectories();
     }
+  });
+
+  test('should allow project deletion if remote DB cleanup fails but force=true is requested', async () => {
+    setupDirectories();
+    mock.restoreAll();
+    mock.method(OracleMemoryService, 'deleteProjectMemory', async () => {
+      throw new Error('Oracle DB constraint violation or execution failure');
+    });
+
+    const handler = getDeleteHandler();
+    const projBDir = path.join(mockTenantRoot, 'tenant1', 'projectB');
+    process.env.CODEATLAS_PROJECT_DIR = projBDir;
+
+    const reqB: any = {
+      query: {
+        projectDir: projBDir,
+        force: 'true'
+      }
+    };
+    const resB: any = {
+      statusCode: 200,
+      jsonData: null,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data: any) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    await new Promise<void>((resolve) => {
+      authStorage.run(auth, async () => {
+        await handler(reqB, resB, () => {});
+        resolve();
+      });
+    });
+
+    assert.strictEqual(resB.statusCode, 200);
+    assert.strictEqual(resB.jsonData.success, true);
+    assert.strictEqual(fs.existsSync(path.join(projBDir, '.codeatlas')), false);
+    assert.strictEqual(fs.existsSync(projBDir), false);
+
+    delete process.env.CODEATLAS_PROJECT_DIR;
+    cleanupDirectories();
+  });
+
+  test('should treat Oracle connection/driver library loading failure as a warning and proceed with project deletion without force=true', async () => {
+    setupDirectories();
+    mock.restoreAll();
+    mock.method(OracleMemoryService, 'deleteProjectMemory', async () => {
+      throw new Error('DPI-1047: Oracle Client library cannot be loaded');
+    });
+
+    const handler = getDeleteHandler();
+    const projBDir = path.join(mockTenantRoot, 'tenant1', 'projectB');
+    process.env.CODEATLAS_PROJECT_DIR = projBDir;
+
+    const reqB: any = {
+      query: {
+        projectDir: projBDir
+      }
+    };
+    const resB: any = {
+      statusCode: 200,
+      jsonData: null,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data: any) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    await new Promise<void>((resolve) => {
+      authStorage.run(auth, async () => {
+        await handler(reqB, resB, () => {});
+        resolve();
+      });
+    });
+
+    assert.strictEqual(resB.statusCode, 200);
+    assert.strictEqual(resB.jsonData.success, true);
+    assert.strictEqual(fs.existsSync(path.join(projBDir, '.codeatlas')), false);
+    assert.strictEqual(fs.existsSync(projBDir), false);
+
+    delete process.env.CODEATLAS_PROJECT_DIR;
+    cleanupDirectories();
   });
 });
 
