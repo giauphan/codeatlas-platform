@@ -481,6 +481,11 @@ export function registerTools(server: McpServer) {
       const nodes = loaded.analysis.graph.nodes;
       const links = loaded.analysis.graph.links;
 
+      let syncSuccess = false;
+      let syncError: string | undefined;
+      let businessRuleSaved = false;
+      let changeDescriptionSaved = false;
+
       // Sync to Oracle 26ai
       if (enableEnterpriseSync !== false && process.env.ORACLE_CONN_STRING) {
         try {
@@ -489,26 +494,43 @@ export function registerTools(server: McpServer) {
           await OracleMemoryService.saveRelationalMemory(loaded.projectName, links);
           if (businessRule) {
             await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "BUSINESS_RULE", businessRule);
+            businessRuleSaved = true;
           }
           if (changeDescription) {
             await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "CHANGE_LOG", changeDescription);
+            changeDescriptionSaved = true;
           }
-        } catch (oracleErr) {
+          syncSuccess = true;
+        } catch (oracleErr: any) {
+          syncError = oracleErr instanceof Error ? oracleErr.message : String(oracleErr);
           console.error("Failed to sync to Oracle:", oracleErr);
+        }
+      } else {
+        if (enableEnterpriseSync === false) {
+          if (businessRule || changeDescription) {
+            syncError = "Sync skipped (enableEnterpriseSync is false), cannot save episodic memory.";
+          } else {
+            syncSuccess = true; // No episodic memory requested, so no-op is successful
+          }
+        } else {
+          syncError = "Oracle DB connection string is not configured.";
         }
       }
 
       const result = {
-        success: true,
+        success: syncSuccess,
         project: loaded.projectName,
         stats: {
           modules: nodes.filter((n) => n.type === "module").length,
           totalEntities: nodes.length,
           totalLinks: links.length,
-          businessRuleSaved: !!businessRule,
-          changeDescriptionSaved: !!changeDescription,
+          businessRuleSaved,
+          changeDescriptionSaved,
         },
-        message: `System memory synced to database for ${loaded.projectName}. Local file writing deprecated.`,
+        error: syncError,
+        message: syncSuccess
+          ? `System memory synced to database for ${loaded.projectName}. Local file writing deprecated.`
+          : `System memory sync failed or skipped: ${syncError}`,
       };
 
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };

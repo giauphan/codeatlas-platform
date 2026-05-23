@@ -408,36 +408,75 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
       console.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
     }
 
-    // Sync to Oracle 26ai in background if connection string is configured
+    let businessRuleSaved = false;
+    let changeDescriptionSaved = false;
+    let syncError: string | undefined = undefined;
+
+    // Sync to Oracle 26ai (episodic memory is processed synchronously to expose failures to callers)
     if (auth && process.env.ORACLE_CONN_STRING) {
-      Promise.resolve().then(async () => {
-        try {
+      try {
+        const { OracleMemoryService } = await import("../oracleDatabase.js");
+        if (businessRule) {
           await authStorage.run(auth, async () => {
-            const { OracleMemoryService } = await import("../oracleDatabase.js");
-            if (analysis.graph?.nodes && analysis.graph?.links) {
-              const nodes = analysis.graph.nodes;
-              const links = analysis.graph.links;
-              console.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
-              await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
-              await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
-            }
-            if (businessRule) {
-              console.error(`[Sync API] Async saving business rule for ${cleanProjectName} to Oracle 26ai: ${businessRule}`);
-              await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", businessRule);
-            }
-            if (changeDescription) {
-              console.error(`[Sync API] Async saving change log for ${cleanProjectName} to Oracle 26ai: ${changeDescription}`);
-              await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", changeDescription);
-            }
-            console.error(`[Sync API] Async sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
+            console.error(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
+            await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", businessRule);
+            businessRuleSaved = true;
           });
-        } catch (oracleErr) {
-          console.error(`[Sync API] Failed to async sync to Oracle 26ai:`, oracleErr);
+        }
+        if (changeDescription) {
+          await authStorage.run(auth, async () => {
+            console.error(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
+            await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", changeDescription);
+            changeDescriptionSaved = true;
+          });
+        }
+
+        // Graph sync is still processed asynchronously in the background as it can be large
+        if (analysis.graph?.nodes && analysis.graph?.links) {
+          const nodes = analysis.graph.nodes;
+          const links = analysis.graph.links;
+          Promise.resolve().then(async () => {
+            try {
+              await authStorage.run(auth, async () => {
+                console.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
+                await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
+                await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
+                console.error(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
+              });
+            } catch (oracleErr) {
+              console.error(`[Sync API] Failed to async sync Knowledge Graph to Oracle 26ai:`, oracleErr);
+            }
+          });
+        }
+      } catch (e: any) {
+        console.error(`[Sync API] Failed to initialize/sync Oracle DB connection: ${e}`);
+        syncError = e instanceof Error ? e.message : String(e);
+      }
+    } else {
+      if (businessRule || changeDescription) {
+        syncError = "Oracle DB is not configured or authenticated.";
+      }
+    }
+
+    if (syncError) {
+      res.status(500).json({
+        error: syncError,
+        projectDir,
+        stats: {
+          businessRuleSaved,
+          changeDescriptionSaved
+        }
+      });
+    } else {
+      res.json({
+        success: true,
+        projectDir,
+        stats: {
+          businessRuleSaved,
+          changeDescriptionSaved
         }
       });
     }
-    
-    res.json({ success: true, projectDir });
   } catch (err: unknown) {
     console.error(`[Sync API] Secure sync failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
