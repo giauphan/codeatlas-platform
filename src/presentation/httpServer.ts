@@ -26,7 +26,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // Enable CORS for dashboard
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
@@ -117,15 +117,26 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
     
     const { cleanProjectName, fullProjectDir } = resolved;
     
-    // 1. Remove project directory and codeatlas indexing file
-    if (fs.existsSync(fullProjectDir)) {
-      await fs.promises.rm(fullProjectDir, { recursive: true, force: true });
-      console.log(`[Delete Project] Cleaned up directory: ${fullProjectDir}`);
+    const errors: string[] = [];
+
+    // 1. Remove ONLY the codeatlas indexing directory within the project
+    try {
+      const codeatlasDir = path.join(fullProjectDir, ".codeatlas");
+      if (fs.existsSync(codeatlasDir)) {
+        await fs.promises.rm(codeatlasDir, { recursive: true, force: true });
+        console.log(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
+      }
+    } catch (dirErr: any) {
+      errors.push(`Failed to clean up index directory: ${dirErr.message || String(dirErr)}`);
     }
-    
+
     // Unregister project from local registered list
-    unregisterProject(fullProjectDir);
-    
+    try {
+      unregisterProject(fullProjectDir);
+    } catch (regErr: any) {
+      errors.push(`Failed to unregister project: ${regErr.message || String(regErr)}`);
+    }
+
     // 2. Remove telemetry data from Firestore (if Firebase is configured)
     try {
       const apps = getApps();
@@ -134,21 +145,35 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
         await db.collection('projects').doc(docId).delete();
         console.log(`[Delete Project] Deleted Firestore document: ${docId}`);
+        if (tenantId) {
+          await db.collection('projects').doc(cleanProjectName).delete();
+          console.log(`[Delete Project] Deleted legacy Firestore document: ${cleanProjectName}`);
+        }
       }
-    } catch (firebaseErr) {
+    } catch (firebaseErr: any) {
       console.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
+      errors.push(`Firestore cleanup failed: ${firebaseErr.message || String(firebaseErr)}`);
     }
-    
+
     // 3. Remove semantic/relational/episodic memory from Oracle DB (if Oracle DB is configured)
     try {
       if (process.env.ORACLE_CONN_STRING) {
         const { OracleMemoryService } = await import("../oracleDatabase.js");
         await OracleMemoryService.deleteProjectMemory(cleanProjectName);
       }
-    } catch (oracleErr) {
+    } catch (oracleErr: any) {
       console.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
+      errors.push(`Oracle DB cleanup failed: ${oracleErr.message || String(oracleErr)}`);
     }
-    
+
+    if (errors.length > 0) {
+      return res.status(500).json({
+        success: false,
+        error: "Partial or full deletion failure",
+        details: errors
+      });
+    }
+
     res.json({ success: true, message: `Successfully removed project: ${cleanProjectName}` });
   } catch (err: unknown) {
     console.error(`[Delete Project] Failed: ${(err instanceof Error ? err.message : String(err))}`);

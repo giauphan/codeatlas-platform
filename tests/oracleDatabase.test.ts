@@ -29,11 +29,9 @@ describe('OracleMemoryService', () => {
   });
 
   test('should handle missing connection gracefully in deleteProjectMemory', async () => {
-    try {
-      await OracleMemoryService.deleteProjectMemory('test_project');
-    } catch (e) {
-      assert.ok(e, 'Should throw or handle error gracefully if Oracle is not configured');
-    }
+    // Method should complete without throwing even when Oracle is not configured
+    await OracleMemoryService.deleteProjectMemory('test_project');
+    assert.ok(true, 'Method completed without throwing');
   });
 
   test('should throw error when pool creation fails during init()', async () => {
