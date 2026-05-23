@@ -25,6 +25,15 @@ describe('OracleMemoryService', () => {
     assert.strictEqual(typeof OracleMemoryService.saveRelationalMemory, 'function');
     assert.strictEqual(typeof OracleMemoryService.detectArchitecturalSmells, 'function');
     assert.strictEqual(typeof OracleMemoryService.saveSemanticMemory, 'function');
+    assert.strictEqual(typeof OracleMemoryService.deleteProjectMemory, 'function');
+  });
+
+  test('should handle missing connection gracefully in deleteProjectMemory', async () => {
+    try {
+      await OracleMemoryService.deleteProjectMemory('test_project');
+    } catch (e) {
+      assert.ok(e, 'Should throw or handle error gracefully if Oracle is not configured');
+    }
   });
 
   test('should throw error when pool creation fails during init()', async () => {

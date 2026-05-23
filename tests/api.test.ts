@@ -2,7 +2,8 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
-import { AnalysisResult } from '../src/services/types.js';
+import os from 'os';
+import { unregisterProject } from '../src/services/projectService.js';
 
 // Setup Mock Request & Response Types for Express
 interface MockResponse {
@@ -101,5 +102,38 @@ describe('REST API Endpoints', () => {
     assert.ok(fs.existsSync(analysisFile), 'Telemetry analysis.json should be written to disk');
     const writtenData = JSON.parse(fs.readFileSync(analysisFile, 'utf8'));
     assert.strictEqual(writtenData.totalFilesAnalyzed, 1);
+  });
+
+  test('should unregister a project path from registered_projects.json', () => {
+    const homeDir = os.homedir();
+    const configDir = path.join(homeDir, ".codeatlas");
+    const regPath = path.join(configDir, "registered_projects.json");
+    
+    // Save original content
+    let originalContent: string | null = null;
+    if (fs.existsSync(regPath)) {
+      originalContent = fs.readFileSync(regPath, "utf-8");
+    }
+
+    try {
+      const dummyProjects = ["/mock/path/projA", "/mock/path/projB"];
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+      }
+      fs.writeFileSync(regPath, JSON.stringify(dummyProjects, null, 2));
+
+      unregisterProject("/mock/path/projA");
+
+      const updatedData = fs.readFileSync(regPath, "utf-8");
+      const updatedList = JSON.parse(updatedData);
+      assert.deepStrictEqual(updatedList, ["/mock/path/projB"]);
+    } finally {
+      // Restore original
+      if (originalContent !== null) {
+        fs.writeFileSync(regPath, originalContent);
+      } else if (fs.existsSync(regPath)) {
+        fs.unlinkSync(regPath);
+      }
+    }
   });
 });
