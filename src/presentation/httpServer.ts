@@ -336,7 +336,7 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
       return res.status(401).json({ error: "Unauthorized: Missing tenant identification" });
     }
     
-    const { projectName, analysis } = req.body;
+    const { projectName, analysis, businessRule, changeDescription } = req.body;
     if (!projectName || !analysis) {
       return res.status(400).json({ error: "Missing projectName or analysis data" });
     }
@@ -409,16 +409,26 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
     }
 
     // Sync to Oracle 26ai in background if connection string is configured
-    if (auth && process.env.ORACLE_CONN_STRING && analysis.graph?.nodes && analysis.graph?.links) {
-      const nodes = analysis.graph.nodes;
-      const links = analysis.graph.links;
+    if (auth && process.env.ORACLE_CONN_STRING) {
       Promise.resolve().then(async () => {
         try {
           await authStorage.run(auth, async () => {
             const { OracleMemoryService } = await import("../oracleDatabase.js");
-            console.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
-            await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
-            await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
+            if (analysis.graph?.nodes && analysis.graph?.links) {
+              const nodes = analysis.graph.nodes;
+              const links = analysis.graph.links;
+              console.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
+              await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
+              await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
+            }
+            if (businessRule) {
+              console.error(`[Sync API] Async saving business rule for ${cleanProjectName} to Oracle 26ai: ${businessRule}`);
+              await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", businessRule);
+            }
+            if (changeDescription) {
+              console.error(`[Sync API] Async saving change log for ${cleanProjectName} to Oracle 26ai: ${changeDescription}`);
+              await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", changeDescription);
+            }
             console.error(`[Sync API] Async sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
           });
         } catch (oracleErr) {
@@ -499,7 +509,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.11.11",
+        version: "2.11.12",
       },
       {
         capabilities: {

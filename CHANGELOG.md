@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.12] - 2026-05-23
+
+### Fixed
+- **Local Memory Elimination**: Removed the remaining local filesystem writes inside the `sync_system_memory` tool handler on both server and client repositories.
+- **Unified Episodic Cloud Sync**: Updated the client's `syncAnalysisToServer` and the server's POST `/api/projects/sync` endpoint to securely transmit and store `businessRule` and `changeDescription` directly in the database.
+
 ## [2.11.11] - 2026-05-23
 
 ### Changed / Fixed
