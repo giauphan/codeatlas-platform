@@ -27,6 +27,11 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  const totalFiles = (analysis?.totalFilesAnalyzed || 0) + (analysis?.totalFilesSkipped || 0);
+  const coveragePercent = totalFiles > 0
+    ? Math.round((analysis?.totalFilesAnalyzed || 0) / totalFiles * 100)
+    : 100;
+
   return (
     <div style={{ height: 'calc(100vh - 8rem)', display: 'flex', flexDirection: 'column' }}>
       <header style={{ marginBottom: '2.5rem' }}>
@@ -114,7 +119,7 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
                 <>
                   [READY] System monitoring active<br/>
                   [INFO] Last index: {new Date().toLocaleTimeString()}<br/>
-                  [INFO] Vector database synchronized (85% coverage)
+                  [INFO] Vector database synchronized ({coveragePercent}% coverage)
                 </>
               )}
             </div>

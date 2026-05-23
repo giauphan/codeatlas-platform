@@ -226,7 +226,41 @@ export const Dashboard: React.FC = () => {
         } catch {
           errorMessage = `Server returned status code ${resp.status}`;
         }
-        alert(`Failed to delete project: ${errorMessage}`);
+
+        if (errorMessage.includes("Remote cleanup failure")) {
+          const forceConfirm = confirm(`Remote DB cleanup failed: ${errorMessage}\n\nDo you want to force local deletion and unregister the project anyway?`);
+          if (forceConfirm) {
+            try {
+              const forceResp = await fetch(`${API_BASE}/api/projects?projectDir=${encodeURIComponent(selectedProjectDir)}&force=true`, {
+                method: 'DELETE',
+                headers
+              });
+              if (forceResp.ok) {
+                alert("Project successfully removed locally!");
+                setAnalysis(null);
+                setSelectedProjectDir('');
+                sessionStorage.removeItem('ca_analysis_cache');
+                sessionStorage.removeItem('ca_selected_project_dir');
+                await fetchProjects();
+                return;
+              } else {
+                let forceErrorMessage = 'Unknown error';
+                try {
+                  const forceData = await forceResp.json();
+                  forceErrorMessage = forceData.error || forceErrorMessage;
+                } catch {
+                  forceErrorMessage = `Server returned status code ${forceResp.status}`;
+                }
+                alert(`Failed to force delete project: ${forceErrorMessage}`);
+              }
+            } catch (forceErr) {
+              console.error("Force delete project failed:", forceErr);
+              alert(`Failed to force delete project: ${forceErr instanceof Error ? forceErr.message : String(forceErr)}`);
+            }
+          }
+        } else {
+          alert(`Failed to delete project: ${errorMessage}`);
+        }
       }
     } catch (err) {
       console.error("Delete project failed:", err);

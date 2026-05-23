@@ -210,8 +210,11 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       errors.push(`Oracle DB cleanup failed: ${oracleErr.message || String(oracleErr)}`);
     }
 
+    const isForce = req.query.force === "true";
+
     // If remote cleanups fail, abort before deleting local files so the project remains discoverable and retryable
-    if (errors.length > 0) {
+    // unless force=true is requested to allow recovery under DB connection failures
+    if (errors.length > 0 && !isForce) {
       return res.status(500).json({
         success: false,
         error: "Remote cleanup failure. Local files and project registry were not modified to allow retries.",
@@ -219,7 +222,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       });
     }
 
-    // 3. Remote cleanups succeeded. Now clean up local index directory and empty tenant sandboxes
+    // 3. Remote cleanups succeeded (or force=true). Now clean up local index directory and empty tenant sandboxes
     try {
       const codeatlasDir = path.join(realProjectDir, ".codeatlas");
       
@@ -257,8 +260,8 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       errors.push(`Failed to clean up index directory: ${dirErr.message || String(dirErr)}`);
     }
 
-    // 4. Unregister project from local registered list only if local cleanup was successful
-    if (errors.length === 0) {
+    // 4. Unregister project from local registered list only if local cleanup was successful, or if force is enabled
+    if (errors.length === 0 || isForce) {
       try {
         unregisterProject(fullProjectDir);
       } catch (regErr: any) {
@@ -266,7 +269,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       }
     }
 
-    if (errors.length > 0) {
+    if (errors.length > 0 && !isForce) {
       return res.status(500).json({
         success: false,
         error: "Local cleanup or unregistration failure. Project registry may not have been updated.",
@@ -274,7 +277,11 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       });
     }
 
-    res.json({ success: true, message: `Successfully removed project: ${cleanProjectName}` });
+    res.json({ 
+      success: true, 
+      message: `Successfully removed project: ${cleanProjectName}`,
+      details: errors.length > 0 ? errors : undefined
+    });
   } catch (err: unknown) {
     console.error(`[Delete Project] Failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
@@ -460,7 +467,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.11.4",
+        version: "2.11.6",
       },
       {
         capabilities: {

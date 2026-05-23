@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.6] - 2026-05-23
+
+### Added / Fixed
+- Implement `force=true` query parameter support in `DELETE /api/projects` endpoint to bypass remote DB/Firestore cleanup errors and proceed with local directory cleanup and unregistration.
+- Add confirmation flow in the React Neural Dashboard to allow users to force delete projects locally if a remote cleanup fails.
+- Calculate and display dynamic index coverage in `KnowledgeGraphView.tsx` and `CloudIndexView.tsx` based on actual analyzed vs skipped file metrics, replacing the hardcoded "85%" value.
+
 ## [2.11.5] - 2026-05-23
 
 ### Fixed / Changed

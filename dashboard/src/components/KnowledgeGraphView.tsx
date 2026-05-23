@@ -31,6 +31,7 @@ interface AnalysisData {
     deadCode?: number;
   };
   totalFilesAnalyzed?: number;
+  totalFilesSkipped?: number;
   graph: {
     nodes: any[];
     links: any[];
@@ -736,13 +737,21 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                   </div>
                 </div>
               ))}
-              <div style={{ padding: '1.5rem', background: 'rgba(0, 240, 255, 0.05)', borderRadius: '20px', border: '1px solid rgba(0, 240, 255, 0.1)' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary-neon)', marginBottom: '0.5rem' }}>INDEX COVERAGE</div>
-                <div style={{ height: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px', overflow: 'hidden' }}>
-                  <motion.div initial={{ width: 0 }} animate={{ width: '85%' }} transition={{ duration: 1 }} style={{ height: '100%', background: 'var(--primary-neon)', boxShadow: '0 0 10px var(--primary-neon)' }} />
-                </div>
-                <div style={{ textAlign: 'right', fontSize: '0.7rem', marginTop: '0.5rem', color: 'var(--primary-neon)', fontWeight: 800 }}>85% SCANNED</div>
-              </div>
+              {(() => {
+                const totalFiles = (analysis?.totalFilesAnalyzed || 0) + (analysis?.totalFilesSkipped || 0);
+                const coveragePercent = totalFiles > 0
+                  ? Math.round((analysis?.totalFilesAnalyzed || 0) / totalFiles * 100)
+                  : 100;
+                return (
+                  <div style={{ padding: '1.5rem', background: 'rgba(0, 240, 255, 0.05)', borderRadius: '20px', border: '1px solid rgba(0, 240, 255, 0.1)' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary-neon)', marginBottom: '0.5rem' }}>INDEX COVERAGE</div>
+                    <div style={{ height: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px', overflow: 'hidden' }}>
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${coveragePercent}%` }} transition={{ duration: 1 }} style={{ height: '100%', background: 'var(--primary-neon)', boxShadow: '0 0 10px var(--primary-neon)' }} />
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: '0.7rem', marginTop: '0.5rem', color: 'var(--primary-neon)', fontWeight: 800 }}>{coveragePercent}% SCANNED</div>
+                  </div>
+                );
+              })()}
               {selectedProjectDir && onDeleteProject && (
                 <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '20px', background: 'rgba(255, 75, 75, 0.05)', border: '1px solid rgba(255, 75, 75, 0.15)', marginTop: 'auto' }}>
                   <div style={{ color: '#FF4B4B', fontSize: '0.75rem', fontWeight: 800, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
