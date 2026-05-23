@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.1] - 2026-05-23
+
+### Changed
+- Moved the Danger Zone project removal control from the Cloud Index tab to the Knowledge Graph tab.
+- Added comprehensive unit tests for project deletion in both backend controllers and frontend dashboard views.
+
 ## [2.11.0] - 2026-05-23
 
 ### Added

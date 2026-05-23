@@ -7,7 +7,8 @@ import {
   Activity, 
   Search,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Trash2
 } from 'lucide-react';
 
 interface AnalysisData {
@@ -41,13 +42,15 @@ interface KnowledgeGraphViewProps {
   projects?: { name: string; dir: string }[];
   selectedProjectDir?: string;
   onProjectChange?: (dir: string) => void;
+  onDeleteProject?: () => void;
 }
 
 export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ 
   analysis,
   projects,
   selectedProjectDir,
-  onProjectChange
+  onProjectChange,
+  onDeleteProject
 }) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -733,13 +736,45 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                   </div>
                 </div>
               ))}
-              <div style={{ marginTop: 'auto', padding: '1.5rem', background: 'rgba(0, 240, 255, 0.05)', borderRadius: '20px', border: '1px solid rgba(0, 240, 255, 0.1)' }}>
+              <div style={{ padding: '1.5rem', background: 'rgba(0, 240, 255, 0.05)', borderRadius: '20px', border: '1px solid rgba(0, 240, 255, 0.1)' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary-neon)', marginBottom: '0.5rem' }}>INDEX COVERAGE</div>
                 <div style={{ height: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px', overflow: 'hidden' }}>
                   <motion.div initial={{ width: 0 }} animate={{ width: '85%' }} transition={{ duration: 1 }} style={{ height: '100%', background: 'var(--primary-neon)', boxShadow: '0 0 10px var(--primary-neon)' }} />
                 </div>
                 <div style={{ textAlign: 'right', fontSize: '0.7rem', marginTop: '0.5rem', color: 'var(--primary-neon)', fontWeight: 800 }}>85% SCANNED</div>
               </div>
+              {selectedProjectDir && onDeleteProject && (
+                <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '20px', background: 'rgba(255, 75, 75, 0.05)', border: '1px solid rgba(255, 75, 75, 0.15)', marginTop: 'auto' }}>
+                  <div style={{ color: '#FF4B4B', fontSize: '0.75rem', fontWeight: 800, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Trash2 size={14} /> DANGER ZONE
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.6)', margin: '0 0 1rem 0', lineHeight: 1.4 }}>
+                    Permanently delete the project index, Firestore telemetry, and Oracle AI Database records.
+                  </p>
+                  <button 
+                    data-testid="delete-project-btn"
+                    style={{ 
+                      width: '100%', 
+                      padding: '0.6rem', 
+                      borderRadius: '10px', 
+                      background: 'rgba(255, 75, 75, 0.1)', 
+                      border: '1px solid #FF4B4B', 
+                      color: '#FF4B4B', 
+                      fontWeight: 700, 
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      fontSize: '0.8rem'
+                    }}
+                    onClick={() => {
+                      if (window.confirm("Are you absolutely sure you want to delete this project's index, telemetry, and Oracle DB data? This cannot be undone.")) {
+                        onDeleteProject();
+                      }
+                    }}
+                  >
+                    Delete Project Index
+                  </button>
+                </div>
+              )}
             </>
           )}
 

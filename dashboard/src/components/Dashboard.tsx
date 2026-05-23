@@ -353,6 +353,7 @@ export const Dashboard: React.FC = () => {
             projects={projects}
             selectedProjectDir={selectedProjectDir}
             onProjectChange={handleProjectChange}
+            onDeleteProject={handleDeleteProject}
           />
         );
       case 'Logic Models':
@@ -365,7 +366,6 @@ export const Dashboard: React.FC = () => {
             onReindex={handleReindex} 
             isIndexingEnabled={isIndexingEnabled} 
             setIsIndexingEnabled={setIsIndexingEnabled} 
-            onDeleteProject={handleDeleteProject}
           />
         );
       case 'Documentation':

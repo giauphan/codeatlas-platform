@@ -15,18 +15,18 @@ vi.mock('../ControlCenterView', () => ({
   ControlCenterView: () => <div data-testid="control-center-view">Control Center View</div>
 }));
 vi.mock('../KnowledgeGraphView', () => ({
-  KnowledgeGraphView: () => <div data-testid="knowledge-graph-view">Knowledge Graph View</div>
+  KnowledgeGraphView: ({ onDeleteProject }: any) => (
+    <div data-testid="knowledge-graph-view">
+      Knowledge Graph View
+      <button data-testid="delete-project-btn" onClick={onDeleteProject}>Delete Project</button>
+    </div>
+  )
 }));
 vi.mock('../LogicModelsView', () => ({
   LogicModelsView: () => <div data-testid="logic-models-view">Logic Models View</div>
 }));
 vi.mock('../CloudIndexView', () => ({
-  CloudIndexView: ({ onDeleteProject }: any) => (
-    <div data-testid="cloud-index-view">
-      Cloud Index View
-      <button data-testid="delete-project-btn" onClick={onDeleteProject}>Delete Project</button>
-    </div>
-  )
+  CloudIndexView: () => <div data-testid="cloud-index-view">Cloud Index View</div>
 }));
 vi.mock('../DocumentationView', () => ({
   DocumentationView: () => <div data-testid="documentation-view">Documentation View</div>
@@ -222,12 +222,12 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    // Switch to Cloud Index tab
-    const ciTab = screen.getByText('Cloud Index');
-    fireEvent.click(ciTab);
+    // Switch to Knowledge Graph tab
+    const kgTab = screen.getByText('Knowledge Graph');
+    fireEvent.click(kgTab);
 
     await waitFor(() => {
-      expect(screen.getByTestId('cloud-index-view')).toBeInTheDocument();
+      expect(screen.getByTestId('knowledge-graph-view')).toBeInTheDocument();
     });
 
     // Click Delete Project button

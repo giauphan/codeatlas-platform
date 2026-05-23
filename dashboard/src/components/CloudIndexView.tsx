@@ -7,8 +7,7 @@ import {
   Globe, 
   Server, 
   Cpu, 
-  Zap,
-  Trash2
+  Zap
 } from 'lucide-react';
 
 interface CloudIndexViewProps {
@@ -17,7 +16,6 @@ interface CloudIndexViewProps {
   onReindex: () => void;
   isIndexingEnabled: boolean;
   setIsIndexingEnabled: (v: boolean) => void;
-  onDeleteProject: () => void;
 }
 
 export const CloudIndexView: React.FC<CloudIndexViewProps> = ({ 
@@ -25,8 +23,7 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
   isIndexing, 
   onReindex, 
   isIndexingEnabled, 
-  setIsIndexingEnabled,
-  onDeleteProject
+  setIsIndexingEnabled
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -137,7 +134,7 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
                 <div style={{ color: 'var(--primary-neon)' }}><item.icon size={20} /></div>
                 <div>
                   <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>{item.value}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>{item.label}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>{item.label}</div>
                 </div>
               </div>
             ))}
@@ -150,36 +147,6 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
             <p style={{ fontSize: '0.8rem', color: 'rgba(255, 180, 0, 0.8)', margin: 0, lineHeight: 1.4 }}>
               Automatic indexing is optimized for local development. For large enterprise monorepos, use the "Selective Scan" in Advanced Configuration.
             </p>
-          </div>
-
-          <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '24px', background: 'rgba(255, 75, 75, 0.05)', border: '1px solid rgba(255, 75, 75, 0.15)' }}>
-            <div style={{ color: '#FF4B4B', fontSize: '0.8rem', fontWeight: 800, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Trash2 size={14} /> DANGER ZONE
-            </div>
-            <p style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.6)', margin: '0 0 1.25rem 0', lineHeight: 1.4 }}>
-              This will permanently delete the project index, Firestore telemetry, and Oracle AI Database records.
-            </p>
-            <button 
-              style={{ 
-                width: '100%', 
-                padding: '0.75rem', 
-                borderRadius: '12px', 
-                background: 'rgba(255, 75, 75, 0.1)', 
-                border: '1px solid #FF4B4B', 
-                color: '#FF4B4B', 
-                fontWeight: 700, 
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                fontSize: '0.85rem'
-              }}
-              onClick={() => {
-                if (window.confirm("Are you absolutely sure you want to delete this project's index, telemetry, and Oracle DB data? This cannot be undone.")) {
-                  onDeleteProject();
-                }
-              }}
-            >
-              Delete Project Index
-            </button>
           </div>
         </div>
       </div>
