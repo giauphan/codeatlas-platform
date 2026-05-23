@@ -430,4 +430,53 @@ export class OracleMemoryService {
       }
     }
   }
+
+  /**
+   * Deletes all episodic, semantic, and relational memory records associated with a project.
+   */
+  static async deleteProjectMemory(project: string) {
+    let connection;
+    try {
+      const pool = await this.init();
+      connection = await pool.getConnection();
+      await this.setSessionContext(connection);
+      
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+
+      // 1. Delete episodic memory
+      const deleteEpisodic = `
+        DELETE FROM ai_episodic_memory 
+        WHERE project_name = :project AND tenant_id = :tenantId
+      `;
+      await connection.execute(deleteEpisodic, { project, tenantId });
+
+      // 2. Delete semantic memory
+      const deleteSemantic = `
+        DELETE FROM ai_semantic_memory 
+        WHERE project_name = :project AND tenant_id = :tenantId
+      `;
+      await connection.execute(deleteSemantic, { project, tenantId });
+
+      // 3. Delete relational memory
+      const deleteRelational = `
+        DELETE FROM ai_relational_memory 
+        WHERE project_name = :project AND tenant_id = :tenantId
+      `;
+      await connection.execute(deleteRelational, { project, tenantId });
+
+      await connection.commit();
+      console.log(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${tenantId}`);
+    } catch (err) {
+      console.error("Error deleting project memory from Oracle DB:", err instanceof Error ? err.message : String(err));
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error("Error closing connection:", closeErr);
+        }
+      }
+    }
+  }
 }

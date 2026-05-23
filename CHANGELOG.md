@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.0] - 2026-05-23
+
+### Added
+- **Project Deletion & Remote Cleanup**: Added `DELETE /api/projects` endpoint and Danger Zone component in the Dashboard to clean up local indexed directories, unregister projects, and purge Firestore telemetry and Oracle 26ai Database memory records (episodic, semantic, relational).
+
 ## [2.10.4] - 2026-05-22
 
 ### Changed / Fixed

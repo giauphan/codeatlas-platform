@@ -11,7 +11,9 @@ import {
   discoverProjectsAsync, 
   loadAnalysisAsync, 
   getStats, 
-  fileExists 
+  fileExists,
+  resolveProjectDir,
+  unregisterProject
 } from "../services/projectService.js";
 import { authStorage } from "../context.js";
 import { registerTools } from "./mcpServer.js";
@@ -93,6 +95,63 @@ app.get("/api/projects", authMiddleware, async (req, res) => {
     const projects = await discoverProjectsAsync(tenantId);
     res.json(projects.map(p => ({ name: p.name, dir: p.dir, modifiedAt: p.modifiedAt })));
   } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
+  }
+});
+
+// REST API: Remove project and its associated data
+app.delete("/api/projects", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+    const projectDir = req.query.projectDir as string;
+    
+    if (!projectDir) {
+      return res.status(400).json({ error: "Missing projectDir parameter" });
+    }
+    
+    const resolved = await resolveProjectDir(projectDir, tenantId);
+    if (!resolved) {
+      return res.status(403).json({ error: "Access denied or project not found" });
+    }
+    
+    const { cleanProjectName, fullProjectDir } = resolved;
+    
+    // 1. Remove project directory and codeatlas indexing file
+    if (fs.existsSync(fullProjectDir)) {
+      await fs.promises.rm(fullProjectDir, { recursive: true, force: true });
+      console.log(`[Delete Project] Cleaned up directory: ${fullProjectDir}`);
+    }
+    
+    // Unregister project from local registered list
+    unregisterProject(fullProjectDir);
+    
+    // 2. Remove telemetry data from Firestore (if Firebase is configured)
+    try {
+      const apps = getApps();
+      if (apps.length) {
+        const db = getFirestore();
+        const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+        await db.collection('projects').doc(docId).delete();
+        console.log(`[Delete Project] Deleted Firestore document: ${docId}`);
+      }
+    } catch (firebaseErr) {
+      console.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
+    }
+    
+    // 3. Remove semantic/relational/episodic memory from Oracle DB (if Oracle DB is configured)
+    try {
+      if (process.env.ORACLE_CONN_STRING) {
+        const { OracleMemoryService } = await import("../oracleDatabase.js");
+        await OracleMemoryService.deleteProjectMemory(cleanProjectName);
+      }
+    } catch (oracleErr) {
+      console.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
+    }
+    
+    res.json({ success: true, message: `Successfully removed project: ${cleanProjectName}` });
+  } catch (err: unknown) {
+    console.error(`[Delete Project] Failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });

@@ -2,7 +2,7 @@
   "name": "codeatlas-enterprise",
   "displayName": "CodeAtlas Enterprise (Oracle 26ai Edition)",
   "description": "AI-powered codebase insights — MCP Server and Remote API",
-  "version": "2.10.4",
+  "version": "2.11.0",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
@@ -34,5 +34,12 @@
     "oracledb": "^6.5.0",
     "py-ast": "^1.9.0",
     "zod": "^3.22.4"
+  },
+  "pnpm": {
+    "allowedBuilds": [
+      "oracledb",
+      "esbuild",
+      "protobufjs"
+    ]
   }
 }
