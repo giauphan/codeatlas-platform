@@ -469,6 +469,7 @@ export class OracleMemoryService {
       console.log(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${tenantId}`);
     } catch (err) {
       console.error("Error deleting project memory from Oracle DB:", err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       if (connection) {
         try {

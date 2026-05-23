@@ -2,10 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.2] - 2026-05-23
+
+### Fixed / Changed
+- Enforce strict exact-path matching during project deletion to prevent name-matching ambiguity.
+- Support safe clean up of empty tenant project folders inside the multi-tenant directory.
+- Restrict Firestore deletion to scoped tenant documents to prevent cross-tenant data loss.
+- Propagate Oracle DB memory and project-unregister errors to the API delete response.
+- Validate project directory query parameter type on the server and safely handle non-JSON error responses in the frontend.
+
 ## [2.11.1] - 2026-05-23
 
 ### Changed
-- Moved the Danger Zone project removal control from the Cloud Index tab to the Knowledge Graph tab.
+- Added Danger Zone project removal control to the Knowledge Graph tab.
 - Added comprehensive unit tests for project deletion in both backend controllers and frontend dashboard views.
 
 ## [2.11.0] - 2026-05-23

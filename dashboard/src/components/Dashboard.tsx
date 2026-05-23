@@ -219,8 +219,14 @@ export const Dashboard: React.FC = () => {
         sessionStorage.removeItem('ca_selected_project_dir');
         await fetchProjects();
       } else {
-        const data = await resp.json();
-        alert(`Failed to delete project: ${data.error || 'Unknown error'}`);
+        let errorMessage = 'Unknown error';
+        try {
+          const data = await resp.json();
+          errorMessage = data.error || errorMessage;
+        } catch {
+          errorMessage = `Server returned status code ${resp.status}`;
+        }
+        alert(`Failed to delete project: ${errorMessage}`);
       }
     } catch (err) {
       console.error("Delete project failed:", err);

@@ -104,13 +104,14 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
-    const projectDir = req.query.projectDir as string;
     
-    if (!projectDir) {
-      return res.status(400).json({ error: "Missing projectDir parameter" });
+    const rawProjectDir = req.query.projectDir;
+    if (typeof rawProjectDir !== "string" || !rawProjectDir.trim()) {
+      return res.status(400).json({ error: "Invalid or missing projectDir parameter. It must be a non-empty string." });
     }
+    const projectDir = rawProjectDir.trim();
     
-    const resolved = await resolveProjectDir(projectDir, tenantId);
+    const resolved = await resolveProjectDir(projectDir, tenantId, true);
     if (!resolved) {
       return res.status(403).json({ error: "Access denied or project not found" });
     }
@@ -119,12 +120,23 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
     
     const errors: string[] = [];
 
-    // 1. Remove ONLY the codeatlas indexing directory within the project
+    // 1. Remove ONLY the codeatlas indexing directory within the project, OR the entire folder if it is a tenant sandbox
     try {
       const codeatlasDir = path.join(fullProjectDir, ".codeatlas");
       if (fs.existsSync(codeatlasDir)) {
         await fs.promises.rm(codeatlasDir, { recursive: true, force: true });
         console.log(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
+      }
+
+      // If multi-tenant mode is active and the project resides within the tenants directory, clean up the empty tenant project folder too
+      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+      const normalizedTenantRoot = path.resolve(tenantRoot);
+      const normalizedProjectDir = path.resolve(fullProjectDir);
+      if (process.env.CODEATLAS_MULTI_TENANT === "true" && normalizedProjectDir.startsWith(normalizedTenantRoot)) {
+        if (normalizedProjectDir !== normalizedTenantRoot && fs.existsSync(normalizedProjectDir)) {
+          await fs.promises.rm(normalizedProjectDir, { recursive: true, force: true });
+          console.log(`[Delete Project] Cleaned up tenant sandbox directory: ${normalizedProjectDir}`);
+        }
       }
     } catch (dirErr: any) {
       errors.push(`Failed to clean up index directory: ${dirErr.message || String(dirErr)}`);
@@ -145,10 +157,6 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
         await db.collection('projects').doc(docId).delete();
         console.log(`[Delete Project] Deleted Firestore document: ${docId}`);
-        if (tenantId) {
-          await db.collection('projects').doc(cleanProjectName).delete();
-          console.log(`[Delete Project] Deleted legacy Firestore document: ${cleanProjectName}`);
-        }
       }
     } catch (firebaseErr: any) {
       console.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);

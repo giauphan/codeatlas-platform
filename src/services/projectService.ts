@@ -133,6 +133,7 @@ export function unregisterProject(dir: string): void {
     }
   } catch (err) {
     console.error(`[Project-Registry] ❌ Failed to unregister project: ${err}`);
+    throw err;
   }
 }
 
@@ -596,11 +597,11 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
   }
 }
 
-export async function resolveProjectDir(projectDir: string, tenantId?: string): Promise<{ cleanProjectName: string; fullProjectDir: string } | null> {
+export async function resolveProjectDir(projectDir: string, tenantId?: string, requireExactPath = false): Promise<{ cleanProjectName: string; fullProjectDir: string } | null> {
   const projects = await discoverProjectsAsync(tenantId);
   const absPath = path.resolve(projectDir);
   const match = projects.find(
-    (p) => p.dir === absPath || p.name.toLowerCase() === projectDir.toLowerCase()
+    (p) => p.dir === absPath || (!requireExactPath && p.name.toLowerCase() === projectDir.toLowerCase())
   );
   if (!match) return null;
   return {

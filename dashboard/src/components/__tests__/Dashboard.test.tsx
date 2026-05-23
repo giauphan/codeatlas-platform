@@ -219,6 +219,7 @@ describe('Dashboard', () => {
 
     sessionStorage.setItem('ca_selected_project_dir', '/home/biibon/mock-project');
     const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(<Dashboard />);
 
@@ -247,5 +248,6 @@ describe('Dashboard', () => {
     });
 
     alertMock.mockRestore();
+    confirmMock.mockRestore();
   });
 });
