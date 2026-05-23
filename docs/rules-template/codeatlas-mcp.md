@@ -16,26 +16,16 @@ An MCP server named `codeatlas` is available. It provides code analysis data inc
 4. **High-level overview** → call `generate_system_flow` for Mermaid architecture diagram
 5. **Execution flow of a feature** → call `generate_feature_flow_diagram` for call-chain Mermaid diagram
 6. **Exploring a file** → call `get_file_entities` to see all entities in that file
-7. **After making changes** → call `sync_system_memory` to update AI memory
+7. **Detecting code smells** → call `detect_architectural_smells` to identify circular dependencies, God objects, and dead code
+8. **Security scanning** → call `scan_enterprise_vulnerabilities` to search for bugs, security vulnerabilities, or unsafe functions
+9. **After making changes** → call `sync_system_memory` to update AI memory
 
-### Memory System
+### Memory & Telemetry Sync
 
-At the **start of EVERY conversation**, read `.agents/memory/` if it exists:
-1. `.agents/memory/system-map.md` — System architecture
-2. `.agents/memory/business-rules.json` — Business rules
-3. `.agents/memory/conventions.md` — Coding conventions
-4. `.agents/memory/change-log.json` — Recent changes
+**After completing code changes**, ALWAYS call the `sync_system_memory` tool to push details to the remote server and Oracle 26ai DB:
+- `changeDescription` (ALWAYS required): Description of the changes made
+- `businessRule` (Optional): Extract and save any new business logic rules mentioned by the user
 
-**After code changes**, ALWAYS call `sync_system_memory`:
-- `changeDescription` (ALWAYS required): What you just changed
-- `businessRule` (ALWAYS extract if user mentions ANY domain logic):
-  - Conditions: "only process videos > 30s", "skip if under 1000 likes"
-  - Permissions: "VIP users skip email verification"
-  - Limits: "free tier limited to 5 projects"
-  - Even if user says it casually, YOU MUST SAVE IT
-  - If unsure whether something is a business rule, SAVE IT ANYWAY
-
-**DO NOT SKIP THIS STEP.** If you forget to sync, the next conversation loses all context.
 
 ### Available Tools
 
@@ -49,6 +39,8 @@ At the **start of EVERY conversation**, read `.agents/memory/` if it exists:
 | `get_file_entities` | All entities inside a specific file |
 | `generate_system_flow` | Mermaid diagram of system architecture (module imports) |
 | `generate_feature_flow_diagram` | Mermaid diagram of feature execution flow (call chains) |
+| `detect_architectural_smells` | Run Oracle 26ai Graph Reasoning to detect tight coupling, god objects, or dead code |
+| `scan_enterprise_vulnerabilities` | Run Security Scanner for hardcoded secrets, unsafe functions, and bugs |
 | `sync_system_memory` | Update .agents/memory/ after code changes |
 | `trace_feature_flow` | Trace feature flow before working on it |
 
@@ -86,5 +78,6 @@ claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
 ```
 
 ### Important
-- Data comes from `.codeatlas/analysis.json` — run `CodeAtlas: Analyze Project` in the editor to generate
-- If no data found, tell user to run the analysis command first
+- Data is automatically indexed by the client on startup or modification and synced to the server database via the API (`/api/projects/sync`).
+- If no analysis is loaded, verify that the client has completed indexing and synchronized with the remote server.
+

@@ -4,17 +4,10 @@ trigger: always_on
 
 ## AI System Memory — Auto-Read & Auto-Sync
 
-### 🧠 MANDATORY: Read Memory at Start
+### 🧠 MANDATORY: Remote Memory & Telemetry System
+All system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas telemetry server and Oracle 26ai Knowledge Graph database. The local `.agents/memory` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance. 
+Use the CodeAtlas MCP tools to query or search relationships, dependencies, and insights directly from the indexed system knowledge.
 
-**At the start of EVERY conversation**, before doing any work:
-
-1. Check if `.agents/memory/` folder exists in the project
-2. If it exists, read these files IN ORDER:
-   - `.agents/memory/system-map.md` — Understand the system architecture
-   - `.agents/memory/business-rules.json` — Know the business rules
-   - `.agents/memory/conventions.md` — Know the coding conventions
-   - `.agents/memory/change-log.json` — Know what changed recently
-3. Use this context to avoid breaking existing logic
 
 ### 🔎 MANDATORY: Use CodeAtlas MCP to Understand Code BEFORE Making Changes
 
