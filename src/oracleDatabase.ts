@@ -54,9 +54,9 @@ export class OracleMemoryService {
   /**
    * Configures the Session Context for Row-Level Security (Oracle Virtual Private Database)
    */
-  private static async setSessionContext(connection: oracledb.Connection) {
+  private static async setSessionContext(connection: oracledb.Connection, overrideTenantId?: string) {
     const auth = authStorage.getStore();
-    const tenantId = auth ? auth.uid : "admin";
+    const tenantId = overrideTenantId || (auth ? auth.uid : "admin");
     
     try {
       // Invoke the context package to dynamically apply Row-Level Security row-filtering policies
@@ -439,10 +439,11 @@ export class OracleMemoryService {
     try {
       const pool = await this.init();
       connection = await pool.getConnection();
-      await this.setSessionContext(connection);
       
       const auth = authStorage.getStore();
       const resolvedTenantId = tenantId || (auth ? auth.uid : "admin");
+      
+      await this.setSessionContext(connection, resolvedTenantId);
 
       // 1. Delete episodic memory
       const deleteEpisodic = `

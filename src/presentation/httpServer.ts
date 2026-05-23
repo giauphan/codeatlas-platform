@@ -18,6 +18,12 @@ import {
 import { authStorage } from "../context.js";
 import { registerTools } from "./mcpServer.js";
 
+// Wrapper object to allow clean mocking of Firebase services in testing environments
+export const firebaseClient = {
+  getApps: () => getApps(),
+  getFirestore: () => getFirestore()
+};
+
 // Setup Express app to serve as both MCP SSE and REST API
 export const app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -43,7 +49,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
       let role = (decodedToken.role as string) || "user";
       if (role !== "admin") {
         try {
-          const userDoc = await getFirestore().collection("users").doc(decodedToken.uid).get();
+          const userDoc = await firebaseClient.getFirestore().collection("users").doc(decodedToken.uid).get();
           if (userDoc.exists) {
             role = userDoc.data()?.role || userDoc.data()?.tier || "user";
           }
@@ -134,7 +140,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
     
     if (process.env.CODEATLAS_MULTI_TENANT === "true") {
       const relativePath = path.relative(normalizedTenantRoot, realProjectDir);
-      isInsideTenantRoot = !!relativePath && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
+      isInsideTenantRoot = !!relativePath && !(relativePath === ".." || relativePath.startsWith(".." + path.sep)) && !path.isAbsolute(relativePath);
       
       const isSystemAdmin = auth
         ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
@@ -147,7 +153,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         if (tenantId) {
           const tenantRootPath = path.resolve(path.join(normalizedTenantRoot, tenantId));
           const relToTenant = path.relative(tenantRootPath, realProjectDir);
-          const isInsideTenant = !!relToTenant && !relToTenant.startsWith("..") && !path.isAbsolute(relToTenant);
+          const isInsideTenant = !!relToTenant && !(relToTenant === ".." || relToTenant.startsWith(".." + path.sep)) && !path.isAbsolute(relToTenant);
           if (!isInsideTenant) {
             return res.status(403).json({ error: "Access denied: Project directory is outside your tenant sandbox." });
           }
@@ -166,12 +172,27 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
 
     // 1. Remove telemetry data from Firestore (if Firebase is configured)
     try {
-      const apps = getApps();
+      const apps = firebaseClient.getApps();
       if (apps.length) {
-        const db = getFirestore();
+        const db = firebaseClient.getFirestore();
         const docId = ownerTenantId ? `${ownerTenantId}_${cleanProjectName}` : cleanProjectName;
         await db.collection('projects').doc(docId).delete();
         console.log(`[Delete Project] Deleted Firestore document: ${docId}`);
+        
+        // Securely handle legacy unscoped document cleanup if it exists
+        if (ownerTenantId) {
+          const legacyDocId = cleanProjectName;
+          const legacyRef = db.collection('projects').doc(legacyDocId);
+          const legacyDoc = await legacyRef.get();
+          if (legacyDoc.exists) {
+            const legacyData = legacyDoc.data();
+            const legacyTenantId = legacyData?.tenantId;
+            if (!legacyTenantId || legacyTenantId === ownerTenantId) {
+              await legacyRef.delete();
+              console.log(`[Delete Project] Cleaned up legacy Firestore document: ${legacyDocId}`);
+            }
+          }
+        }
       }
     } catch (firebaseErr: any) {
       console.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
@@ -236,17 +257,19 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       errors.push(`Failed to clean up index directory: ${dirErr.message || String(dirErr)}`);
     }
 
-    // 4. Unregister project from local registered list
-    try {
-      unregisterProject(fullProjectDir);
-    } catch (regErr: any) {
-      errors.push(`Failed to unregister project: ${regErr.message || String(regErr)}`);
+    // 4. Unregister project from local registered list only if local cleanup was successful
+    if (errors.length === 0) {
+      try {
+        unregisterProject(fullProjectDir);
+      } catch (regErr: any) {
+        errors.push(`Failed to unregister project: ${regErr.message || String(regErr)}`);
+      }
     }
 
     if (errors.length > 0) {
       return res.status(500).json({
         success: false,
-        error: "Partial local deletion failure",
+        error: "Local cleanup or unregistration failure. Project registry may not have been updated.",
         details: errors
       });
     }
@@ -320,9 +343,9 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
     
     // Securely sync telemetry / database stats on server-side
     try {
-      const apps = getApps();
+      const apps = firebaseClient.getApps();
       if (apps.length) {
-        const db = getFirestore();
+        const db = firebaseClient.getFirestore();
         const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
         const docRef = db.collection('projects').doc(docId);
 

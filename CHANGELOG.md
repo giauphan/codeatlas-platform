@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.5] - 2026-05-23
+
+### Fixed / Changed
+- Configure Virtual Private Database (VPD) session context using target tenant ID before deleting project data in Oracle Database.
+- Securely check for and clean up unclaimed or matching tenant legacy unscoped Firestore documents.
+- Restrict directory traversal checks to strictly block path traversal while supporting double-dot-prefixed directory names inside the sandbox.
+- Retain project registration in `registered_projects.json` if local index directory cleanup fails, ensuring the operation can be retried.
+
 ## [2.11.4] - 2026-05-23
 
 ### Fixed / Changed

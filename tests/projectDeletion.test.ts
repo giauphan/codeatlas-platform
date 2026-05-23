@@ -2,7 +2,8 @@ import { test, describe, before, after, mock } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
-import { app } from '../src/presentation/httpServer.js';
+import os from 'os';
+import { app, firebaseClient } from '../src/presentation/httpServer.js';
 import { authStorage } from '../src/context.js';
 import { OracleMemoryService } from '../src/oracleDatabase.js';
 
@@ -396,4 +397,203 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
     delete process.env.CODEATLAS_PROJECT_DIR;
     cleanupDirectories();
   });
+
+  test('should handle double-dot-prefixed directory names inside the sandbox safely', async () => {
+    const dotDotDir = path.join(mockTenantRoot, 'tenant1', '..projectA');
+    if (fs.existsSync(dotDotDir)) {
+      fs.rmSync(dotDotDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(path.join(dotDotDir, '.codeatlas'), { recursive: true });
+    fs.writeFileSync(path.join(dotDotDir, '.codeatlas', 'analysis.json'), '{}');
+
+    const handler = getDeleteHandler();
+    process.env.CODEATLAS_PROJECT_DIR = dotDotDir;
+
+    const reqDot: any = {
+      query: {
+        projectDir: dotDotDir
+      }
+    };
+    const resDot: any = {
+      statusCode: 200,
+      jsonData: null,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data: any) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    const auth = { uid: 'tenant1', role: 'user', tier: 'enterprise', keyId: 'mock-key', email: 'user@tenant1.com' };
+    await new Promise<void>((resolve) => {
+      authStorage.run(auth, async () => {
+        await handler(reqDot, resDot, () => {});
+        resolve();
+      });
+    });
+
+    assert.strictEqual(resDot.statusCode, 200);
+    assert.strictEqual(resDot.jsonData.success, true);
+    assert.strictEqual(fs.existsSync(dotDotDir), false);
+
+    delete process.env.CODEATLAS_PROJECT_DIR;
+    cleanupDirectories();
+  });
+
+  test('should skip project unregistration if local cleanup fails', async () => {
+    setupDirectories();
+    deleteProjectMemoryCalls = [];
+
+    const homeDir = os.homedir();
+    const configDir = path.join(homeDir, ".codeatlas");
+    const regPath = path.join(configDir, "registered_projects.json");
+    
+    let originalContent: string | null = null;
+    if (fs.existsSync(regPath)) {
+      originalContent = fs.readFileSync(regPath, "utf-8");
+    }
+
+    const handler = getDeleteHandler();
+    const projBDir = path.join(mockTenantRoot, 'tenant1', 'projectB');
+    process.env.CODEATLAS_PROJECT_DIR = projBDir;
+
+    const dummyProjects = [path.resolve(projBDir), "/mock/path/projC"];
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    fs.writeFileSync(regPath, JSON.stringify(dummyProjects, null, 2));
+
+    const originalRm = fs.promises.rm;
+    fs.promises.rm = async () => {
+      throw new Error("Simulated filesystem cleanup failure");
+    };
+
+    try {
+      const reqB: any = {
+        query: {
+          projectDir: projBDir
+        }
+      };
+      const resB: any = {
+        statusCode: 200,
+        jsonData: null,
+        status(code: number) {
+          this.statusCode = code;
+          return this;
+        },
+        json(data: any) {
+          this.jsonData = data;
+          return this;
+        }
+      };
+
+      const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+      await new Promise<void>((resolve) => {
+        authStorage.run(auth, async () => {
+          await handler(reqB, resB, () => {});
+          resolve();
+        });
+      });
+
+      assert.strictEqual(resB.statusCode, 500);
+      assert.match(resB.jsonData.error, /Local cleanup or unregistration failure/);
+
+      const updatedData = fs.readFileSync(regPath, "utf-8");
+      const updatedList = JSON.parse(updatedData);
+      assert.ok(updatedList.includes(path.resolve(projBDir)), 'Project should remain registered on failure');
+    } finally {
+      fs.promises.rm = originalRm;
+      if (originalContent !== null) {
+        fs.writeFileSync(regPath, originalContent);
+      } else if (fs.existsSync(regPath)) {
+        fs.unlinkSync(regPath);
+      }
+      delete process.env.CODEATLAS_PROJECT_DIR;
+      cleanupDirectories();
+    }
+  });
+
+  test('should securely clean up legacy unscoped Firestore document if matching tenant or unclaimed', async () => {
+    const mockApp = {} as any;
+    mock.method(firebaseClient, 'getApps', () => [mockApp]);
+
+    const deletedDocs: string[] = [];
+    const mockLegacyDoc = {
+      exists: true,
+      data: () => ({ tenantId: 'tenant1' })
+    };
+
+    const mockDb = {
+      collection: (colName: string) => {
+        assert.strictEqual(colName, 'projects');
+        return {
+          doc: (docId: string) => {
+            return {
+              get: async () => {
+                if (docId === 'projectB') {
+                  return mockLegacyDoc;
+                }
+                return { exists: false };
+              },
+              delete: async () => {
+                deletedDocs.push(docId);
+              }
+            };
+          }
+        };
+      }
+    } as any;
+
+    mock.method(firebaseClient, 'getFirestore', () => mockDb);
+
+    try {
+      setupDirectories();
+      const handler = getDeleteHandler();
+      const projBDir = path.join(mockTenantRoot, 'tenant1', 'projectB');
+      process.env.CODEATLAS_PROJECT_DIR = projBDir;
+
+      const reqB: any = {
+        query: {
+          projectDir: projBDir
+        }
+      };
+      const resB: any = {
+        statusCode: 200,
+        jsonData: null,
+        status(code: number) {
+          this.statusCode = code;
+          return this;
+        },
+        json(data: any) {
+          this.jsonData = data;
+          return this;
+        }
+      };
+
+      const auth = { uid: 'tenant1', role: 'user', tier: 'enterprise', keyId: 'mock-key', email: 'user@tenant1.com' };
+      await new Promise<void>((resolve) => {
+        authStorage.run(auth, async () => {
+          await handler(reqB, resB, () => {});
+          resolve();
+        });
+      });
+
+      assert.strictEqual(resB.statusCode, 200);
+      assert.strictEqual(resB.jsonData.success, true);
+
+      assert.ok(deletedDocs.includes('tenant1_projectB'));
+      assert.ok(deletedDocs.includes('projectB'));
+    } finally {
+      mock.restoreAll();
+      mock.method(OracleMemoryService, 'deleteProjectMemory', async (project: string, tenantId?: string) => {
+        deleteProjectMemoryCalls.push({ project, tenantId });
+      });
+      delete process.env.CODEATLAS_PROJECT_DIR;
+      cleanupDirectories();
+    }
+  });
 });
+
