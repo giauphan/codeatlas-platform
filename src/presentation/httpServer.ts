@@ -135,25 +135,30 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
     if (process.env.CODEATLAS_MULTI_TENANT === "true") {
       const relativePath = path.relative(normalizedTenantRoot, realProjectDir);
       isInsideTenantRoot = !!relativePath && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
-      if (!isInsideTenantRoot) {
-        return res.status(403).json({ error: "Access denied: Project directory is outside the tenant root sandbox." });
-      }
       
       const isSystemAdmin = auth
         ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
         : false;
-      if (!isSystemAdmin && tenantId) {
-        const tenantRootPath = path.resolve(path.join(normalizedTenantRoot, tenantId));
-        const relToTenant = path.relative(tenantRootPath, realProjectDir);
-        const isInsideTenant = !!relToTenant && !relToTenant.startsWith("..") && !path.isAbsolute(relToTenant);
-        if (!isInsideTenant) {
-          return res.status(403).json({ error: "Access denied: Project directory is outside your tenant sandbox." });
+        
+      if (!isSystemAdmin) {
+        if (!isInsideTenantRoot) {
+          return res.status(403).json({ error: "Access denied: Project directory is outside the tenant root sandbox." });
+        }
+        if (tenantId) {
+          const tenantRootPath = path.resolve(path.join(normalizedTenantRoot, tenantId));
+          const relToTenant = path.relative(tenantRootPath, realProjectDir);
+          const isInsideTenant = !!relToTenant && !relToTenant.startsWith("..") && !path.isAbsolute(relToTenant);
+          if (!isInsideTenant) {
+            return res.status(403).json({ error: "Access denied: Project directory is outside your tenant sandbox." });
+          }
         }
       }
 
-      const parts = relativePath.split(path.sep);
-      if (parts.length > 0 && parts[0]) {
-        ownerTenantId = parts[0];
+      if (isInsideTenantRoot) {
+        const parts = relativePath.split(path.sep);
+        if (parts.length > 0 && parts[0]) {
+          ownerTenantId = parts[0];
+        }
       }
     }
     
@@ -432,7 +437,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.11.3",
+        version: "2.11.4",
       },
       {
         capabilities: {

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.4] - 2026-05-23
+
+### Fixed / Changed
+- Defer local indexing directory deletion and registry unregistration until remote database cleanups (Firestore, Oracle DB) succeed.
+- Implement canonical path resolution using `fs.promises.realpath` to secure multi-tenant sandbox boundary checks against symlink traversal.
+- Support safe symlink project unlinking and symlink `.codeatlas` file removal without target traversal.
+- Add comprehensive integration tests verifying cleanup order, symlink handling, and sandbox validation under failure states.
+
 ## [2.11.3] - 2026-05-23
 
 ### Fixed / Changed
