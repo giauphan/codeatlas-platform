@@ -116,11 +116,29 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       return res.status(403).json({ error: "Access denied or project not found" });
     }
     
-    const { cleanProjectName, fullProjectDir } = resolved;
+        const { cleanProjectName, fullProjectDir } = resolved;
+    
+    // Derive target owner tenant from project path
+    let ownerTenantId = tenantId;
+    let isInsideTenantRoot = false;
+    const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+    const normalizedTenantRoot = path.resolve(tenantRoot);
+    const normalizedProjectDir = path.resolve(fullProjectDir);
+    
+    if (process.env.CODEATLAS_MULTI_TENANT === "true") {
+      const relativePath = path.relative(normalizedTenantRoot, normalizedProjectDir);
+      isInsideTenantRoot = !!relativePath && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
+      if (isInsideTenantRoot) {
+        const parts = relativePath.split(path.sep);
+        if (parts.length > 0 && parts[0]) {
+          ownerTenantId = parts[0];
+        }
+      }
+    }
     
     const errors: string[] = [];
 
-    // 1. Remove ONLY the codeatlas indexing directory within the project, OR the entire folder if it is a tenant sandbox
+    // 1. Remove ONLY the codeatlas indexing directory within the project, OR the entire folder if it is a tenant sandbox and is empty
     try {
       const codeatlasDir = path.join(fullProjectDir, ".codeatlas");
       if (fs.existsSync(codeatlasDir)) {
@@ -128,14 +146,14 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         console.log(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
       }
 
-      // If multi-tenant mode is active and the project resides within the tenants directory, clean up the empty tenant project folder too
-      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
-      const normalizedTenantRoot = path.resolve(tenantRoot);
-      const normalizedProjectDir = path.resolve(fullProjectDir);
-      if (process.env.CODEATLAS_MULTI_TENANT === "true" && normalizedProjectDir.startsWith(normalizedTenantRoot)) {
+      // If multi-tenant mode is active, the project resides within the tenants directory, and the directory is empty after index cleanup, clean up the empty tenant project folder too
+      if (process.env.CODEATLAS_MULTI_TENANT === "true" && isInsideTenantRoot) {
         if (normalizedProjectDir !== normalizedTenantRoot && fs.existsSync(normalizedProjectDir)) {
-          await fs.promises.rm(normalizedProjectDir, { recursive: true, force: true });
-          console.log(`[Delete Project] Cleaned up tenant sandbox directory: ${normalizedProjectDir}`);
+          const remainingFiles = await fs.promises.readdir(normalizedProjectDir);
+          if (remainingFiles.length === 0) {
+            await fs.promises.rm(normalizedProjectDir, { recursive: true, force: true });
+            console.log(`[Delete Project] Cleaned up empty tenant sandbox directory: ${normalizedProjectDir}`);
+          }
         }
       }
     } catch (dirErr: any) {
@@ -154,7 +172,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       const apps = getApps();
       if (apps.length) {
         const db = getFirestore();
-        const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+        const docId = ownerTenantId ? `${ownerTenantId}_${cleanProjectName}` : cleanProjectName;
         await db.collection('projects').doc(docId).delete();
         console.log(`[Delete Project] Deleted Firestore document: ${docId}`);
       }
@@ -167,7 +185,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
     try {
       if (process.env.ORACLE_CONN_STRING) {
         const { OracleMemoryService } = await import("../oracleDatabase.js");
-        await OracleMemoryService.deleteProjectMemory(cleanProjectName);
+        await OracleMemoryService.deleteProjectMemory(cleanProjectName, ownerTenantId);
       }
     } catch (oracleErr: any) {
       console.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
@@ -368,7 +386,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.9.11",
+        version: "2.11.3",
       },
       {
         capabilities: {

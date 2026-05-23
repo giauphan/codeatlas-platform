@@ -434,7 +434,7 @@ export class OracleMemoryService {
   /**
    * Deletes all episodic, semantic, and relational memory records associated with a project.
    */
-  static async deleteProjectMemory(project: string) {
+  static async deleteProjectMemory(project: string, tenantId?: string) {
     let connection;
     try {
       const pool = await this.init();
@@ -442,31 +442,31 @@ export class OracleMemoryService {
       await this.setSessionContext(connection);
       
       const auth = authStorage.getStore();
-      const tenantId = auth ? auth.uid : "admin";
+      const resolvedTenantId = tenantId || (auth ? auth.uid : "admin");
 
       // 1. Delete episodic memory
       const deleteEpisodic = `
         DELETE FROM ai_episodic_memory 
-        WHERE project_name = :project AND tenant_id = :tenantId
+        WHERE project_name = :project AND tenant_id = :resolvedTenantId
       `;
-      await connection.execute(deleteEpisodic, { project, tenantId });
+      await connection.execute(deleteEpisodic, { project, resolvedTenantId });
 
       // 2. Delete semantic memory
       const deleteSemantic = `
         DELETE FROM ai_semantic_memory 
-        WHERE project_name = :project AND tenant_id = :tenantId
+        WHERE project_name = :project AND tenant_id = :resolvedTenantId
       `;
-      await connection.execute(deleteSemantic, { project, tenantId });
+      await connection.execute(deleteSemantic, { project, resolvedTenantId });
 
       // 3. Delete relational memory
       const deleteRelational = `
         DELETE FROM ai_relational_memory 
-        WHERE project_name = :project AND tenant_id = :tenantId
+        WHERE project_name = :project AND tenant_id = :resolvedTenantId
       `;
-      await connection.execute(deleteRelational, { project, tenantId });
+      await connection.execute(deleteRelational, { project, resolvedTenantId });
 
       await connection.commit();
-      console.log(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${tenantId}`);
+      console.log(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${resolvedTenantId}`);
     } catch (err) {
       console.error("Error deleting project memory from Oracle DB:", err instanceof Error ? err.message : String(err));
       throw err;

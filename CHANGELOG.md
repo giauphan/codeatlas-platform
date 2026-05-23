@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.3] - 2026-05-23
+
+### Fixed / Changed
+- Derive target project owner tenant ID from resolved project path for Firestore and Oracle DB cleanup.
+- Implement robust relative-path checking (`path.relative`) for tenant sandbox path-boundary checks.
+- Safely clean up tenant directories only when they are empty after `.codeatlas` index directory removal.
+- Add comprehensive integration tests for project deletion boundary checks and sandbox directory cleanup.
+
 ## [2.11.2] - 2026-05-23
 
 ### Fixed / Changed
