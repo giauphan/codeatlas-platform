@@ -468,7 +468,7 @@ export function registerTools(server: McpServer) {
       project: z.string().optional().describe("Project name or path"),
       businessRule: z.string().optional().describe("Optional: A new business rule to add to the memory (e.g. 'VIP users get free shipping')"),
       changeDescription: z.string().optional().describe("Optional: Description of what was just changed (for the changelog)"),
-      enableEnterpriseSync: z.boolean().optional().describe("If true, syncs data to Oracle 26ai Knowledge Graph (Pro/Plus feature). Default is false."),
+      enableEnterpriseSync: z.boolean().optional().default(true).describe("If true, syncs data to Oracle 26ai Knowledge Graph (Pro/Plus feature). Default is true."),
     },
     async ({ project, businessRule, changeDescription, enableEnterpriseSync }: { project?: string; businessRule?: string; changeDescription?: string; enableEnterpriseSync?: boolean }) => {
       const auth = await checkAuth();
@@ -687,7 +687,7 @@ export function registerTools(server: McpServer) {
       await fs.promises.writeFile(path.join(memoryDir, "conventions.md"), conventionsContent);
 
       // Sync to Oracle 26ai
-      if (enableEnterpriseSync) {
+      if (enableEnterpriseSync !== false && process.env.ORACLE_CONN_STRING) {
         try {
           console.error(`Syncing Knowledge Graph for ${loaded.projectName} to Oracle 26ai...`);
           await OracleMemoryService.saveSemanticMemory(loaded.projectName, nodes);
@@ -1296,7 +1296,7 @@ export function registerTools(server: McpServer) {
 export const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.11.7",
+    version: "2.11.8",
   },
   {
     capabilities: {
