@@ -7,7 +7,7 @@ import {
   Globe, 
   Server, 
   Cpu, 
-  Zap 
+  Zap
 } from 'lucide-react';
 
 interface CloudIndexViewProps {
@@ -23,7 +23,7 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
   isIndexing, 
   onReindex, 
   isIndexingEnabled, 
-  setIsIndexingEnabled 
+  setIsIndexingEnabled
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -134,7 +134,7 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
                 <div style={{ color: 'var(--primary-neon)' }}><item.icon size={20} /></div>
                 <div>
                   <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>{item.value}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>{item.label}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>{item.label}</div>
                 </div>
               </div>
             ))}

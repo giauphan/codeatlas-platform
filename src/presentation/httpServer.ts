@@ -11,10 +11,18 @@ import {
   discoverProjectsAsync, 
   loadAnalysisAsync, 
   getStats, 
-  fileExists 
+  fileExists,
+  resolveProjectDir,
+  unregisterProject
 } from "../services/projectService.js";
 import { authStorage } from "../context.js";
 import { registerTools } from "./mcpServer.js";
+
+// Wrapper object to allow clean mocking of Firebase services in testing environments
+export const firebaseClient = {
+  getApps: () => getApps(),
+  getFirestore: () => getFirestore()
+};
 
 // Setup Express app to serve as both MCP SSE and REST API
 export const app = express();
@@ -24,7 +32,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // Enable CORS for dashboard
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
@@ -41,7 +49,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
       let role = (decodedToken.role as string) || "user";
       if (role !== "admin") {
         try {
-          const userDoc = await getFirestore().collection("users").doc(decodedToken.uid).get();
+          const userDoc = await firebaseClient.getFirestore().collection("users").doc(decodedToken.uid).get();
           if (userDoc.exists) {
             role = userDoc.data()?.role || userDoc.data()?.tier || "user";
           }
@@ -93,6 +101,182 @@ app.get("/api/projects", authMiddleware, async (req, res) => {
     const projects = await discoverProjectsAsync(tenantId);
     res.json(projects.map(p => ({ name: p.name, dir: p.dir, modifiedAt: p.modifiedAt })));
   } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
+  }
+});
+
+// REST API: Remove project and its associated data
+app.delete("/api/projects", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+    
+    const rawProjectDir = req.query.projectDir;
+    if (typeof rawProjectDir !== "string" || !rawProjectDir.trim()) {
+      return res.status(400).json({ error: "Invalid or missing projectDir parameter. It must be a non-empty string." });
+    }
+    const projectDir = rawProjectDir.trim();
+    
+    const resolved = await resolveProjectDir(projectDir, tenantId, true);
+    if (!resolved) {
+      return res.status(403).json({ error: "Access denied or project not found" });
+    }
+    
+    const { cleanProjectName, fullProjectDir } = resolved;
+    
+    // Derive target owner tenant from project path
+    let ownerTenantId = tenantId;
+    let isInsideTenantRoot = false;
+    const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+    const normalizedTenantRoot = path.resolve(tenantRoot);
+    
+    // Resolve the real canonical path of the project to securely handle symlinks
+    let realProjectDir: string;
+    try {
+      realProjectDir = await fs.promises.realpath(fullProjectDir);
+    } catch {
+      realProjectDir = path.resolve(fullProjectDir);
+    }
+    
+    if (process.env.CODEATLAS_MULTI_TENANT === "true") {
+      const relativePath = path.relative(normalizedTenantRoot, realProjectDir);
+      isInsideTenantRoot = !!relativePath && !(relativePath === ".." || relativePath.startsWith(".." + path.sep)) && !path.isAbsolute(relativePath);
+      
+      const isSystemAdmin = auth
+        ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
+        : false;
+        
+      if (!isSystemAdmin) {
+        if (!isInsideTenantRoot) {
+          return res.status(403).json({ error: "Access denied: Project directory is outside the tenant root sandbox." });
+        }
+        if (tenantId) {
+          const tenantRootPath = path.resolve(path.join(normalizedTenantRoot, tenantId));
+          const relToTenant = path.relative(tenantRootPath, realProjectDir);
+          const isInsideTenant = !!relToTenant && !(relToTenant === ".." || relToTenant.startsWith(".." + path.sep)) && !path.isAbsolute(relToTenant);
+          if (!isInsideTenant) {
+            return res.status(403).json({ error: "Access denied: Project directory is outside your tenant sandbox." });
+          }
+        }
+      }
+
+      if (isInsideTenantRoot) {
+        const parts = relativePath.split(path.sep);
+        if (parts.length > 0 && parts[0]) {
+          ownerTenantId = parts[0];
+        }
+      }
+    }
+    
+    const errors: string[] = [];
+
+    // 1. Remove telemetry data from Firestore (if Firebase is configured)
+    try {
+      const apps = firebaseClient.getApps();
+      if (apps.length) {
+        const db = firebaseClient.getFirestore();
+        const docId = ownerTenantId ? `${ownerTenantId}_${cleanProjectName}` : cleanProjectName;
+        await db.collection('projects').doc(docId).delete();
+        console.log(`[Delete Project] Deleted Firestore document: ${docId}`);
+        
+        // Securely handle legacy unscoped document cleanup if it exists
+        if (ownerTenantId) {
+          const legacyDocId = cleanProjectName;
+          const legacyRef = db.collection('projects').doc(legacyDocId);
+          const legacyDoc = await legacyRef.get();
+          if (legacyDoc.exists) {
+            const legacyData = legacyDoc.data();
+            const legacyTenantId = legacyData?.tenantId;
+            if (!legacyTenantId || legacyTenantId === ownerTenantId) {
+              await legacyRef.delete();
+              console.log(`[Delete Project] Cleaned up legacy Firestore document: ${legacyDocId}`);
+            }
+          }
+        }
+      }
+    } catch (firebaseErr: any) {
+      console.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
+      errors.push(`Firestore cleanup failed: ${firebaseErr.message || String(firebaseErr)}`);
+    }
+
+    // 2. Remove semantic/relational/episodic memory from Oracle DB (if Oracle DB is configured)
+    try {
+      if (process.env.ORACLE_CONN_STRING) {
+        const { OracleMemoryService } = await import("../oracleDatabase.js");
+        await OracleMemoryService.deleteProjectMemory(cleanProjectName, ownerTenantId);
+      }
+    } catch (oracleErr: any) {
+      console.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
+      errors.push(`Oracle DB cleanup failed: ${oracleErr.message || String(oracleErr)}`);
+    }
+
+    // If remote cleanups fail, abort before deleting local files so the project remains discoverable and retryable
+    if (errors.length > 0) {
+      return res.status(500).json({
+        success: false,
+        error: "Remote cleanup failure. Local files and project registry were not modified to allow retries.",
+        details: errors
+      });
+    }
+
+    // 3. Remote cleanups succeeded. Now clean up local index directory and empty tenant sandboxes
+    try {
+      const codeatlasDir = path.join(realProjectDir, ".codeatlas");
+      
+      let codeatlasLstat;
+      try {
+        codeatlasLstat = await fs.promises.lstat(codeatlasDir);
+      } catch {}
+
+      if (codeatlasLstat) {
+        if (codeatlasLstat.isSymbolicLink()) {
+          await fs.promises.unlink(codeatlasDir);
+        } else if (fs.existsSync(codeatlasDir)) {
+          await fs.promises.rm(codeatlasDir, { recursive: true, force: true });
+        }
+        console.log(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
+      }
+
+      // If multi-tenant mode is active, the project resides within the tenants directory, and the directory is empty after index cleanup, clean up the empty tenant project folder too
+      if (process.env.CODEATLAS_MULTI_TENANT === "true" && isInsideTenantRoot) {
+        if (realProjectDir !== normalizedTenantRoot && fs.existsSync(realProjectDir)) {
+          const lstat = await fs.promises.lstat(fullProjectDir);
+          if (lstat.isSymbolicLink()) {
+            await fs.promises.unlink(fullProjectDir);
+            console.log(`[Delete Project] Unlinked tenant project symlink: ${fullProjectDir}`);
+          } else {
+            const remainingFiles = await fs.promises.readdir(realProjectDir);
+            if (remainingFiles.length === 0) {
+              await fs.promises.rm(realProjectDir, { recursive: true, force: true });
+              console.log(`[Delete Project] Cleaned up empty tenant sandbox directory: ${realProjectDir}`);
+            }
+          }
+        }
+      }
+    } catch (dirErr: any) {
+      errors.push(`Failed to clean up index directory: ${dirErr.message || String(dirErr)}`);
+    }
+
+    // 4. Unregister project from local registered list only if local cleanup was successful
+    if (errors.length === 0) {
+      try {
+        unregisterProject(fullProjectDir);
+      } catch (regErr: any) {
+        errors.push(`Failed to unregister project: ${regErr.message || String(regErr)}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      return res.status(500).json({
+        success: false,
+        error: "Local cleanup or unregistration failure. Project registry may not have been updated.",
+        details: errors
+      });
+    }
+
+    res.json({ success: true, message: `Successfully removed project: ${cleanProjectName}` });
+  } catch (err: unknown) {
+    console.error(`[Delete Project] Failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -159,9 +343,9 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
     
     // Securely sync telemetry / database stats on server-side
     try {
-      const apps = getApps();
+      const apps = firebaseClient.getApps();
       if (apps.length) {
-        const db = getFirestore();
+        const db = firebaseClient.getFirestore();
         const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
         const docRef = db.collection('projects').doc(docId);
 
@@ -276,7 +460,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.9.11",
+        version: "2.11.4",
       },
       {
         capabilities: {

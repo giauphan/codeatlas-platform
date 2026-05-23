@@ -109,6 +109,34 @@ export function registerProject(dir: string): void {
   }
 }
 
+export function unregisterProject(dir: string): void {
+  try {
+    const homeDir = os.homedir();
+    const configDir = path.join(homeDir, ".codeatlas");
+    const regPath = path.join(configDir, "registered_projects.json");
+    if (fs.existsSync(regPath)) {
+      let projects: string[] = [];
+      try {
+        const data = fs.readFileSync(regPath, "utf-8");
+        projects = JSON.parse(data);
+      } catch {
+        projects = [];
+      }
+      if (Array.isArray(projects)) {
+        const absPath = path.resolve(dir);
+        const filtered = projects.filter((p) => p !== absPath);
+        if (filtered.length !== projects.length) {
+          fs.writeFileSync(regPath, JSON.stringify(filtered, null, 2));
+          console.error(`[Project-Registry] 📝 Unregistered project: ${absPath}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[Project-Registry] ❌ Failed to unregister project: ${err}`);
+    throw err;
+  }
+}
+
 export function scanForCodeatlasProjects(parentDir: string): string[] {
   const discovered: string[] = [];
   try {
@@ -568,3 +596,17 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
     return null;
   }
 }
+
+export async function resolveProjectDir(projectDir: string, tenantId?: string, requireExactPath = false): Promise<{ cleanProjectName: string; fullProjectDir: string } | null> {
+  const projects = await discoverProjectsAsync(tenantId);
+  const absPath = path.resolve(projectDir);
+  const match = projects.find(
+    (p) => p.dir === absPath || (!requireExactPath && p.name.toLowerCase() === projectDir.toLowerCase())
+  );
+  if (!match) return null;
+  return {
+    cleanProjectName: match.name,
+    fullProjectDir: match.dir
+  };
+}
+

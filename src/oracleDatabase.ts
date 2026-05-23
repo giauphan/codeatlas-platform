@@ -54,9 +54,9 @@ export class OracleMemoryService {
   /**
    * Configures the Session Context for Row-Level Security (Oracle Virtual Private Database)
    */
-  private static async setSessionContext(connection: oracledb.Connection) {
+  private static async setSessionContext(connection: oracledb.Connection, overrideTenantId?: string) {
     const auth = authStorage.getStore();
-    const tenantId = auth ? auth.uid : "admin";
+    const tenantId = overrideTenantId || (auth ? auth.uid : "admin");
     
     try {
       // Invoke the context package to dynamically apply Row-Level Security row-filtering policies
@@ -420,6 +420,57 @@ export class OracleMemoryService {
     } catch (err) {
       console.error("Error detecting smells:", err instanceof Error ? err.message : String(err));
       return null;
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error("Error closing connection:", closeErr);
+        }
+      }
+    }
+  }
+
+  /**
+   * Deletes all episodic, semantic, and relational memory records associated with a project.
+   */
+  static async deleteProjectMemory(project: string, tenantId?: string) {
+    let connection;
+    try {
+      const pool = await this.init();
+      connection = await pool.getConnection();
+      
+      const auth = authStorage.getStore();
+      const resolvedTenantId = tenantId || (auth ? auth.uid : "admin");
+      
+      await this.setSessionContext(connection, resolvedTenantId);
+
+      // 1. Delete episodic memory
+      const deleteEpisodic = `
+        DELETE FROM ai_episodic_memory 
+        WHERE project_name = :project AND tenant_id = :resolvedTenantId
+      `;
+      await connection.execute(deleteEpisodic, { project, resolvedTenantId });
+
+      // 2. Delete semantic memory
+      const deleteSemantic = `
+        DELETE FROM ai_semantic_memory 
+        WHERE project_name = :project AND tenant_id = :resolvedTenantId
+      `;
+      await connection.execute(deleteSemantic, { project, resolvedTenantId });
+
+      // 3. Delete relational memory
+      const deleteRelational = `
+        DELETE FROM ai_relational_memory 
+        WHERE project_name = :project AND tenant_id = :resolvedTenantId
+      `;
+      await connection.execute(deleteRelational, { project, resolvedTenantId });
+
+      await connection.commit();
+      console.log(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${resolvedTenantId}`);
+    } catch (err) {
+      console.error("Error deleting project memory from Oracle DB:", err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       if (connection) {
         try {

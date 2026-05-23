@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.5] - 2026-05-23
+
+### Fixed / Changed
+- Configure Virtual Private Database (VPD) session context using target tenant ID before deleting project data in Oracle Database.
+- Securely check for and clean up unclaimed or matching tenant legacy unscoped Firestore documents.
+- Restrict directory traversal checks to strictly block path traversal while supporting double-dot-prefixed directory names inside the sandbox.
+- Retain project registration in `registered_projects.json` if local index directory cleanup fails, ensuring the operation can be retried.
+
+## [2.11.4] - 2026-05-23
+
+### Fixed / Changed
+- Defer local indexing directory deletion and registry unregistration until remote database cleanups (Firestore, Oracle DB) succeed.
+- Implement canonical path resolution using `fs.promises.realpath` to secure multi-tenant sandbox boundary checks against symlink traversal.
+- Support safe symlink project unlinking and symlink `.codeatlas` file removal without target traversal.
+- Add comprehensive integration tests verifying cleanup order, symlink handling, and sandbox validation under failure states.
+
+## [2.11.3] - 2026-05-23
+
+### Fixed / Changed
+- Derive target project owner tenant ID from resolved project path for Firestore and Oracle DB cleanup.
+- Implement robust relative-path checking (`path.relative`) for tenant sandbox path-boundary checks.
+- Safely clean up tenant directories only when they are empty after `.codeatlas` index directory removal.
+- Add comprehensive integration tests for project deletion boundary checks and sandbox directory cleanup.
+
+## [2.11.2] - 2026-05-23
+
+### Fixed / Changed
+- Enforce strict exact-path matching during project deletion to prevent name-matching ambiguity.
+- Support safe clean up of empty tenant project folders inside the multi-tenant directory.
+- Restrict Firestore deletion to scoped tenant documents to prevent cross-tenant data loss.
+- Propagate Oracle DB memory and project-unregister errors to the API delete response.
+- Validate project directory query parameter type on the server and safely handle non-JSON error responses in the frontend.
+
+## [2.11.1] - 2026-05-23
+
+### Changed
+- Added Danger Zone project removal control to the Knowledge Graph tab.
+- Added comprehensive unit tests for project deletion in both backend controllers and frontend dashboard views.
+
+## [2.11.0] - 2026-05-23
+
+### Added
+- **Project Deletion & Remote Cleanup**: Added `DELETE /api/projects` endpoint and Danger Zone component in the Dashboard to clean up local indexed directories, unregister projects, and purge Firestore telemetry and Oracle 26ai Database memory records (episodic, semantic, relational).
+
 ## [2.10.4] - 2026-05-22
 
 ### Changed / Fixed

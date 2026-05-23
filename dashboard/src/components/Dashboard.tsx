@@ -203,6 +203,37 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleDeleteProject = async () => {
+    if (!selectedProjectDir) return;
+    try {
+      const headers = await getAuthHeaders();
+      const resp = await fetch(`${API_BASE}/api/projects?projectDir=${encodeURIComponent(selectedProjectDir)}`, {
+        method: 'DELETE',
+        headers
+      });
+      if (resp.ok) {
+        alert("Project successfully removed!");
+        setAnalysis(null);
+        setSelectedProjectDir('');
+        sessionStorage.removeItem('ca_analysis_cache');
+        sessionStorage.removeItem('ca_selected_project_dir');
+        await fetchProjects();
+      } else {
+        let errorMessage = 'Unknown error';
+        try {
+          const data = await resp.json();
+          errorMessage = data.error || errorMessage;
+        } catch {
+          errorMessage = `Server returned status code ${resp.status}`;
+        }
+        alert(`Failed to delete project: ${errorMessage}`);
+      }
+    } catch (err) {
+      console.error("Delete project failed:", err);
+      alert(`Failed to delete project: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   useEffect(() => {
     if (!user) {
       // Clear user states on logout immediately
@@ -328,6 +359,7 @@ export const Dashboard: React.FC = () => {
             projects={projects}
             selectedProjectDir={selectedProjectDir}
             onProjectChange={handleProjectChange}
+            onDeleteProject={handleDeleteProject}
           />
         );
       case 'Logic Models':
