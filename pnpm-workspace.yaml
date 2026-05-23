@@ -2,6 +2,6 @@ packages:
   - "dashboard"
   - "."
 allowBuilds:
-  esbuild: true
-  oracledb: true
-  protobufjs: true
+  esbuild: false
+  oracledb: false
+  protobufjs: false
