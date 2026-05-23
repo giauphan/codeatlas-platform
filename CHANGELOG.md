@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.8] - 2026-05-23
+
+### Added / Changed
+- **Embedding Integration for Auto-Indexing**: Integrated NVIDIA embedding generation into the standard workspace synchronization flow. Telemetry requests hitting `POST /api/projects/sync` now automatically schedule background vector embeddings and save relational mapping of AST structures directly into the Oracle 26ai Database.
+- **Always-on Semantic Memory Sync**: Defaulted the manual `sync_system_memory` tool's `enableEnterpriseSync` flag to `true` for both the client enterprise gateway and the remote server.
+
 ## [2.11.7] - 2026-05-23
 
 ### Added / Fixed

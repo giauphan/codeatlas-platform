@@ -407,6 +407,25 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
     } catch (e) {
       console.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
     }
+
+    // Sync to Oracle 26ai in background if connection string is configured
+    if (auth && process.env.ORACLE_CONN_STRING && analysis.graph?.nodes && analysis.graph?.links) {
+      const nodes = analysis.graph.nodes;
+      const links = analysis.graph.links;
+      Promise.resolve().then(async () => {
+        try {
+          await authStorage.run(auth, async () => {
+            const { OracleMemoryService } = await import("../oracleDatabase.js");
+            console.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
+            await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
+            await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
+            console.error(`[Sync API] Async sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
+          });
+        } catch (oracleErr) {
+          console.error(`[Sync API] Failed to async sync to Oracle 26ai:`, oracleErr);
+        }
+      });
+    }
     
     res.json({ success: true, projectDir });
   } catch (err: unknown) {
