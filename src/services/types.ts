@@ -33,6 +33,7 @@ export interface EntityCounts {
   modules: number;
   functions: number;
   classes: number;
+  variables?: number;
   dependencies: number;
   circularDeps: number;
   deadCode?: number;
