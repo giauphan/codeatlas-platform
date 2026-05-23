@@ -109,7 +109,7 @@ export function registerTools(server: McpServer) {
         entities: nodes.map((n) => ({
           name: n.label,
           type: n.type,
-          filePath: n.filePath || null,
+          filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
           line: n.line || null,
         })),
       };
@@ -264,7 +264,7 @@ export function registerTools(server: McpServer) {
           return {
             name: n.label,
             type: n.type,
-            filePath: n.filePath || null,
+            filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
             line: n.line || null,
             incomingRelationships: incomingLinks,
             outgoingRelationships: outgoingLinks,
@@ -317,7 +317,7 @@ export function registerTools(server: McpServer) {
         showing: filesEntries.length,
         truncated: byFile.size > filesEntries.length,
         files: filesEntries.map(([fp, entities]) => ({
-          filePath: fp,
+          filePath: fp === "unknown" ? "unknown" : (path.isAbsolute(fp) ? fp : path.resolve(loaded.projectDir, fp)),
           entities: entities.map((e) => ({
             name: e.label,
             type: e.type,
@@ -558,7 +558,11 @@ export function registerTools(server: McpServer) {
         .slice(0, 20);
 
       const keyModulesSection = keyModules
-        .map((m, i) => `${i + 1}. **${m.name}** (${m.connections} connections) — \`${path.relative(loaded.projectDir, m.path || "")}\``)
+        .map((m, i) => {
+          const absPath = m.path ? (path.isAbsolute(m.path) ? m.path : path.resolve(loaded.projectDir, m.path)) : "";
+          const relPath = absPath ? path.relative(loaded.projectDir, absPath) : "";
+          return `${i + 1}. **${m.name}** (${m.connections} connections) — \`${relPath}\``;
+        })
         .join("\n");
 
       await fs.promises.writeFile(path.join(memoryDir, "system-map.md"), systemMapContent + "\n" + keyModulesSection + "\n");
@@ -579,7 +583,7 @@ export function registerTools(server: McpServer) {
 
         return {
           name: m.label,
-          path: m.filePath ? path.relative(loaded.projectDir, m.filePath) : null,
+          path: m.filePath ? (path.isAbsolute(m.filePath) ? path.relative(loaded.projectDir, m.filePath) : m.filePath) : null,
           contains: contained,
           imports: imports,
           connectionCount: moduleConnections.get(m.id) || 0,
@@ -592,7 +596,7 @@ export function registerTools(server: McpServer) {
       const featureMap = new Map<string, string[]>();
       for (const mod of modules) {
         if (!mod.filePath) continue;
-        const rel = path.relative(loaded.projectDir, mod.filePath);
+        const rel = path.isAbsolute(mod.filePath) ? path.relative(loaded.projectDir, mod.filePath) : mod.filePath;
         const dir = path.dirname(rel).split(path.sep)[0] || ".";
         if (!featureMap.has(dir)) featureMap.set(dir, []);
         featureMap.get(dir)!.push(rel);
@@ -825,13 +829,18 @@ export function registerTools(server: McpServer) {
       }
 
       const filesArray = Array.from(byFile.entries())
-        .map(([filePath, entities]) => ({
-          filePath: filePath === "external" ? "external" : path.relative(loaded.projectDir, filePath),
-          absolutePath: filePath,
-          entities,
-          hasSeedMatch: entities.some((e) => e.isSeed),
-          entityCount: entities.length,
-        }))
+        .map(([filePath, entities]) => {
+          const isExt = filePath === "external";
+          const relPath = isExt ? "external" : (path.isAbsolute(filePath) ? path.relative(loaded.projectDir, filePath) : filePath);
+          const absPath = isExt ? "external" : (path.isAbsolute(filePath) ? filePath : path.resolve(loaded.projectDir, filePath));
+          return {
+            filePath: relPath,
+            absolutePath: absPath,
+            entities,
+            hasSeedMatch: entities.some((e) => e.isSeed),
+            entityCount: entities.length,
+          };
+        })
         .sort((a, b) => {
           if (a.hasSeedMatch && !b.hasSeedMatch) return -1;
           if (!a.hasSeedMatch && b.hasSeedMatch) return 1;
@@ -1105,7 +1114,7 @@ export function registerTools(server: McpServer) {
             step: step++,
             name: node.label,
             type: node.type,
-            file: node.filePath ? path.relative(loaded.projectDir, node.filePath) : null,
+            file: node.filePath ? (path.isAbsolute(node.filePath) ? path.relative(loaded.projectDir, node.filePath) : node.filePath) : null,
             line: node.line || null,
             callsTo,
             calledBy,
@@ -1136,7 +1145,7 @@ export function registerTools(server: McpServer) {
             step: step++,
             name: node.label,
             type: node.type,
-            file: node.filePath ? path.relative(loaded.projectDir, node.filePath) : null,
+            file: node.filePath ? (path.isAbsolute(node.filePath) ? path.relative(loaded.projectDir, node.filePath) : node.filePath) : null,
             line: node.line || null,
             callsTo,
             calledBy,
@@ -1154,7 +1163,7 @@ export function registerTools(server: McpServer) {
         entryPoints: entryPoints.map((n) => ({
           name: n.label,
           type: n.type,
-          file: n.filePath ? path.relative(loaded.projectDir, n.filePath) : null,
+          file: n.filePath ? (path.isAbsolute(n.filePath) ? path.relative(loaded.projectDir, n.filePath) : n.filePath) : null,
         })),
         mermaidDiagram: mermaid,
         executionOrder,
@@ -1296,7 +1305,7 @@ export function registerTools(server: McpServer) {
 export const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.11.8",
+    version: "2.11.9",
   },
   {
     capabilities: {

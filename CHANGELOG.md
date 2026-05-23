@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.9] - 2026-05-23
+
+### Fixed
+- **Path Leakage Protection**: Sanitized and normalized all local workspace paths (`filePath`) to relative paths prior to serialization and remote synchronization. This stops sensitive local absolute paths (e.g. `/home/biibon/...`) from being transmitted to the cloud database and Oracle 26ai Knowledge Graph.
+- **Dynamic Path Resolution**: Local MCP server tools dynamically resolve absolute file paths for local consumption (e.g. for the local LLM/IDE), preserving complete local-first functionality while maintaining clean/portable synced metadata.
+
 ## [2.11.8] - 2026-05-23
 
 ### Added / Changed
