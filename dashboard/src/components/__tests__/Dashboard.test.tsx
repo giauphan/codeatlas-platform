@@ -21,7 +21,12 @@ vi.mock('../LogicModelsView', () => ({
   LogicModelsView: () => <div data-testid="logic-models-view">Logic Models View</div>
 }));
 vi.mock('../CloudIndexView', () => ({
-  CloudIndexView: () => <div data-testid="cloud-index-view">Cloud Index View</div>
+  CloudIndexView: ({ onDeleteProject }: any) => (
+    <div data-testid="cloud-index-view">
+      Cloud Index View
+      <button data-testid="delete-project-btn" onClick={onDeleteProject}>Delete Project</button>
+    </div>
+  )
 }));
 vi.mock('../DocumentationView', () => ({
   DocumentationView: () => <div data-testid="documentation-view">Documentation View</div>
@@ -195,5 +200,52 @@ describe('Dashboard', () => {
     await waitFor(() => {
         expect(sessionStorage.getItem('codeatlas_indexing_enabled')).toBe('false');
     });
+  });
+
+  it('calls handleDeleteProject and clears state on successful deletion', async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/api/projects') && !url.includes('projectDir=')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([{ name: 'mock-project', dir: '/home/biibon/mock-project' }])
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true })
+      });
+    });
+    globalThis.fetch = fetchMock;
+
+    sessionStorage.setItem('ca_selected_project_dir', '/home/biibon/mock-project');
+    const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+
+    render(<Dashboard />);
+
+    // Switch to Cloud Index tab
+    const ciTab = screen.getByText('Cloud Index');
+    fireEvent.click(ciTab);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cloud-index-view')).toBeInTheDocument();
+    });
+
+    // Click Delete Project button
+    const deleteBtn = screen.getByTestId('delete-project-btn');
+    fireEvent.click(deleteBtn);
+
+    await waitFor(() => {
+      // Assert fetch was called with DELETE method and correct URL
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/projects?projectDir=%2Fhome%2Fbiibon%2Fmock-project'),
+        expect.objectContaining({ method: 'DELETE' })
+      );
+      // Assert states and sessionStorage are cleared
+      expect(sessionStorage.getItem('ca_selected_project_dir')).toBeNull();
+      expect(sessionStorage.getItem('ca_analysis_cache')).toBeNull();
+      expect(alertMock).toHaveBeenCalledWith('Project successfully removed!');
+    });
+
+    alertMock.mockRestore();
   });
 });
