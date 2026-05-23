@@ -214,4 +214,186 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
     delete process.env.CODEATLAS_PROJECT_DIR;
     cleanupDirectories();
   });
+
+  test('should abort deletion and preserve local files if remote DB cleanup fails', async () => {
+    setupDirectories();
+    deleteProjectMemoryCalls = [];
+
+    // Temporarily make deleteProjectMemory throw an error
+    mock.restoreAll();
+    mock.method(OracleMemoryService, 'deleteProjectMemory', async (project: string, tenantId?: string) => {
+      throw new Error('Oracle DB connection lost');
+    });
+
+    const handler = getDeleteHandler();
+    const projBDir = path.join(mockTenantRoot, 'tenant1', 'projectB');
+    process.env.CODEATLAS_PROJECT_DIR = projBDir;
+
+    const reqB: any = {
+      query: {
+        projectDir: projBDir
+      }
+    };
+    const resB: any = {
+      statusCode: 200,
+      jsonData: null,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data: any) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    await new Promise<void>((resolve) => {
+      authStorage.run(auth, async () => {
+        await handler(reqB, resB, () => {});
+        resolve();
+      });
+    });
+
+    assert.strictEqual(resB.statusCode, 500);
+    assert.strictEqual(resB.jsonData.success, false);
+    assert.match(resB.jsonData.error, /Remote cleanup failure/);
+
+    // Verify .codeatlas and projectB still exist locally because deletion was deferred
+    assert.strictEqual(fs.existsSync(path.join(projBDir, '.codeatlas')), true);
+    assert.strictEqual(fs.existsSync(projBDir), true);
+
+    // Restore original mock
+    mock.restoreAll();
+    mock.method(OracleMemoryService, 'deleteProjectMemory', async (project: string, tenantId?: string) => {
+      deleteProjectMemoryCalls.push({ project, tenantId });
+    });
+
+    delete process.env.CODEATLAS_PROJECT_DIR;
+    cleanupDirectories();
+  });
+
+  test('should handle symlink project directories and symlink .codeatlas securely without traversing outside sandbox', async () => {
+    setupDirectories();
+    deleteProjectMemoryCalls = [];
+
+    // Create a project directory that is a symlink to another directory inside sandbox
+    const sourceDir = path.join(mockTenantRoot, 'tenant1', 'sourceProject');
+    if (fs.existsSync(sourceDir)) {
+      fs.rmSync(sourceDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(path.join(sourceDir, '.codeatlas'), { recursive: true });
+    fs.writeFileSync(path.join(sourceDir, '.codeatlas', 'analysis.json'), '{}');
+    fs.writeFileSync(path.join(sourceDir, 'config.json'), '{}');
+
+    // Create a symlink named projectSymlink pointing to sourceProject
+    const symlinkDir = path.join(mockTenantRoot, 'tenant1', 'projectSymlink');
+    if (fs.existsSync(symlinkDir)) {
+      fs.unlinkSync(symlinkDir);
+    }
+    fs.symlinkSync(sourceDir, symlinkDir);
+
+    const handler = getDeleteHandler();
+    process.env.CODEATLAS_PROJECT_DIR = symlinkDir;
+
+    const reqSym: any = {
+      query: {
+        projectDir: symlinkDir
+      }
+    };
+    const resSym: any = {
+      statusCode: 200,
+      jsonData: null,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data: any) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    await new Promise<void>((resolve) => {
+      authStorage.run(auth, async () => {
+        await handler(reqSym, resSym, () => {});
+        resolve();
+      });
+    });
+
+    assert.strictEqual(resSym.statusCode, 200);
+    assert.strictEqual(resSym.jsonData.success, true);
+
+    // The symlink file itself should be unlinked/removed
+    assert.strictEqual(fs.existsSync(symlinkDir), false);
+
+    // The target sourceProject directory's .codeatlas directory should be deleted,
+    // but the sourceProject itself should NOT be deleted because it is not empty (it has config.json)
+    assert.strictEqual(fs.existsSync(path.join(sourceDir, '.codeatlas')), false);
+    assert.strictEqual(fs.existsSync(sourceDir), true);
+    assert.strictEqual(fs.existsSync(path.join(sourceDir, 'config.json')), true);
+
+    delete process.env.CODEATLAS_PROJECT_DIR;
+    cleanupDirectories();
+  });
+
+  test('should reject deletion if symlink points outside the tenant sandbox root', async () => {
+    setupDirectories();
+    deleteProjectMemoryCalls = [];
+
+    // Create a directory outside mockTenantRoot (e.g. in siblingTenantRoot)
+    const outsideDir = path.join(siblingTenantRoot, 'outsideProject');
+    if (fs.existsSync(outsideDir)) {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(path.join(outsideDir, '.codeatlas'), { recursive: true });
+    fs.writeFileSync(path.join(outsideDir, '.codeatlas', 'analysis.json'), '{}');
+
+    // Create a symlink in mockTenantRoot pointing to outsideDir
+    const symlinkDir = path.join(mockTenantRoot, 'tenant1', 'badSymlink');
+    if (fs.existsSync(symlinkDir)) {
+      fs.unlinkSync(symlinkDir);
+    }
+    fs.symlinkSync(outsideDir, symlinkDir);
+
+    const handler = getDeleteHandler();
+    process.env.CODEATLAS_PROJECT_DIR = symlinkDir;
+
+    const reqSym: any = {
+      query: {
+        projectDir: symlinkDir
+      }
+    };
+    const resSym: any = {
+      statusCode: 200,
+      jsonData: null,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data: any) {
+        this.jsonData = data;
+        return this;
+      }
+    };
+
+    // Even admin/tenant users should be rejected if the target is outside the tenant root sandbox
+    const auth = { uid: 'tenant1', role: 'user', tier: 'enterprise', keyId: 'mock-key', email: 'user@tenant1.com' };
+    await new Promise<void>((resolve) => {
+      authStorage.run(auth, async () => {
+        await handler(reqSym, resSym, () => {});
+        resolve();
+      });
+    });
+
+    assert.strictEqual(resSym.statusCode, 403);
+    assert.match(resSym.jsonData.error, /outside the tenant root sandbox/);
+
+    // Verify target outside directory is intact
+    assert.strictEqual(fs.existsSync(path.join(outsideDir, '.codeatlas')), true);
+
+    delete process.env.CODEATLAS_PROJECT_DIR;
+    cleanupDirectories();
+  });
 });

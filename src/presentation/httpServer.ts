@@ -116,58 +116,50 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       return res.status(403).json({ error: "Access denied or project not found" });
     }
     
-        const { cleanProjectName, fullProjectDir } = resolved;
+    const { cleanProjectName, fullProjectDir } = resolved;
     
     // Derive target owner tenant from project path
     let ownerTenantId = tenantId;
     let isInsideTenantRoot = false;
     const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
     const normalizedTenantRoot = path.resolve(tenantRoot);
-    const normalizedProjectDir = path.resolve(fullProjectDir);
+    
+    // Resolve the real canonical path of the project to securely handle symlinks
+    let realProjectDir: string;
+    try {
+      realProjectDir = await fs.promises.realpath(fullProjectDir);
+    } catch {
+      realProjectDir = path.resolve(fullProjectDir);
+    }
     
     if (process.env.CODEATLAS_MULTI_TENANT === "true") {
-      const relativePath = path.relative(normalizedTenantRoot, normalizedProjectDir);
+      const relativePath = path.relative(normalizedTenantRoot, realProjectDir);
       isInsideTenantRoot = !!relativePath && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
-      if (isInsideTenantRoot) {
-        const parts = relativePath.split(path.sep);
-        if (parts.length > 0 && parts[0]) {
-          ownerTenantId = parts[0];
+      if (!isInsideTenantRoot) {
+        return res.status(403).json({ error: "Access denied: Project directory is outside the tenant root sandbox." });
+      }
+      
+      const isSystemAdmin = auth
+        ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
+        : false;
+      if (!isSystemAdmin && tenantId) {
+        const tenantRootPath = path.resolve(path.join(normalizedTenantRoot, tenantId));
+        const relToTenant = path.relative(tenantRootPath, realProjectDir);
+        const isInsideTenant = !!relToTenant && !relToTenant.startsWith("..") && !path.isAbsolute(relToTenant);
+        if (!isInsideTenant) {
+          return res.status(403).json({ error: "Access denied: Project directory is outside your tenant sandbox." });
         }
+      }
+
+      const parts = relativePath.split(path.sep);
+      if (parts.length > 0 && parts[0]) {
+        ownerTenantId = parts[0];
       }
     }
     
     const errors: string[] = [];
 
-    // 1. Remove ONLY the codeatlas indexing directory within the project, OR the entire folder if it is a tenant sandbox and is empty
-    try {
-      const codeatlasDir = path.join(fullProjectDir, ".codeatlas");
-      if (fs.existsSync(codeatlasDir)) {
-        await fs.promises.rm(codeatlasDir, { recursive: true, force: true });
-        console.log(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
-      }
-
-      // If multi-tenant mode is active, the project resides within the tenants directory, and the directory is empty after index cleanup, clean up the empty tenant project folder too
-      if (process.env.CODEATLAS_MULTI_TENANT === "true" && isInsideTenantRoot) {
-        if (normalizedProjectDir !== normalizedTenantRoot && fs.existsSync(normalizedProjectDir)) {
-          const remainingFiles = await fs.promises.readdir(normalizedProjectDir);
-          if (remainingFiles.length === 0) {
-            await fs.promises.rm(normalizedProjectDir, { recursive: true, force: true });
-            console.log(`[Delete Project] Cleaned up empty tenant sandbox directory: ${normalizedProjectDir}`);
-          }
-        }
-      }
-    } catch (dirErr: any) {
-      errors.push(`Failed to clean up index directory: ${dirErr.message || String(dirErr)}`);
-    }
-
-    // Unregister project from local registered list
-    try {
-      unregisterProject(fullProjectDir);
-    } catch (regErr: any) {
-      errors.push(`Failed to unregister project: ${regErr.message || String(regErr)}`);
-    }
-
-    // 2. Remove telemetry data from Firestore (if Firebase is configured)
+    // 1. Remove telemetry data from Firestore (if Firebase is configured)
     try {
       const apps = getApps();
       if (apps.length) {
@@ -181,7 +173,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       errors.push(`Firestore cleanup failed: ${firebaseErr.message || String(firebaseErr)}`);
     }
 
-    // 3. Remove semantic/relational/episodic memory from Oracle DB (if Oracle DB is configured)
+    // 2. Remove semantic/relational/episodic memory from Oracle DB (if Oracle DB is configured)
     try {
       if (process.env.ORACLE_CONN_STRING) {
         const { OracleMemoryService } = await import("../oracleDatabase.js");
@@ -192,10 +184,64 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       errors.push(`Oracle DB cleanup failed: ${oracleErr.message || String(oracleErr)}`);
     }
 
+    // If remote cleanups fail, abort before deleting local files so the project remains discoverable and retryable
     if (errors.length > 0) {
       return res.status(500).json({
         success: false,
-        error: "Partial or full deletion failure",
+        error: "Remote cleanup failure. Local files and project registry were not modified to allow retries.",
+        details: errors
+      });
+    }
+
+    // 3. Remote cleanups succeeded. Now clean up local index directory and empty tenant sandboxes
+    try {
+      const codeatlasDir = path.join(realProjectDir, ".codeatlas");
+      
+      let codeatlasLstat;
+      try {
+        codeatlasLstat = await fs.promises.lstat(codeatlasDir);
+      } catch {}
+
+      if (codeatlasLstat) {
+        if (codeatlasLstat.isSymbolicLink()) {
+          await fs.promises.unlink(codeatlasDir);
+        } else if (fs.existsSync(codeatlasDir)) {
+          await fs.promises.rm(codeatlasDir, { recursive: true, force: true });
+        }
+        console.log(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
+      }
+
+      // If multi-tenant mode is active, the project resides within the tenants directory, and the directory is empty after index cleanup, clean up the empty tenant project folder too
+      if (process.env.CODEATLAS_MULTI_TENANT === "true" && isInsideTenantRoot) {
+        if (realProjectDir !== normalizedTenantRoot && fs.existsSync(realProjectDir)) {
+          const lstat = await fs.promises.lstat(fullProjectDir);
+          if (lstat.isSymbolicLink()) {
+            await fs.promises.unlink(fullProjectDir);
+            console.log(`[Delete Project] Unlinked tenant project symlink: ${fullProjectDir}`);
+          } else {
+            const remainingFiles = await fs.promises.readdir(realProjectDir);
+            if (remainingFiles.length === 0) {
+              await fs.promises.rm(realProjectDir, { recursive: true, force: true });
+              console.log(`[Delete Project] Cleaned up empty tenant sandbox directory: ${realProjectDir}`);
+            }
+          }
+        }
+      }
+    } catch (dirErr: any) {
+      errors.push(`Failed to clean up index directory: ${dirErr.message || String(dirErr)}`);
+    }
+
+    // 4. Unregister project from local registered list
+    try {
+      unregisterProject(fullProjectDir);
+    } catch (regErr: any) {
+      errors.push(`Failed to unregister project: ${regErr.message || String(regErr)}`);
+    }
+
+    if (errors.length > 0) {
+      return res.status(500).json({
+        success: false,
+        error: "Partial local deletion failure",
         details: errors
       });
     }
