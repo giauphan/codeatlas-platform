@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.13] - 2026-05-24
+
+### Fixed
+- **Dashboard Cache Invalidation**: Implemented project-specific cache-key storage (`ca_analysis_cache_\${projectDir}`) in `Dashboard.tsx` to resolve stale UI counts on dashboard selection and reload.
+- **Cache Clearing**: Added automatic clearing of project-specific cached analysis upon project deletion, logout, session expiration, and explicit re-indexing.
+
+## [2.11.12] - 2026-05-23
+
+### Fixed
+- **Local Memory Elimination**: Removed the remaining local filesystem writes inside the `sync_system_memory` tool handler on both server and client repositories.
+- **Unified Episodic Cloud Sync**: Updated the client's `syncAnalysisToServer` and the server's POST `/api/projects/sync` endpoint to securely transmit and store `businessRule` and `changeDescription` directly in the database.
+
 ## [2.11.11] - 2026-05-23
 
 ### Changed / Fixed
