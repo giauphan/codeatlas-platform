@@ -108,11 +108,17 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   // Keep physics simulation state in a local state updated on tick
   const [simNodes, setSimNodes] = useState<any[]>([]);
 
-  // Initialize nodes with positions
+  // Initialize nodes with positions, prioritizing modules to avoid cutting them off
   useEffect(() => {
     const centerX = 550;
     const centerY = 350;
-    const initialNodes = filteredNodes.slice(0, 120).map((n, i) => {
+    
+    // Sort and slice: place all module nodes first, then fill up to 150 total nodes
+    const modules = filteredNodes.filter((n: any) => n.type === 'module');
+    const nonModules = filteredNodes.filter((n: any) => n.type !== 'module');
+    const prioritizedNodes = [...modules, ...nonModules].slice(0, 150);
+
+    const initialNodes = prioritizedNodes.map((n, i) => {
       const isModule = n.type === 'module';
       const angle = (i * 2 * Math.PI) / (isModule ? 6 : 24);
       const radius = isModule ? 70 : 160 + (Math.floor(i / 20) * 55);
