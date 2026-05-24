@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [2.11.13] - 2026-05-24
 
 ### Fixed
-- **Dashboard Cache Invalidation**: Implemented project-specific cache-key storage (`ca_analysis_cache_<projectDir>`) in `Dashboard.tsx` to resolve stale UI counts on dashboard selection and reload.
+- **Dashboard Cache Invalidation**: Implemented project-specific cache-key storage (`ca_analysis_cache_\${projectDir}`) in `Dashboard.tsx` to resolve stale UI counts on dashboard selection and reload.
 - **Cache Clearing**: Added automatic clearing of project-specific cached analysis upon project deletion, logout, session expiration, and explicit re-indexing.
 
 ## [2.11.12] - 2026-05-23

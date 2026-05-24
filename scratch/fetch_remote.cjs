@@ -1,6 +1,6 @@
 const https = require('https');
 
-const apiKey = "ca_7d94a7d627324b79870c77e3307190ce";
+const apiKey = process.env.ATLAS_API_KEY || "ca_placeholder";
 
 function makeRequest(url) {
   return new Promise((resolve, reject) => {
