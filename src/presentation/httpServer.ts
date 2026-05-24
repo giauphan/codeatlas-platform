@@ -301,6 +301,120 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
   }
 });
 
+// REST API: Get indexing settings for a project
+app.get("/api/projects/settings", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+    
+    const projectDir = req.query.projectDir as string;
+    const projectName = req.query.projectName as string;
+    
+    if (!projectDir && !projectName) {
+      return res.status(400).json({ error: "Missing projectDir or projectName query parameter" });
+    }
+    
+    let resolved;
+    if (projectDir) {
+      resolved = await resolveProjectDir(projectDir, tenantId, true);
+    } else if (projectName) {
+      resolved = await resolveProjectDir(projectName, tenantId, false);
+    }
+    
+    if (!resolved) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+    
+    const { cleanProjectName, fullProjectDir } = resolved;
+    let indexingEnabled = true;
+    
+    try {
+      const settingsPath = path.join(fullProjectDir, ".codeatlas", "settings.json");
+      if (fs.existsSync(settingsPath)) {
+        const data = await fs.promises.readFile(settingsPath, "utf-8");
+        const parsed = JSON.parse(data);
+        if (typeof parsed.indexingEnabled === "boolean") {
+          indexingEnabled = parsed.indexingEnabled;
+        }
+      } else {
+        // Fallback: check Firestore
+        const apps = firebaseClient.getApps();
+        if (apps.length) {
+          const db = firebaseClient.getFirestore();
+          const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+          const docRef = db.collection('projects').doc(docId);
+          const doc = await docRef.get();
+          if (doc.exists && typeof doc.data()?.indexingEnabled === "boolean") {
+            indexingEnabled = doc.data()?.indexingEnabled;
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[Settings API] Error reading settings:", e);
+    }
+    
+    res.json({ indexingEnabled });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
+  }
+});
+
+// REST API: Update indexing settings for a project
+app.post("/api/projects/settings", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+    
+    const { projectDir, projectName, indexingEnabled } = req.body;
+    if (typeof indexingEnabled !== "boolean") {
+      return res.status(400).json({ error: "Missing or invalid indexingEnabled parameter (must be boolean)" });
+    }
+    
+    if (!projectDir && !projectName) {
+      return res.status(400).json({ error: "Missing projectDir or projectName parameter" });
+    }
+    
+    let resolved;
+    if (projectDir) {
+      resolved = await resolveProjectDir(projectDir, tenantId, true);
+    } else if (projectName) {
+      resolved = await resolveProjectDir(projectName, tenantId, false);
+    }
+    
+    if (!resolved) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+    
+    const { cleanProjectName, fullProjectDir } = resolved;
+    
+    // Ensure .codeatlas directory exists
+    const codeatlasDir = path.join(fullProjectDir, ".codeatlas");
+    if (!fs.existsSync(codeatlasDir)) {
+      await fs.promises.mkdir(codeatlasDir, { recursive: true });
+    }
+    
+    const settingsPath = path.join(codeatlasDir, "settings.json");
+    await fs.promises.writeFile(settingsPath, JSON.stringify({ indexingEnabled }, null, 2));
+    
+    // Save to Firestore
+    try {
+      const apps = firebaseClient.getApps();
+      if (apps.length) {
+        const db = firebaseClient.getFirestore();
+        const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+        const docRef = db.collection('projects').doc(docId);
+        await docRef.set({ indexingEnabled }, { merge: true });
+      }
+    } catch (e) {
+      console.error("[Settings API] Error updating Firestore settings:", e);
+    }
+    
+    res.json({ success: true, indexingEnabled });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
+  }
+});
+
 // REST API: Get analysis data
 app.get("/api/analysis", authMiddleware, async (req, res) => {
   try {
@@ -548,7 +662,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.11.14",
+        version: "2.12.0",
       },
       {
         capabilities: {

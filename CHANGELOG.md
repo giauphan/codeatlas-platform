@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.0] - 2026-05-24
+
+### Added
+- **Indexing Settings Endpoints**: Introduced `GET /api/projects/settings` and `POST /api/projects/settings` REST API routes to retrieve and save codebase-level indexing configurations (e.g. `indexingEnabled`).
+- **Dynamic File Watcher Toggle**: Integrated the indexing configuration check in the enterprise MCP `watcherService` to respect the auto-scan settings and skip local indexing/telemetry pushes if disabled.
+
+## [2.11.15] - 2026-05-24
+
+### Changed / Removed
+- **Menu Simplification**: Removed the 'Logic Engines' ('Logic Models') view component, sidebar menu item, and corresponding unit test coverage from the dashboard.
+
 ## [2.11.14] - 2026-05-24
 
 ### Fixed

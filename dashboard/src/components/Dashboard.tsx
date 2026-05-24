@@ -93,28 +93,53 @@ export const Dashboard: React.FC = () => {
     }
     return null;
   });
-  const [isIndexingEnabled, setIsIndexingEnabled] = useState(() => {
-    const saved = sessionStorage.getItem('codeatlas_indexing_enabled');
-    if (saved !== null) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        sessionStorage.removeItem('codeatlas_indexing_enabled');
-      }
-    }
-    return true;
+  const [selectedProjectDir, setSelectedProjectDir] = useState<string>(() => {
+    return sessionStorage.getItem('ca_selected_project_dir') || '';
   });
+  const [isIndexingEnabled, setIsIndexingEnabled] = useState(true);
+
+  const fetchIndexingSettings = async (projectDir: string) => {
+    try {
+      const headers = await getAuthHeaders();
+      const resp = await fetch(`${API_BASE}/api/projects/settings?projectDir=${encodeURIComponent(projectDir)}`, { headers });
+      if (resp.ok) {
+        const data = await resp.json();
+        setIsIndexingEnabled(data.indexingEnabled);
+        sessionStorage.setItem('codeatlas_indexing_enabled', JSON.stringify(data.indexingEnabled));
+      }
+    } catch (err) {
+      console.error("Failed to fetch indexing settings:", err);
+    }
+  };
 
   useEffect(() => {
-    sessionStorage.setItem('codeatlas_indexing_enabled', JSON.stringify(isIndexingEnabled));
-  }, [isIndexingEnabled]);
+    if (selectedProjectDir) {
+      fetchIndexingSettings(selectedProjectDir);
+    }
+  }, [selectedProjectDir]);
+
+  const handleToggleIndexingEnabled = async (newValue: boolean) => {
+    setIsIndexingEnabled(newValue);
+    sessionStorage.setItem('codeatlas_indexing_enabled', JSON.stringify(newValue));
+    if (!selectedProjectDir) return;
+    try {
+      const headers = await getAuthHeaders();
+      await fetch(`${API_BASE}/api/projects/settings`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          projectDir: selectedProjectDir,
+          indexingEnabled: newValue
+        })
+      });
+    } catch (err) {
+      console.error("Failed to update indexing settings:", err);
+    }
+  };
 
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState({ totalRequests: 0 });
   const [projects, setProjects] = useState<{ name: string; dir: string }[]>([]);
-  const [selectedProjectDir, setSelectedProjectDir] = useState<string>(() => {
-    return sessionStorage.getItem('ca_selected_project_dir') || '';
-  });
   const user = auth.currentUser;
 
   const getAuthHeaders = async () => {
@@ -461,7 +486,7 @@ export const Dashboard: React.FC = () => {
             isIndexing={isIndexing} 
             onReindex={handleReindex} 
             isIndexingEnabled={isIndexingEnabled} 
-            setIsIndexingEnabled={setIsIndexingEnabled} 
+            setIsIndexingEnabled={handleToggleIndexingEnabled} 
           />
         );
       case 'Documentation':
