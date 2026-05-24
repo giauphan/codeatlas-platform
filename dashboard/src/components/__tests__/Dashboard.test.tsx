@@ -22,9 +22,6 @@ vi.mock('../KnowledgeGraphView', () => ({
     </div>
   )
 }));
-vi.mock('../LogicModelsView', () => ({
-  LogicModelsView: () => <div data-testid="logic-models-view">Logic Models View</div>
-}));
 vi.mock('../CloudIndexView', () => ({
   CloudIndexView: () => <div data-testid="cloud-index-view">Cloud Index View</div>
 }));
@@ -121,21 +118,12 @@ describe('Dashboard', () => {
       expect(screen.getByTestId('knowledge-graph-view')).toBeInTheDocument();
     });
 
-    // Click on Logic Models tab
-    const lmTab = screen.getByText('Logic Models');
-    fireEvent.click(lmTab);
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('knowledge-graph-view')).not.toBeInTheDocument();
-      expect(screen.getByTestId('logic-models-view')).toBeInTheDocument();
-    });
-
     // Click on Cloud Index tab
     const ciTab = screen.getByText('Cloud Index');
     fireEvent.click(ciTab);
 
     await waitFor(() => {
-      expect(screen.queryByTestId('logic-models-view')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('knowledge-graph-view')).not.toBeInTheDocument();
       expect(screen.getByTestId('cloud-index-view')).toBeInTheDocument();
     });
 

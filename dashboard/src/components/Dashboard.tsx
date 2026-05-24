@@ -13,7 +13,6 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LogOut, 
-  Cpu, 
   Globe, 
   Network, 
   ShieldCheck, 
@@ -24,7 +23,6 @@ import {
 // Decoupled sub-views
 import { ControlCenterView } from './ControlCenterView';
 import { KnowledgeGraphView } from './KnowledgeGraphView';
-import { LogicModelsView } from './LogicModelsView';
 import { CloudIndexView } from './CloudIndexView';
 import { DocumentationView } from './DocumentationView';
 
@@ -456,8 +454,6 @@ export const Dashboard: React.FC = () => {
             onDeleteProject={handleDeleteProject}
           />
         );
-      case 'Logic Models':
-        return <LogicModelsView analysis={resolvedAnalysis} />;
       case 'Cloud Index':
         return (
           <CloudIndexView 
@@ -494,7 +490,6 @@ export const Dashboard: React.FC = () => {
           {[
             { icon: LayoutDashboard, label: 'Control Center' },
             { icon: Network, label: 'Knowledge Graph' },
-            { icon: Cpu, label: 'Logic Models' },
             { icon: Globe, label: 'Cloud Index' },
             { icon: BookOpen, label: 'Documentation' },
           ].map((item) => (
