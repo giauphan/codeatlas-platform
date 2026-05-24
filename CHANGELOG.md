@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.14] - 2026-05-24
+
+### Fixed
+- **Knowledge Graph Node Prioritization**: Prioritized module type nodes in the front-end simulation graph to prevent module nodes from being cut off due to the performance rendering limit.
+
 ## [2.11.13] - 2026-05-24
 
 ### Fixed
