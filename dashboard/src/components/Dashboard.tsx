@@ -74,12 +74,37 @@ export const Dashboard: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Control Center');
   const [analysis, setAnalysis] = useState<AnalysisData | null>(() => {
+    const savedProjDir = sessionStorage.getItem('ca_selected_project_dir');
+    if (savedProjDir) {
+      const cachedProject = sessionStorage.getItem(`ca_analysis_cache_${savedProjDir}`);
+      if (cachedProject) {
+        try {
+          return JSON.parse(cachedProject);
+        } catch (e) {
+          sessionStorage.removeItem(`ca_analysis_cache_${savedProjDir}`);
+        }
+      }
+    }
     const cached = sessionStorage.getItem('ca_analysis_cache');
-    return cached ? JSON.parse(cached) : null;
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        sessionStorage.removeItem('ca_analysis_cache');
+      }
+    }
+    return null;
   });
   const [isIndexingEnabled, setIsIndexingEnabled] = useState(() => {
     const saved = sessionStorage.getItem('codeatlas_indexing_enabled');
-    return saved !== null ? JSON.parse(saved) : true;
+    if (saved !== null) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        sessionStorage.removeItem('codeatlas_indexing_enabled');
+      }
+    }
+    return true;
   });
 
   useEffect(() => {
@@ -127,15 +152,24 @@ export const Dashboard: React.FC = () => {
       if (resp.ok) {
         const data = await resp.json();
         setAnalysis(data);
+        if (projectDir) {
+          sessionStorage.setItem(`ca_analysis_cache_${projectDir}`, JSON.stringify(data));
+        }
         sessionStorage.setItem('ca_analysis_cache', JSON.stringify(data));
       } else {
         // Clear cached stale data if backend rejects access (404/403 boundary violation)
         setAnalysis(null);
+        if (projectDir) {
+          sessionStorage.removeItem(`ca_analysis_cache_${projectDir}`);
+        }
         sessionStorage.removeItem('ca_analysis_cache');
       }
     } catch (err) {
       console.error("Failed to fetch analysis:", err);
       setAnalysis(null);
+      if (projectDir) {
+        sessionStorage.removeItem(`ca_analysis_cache_${projectDir}`);
+      }
       sessionStorage.removeItem('ca_analysis_cache');
     }
   };
@@ -162,6 +196,11 @@ export const Dashboard: React.FC = () => {
           sessionStorage.removeItem('ca_selected_project_dir');
           setAnalysis(null);
           sessionStorage.removeItem('ca_analysis_cache');
+          Object.keys(sessionStorage).forEach(k => {
+            if (k.startsWith('ca_analysis_cache_')) {
+              sessionStorage.removeItem(k);
+            }
+          });
         }
       } else {
         setProjects([]);
@@ -169,6 +208,11 @@ export const Dashboard: React.FC = () => {
         sessionStorage.removeItem('ca_selected_project_dir');
         setAnalysis(null);
         sessionStorage.removeItem('ca_analysis_cache');
+        Object.keys(sessionStorage).forEach(k => {
+          if (k.startsWith('ca_analysis_cache_')) {
+            sessionStorage.removeItem(k);
+          }
+        });
       }
     } catch (err) {
       console.error("Failed to fetch projects:", err);
@@ -177,6 +221,11 @@ export const Dashboard: React.FC = () => {
       sessionStorage.removeItem('ca_selected_project_dir');
       setAnalysis(null);
       sessionStorage.removeItem('ca_analysis_cache');
+      Object.keys(sessionStorage).forEach(k => {
+        if (k.startsWith('ca_analysis_cache_')) {
+          sessionStorage.removeItem(k);
+        }
+      });
     }
   };
 
@@ -188,6 +237,10 @@ export const Dashboard: React.FC = () => {
 
   const handleReindex = async () => {
     setIsIndexing(true);
+    if (selectedProjectDir) {
+      sessionStorage.removeItem(`ca_analysis_cache_${selectedProjectDir}`);
+      sessionStorage.removeItem('ca_analysis_cache');
+    }
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch(`${API_BASE}/api/reindex`, {
@@ -215,6 +268,7 @@ export const Dashboard: React.FC = () => {
         alert("Project successfully removed!");
         setAnalysis(null);
         setSelectedProjectDir('');
+        sessionStorage.removeItem(`ca_analysis_cache_${selectedProjectDir}`);
         sessionStorage.removeItem('ca_analysis_cache');
         sessionStorage.removeItem('ca_selected_project_dir');
         await fetchProjects();
@@ -239,6 +293,7 @@ export const Dashboard: React.FC = () => {
                 alert("Project successfully removed locally!");
                 setAnalysis(null);
                 setSelectedProjectDir('');
+                sessionStorage.removeItem(`ca_analysis_cache_${selectedProjectDir}`);
                 sessionStorage.removeItem('ca_analysis_cache');
                 sessionStorage.removeItem('ca_selected_project_dir');
                 await fetchProjects();
@@ -276,6 +331,11 @@ export const Dashboard: React.FC = () => {
       setSelectedProjectDir('');
       sessionStorage.removeItem('ca_analysis_cache');
       sessionStorage.removeItem('ca_selected_project_dir');
+      Object.keys(sessionStorage).forEach(k => {
+        if (k.startsWith('ca_analysis_cache_')) {
+          sessionStorage.removeItem(k);
+        }
+      });
       return;
     }
     
