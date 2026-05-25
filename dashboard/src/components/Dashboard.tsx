@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { auth, db } from '../lib/firebase';
 import { 
   collection, 
@@ -96,7 +96,21 @@ export const Dashboard: React.FC = () => {
   const [selectedProjectDir, setSelectedProjectDir] = useState<string>(() => {
     return sessionStorage.getItem('ca_selected_project_dir') || '';
   });
-  const [isIndexingEnabled, setIsIndexingEnabled] = useState(true);
+  const [isIndexingEnabled, setIsIndexingEnabled] = useState<boolean>(() => {
+    const savedProjDir = sessionStorage.getItem('ca_selected_project_dir');
+    if (savedProjDir) {
+      const cached = sessionStorage.getItem(`codeatlas_indexing_enabled_${savedProjDir}`);
+      if (cached !== null) {
+        try {
+          return JSON.parse(cached);
+        } catch {
+          // ignore
+        }
+      }
+    }
+    return true;
+  });
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
 
   const fetchIndexingSettings = async (projectDir: string) => {
     try {
@@ -105,7 +119,7 @@ export const Dashboard: React.FC = () => {
       if (resp.ok) {
         const data = await resp.json();
         setIsIndexingEnabled(data.indexingEnabled);
-        sessionStorage.setItem('codeatlas_indexing_enabled', JSON.stringify(data.indexingEnabled));
+        sessionStorage.setItem(`codeatlas_indexing_enabled_${projectDir}`, JSON.stringify(data.indexingEnabled));
       }
     } catch (err) {
       console.error("Failed to fetch indexing settings:", err);
@@ -114,17 +128,29 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (selectedProjectDir) {
+      const cached = sessionStorage.getItem(`codeatlas_indexing_enabled_${selectedProjectDir}`);
+      if (cached !== null) {
+        try {
+          setIsIndexingEnabled(JSON.parse(cached));
+        } catch {
+          // ignore
+        }
+      }
       fetchIndexingSettings(selectedProjectDir);
     }
   }, [selectedProjectDir]);
 
-  const handleToggleIndexingEnabled = async (newValue: boolean) => {
+  const handleToggleIndexingEnabled = useCallback(async (newValue: boolean) => {
+    if (!selectedProjectDir || isUpdatingSettings) return;
+    
+    const oldValue = isIndexingEnabled;
     setIsIndexingEnabled(newValue);
-    sessionStorage.setItem('codeatlas_indexing_enabled', JSON.stringify(newValue));
-    if (!selectedProjectDir) return;
+    sessionStorage.setItem(`codeatlas_indexing_enabled_${selectedProjectDir}`, JSON.stringify(newValue));
+    setIsUpdatingSettings(true);
+    
     try {
       const headers = await getAuthHeaders();
-      await fetch(`${API_BASE}/api/projects/settings`, {
+      const resp = await fetch(`${API_BASE}/api/projects/settings`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -132,10 +158,25 @@ export const Dashboard: React.FC = () => {
           indexingEnabled: newValue
         })
       });
+      if (!resp.ok) {
+        let errMsg = "Server error";
+        try {
+          const data = await resp.json();
+          errMsg = data.error || errMsg;
+        } catch {
+          // ignore
+        }
+        throw new Error(errMsg);
+      }
     } catch (err) {
       console.error("Failed to update indexing settings:", err);
+      setIsIndexingEnabled(oldValue);
+      sessionStorage.setItem(`codeatlas_indexing_enabled_${selectedProjectDir}`, JSON.stringify(oldValue));
+      alert(`Failed to update indexing settings: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsUpdatingSettings(false);
     }
-  };
+  }, [selectedProjectDir, isIndexingEnabled, isUpdatingSettings]);
 
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState({ totalRequests: 0 });
@@ -220,7 +261,7 @@ export const Dashboard: React.FC = () => {
           setAnalysis(null);
           sessionStorage.removeItem('ca_analysis_cache');
           Object.keys(sessionStorage).forEach(k => {
-            if (k.startsWith('ca_analysis_cache_')) {
+            if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
               sessionStorage.removeItem(k);
             }
           });
@@ -232,7 +273,7 @@ export const Dashboard: React.FC = () => {
         setAnalysis(null);
         sessionStorage.removeItem('ca_analysis_cache');
         Object.keys(sessionStorage).forEach(k => {
-          if (k.startsWith('ca_analysis_cache_')) {
+          if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
             sessionStorage.removeItem(k);
           }
         });
@@ -245,7 +286,7 @@ export const Dashboard: React.FC = () => {
       setAnalysis(null);
       sessionStorage.removeItem('ca_analysis_cache');
       Object.keys(sessionStorage).forEach(k => {
-        if (k.startsWith('ca_analysis_cache_')) {
+        if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
           sessionStorage.removeItem(k);
         }
       });
@@ -292,6 +333,7 @@ export const Dashboard: React.FC = () => {
         setAnalysis(null);
         setSelectedProjectDir('');
         sessionStorage.removeItem(`ca_analysis_cache_${selectedProjectDir}`);
+        sessionStorage.removeItem(`codeatlas_indexing_enabled_${selectedProjectDir}`);
         sessionStorage.removeItem('ca_analysis_cache');
         sessionStorage.removeItem('ca_selected_project_dir');
         await fetchProjects();
@@ -317,6 +359,7 @@ export const Dashboard: React.FC = () => {
                 setAnalysis(null);
                 setSelectedProjectDir('');
                 sessionStorage.removeItem(`ca_analysis_cache_${selectedProjectDir}`);
+                sessionStorage.removeItem(`codeatlas_indexing_enabled_${selectedProjectDir}`);
                 sessionStorage.removeItem('ca_analysis_cache');
                 sessionStorage.removeItem('ca_selected_project_dir');
                 await fetchProjects();
@@ -355,7 +398,7 @@ export const Dashboard: React.FC = () => {
       sessionStorage.removeItem('ca_analysis_cache');
       sessionStorage.removeItem('ca_selected_project_dir');
       Object.keys(sessionStorage).forEach(k => {
-        if (k.startsWith('ca_analysis_cache_')) {
+        if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
           sessionStorage.removeItem(k);
         }
       });
@@ -487,6 +530,7 @@ export const Dashboard: React.FC = () => {
             onReindex={handleReindex} 
             isIndexingEnabled={isIndexingEnabled} 
             setIsIndexingEnabled={handleToggleIndexingEnabled} 
+            isUpdatingSettings={isUpdatingSettings}
           />
         );
       case 'Documentation':

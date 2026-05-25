@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Check, 
@@ -16,6 +16,7 @@ interface CloudIndexViewProps {
   onReindex: () => void;
   isIndexingEnabled: boolean;
   setIsIndexingEnabled: (v: boolean) => void;
+  isUpdatingSettings?: boolean;
 }
 
 export const CloudIndexView: React.FC<CloudIndexViewProps> = ({ 
@@ -23,9 +24,15 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
   isIndexing, 
   onReindex, 
   isIndexingEnabled, 
-  setIsIndexingEnabled
+  setIsIndexingEnabled,
+  isUpdatingSettings = false
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const handleToggleClick = useCallback(() => {
+    if (isUpdatingSettings) return;
+    setIsIndexingEnabled(!isIndexingEnabled);
+  }, [isIndexingEnabled, setIsIndexingEnabled, isUpdatingSettings]);
 
   const totalFiles = (analysis?.totalFilesAnalyzed || 0) + (analysis?.totalFilesSkipped || 0);
   const coveragePercent = totalFiles > 0
@@ -47,10 +54,16 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2.5rem' }}>
               <div style={{ 
                 width: '24px', height: '24px', border: '2px solid var(--primary-neon)', borderRadius: '6px', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                cursor: isUpdatingSettings ? 'not-allowed' : 'pointer',
+                opacity: isUpdatingSettings ? 0.6 : 1,
                 background: isIndexingEnabled ? 'var(--primary-neon)' : 'transparent'
-              }} onClick={() => setIsIndexingEnabled(!isIndexingEnabled)}>
-                {isIndexingEnabled && <Check size={16} color="#000" strokeWidth={4} />}
+              }} onClick={handleToggleClick}>
+                {isUpdatingSettings ? (
+                  <Loader2 className="animate-spin" size={14} color={isIndexingEnabled ? "#000" : "var(--primary-neon)"} />
+                ) : (
+                  isIndexingEnabled && <Check size={16} color="#000" strokeWidth={4} />
+                )}
               </div>
               <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>Enable Codebase Indexing</span>
               <div style={{ padding: '0.25rem 0.6rem', borderRadius: '100px', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>

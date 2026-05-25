@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.1] - 2026-05-25
+
+### Fixed / Changed
+- **Race Condition Resolution**: Prevented indexing settings database/filesystem inconsistency by propagating Firestore write failures immediately to return 500 error on POST requests.
+- **Corrupted Settings JSON Fallback**: Wrapped JSON parser in the GET settings endpoint to prevent server crashes on corrupted settings files, falling back to Firestore database configuration.
+- **Optimistic State Management**: Refactored the dashboard project settings checkbox to perform optimistic UI updates with robust error rollback, and show loading states.
+- **Project-Specific Settings Cache**: Replaced the global session storage cache key with project-specific settings caches (`codeatlas_indexing_enabled_{projectDir}`), clearing them properly on project deletion or user logout.
+- **Parameter Validation & Typings**: Strengthened project settings API parameters validation to restrict inputs to non-empty strings and boolean flags.
+- **Stable UI Click Handlers**: Wrapped frontend click and state callbacks in stable `useCallback` hooks to prevent unnecessary component re-renders.
+- **Enhanced Test Coverage**: Added comprehensive negative/edge-case tests to `settings.test.ts` verifying parameter validation, Firestore failures, corrupted files, and correct HTTP status codes.
+
 ## [2.12.0] - 2026-05-24
 
 ### Added

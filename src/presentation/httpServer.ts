@@ -307,8 +307,15 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
     
-    const projectDir = req.query.projectDir as string;
-    const projectName = req.query.projectName as string;
+    const projectDir = req.query.projectDir;
+    const projectName = req.query.projectName;
+    
+    if (projectDir !== undefined && (typeof projectDir !== "string" || !projectDir.trim())) {
+      return res.status(400).json({ error: "Invalid projectDir parameter" });
+    }
+    if (projectName !== undefined && (typeof projectName !== "string" || !projectName.trim())) {
+      return res.status(400).json({ error: "Invalid projectName parameter" });
+    }
     
     if (!projectDir && !projectName) {
       return res.status(400).json({ error: "Missing projectDir or projectName query parameter" });
@@ -316,9 +323,9 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
     
     let resolved;
     if (projectDir) {
-      resolved = await resolveProjectDir(projectDir, tenantId, true);
+      resolved = await resolveProjectDir(projectDir.trim(), tenantId, true);
     } else if (projectName) {
-      resolved = await resolveProjectDir(projectName, tenantId, false);
+      resolved = await resolveProjectDir(projectName.trim(), tenantId, false);
     }
     
     if (!resolved) {
@@ -327,17 +334,34 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
     
     const { cleanProjectName, fullProjectDir } = resolved;
     let indexingEnabled = true;
+    let checkedLocal = false;
     
     try {
       const settingsPath = path.join(fullProjectDir, ".codeatlas", "settings.json");
       if (fs.existsSync(settingsPath)) {
         const data = await fs.promises.readFile(settingsPath, "utf-8");
-        const parsed = JSON.parse(data);
-        if (typeof parsed.indexingEnabled === "boolean") {
-          indexingEnabled = parsed.indexingEnabled;
+        try {
+          const parsed = JSON.parse(data);
+          if (typeof parsed.indexingEnabled === "boolean") {
+            indexingEnabled = parsed.indexingEnabled;
+            checkedLocal = true;
+          } else {
+            console.warn("[Settings API] Invalid settings file format: indexingEnabled is not a boolean");
+          }
+        } catch (parseErr) {
+          console.error("[Settings API] Corrupted settings file:", parseErr);
         }
-      } else {
-        // Fallback: check Firestore
+      }
+    } catch (e: any) {
+      console.error("[Settings API] Error reading settings file:", e);
+      if (e.code !== "ENOENT") {
+        return res.status(500).json({ error: `Failed to read local settings: ${e.message}` });
+      }
+    }
+    
+    if (!checkedLocal) {
+      // Fallback: check Firestore
+      try {
         const apps = firebaseClient.getApps();
         if (apps.length) {
           const db = firebaseClient.getFirestore();
@@ -348,9 +372,11 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
             indexingEnabled = doc.data()?.indexingEnabled;
           }
         }
+      } catch (e: any) {
+        console.error("[Settings API] Error reading Firestore fallback:", e);
+        // If local read failed/corrupted AND firestore fallback fails, return a 500 error
+        return res.status(500).json({ error: `Failed to fetch settings from fallback storage: ${e.message}` });
       }
-    } catch (e) {
-      console.error("[Settings API] Error reading settings:", e);
     }
     
     res.json({ indexingEnabled });
@@ -370,15 +396,22 @@ app.post("/api/projects/settings", authMiddleware, async (req, res) => {
       return res.status(400).json({ error: "Missing or invalid indexingEnabled parameter (must be boolean)" });
     }
     
+    if (projectDir !== undefined && (typeof projectDir !== "string" || !projectDir.trim())) {
+      return res.status(400).json({ error: "Invalid projectDir parameter" });
+    }
+    if (projectName !== undefined && (typeof projectName !== "string" || !projectName.trim())) {
+      return res.status(400).json({ error: "Invalid projectName parameter" });
+    }
+    
     if (!projectDir && !projectName) {
       return res.status(400).json({ error: "Missing projectDir or projectName parameter" });
     }
     
     let resolved;
     if (projectDir) {
-      resolved = await resolveProjectDir(projectDir, tenantId, true);
+      resolved = await resolveProjectDir(projectDir.trim(), tenantId, true);
     } else if (projectName) {
-      resolved = await resolveProjectDir(projectName, tenantId, false);
+      resolved = await resolveProjectDir(projectName.trim(), tenantId, false);
     }
     
     if (!resolved) {
@@ -405,8 +438,9 @@ app.post("/api/projects/settings", authMiddleware, async (req, res) => {
         const docRef = db.collection('projects').doc(docId);
         await docRef.set({ indexingEnabled }, { merge: true });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("[Settings API] Error updating Firestore settings:", e);
+      throw new Error(`Firestore update failed: ${e.message || String(e)}`);
     }
     
     res.json({ success: true, indexingEnabled });
@@ -662,7 +696,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.12.0",
+        version: "2.12.1",
       },
       {
         capabilities: {
