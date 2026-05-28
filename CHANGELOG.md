@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.2] - 2026-05-28
+
+### Fixed / Changed
+- **Static Analysis Heuristic Refinements**: Hardened the static vulnerability scanner in `src/securityScanner.ts` to ignore test files, mock files, and scratch/diagnostic directories.
+- **UseCase Exclusion**: Prevented standard TS/JS Use-Case design execution patterns (e.g. `execute()`) and Use-Case classes from triggering false-positive SQL Injection findings.
+- **Enterprise MCP Sync**: Updated `codeatlas-mcp-enterprise` repository version to `2.1.50` and synchronized its security scanner heuristics to ignore test/mock files and UseCase command patterns.
+
 ## [2.12.1] - 2026-05-25
 
 ### Fixed / Changed
