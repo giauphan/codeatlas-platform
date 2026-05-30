@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.3] - 2026-05-30
+
+### Fixed
+- **Dashboard Storage Quota Hardening**: Replaced direct `sessionStorage.setItem` calls in `Dashboard.tsx` with a robust `safeSessionStorageSetItem` wrapper that catches `QuotaExceededError` and `NS_ERROR_DOM_QUOTA_REACHED` errors, clears older cached project analysis data (`ca_analysis_cache_*`) to reclaim storage space, and retries the save operation.
+
 ## [2.12.2] - 2026-05-28
+
 
 ### Fixed / Changed
 - **Static Analysis Heuristic Refinements**: Hardened the static vulnerability scanner in `src/securityScanner.ts` to ignore test files, mock files, and scratch/diagnostic directories.

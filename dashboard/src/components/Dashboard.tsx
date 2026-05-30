@@ -65,6 +65,36 @@ interface AnalysisData {
   };
 }
 
+const safeSessionStorageSetItem = (key: string, value: string) => {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch (err) {
+    if (err instanceof DOMException && (
+      err.name === 'QuotaExceededError' ||
+      err.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+    )) {
+      console.warn("Storage quota exceeded. Clearing older analysis caches to free up space...", err);
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const k = sessionStorage.key(i);
+          if (k && k.startsWith('ca_analysis_cache_') && k !== key) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach(k => sessionStorage.removeItem(k));
+        
+        sessionStorage.setItem(key, value);
+        console.log("Successfully cached after clearing older analysis caches.");
+      } catch (retryErr) {
+        console.error("Failed to cache analysis even after clearing older caches:", retryErr);
+      }
+    } else {
+      console.error("Failed to write to sessionStorage:", err);
+    }
+  }
+};
+
 export const Dashboard: React.FC = () => {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [newKeyName, setNewKeyName] = useState('');
@@ -119,7 +149,7 @@ export const Dashboard: React.FC = () => {
       if (resp.ok) {
         const data = await resp.json();
         setIsIndexingEnabled(data.indexingEnabled);
-        sessionStorage.setItem(`codeatlas_indexing_enabled_${projectDir}`, JSON.stringify(data.indexingEnabled));
+        safeSessionStorageSetItem(`codeatlas_indexing_enabled_${projectDir}`, JSON.stringify(data.indexingEnabled));
       }
     } catch (err) {
       console.error("Failed to fetch indexing settings:", err);
@@ -145,7 +175,7 @@ export const Dashboard: React.FC = () => {
     
     const oldValue = isIndexingEnabled;
     setIsIndexingEnabled(newValue);
-    sessionStorage.setItem(`codeatlas_indexing_enabled_${selectedProjectDir}`, JSON.stringify(newValue));
+    safeSessionStorageSetItem(`codeatlas_indexing_enabled_${selectedProjectDir}`, JSON.stringify(newValue));
     setIsUpdatingSettings(true);
     
     try {
@@ -171,7 +201,7 @@ export const Dashboard: React.FC = () => {
     } catch (err) {
       console.error("Failed to update indexing settings:", err);
       setIsIndexingEnabled(oldValue);
-      sessionStorage.setItem(`codeatlas_indexing_enabled_${selectedProjectDir}`, JSON.stringify(oldValue));
+      safeSessionStorageSetItem(`codeatlas_indexing_enabled_${selectedProjectDir}`, JSON.stringify(oldValue));
       alert(`Failed to update indexing settings: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsUpdatingSettings(false);
@@ -217,9 +247,9 @@ export const Dashboard: React.FC = () => {
         const data = await resp.json();
         setAnalysis(data);
         if (projectDir) {
-          sessionStorage.setItem(`ca_analysis_cache_${projectDir}`, JSON.stringify(data));
+          safeSessionStorageSetItem(`ca_analysis_cache_${projectDir}`, JSON.stringify(data));
         }
-        sessionStorage.setItem('ca_analysis_cache', JSON.stringify(data));
+        safeSessionStorageSetItem('ca_analysis_cache', JSON.stringify(data));
       } else {
         // Clear cached stale data if backend rejects access (404/403 boundary violation)
         setAnalysis(null);
@@ -251,7 +281,7 @@ export const Dashboard: React.FC = () => {
           if (!hasSelected || !selectedProjectDir) {
             const defaultDir = data[0].dir;
             setSelectedProjectDir(defaultDir);
-            sessionStorage.setItem('ca_selected_project_dir', defaultDir);
+            safeSessionStorageSetItem('ca_selected_project_dir', defaultDir);
             fetchAnalysis(defaultDir);
           }
         } else {
@@ -295,7 +325,7 @@ export const Dashboard: React.FC = () => {
 
   const handleProjectChange = (dir: string) => {
     setSelectedProjectDir(dir);
-    sessionStorage.setItem('ca_selected_project_dir', dir);
+    safeSessionStorageSetItem('ca_selected_project_dir', dir);
     fetchAnalysis(dir);
   };
 
