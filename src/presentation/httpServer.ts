@@ -99,7 +99,11 @@ app.get("/api/projects", authMiddleware, async (req, res) => {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
     const projects = await discoverProjectsAsync(tenantId);
-    res.json(projects.map(p => ({ name: p.name, dir: p.dir, modifiedAt: p.modifiedAt })));
+    res.json(projects.map(p => {
+      // Sanitize absolute paths by making them relative to current working directory
+      const relativeDir = path.relative(process.cwd(), p.dir);
+      return { name: p.name, dir: relativeDir, modifiedAt: p.modifiedAt };
+    }));
   } catch (err: unknown) {
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
@@ -460,7 +464,10 @@ app.get("/api/analysis", authMiddleware, async (req, res) => {
     if (req.query.project && !req.query.projectDir) {
       res.json(loaded.analysis);
     } else {
-      res.json(loaded);
+      res.json({
+        ...loaded,
+        projectDir: path.relative(process.cwd(), loaded.projectDir)
+      });
     }
   } catch (err: unknown) {
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
@@ -606,10 +613,12 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
       }
     }
 
+    const sanitizedProjectDir = path.relative(process.cwd(), projectDir);
+
     if (syncError) {
       res.status(500).json({
         error: syncError,
-        projectDir,
+        projectDir: sanitizedProjectDir,
         stats: {
           businessRuleSaved,
           changeDescriptionSaved
@@ -618,7 +627,7 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
     } else {
       res.json({
         success: true,
-        projectDir,
+        projectDir: sanitizedProjectDir,
         stats: {
           businessRuleSaved,
           changeDescriptionSaved
@@ -696,7 +705,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.12.3",
+        version: "2.12.4",
       },
       {
         capabilities: {

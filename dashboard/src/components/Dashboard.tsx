@@ -68,12 +68,15 @@ interface AnalysisData {
 const safeSessionStorageSetItem = (key: string, value: string) => {
   try {
     sessionStorage.setItem(key, value);
-  } catch (err) {
-    if (err instanceof DOMException && (
+  } catch (err: any) {
+    const isQuotaError = err && (
       err.name === 'QuotaExceededError' ||
-      err.name === 'NS_ERROR_DOM_QUOTA_REACHED'
-    )) {
-      console.warn("Storage quota exceeded. Clearing older analysis caches to free up space...", err);
+      err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      err.code === 22 ||
+      err.code === 1014
+    );
+    if (isQuotaError) {
+      console.warn("Storage quota exceeded. Clearing older analysis caches to free up space...");
       try {
         const keysToRemove: string[] = [];
         for (let i = 0; i < sessionStorage.length; i++) {
@@ -87,7 +90,7 @@ const safeSessionStorageSetItem = (key: string, value: string) => {
         sessionStorage.setItem(key, value);
         console.log("Successfully cached after clearing older analysis caches.");
       } catch (retryErr) {
-        console.error("Failed to cache analysis even after clearing older caches:", retryErr);
+        console.warn(`[CodeAtlas] Project analysis size (${(value.length / 1024 / 1024).toFixed(2)} MB) exceeds browser sessionStorage quota limit. Operating in high-performance memory-only mode without local cache.`);
       }
     } else {
       console.error("Failed to write to sessionStorage:", err);
@@ -248,8 +251,9 @@ export const Dashboard: React.FC = () => {
         setAnalysis(data);
         if (projectDir) {
           safeSessionStorageSetItem(`ca_analysis_cache_${projectDir}`, JSON.stringify(data));
+        } else {
+          safeSessionStorageSetItem('ca_analysis_cache', JSON.stringify(data));
         }
-        safeSessionStorageSetItem('ca_analysis_cache', JSON.stringify(data));
       } else {
         // Clear cached stale data if backend rejects access (404/403 boundary violation)
         setAnalysis(null);

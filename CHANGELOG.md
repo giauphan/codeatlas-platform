@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.4] - 2026-05-30
+
+### Fixed
+- **Information Disclosure Vulnerability**: Resolved a high-severity path disclosure security bug by mapping and sanitizing all absolute filesystem project directories to relative paths across `GET /api/projects`, `GET /api/analysis`, and `POST /api/projects/sync` endpoints.
+- **Double-Write Cache Optimization**: Optimized the frontend analysis caching mechanism in `Dashboard.tsx` to save cache in a single dedicated location rather than duplicate writes, instantly saving 50% of the storage quota.
+- **Graceful Quota Handling**: Replaced console error traces in `safeSessionStorageSetItem` with a graceful notice warning when project analysis payloads exceed maximum storage limits, allowing smooth memory-only operation.
+
 ## [2.12.3] - 2026-05-30
 
 ### Fixed
