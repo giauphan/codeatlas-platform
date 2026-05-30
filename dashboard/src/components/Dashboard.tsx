@@ -76,7 +76,6 @@ const safeSessionStorageSetItem = (key: string, value: string) => {
       err.code === 1014
     );
     if (isQuotaError) {
-      console.warn("Storage quota exceeded. Clearing older analysis caches to free up space...");
       try {
         const keysToRemove: string[] = [];
         for (let i = 0; i < sessionStorage.length; i++) {
@@ -88,12 +87,11 @@ const safeSessionStorageSetItem = (key: string, value: string) => {
         keysToRemove.forEach(k => sessionStorage.removeItem(k));
         
         sessionStorage.setItem(key, value);
-        console.log("Successfully cached after clearing older analysis caches.");
       } catch (retryErr) {
-        console.warn(`[CodeAtlas] Project analysis size (${(value.length / 1024 / 1024).toFixed(2)} MB) exceeds browser sessionStorage quota limit. Operating in high-performance memory-only mode without local cache.`);
+        console.info(`[CodeAtlas] Project analysis size (${(value.length / 1024 / 1024).toFixed(2)} MB) exceeds browser sessionStorage quota limit. Operating in high-performance memory-only mode without local cache.`);
       }
     } else {
-      console.error("Failed to write to sessionStorage:", err);
+      console.info("Failed to write to sessionStorage:", err);
     }
   }
 };

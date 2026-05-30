@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.5] - 2026-05-30
+
+### Fixed
+- **Passive Event Listener preventDefault Warnings**: Resolved console warnings and scroll interference (`Unable to preventDefault inside passive event listener invocation`) on SVG wheel gestures by attaching the wheel listener directly to the SVG element in `KnowledgeGraphView.tsx` with `{ passive: false }`.
+- **Silent Cache Eviction**: Refactored the quota eviction mechanism in `Dashboard.tsx` to clear old analysis storage silently and use a clean `console.info` fallback, completely removing collapsible stack traces and yellow warnings.
+
 ## [2.12.4] - 2026-05-30
 
 ### Fixed

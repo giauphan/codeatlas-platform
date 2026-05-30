@@ -96,6 +96,26 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     };
   }, []);
 
+  // Synchronize non-passive wheel event listener to avoid console warnings
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = 1.08;
+      setZoom(prevZoom => {
+        const nextZoom = e.deltaY < 0 ? prevZoom * zoomFactor : prevZoom / zoomFactor;
+        return Math.max(0.2, Math.min(6, nextZoom));
+      });
+    };
+
+    svgEl.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      svgEl.removeEventListener('wheel', onWheel);
+    };
+  }, []);
+
   const filteredNodes = useMemo(() => {
     if (!analysis || !analysis.graph || !analysis.graph.nodes) return [];
     return analysis.graph.nodes.filter((n: any) => {
@@ -287,14 +307,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   const handleMouseUp = () => {
     setDraggedNodeId(null);
     setIsPanning(false);
-  };
-
-  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
-    e.preventDefault();
-    const zoomFactor = 1.08;
-    const nextZoom = e.deltaY < 0 ? zoom * zoomFactor : zoom / zoomFactor;
-    // Keep zoom within standard readable boundaries (0.2x macro to 6x micro view)
-    setZoom(Math.max(0.2, Math.min(6, nextZoom)));
   };
 
   const toggleFilter = (type: string) => {
@@ -505,7 +517,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             width="100%" 
             height="100%" 
             viewBox="0 0 1100 700"
-            onWheel={handleWheel}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseUp}
