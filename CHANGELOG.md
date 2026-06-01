@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.8] - 2026-06-01
+
+### Fixed
+- **Dynamic Cross-Platform Antigravity Detection**: Replaced the hardcoded `/config/Downloads/Antigravity` fallback check with a dynamic, multi-platform resolution of `~/.gemini/antigravity` relative to `os.homedir()`, guaranteeing robust active workspace filtering for local users across Windows, macOS, and Linux.
+- **Enterprise MCP Version**: Bumped enterprise MCP package to `2.1.53`.
+
 ## [2.12.7] - 2026-06-01
 
 ### Fixed
