@@ -537,6 +537,66 @@ export function registerTools(server: McpServer) {
     }
   );
 
+  // Tool 7.5: Get System Memory (Episodic memories like business rules and change logs)
+  server.tool(
+    "get_system_memory",
+    "Retrieve the auto-generated system documentation and episodic memories (business rules and change logs) for a project from the Oracle 26ai Knowledge Graph database.",
+    {
+      project: z.string().optional().describe("Project name or path"),
+      eventType: z.enum(["all", "BUSINESS_RULE", "CHANGE_LOG"]).optional().default("all").describe("Filter by event type"),
+    },
+    async ({ project, eventType }: { project?: string; eventType?: "all" | "BUSINESS_RULE" | "CHANGE_LOG" }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "get_system_memory", { project, eventType });
+      const loaded = await loadAnalysisAsync(project);
+      if (!loaded) {
+        return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
+      }
+
+      if (!process.env.ORACLE_CONN_STRING) {
+        return { content: [{ type: "text" as const, text: "Oracle DB connection string is not configured." }] };
+      }
+
+      try {
+        const filterType = eventType === "all" ? undefined : eventType;
+        const memories = await OracleMemoryService.getEpisodicMemories(loaded.projectName, filterType);
+
+        const parsedMemories = memories.map((m: any) => {
+          let val = null;
+          try {
+            if (m.EVENT_DATA) {
+              if (typeof m.EVENT_DATA === "string") {
+                const parsed = JSON.parse(m.EVENT_DATA);
+                val = parsed.val !== undefined ? parsed.val : parsed;
+              } else if (typeof m.EVENT_DATA === "object") {
+                val = m.EVENT_DATA.val !== undefined ? m.EVENT_DATA.val : m.EVENT_DATA;
+              }
+            }
+          } catch (e) {
+            val = m.EVENT_DATA;
+          }
+          return {
+            id: m.ID,
+            eventType: m.EVENT_TYPE,
+            data: val,
+            createdAt: m.CREATED_AT
+          };
+        });
+
+        const result = {
+          success: true,
+          project: loaded.projectName,
+          count: parsedMemories.length,
+          memories: parsedMemories
+        };
+
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (err: any) {
+        return { content: [{ type: "text" as const, text: `Failed to retrieve system memory: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    }
+  );
+
   // Tool 8: Trace Feature Flow
   server.tool(
     "trace_feature_flow",
@@ -1109,7 +1169,7 @@ export function registerTools(server: McpServer) {
 export const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.12.8",
+    version: "2.13.0",
   },
   {
     capabilities: {

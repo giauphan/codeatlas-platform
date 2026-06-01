@@ -305,6 +305,73 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
   }
 });
 
+// REST API: Get episodic memory (business rules / change logs) for a project
+app.get("/api/projects/memory", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    if (!auth) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const tenantId = auth.uid;
+
+    const { projectName, eventType } = req.query;
+    if (!projectName || typeof projectName !== "string" || !projectName.trim()) {
+      return res.status(400).json({ error: "Missing or invalid projectName query parameter" });
+    }
+
+    if (eventType !== undefined && eventType !== "BUSINESS_RULE" && eventType !== "CHANGE_LOG") {
+      return res.status(400).json({ error: "Invalid eventType parameter. Must be BUSINESS_RULE or CHANGE_LOG" });
+    }
+
+    const cleanProjectName = path.basename(projectName.trim());
+
+    if (!process.env.ORACLE_CONN_STRING) {
+      return res.json({
+        success: true,
+        projectName: cleanProjectName,
+        memories: [],
+        message: "Oracle DB connection string is not configured."
+      });
+    }
+
+    const { OracleMemoryService } = await import("../oracleDatabase.js");
+    const memories = await authStorage.run(auth, async () => {
+      return await OracleMemoryService.getEpisodicMemories(cleanProjectName, eventType as any);
+    });
+
+    const parsedMemories = memories.map((m: any) => {
+      let val = null;
+      try {
+        if (m.EVENT_DATA) {
+          if (typeof m.EVENT_DATA === "string") {
+            const parsed = JSON.parse(m.EVENT_DATA);
+            val = parsed.val !== undefined ? parsed.val : parsed;
+          } else if (typeof m.EVENT_DATA === "object") {
+            val = m.EVENT_DATA.val !== undefined ? m.EVENT_DATA.val : m.EVENT_DATA;
+          }
+        }
+      } catch (e) {
+        val = m.EVENT_DATA;
+      }
+      return {
+        id: m.ID,
+        eventType: m.EVENT_TYPE,
+        data: val,
+        createdAt: m.CREATED_AT
+      };
+    });
+
+    res.json({
+      success: true,
+      projectName: cleanProjectName,
+      memories: parsedMemories
+    });
+  } catch (err: unknown) {
+    console.error(`[Get Project Memory] Failed: ${(err instanceof Error ? err.message : String(err))}`);
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
+  }
+});
+
 // REST API: Get indexing settings for a project
 app.get("/api/projects/settings", authMiddleware, async (req, res) => {
   try {

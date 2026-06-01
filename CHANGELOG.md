@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.13.0] - 2026-06-01
+
+### Added
+- **Episodic Memory Retrieval (GET)**: Implemented full-circle support for querying saved Change Logs and Business Rules from the Oracle 26ai database.
+- **`get_system_memory` MCP Tool**: Added a new tool to query, filter, and parse episodic memory entries by project name and event type directly from the Knowledge Graph database.
+- **`GET /api/projects/memory` REST API Endpoint**: Added a secure HTTP API endpoint to retrieve episodic memory entries with robust JSON parsing.
+
 ## [2.12.8] - 2026-06-01
 
 ### Fixed

@@ -127,6 +127,47 @@ export class OracleMemoryService {
   }
 
   /**
+   * Retrieves episodic memories (change logs / business rules) for a project.
+   */
+  static async getEpisodicMemories(project: string, eventType?: "BUSINESS_RULE" | "CHANGE_LOG") {
+    let connection;
+    try {
+      const pool = await this.init();
+      connection = await pool.getConnection();
+      await this.setSessionContext(connection);
+
+      let sql = `
+        SELECT id, event_type, event_data, created_at
+        FROM ai_episodic_memory
+        WHERE project_name = :project
+      `;
+      const binds: any = { project };
+
+      if (eventType) {
+        sql += ` AND event_type = :eventType`;
+        binds.eventType = eventType;
+      }
+
+      sql += ` ORDER BY created_at DESC`;
+
+      const result = await connection.execute(sql, binds);
+      return result.rows || [];
+    } catch (err) {
+      console.error("Error getting episodic memories:", err instanceof Error ? err.message : String(err));
+      return [];
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error("Error closing connection:", closeErr);
+        }
+      }
+    }
+  }
+
+
+  /**
    * Generates an embedding vector using NVIDIA NIM Embeddings API
    */
   private static async generateNvidiaEmbedding(text: string, inputType: 'passage' | 'query'): Promise<number[] | null> {
