@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.6] - 2026-06-01
+
+### Fixed
+- **Enterprise MCP Sync Credentials Security**: Resolved background secure cloud sync 401 Unauthorized issues by replacing direct env-var reliance with config-aware fallback resolution in the enterprise watcher and sync services, prioritizing `.gemini/antigravity/mcp_config.json` configuration values over stale/polluted environments.
+- **Enterprise MCP Version**: Bumped enterprise MCP package to `2.1.51` to ship the credentials resolution framework.
+
 ## [2.12.5] - 2026-05-30
 
 ### Fixed

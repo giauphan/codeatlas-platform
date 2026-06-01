@@ -138,14 +138,25 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     const nonModules = filteredNodes.filter((n: any) => n.type !== 'module');
     const prioritizedNodes = [...modules, ...nonModules].slice(0, 150);
 
+    const moduleCount = prioritizedNodes.filter((n: any) => n.type === 'module').length;
+    const nonModuleCount = prioritizedNodes.filter((n: any) => n.type !== 'module').length;
+
     const initialNodes = prioritizedNodes.map((n, i) => {
       const isModule = n.type === 'module';
-      const angle = (i * 2 * Math.PI) / (isModule ? 6 : 24);
-      const radius = isModule ? 70 : 160 + (Math.floor(i / 20) * 55);
+      // Distribute evenly in full 360 degrees circle to avoid piling nodes onto a few spokes
+      const angle = isModule 
+        ? (i * 2 * Math.PI) / (moduleCount || 1)
+        : (i * 2 * Math.PI) / (nonModuleCount || 1);
+      
+      // Distribute radius outward in concentric rings to prevent overlap congestion
+      const radius = isModule 
+        ? 90 + (Math.floor(i / 12) * 35) 
+        : 220 + (Math.floor(i / 15) * 45);
+        
       return {
         ...n,
-        x: centerX + Math.cos(angle) * radius + (Math.random() - 0.5) * 50,
-        y: centerY + Math.sin(angle) * radius + (Math.random() - 0.5) * 50,
+        x: centerX + Math.cos(angle) * radius + (Math.random() - 0.5) * 15,
+        y: centerY + Math.sin(angle) * radius + (Math.random() - 0.5) * 15,
         vx: 0,
         vy: 0
       };
@@ -184,10 +195,15 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               const pushX = (dx / dist) * force;
               const pushY = (dy / dist) * force;
               
-              n1.vx += pushX;
-              n1.vy += pushY;
-              n2.vx -= pushX;
-              n2.vy -= pushY;
+              // Cap push force to prevent physics explosion from overlapping nodes
+              const maxPush = 2.2;
+              const cappedPushX = Math.max(-maxPush, Math.min(maxPush, pushX));
+              const cappedPushY = Math.max(-maxPush, Math.min(maxPush, pushY));
+              
+              n1.vx += cappedPushX;
+              n1.vy += cappedPushY;
+              n2.vx -= cappedPushX;
+              n2.vy -= cappedPushY;
             }
           }
         }
@@ -208,10 +224,15 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               const pullX = (dx / dist) * force;
               const pullY = (dy / dist) * force;
               
-              sourceNode.vx += pullX;
-              sourceNode.vy += pullY;
-              targetNode.vx -= pullX;
-              targetNode.vy -= pullY;
+              // Cap link pull force to ensure stability
+              const maxPull = 1.8;
+              const cappedPullX = Math.max(-maxPull, Math.min(maxPull, pullX));
+              const cappedPullY = Math.max(-maxPull, Math.min(maxPull, pullY));
+              
+              sourceNode.vx += cappedPullX;
+              sourceNode.vy += cappedPullY;
+              targetNode.vx -= cappedPullX;
+              targetNode.vy -= cappedPullY;
             }
           });
         }
@@ -239,9 +260,22 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             n.vy *= 0.82;
           }
 
-          // Keep nodes inside reasonable viewport boundaries
-          n.x = Math.max(50, Math.min(1050, n.x));
-          n.y = Math.max(50, Math.min(650, n.y));
+          // Keep nodes inside reasonable viewport boundaries with elastic bounce damping
+          if (n.x <= 50) {
+            n.vx *= -0.5;
+            n.x = 50;
+          } else if (n.x >= 1050) {
+            n.vx *= -0.5;
+            n.x = 1050;
+          }
+          
+          if (n.y <= 50) {
+            n.vy *= -0.5;
+            n.y = 50;
+          } else if (n.y >= 650) {
+            n.vy *= -0.5;
+            n.y = 650;
+          }
         });
 
         return nodes;
