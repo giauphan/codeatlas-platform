@@ -1109,7 +1109,7 @@ export function registerTools(server: McpServer) {
 export const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.12.6",
+    version: "2.12.7",
   },
   {
     capabilities: {

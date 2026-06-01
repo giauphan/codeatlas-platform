@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.7] - 2026-06-01
+
+### Fixed
+- **Cross-Platform Claude Desktop Paths**: Added full support for macOS and Windows Claude Desktop configuration files (`Library/Application Support/Claude/claude_desktop_config.json` and `AppData/Roaming/Claude/claude_desktop_config.json`) inside the fallback API key resolver, ensuring seamless plug-and-play setup for clients across all operating systems.
+- **Enterprise MCP Version**: Bumped enterprise MCP package to `2.1.52`.
+
 ## [2.12.6] - 2026-06-01
 
 ### Fixed
