@@ -306,7 +306,11 @@ export class OracleMemoryService {
           };
         });
 
-        await connection.executeMany(sql, binds as any[], { autoCommit: true });
+        const dbChunkSize = 500;
+        for (let i = 0; i < binds.length; i += dbChunkSize) {
+          const chunk = binds.slice(i, i + dbChunkSize);
+          await connection.executeMany(sql, chunk as any[], { autoCommit: true });
+        }
         
 
     } catch (err) {
@@ -352,7 +356,11 @@ export class OracleMemoryService {
           tenantId
         }));
 
-        await connection.executeMany(sql, binds, { autoCommit: true });
+        const dbChunkSize = 1000;
+        for (let i = 0; i < binds.length; i += dbChunkSize) {
+          const chunk = binds.slice(i, i + dbChunkSize);
+          await connection.executeMany(sql, chunk, { autoCommit: true });
+        }
         
 
     } catch (err) {
