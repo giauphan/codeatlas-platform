@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
-import * as dotenv from "dotenv";
 
 // Import Presentation Adapters
 import { server } from "./src/presentation/mcpServer.js";
@@ -21,9 +23,6 @@ import {
   loadAnalysisAsync, 
   fileExists 
 } from "./src/services/projectService.js";
-
-// Load environment variables
-dotenv.config();
 
 // Initialize Firebase Admin (Infrastructure Configuration at Composition Root)
 const apps = getApps();

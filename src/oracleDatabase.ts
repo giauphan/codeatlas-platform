@@ -2,12 +2,12 @@ import oracledb from "oracledb";
 import * as path from "path";
 import { authStorage } from "./context.js";
 
-// Connection configuration derived from environment variables
-const dbConfig = {
+// Connection configuration helper to evaluate environment variables at runtime
+const getDbConfig = () => ({
   user: process.env.ORACLE_USER || "ADMIN",
   password: process.env.ORACLE_PASSWORD || "",
   connectString: process.env.ORACLE_CONN_STRING || ""
-};
+});
 
 /**
  * Service to manage AI Memory on Oracle Database 26ai.
@@ -49,7 +49,7 @@ export class OracleMemoryService {
         oracledb.fetchAsString = [oracledb.CLOB];
         
         this.pool = await oracledb.createPool({
-          ...dbConfig,
+          ...getDbConfig(),
           poolMin: 2,
           poolMax: 10,
           poolIncrement: 1

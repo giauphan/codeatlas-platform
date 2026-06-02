@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.13.3] - 2026-06-02
+
+### Fixed
+- **Oracle DB Connection Timing (NJS-125)**: Postponed evaluation of database configuration environment variables to runtime inside the connection pool initialization helper. Also moved `dotenv.config()` invocation to the absolute top of the index.ts entrypoint, preventing early module imports from reading empty/unloaded environment variables.
+
 ## [2.13.2] - 2026-06-02
 
 ### Fixed
