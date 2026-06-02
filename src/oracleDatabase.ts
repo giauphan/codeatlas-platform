@@ -270,6 +270,10 @@ export class OracleMemoryService {
    * Tier 2: Semantic Memory - Stores code entity embeddings
    */
   static async saveSemanticMemory(project: string, entities: any[]) {
+    // Generate embeddings for the entities chunk-by-chunk FIRST without holding a connection
+    const contents = entities.map(e => `Entity: ${e.label}, Type: ${e.type}, Path: ${e.filePath}`);
+    const embeddings = await this.generateNvidiaEmbeddingsBatch(contents, 'passage');
+
     let connection;
     try {
       const pool = await this.init();
@@ -287,10 +291,6 @@ export class OracleMemoryService {
           WHEN NOT MATCHED THEN INSERT (id, project_name, entity_type, entity_name, file_path, content, embedding, tenant_id)
           VALUES (src.id, src.project_name, src.entity_type, src.entity_name, src.file_path, src.content, src.embedding, src.tenant_id)
         `;
-        
-        // Generate embeddings for the entities chunk-by-chunk
-        const contents = entities.map(e => `Entity: ${e.label}, Type: ${e.type}, Path: ${e.filePath}`);
-        const embeddings = await this.generateNvidiaEmbeddingsBatch(contents, 'passage');
 
         const binds = entities.map((e, index) => {
           const embeddingVector = embeddings && embeddings[index] ? embeddings[index] : null;
@@ -311,7 +311,6 @@ export class OracleMemoryService {
           const chunk = binds.slice(i, i + dbChunkSize);
           await connection.executeMany(sql, chunk as any[], { autoCommit: true });
         }
-        
 
     } catch (err) {
       console.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
@@ -381,13 +380,14 @@ export class OracleMemoryService {
    * Query using AI Vector Search (Native Oracle 26ai feature)
    */
   static async searchSemanticMemory(project: string, query: string, limit: number = 5) {
+    // Generate query embedding first, before acquiring database connection
+    const queryVector = await this.generateNvidiaEmbedding(query, 'query');
+
     let connection;
     try {
       const pool = await this.init();
       connection = await pool.getConnection();
       await this.setSessionContext(connection);
-      
-        const queryVector = await this.generateNvidiaEmbedding(query, 'query');
       
         const sql = `
           SELECT entity_name, entity_type, file_path, content
@@ -404,7 +404,6 @@ export class OracleMemoryService {
         
         const result = await connection.execute(sql, binds);
         return result.rows;
-        
 
     } catch (err) {
       console.error("Error searching semantic memory:", err instanceof Error ? err.message : String(err));

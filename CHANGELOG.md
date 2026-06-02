@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.13.6] - 2026-06-02
+
+### Changed
+- **NJS-040 Connection Starvation Fix**: Refactored `saveSemanticMemory` and `searchSemanticMemory` in `OracleMemoryService` to generate NVIDIA embeddings *before* acquiring an Oracle database connection. This prevents holding connection pool slots idle for long periods during external API latency, completely eliminating NJS-040 timeout errors.
+
 ## [2.13.5] - 2026-06-02
 
 ### Changed
