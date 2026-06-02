@@ -26,7 +26,47 @@ export function getStats(analysis: AnalysisResultLocal) {
   };
 }
 
+export function isSystemIdeDirectory(dir: string): boolean {
+  try {
+    const absPath = path.resolve(dir.trim());
+    if (absPath === "/config/Downloads/Antigravity" || absPath.startsWith("/config/Downloads/Antigravity/")) {
+      return true;
+    }
+    
+    // Dynamically resolve ~/.gemini/antigravity across operating systems
+    const homeDir = os.homedir();
+    const dynamicAntigravityPath = path.resolve(path.join(homeDir, ".gemini", "antigravity"));
+    if (absPath === dynamicAntigravityPath || absPath.startsWith(dynamicAntigravityPath + path.sep)) {
+      return true;
+    }
+
+    // Ignore home directory itself, system root, or /config root
+    if (absPath === homeDir || absPath === "/" || absPath === "/config") {
+      return true;
+    }
+
+    // Ignore system/IDE configuration folders starting with a dot (e.g. .codeium, .vscode, .cursor)
+    // but allow double-dot prefixes (like ..projectA)
+    const parts = absPath.split(path.sep);
+    if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas')) {
+      return true;
+    }
+
+    // Check if it's the IDE resources directory
+    if (fs.existsSync(path.join(absPath, "resources", "app", "extensions")) ||
+        fs.existsSync(path.join(absPath, "resources", "app", "out", "vs"))) {
+      return true;
+    }
+  } catch {
+    // Ignore errors
+  }
+  return false;
+}
+
 export function isProjectDirectory(dir: string): boolean {
+  if (isSystemIdeDirectory(dir)) {
+    return false;
+  }
   if (dir === process.cwd() || dir === process.env.CODEATLAS_PROJECT_DIR || dir.includes("/tenants/")) {
     return true;
   }
@@ -45,6 +85,9 @@ export function isProjectDirectory(dir: string): boolean {
 }
 
 export async function isProjectDirectoryAsync(dir: string): Promise<boolean> {
+  if (isSystemIdeDirectory(dir)) {
+    return false;
+  }
   if (dir === process.cwd() || dir === process.env.CODEATLAS_PROJECT_DIR || dir.includes("/tenants/")) {
     return true;
   }
@@ -99,6 +142,9 @@ export function registerProject(dir: string): void {
       projects = [];
     }
     const absPath = path.resolve(dir);
+    if (isSystemIdeDirectory(absPath)) {
+      return;
+    }
     if (!projects.includes(absPath)) {
       projects.push(absPath);
       fs.writeFileSync(regPath, JSON.stringify(projects, null, 2));
@@ -316,7 +362,18 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       if (fs.existsSync(regPath)) {
         const registered = JSON.parse(fs.readFileSync(regPath, "utf-8"));
         if (Array.isArray(registered)) {
-          for (const dir of registered) {
+          let updated = false;
+          const filtered = registered.filter((dir) => {
+            if (isSystemIdeDirectory(dir)) {
+              updated = true;
+              return false;
+            }
+            return true;
+          });
+          if (updated) {
+            fs.writeFileSync(regPath, JSON.stringify(filtered, null, 2));
+          }
+          for (const dir of filtered) {
             if (fs.existsSync(dir)) {
               searchDirs.push(dir);
             }
@@ -330,6 +387,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
   for (const dir of searchDirs) {
     if (seen.has(dir)) continue;
     seen.add(dir);
+    if (isSystemIdeDirectory(dir)) continue;
 
     if (isProjectDirectory(dir)) {
       try {
@@ -365,6 +423,10 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
 
   if (projectDir) {
     const absPath = path.resolve(projectDir);
+    if (isSystemIdeDirectory(absPath)) {
+      console.warn(`[Auto-Scan] 🛡️ Ignored IDE system/extensions directory from workspace indexing: ${absPath}`);
+      return null;
+    }
     let match = projects.find(
       (p) => p.dir === absPath || 
              p.name.toLowerCase() === projectDir.toLowerCase() ||
@@ -511,7 +573,18 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
         const data = await fs.promises.readFile(regPath, "utf-8");
         const registered = JSON.parse(data);
         if (Array.isArray(registered)) {
-          for (const dir of registered) {
+          let updated = false;
+          const filtered = registered.filter((dir) => {
+            if (isSystemIdeDirectory(dir)) {
+              updated = true;
+              return false;
+            }
+            return true;
+          });
+          if (updated) {
+            await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+          }
+          for (const dir of filtered) {
             if (await fileExists(dir)) {
               searchDirs.push(dir);
             }
@@ -525,6 +598,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
   for (const dir of searchDirs) {
     if (seen.has(dir)) continue;
     seen.add(dir);
+    if (isSystemIdeDirectory(dir)) continue;
 
     if (await isProjectDirectoryAsync(dir)) {
       try {
@@ -560,6 +634,10 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
 
   if (projectDir) {
     const absPath = path.resolve(projectDir);
+    if (isSystemIdeDirectory(absPath)) {
+      console.warn(`[Auto-Scan] 🛡️ Ignored IDE system/extensions directory from workspace indexing: ${absPath}`);
+      return null;
+    }
     let match = projects.find(
       (p) => p.dir === absPath || 
              p.name.toLowerCase() === projectDir.toLowerCase() ||

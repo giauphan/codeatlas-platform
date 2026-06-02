@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.13.2] - 2026-06-02
+
+### Fixed
+- **Oracle DB Episodic Memory Bug**: Fixed silent failure during episodic memory sync by wrapping primitive/string values inside a structured JSON object (`{ val: data }`) before binding with native `oracledb.DB_TYPE_JSON`.
+- **Database Error Propagation**: Hardened error handling in `OracleMemoryService` by propagating (re-throwing) database errors rather than catching and swallowing them, allowing REST APIs and MCP tools to properly detect and report failures.
+
 ## [2.13.1] - 2026-06-02
 
 ### Fixed

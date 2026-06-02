@@ -104,17 +104,20 @@ export class OracleMemoryService {
           VALUES (:id, :project, :eventType, :data, :tenantId)
         `;
         
+        const jsonValue = typeof data === "object" && data !== null ? data : { val: data };
+
         await connection.execute(sql, {
           id,
           project,
           eventType,
-          data: { val: data, type: oracledb.DB_TYPE_JSON },
+          data: { val: jsonValue, type: oracledb.DB_TYPE_JSON },
           tenantId
         }, { autoCommit: true });
         
 
     } catch (err) {
       console.error("Error saving episodic memory:", err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       if (connection) {
         try {
@@ -154,7 +157,7 @@ export class OracleMemoryService {
       return result.rows || [];
     } catch (err) {
       console.error("Error getting episodic memories:", err instanceof Error ? err.message : String(err));
-      return [];
+      throw err;
     } finally {
       if (connection) {
         try {
@@ -308,6 +311,7 @@ export class OracleMemoryService {
 
     } catch (err) {
       console.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       if (connection) {
         try {
@@ -353,6 +357,7 @@ export class OracleMemoryService {
 
     } catch (err) {
       console.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       if (connection) {
         try {
@@ -395,7 +400,7 @@ export class OracleMemoryService {
 
     } catch (err) {
       console.error("Error searching semantic memory:", err instanceof Error ? err.message : String(err));
-      return [];
+      throw err;
     } finally {
       if (connection) {
         try {
@@ -473,7 +478,7 @@ export class OracleMemoryService {
 
     } catch (err) {
       console.error("Error detecting smells:", err instanceof Error ? err.message : String(err));
-      return null;
+      throw err;
     } finally {
       if (connection) {
         try {
