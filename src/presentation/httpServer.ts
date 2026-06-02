@@ -24,6 +24,74 @@ export const firebaseClient = {
   getFirestore: () => getFirestore()
 };
 
+// Custom local rate limiter without external dependencies
+const rateLimits = new Map<string, number[]>();
+const limitRequests = 60; // Max 60 requests
+const limitWindowMs = 60000; // Per 1 minute
+
+export const localRateLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const auth = authStorage.getStore();
+  const tenantId = auth ? auth.uid : (req.ip || "anonymous");
+  
+  const now = Date.now();
+  const timestamps = rateLimits.get(tenantId) || [];
+  
+  // Filter out timestamps outside the window
+  const activeTimestamps = timestamps.filter(t => now - t < limitWindowMs);
+  
+  if (activeTimestamps.length >= limitRequests) {
+    console.warn(`[Rate Limiter] Limit exceeded for tenant/IP: ${tenantId}`);
+    return res.status(429).json({ error: "Too many requests. Please try again in a minute." });
+  }
+  
+  activeTimestamps.push(now);
+  rateLimits.set(tenantId, activeTimestamps);
+  next();
+};
+
+// Task queue to serialize/control concurrency of heavy operations
+class TaskQueue {
+  private queue: (() => Promise<any>)[] = [];
+  private activeCount = 0;
+  private maxConcurrency = 1; // Process at most 1 heavy sync task concurrently to prevent connection pool exhaustion
+
+  constructor(maxConcurrency: number = 1) {
+    this.maxConcurrency = maxConcurrency;
+  }
+
+  enqueue<T>(task: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await task();
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        }
+      });
+      this.next();
+    });
+  }
+
+  private next() {
+    if (this.activeCount >= this.maxConcurrency || this.queue.length === 0) {
+      return;
+    }
+    
+    const task = this.queue.shift();
+    if (task) {
+      this.activeCount++;
+      task().finally(() => {
+        this.activeCount--;
+        this.next();
+      });
+    }
+  }
+}
+
+export const syncQueue = new TaskQueue(1);
+
+
 // Setup Express app to serve as both MCP SSE and REST API
 export const app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -549,7 +617,7 @@ app.post("/api/reindex", authMiddleware, async (req, res) => {
 });
 
 // REST API: Securely sync local AST analysis from Local-First gateway and sync telemetry
-app.post("/api/projects/sync", authMiddleware, async (req, res) => {
+app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -562,142 +630,154 @@ app.post("/api/projects/sync", authMiddleware, async (req, res) => {
     if (!projectName || !analysis) {
       return res.status(400).json({ error: "Missing projectName or analysis data" });
     }
-    
-    // Clean project name to avoid directory traversal
-    const cleanProjectName = path.basename(projectName);
-    
-    // Resolve project directory on the VPS
-    let projectDir: string;
-    if (process.env.CODEATLAS_MULTI_TENANT === "true") {
-      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
-      projectDir = path.join(tenantRoot, tenantId, cleanProjectName);
-    } else {
-      projectDir = path.join(process.cwd(), "projects", cleanProjectName);
-    }
-    
-    const codeatlasDir = path.join(projectDir, ".codeatlas");
-    if (!(await fileExists(codeatlasDir))) {
-      await fs.promises.mkdir(codeatlasDir, { recursive: true });
-    }
-    
-    const analysisPath = path.join(codeatlasDir, "analysis.json");
-    await fs.promises.writeFile(analysisPath, JSON.stringify(analysis, null, 2));
-    
-    // Securely sync telemetry / database stats on server-side
-    try {
-      const apps = firebaseClient.getApps();
-      if (apps.length) {
-        const db = firebaseClient.getFirestore();
-        const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
-        const docRef = db.collection('projects').doc(docId);
 
-        // Runtime migration fallback: if docId is different from cleanProjectName, check if a legacy doc exists to migrate historical telemetry
-        if (tenantId) {
-          const legacyDocId = cleanProjectName;
-          const legacyRef = db.collection('projects').doc(legacyDocId);
-          try {
-            const [newDoc, legacyDoc] = await Promise.all([
-              docRef.get(),
-              legacyRef.get()
-            ]);
-            if (legacyDoc.exists && !newDoc.exists) {
-              const legacyData = legacyDoc.data() || {};
-              await docRef.set({
-                ...legacyData,
-                tenantId: tenantId
-              }, { merge: true });
-              await legacyRef.delete();
-              console.error(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
+    // Queue the heavy file write & database sync operations to prevent connection pool starvation/conflicts
+    const result = await syncQueue.enqueue(async () => {
+      const executeTask = async () => {
+        // Clean project name to avoid directory traversal
+        const cleanProjectName = path.basename(projectName);
+        
+        // Resolve project directory on the VPS
+        let projectDir: string;
+        if (process.env.CODEATLAS_MULTI_TENANT === "true") {
+          const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+          projectDir = path.join(tenantRoot, tenantId, cleanProjectName);
+        } else {
+          projectDir = path.join(process.cwd(), "projects", cleanProjectName);
+        }
+        
+        const codeatlasDir = path.join(projectDir, ".codeatlas");
+        if (!(await fileExists(codeatlasDir))) {
+          await fs.promises.mkdir(codeatlasDir, { recursive: true });
+        }
+        
+        const analysisPath = path.join(codeatlasDir, "analysis.json");
+        await fs.promises.writeFile(analysisPath, JSON.stringify(analysis, null, 2));
+        
+        // Securely sync telemetry / database stats on server-side
+        try {
+          const apps = firebaseClient.getApps();
+          if (apps.length) {
+            const db = firebaseClient.getFirestore();
+            const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+            const docRef = db.collection('projects').doc(docId);
+
+            // Runtime migration fallback: if docId is different from cleanProjectName, check if a legacy doc exists to migrate historical telemetry
+            if (tenantId) {
+              const legacyDocId = cleanProjectName;
+              const legacyRef = db.collection('projects').doc(legacyDocId);
+              try {
+                const [newDoc, legacyDoc] = await Promise.all([
+                  docRef.get(),
+                  legacyRef.get()
+                ]);
+                if (legacyDoc.exists && !newDoc.exists) {
+                  const legacyData = legacyDoc.data() || {};
+                  await docRef.set({
+                    ...legacyData,
+                    tenantId: tenantId
+                  }, { merge: true });
+                  await legacyRef.delete();
+                  console.error(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
+                }
+              } catch (migrateErr) {
+                console.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
+              }
             }
-          } catch (migrateErr) {
-            console.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
+
+            await docRef.set({
+              name: cleanProjectName,
+              path: projectDir,
+              stats: (analysis as any).stats || analysis.entityCounts || {},
+              lastIndexed: new Date().toISOString(),
+              nodesCount: analysis.graph?.nodes?.length || 0,
+              linksCount: analysis.graph?.links?.length || 0,
+              status: 'synced',
+              tenantId: tenantId
+            }, { merge: true });
+            console.error(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
+          }
+        } catch (e) {
+          console.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
+        }
+
+        let businessRuleSaved = false;
+        let changeDescriptionSaved = false;
+        let syncError: string | undefined = undefined;
+
+        // Sync to Oracle 26ai (episodic memory is processed synchronously to expose failures to callers)
+        if (auth && process.env.ORACLE_CONN_STRING) {
+          try {
+            const { OracleMemoryService } = await import("../oracleDatabase.js");
+            if (businessRule) {
+              await authStorage.run(auth, async () => {
+                console.error(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
+                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", businessRule);
+                businessRuleSaved = true;
+              });
+            }
+            if (changeDescription) {
+              await authStorage.run(auth, async () => {
+                console.error(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
+                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", changeDescription);
+                changeDescriptionSaved = true;
+              });
+            }
+
+            // Graph sync is still processed asynchronously in the background as it can be large
+            if (analysis.graph?.nodes && analysis.graph?.links) {
+              const nodes = analysis.graph.nodes;
+              const links = analysis.graph.links;
+              Promise.resolve().then(async () => {
+                try {
+                  await authStorage.run(auth, async () => {
+                    console.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
+                    await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
+                    await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
+                    console.error(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
+                  });
+                } catch (oracleErr) {
+                  console.error(`[Sync API] Failed to async sync Knowledge Graph to Oracle 26ai:`, oracleErr);
+                }
+              });
+            }
+          } catch (e: any) {
+            console.error(`[Sync API] Failed to initialize/sync Oracle DB connection: ${e}`);
+            syncError = e instanceof Error ? e.message : String(e);
+          }
+        } else {
+          if (businessRule || changeDescription) {
+            syncError = "Oracle DB is not configured or authenticated.";
           }
         }
 
-        await docRef.set({
-          name: cleanProjectName,
-          path: projectDir,
-          stats: (analysis as any).stats || analysis.entityCounts || {},
-          lastIndexed: new Date().toISOString(),
-          nodesCount: analysis.graph?.nodes?.length || 0,
-          linksCount: analysis.graph?.links?.length || 0,
-          status: 'synced',
-          tenantId: tenantId
-        }, { merge: true });
-        console.error(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
+        const sanitizedProjectDir = path.relative(process.cwd(), projectDir);
+        return { sanitizedProjectDir, businessRuleSaved, changeDescriptionSaved, syncError };
+      };
+
+      if (auth) {
+        return await authStorage.run(auth, executeTask);
+      } else {
+        return await executeTask();
       }
-    } catch (e) {
-      console.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
-    }
+    });
 
-    let businessRuleSaved = false;
-    let changeDescriptionSaved = false;
-    let syncError: string | undefined = undefined;
-
-    // Sync to Oracle 26ai (episodic memory is processed synchronously to expose failures to callers)
-    if (auth && process.env.ORACLE_CONN_STRING) {
-      try {
-        const { OracleMemoryService } = await import("../oracleDatabase.js");
-        if (businessRule) {
-          await authStorage.run(auth, async () => {
-            console.error(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
-            await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", businessRule);
-            businessRuleSaved = true;
-          });
-        }
-        if (changeDescription) {
-          await authStorage.run(auth, async () => {
-            console.error(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
-            await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", changeDescription);
-            changeDescriptionSaved = true;
-          });
-        }
-
-        // Graph sync is still processed asynchronously in the background as it can be large
-        if (analysis.graph?.nodes && analysis.graph?.links) {
-          const nodes = analysis.graph.nodes;
-          const links = analysis.graph.links;
-          Promise.resolve().then(async () => {
-            try {
-              await authStorage.run(auth, async () => {
-                console.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
-                await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
-                await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
-                console.error(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
-              });
-            } catch (oracleErr) {
-              console.error(`[Sync API] Failed to async sync Knowledge Graph to Oracle 26ai:`, oracleErr);
-            }
-          });
-        }
-      } catch (e: any) {
-        console.error(`[Sync API] Failed to initialize/sync Oracle DB connection: ${e}`);
-        syncError = e instanceof Error ? e.message : String(e);
-      }
-    } else {
-      if (businessRule || changeDescription) {
-        syncError = "Oracle DB is not configured or authenticated.";
-      }
-    }
-
-    const sanitizedProjectDir = path.relative(process.cwd(), projectDir);
-
-    if (syncError) {
+    if (result.syncError) {
       res.status(500).json({
-        error: syncError,
-        projectDir: sanitizedProjectDir,
+        error: result.syncError,
+        projectDir: result.sanitizedProjectDir,
         stats: {
-          businessRuleSaved,
-          changeDescriptionSaved
+          businessRuleSaved: result.businessRuleSaved,
+          changeDescriptionSaved: result.changeDescriptionSaved
         }
       });
     } else {
       res.json({
         success: true,
-        projectDir: sanitizedProjectDir,
+        projectDir: result.sanitizedProjectDir,
         stats: {
-          businessRuleSaved,
-          changeDescriptionSaved
+          businessRuleSaved: result.businessRuleSaved,
+          changeDescriptionSaved: result.changeDescriptionSaved
         }
       });
     }
@@ -772,7 +852,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.13.3",
+        version: "2.13.5",
       },
       {
         capabilities: {

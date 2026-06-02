@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.13.5] - 2026-06-02
+
+### Changed
+- **Security Scanner Performance Optimization**: Refactored `SecurityScanner.scan` to combine multiple nodes-list iterations into a single $O(N)$ pass. Cached normalization paths to prevent redundant string manipulation, drastically reducing CPU usage and memory footprint during project-wide vulnerability scans.
+
+## [2.13.4] - 2026-06-02
+
+### Added
+- **API Gateway Rate Limiting**: Added local in-memory rate limiting middleware `localRateLimiter` (60 requests/minute limit per tenant/IP) to prevent server/database overload.
+- **Sequential Sync Task Queue**: Implemented a concurrency-limiting task queue (`syncQueue` with concurrency = 1) for the `/api/projects/sync` endpoint. This serializes database-intensive knowledge graph writes and prevents connection pool exhaustion or lock contention during high-volume synchronizations.
+
+### Changed
+- **Relational Memory Batched Writes**: Updated relational memory link insertion query in `OracleMemoryService.saveRelationalMemory` to execute in batches of 1000 items.
+
 ## [2.13.3] - 2026-06-02
 
 ### Fixed

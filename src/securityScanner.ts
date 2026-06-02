@@ -18,6 +18,9 @@ export class SecurityScanner {
     const findings: SecurityFinding[] = [];
     const nodes = analysis.graph.nodes;
 
+    const secretKeywords = ["api_key", "secret", "password", "token", "private_key", "access_key"];
+    const unsafeFuncs = ["eval", "exec", "system", "child_process", "spawn", "shell_exec"];
+
     // Helper to identify test, mock or diagnostic files
     const isTestOrMockFile = (filePath: string): boolean => {
       const fp = filePath.toLowerCase().replace(/\\/g, "/");
@@ -34,74 +37,55 @@ export class SecurityScanner {
       );
     };
 
-    // 1. Detect Hardcoded Secrets
-    const secretKeywords = ["api_key", "secret", "password", "token", "private_key", "access_key"];
     nodes.forEach((node: GraphNode) => {
-      if (node.type === "variable") {
-        if (node.filePath && isTestOrMockFile(node.filePath)) {
-          return;
-        }
+      const filePath = node.filePath;
+      if (filePath && isTestOrMockFile(filePath)) {
+        return;
+      }
 
-        const name = node.label.toLowerCase();
-        if (secretKeywords.some(k => name.includes(k))) {
+      const labelLower = node.label.toLowerCase();
+
+      // 1. Detect Hardcoded Secrets
+      if (node.type === "variable") {
+        if (secretKeywords.some(k => labelLower.includes(k))) {
           findings.push({
             severity: "HIGH",
             type: "HARDCODED_SECRET",
             message: `Potential hardcoded secret found in variable: ${node.label}`,
-            filePath: node.filePath || "unknown",
+            filePath: filePath || "unknown",
             line: node.line || null
           });
         }
       }
-    });
 
-    // 2. Detect Unsafe Functions (eval, exec, etc.)
-    const unsafeFuncs = ["eval", "exec", "system", "child_process", "spawn", "shell_exec"];
-    nodes.forEach((node: GraphNode) => {
-      if (node.type === "function") {
-        if (node.filePath && isTestOrMockFile(node.filePath)) {
-          return;
-        }
-
-        const name = node.label.toLowerCase();
-        if (unsafeFuncs.includes(name)) {
+      // 2. Detect Unsafe Functions (eval, exec, etc.)
+      else if (node.type === "function") {
+        if (unsafeFuncs.includes(labelLower)) {
           findings.push({
             severity: "CRITICAL",
             type: "UNSAFE_FUNCTION",
             message: `Use of potentially dangerous function: ${node.label}`,
-            filePath: node.filePath || "unknown",
+            filePath: filePath || "unknown",
+            line: node.line || null
+          });
+        }
+
+        // 3. Detect Potential SQL Injection
+        if (
+          (node.label.includes("Query") || node.label.includes("execute")) &&
+          node.label !== "execute" &&
+          !node.label.endsWith("UseCase")
+        ) {
+          findings.push({
+            severity: "MEDIUM",
+            type: "SQL_INJECTION_RISK",
+            message: `Potential SQL Injection risk in database call: ${node.label}. Ensure parameterized queries are used.`,
+            filePath: filePath || "unknown",
             line: node.line || null
           });
         }
       }
     });
-
-    // 3. Detect Potential SQL Injection
-    // Look for functions containing "query" or "execute" that are connected to variables
-    // (Simplified heuristic for static analysis)
-    nodes.forEach((node: GraphNode) => {
-      if (node.type === "function" && (node.label.includes("Query") || node.label.includes("execute"))) {
-        if (node.filePath && isTestOrMockFile(node.filePath)) {
-          return;
-        }
-
-        // Avoid UseCase classes (Command pattern)
-        if (node.label === "execute" || node.label.endsWith("UseCase")) {
-          return;
-        }
-
-        findings.push({
-          severity: "MEDIUM",
-          type: "SQL_INJECTION_RISK",
-          message: `Potential SQL Injection risk in database call: ${node.label}. Ensure parameterized queries are used.`,
-          filePath: node.filePath || "unknown",
-          line: node.line || null
-        });
-      }
-    });
-
-    // 4. Detect Insecure Protocols (http vs https)
-    // (Could be expanded by looking at string constants if we had them)
 
     return findings;
   }
