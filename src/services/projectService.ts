@@ -366,7 +366,9 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
   if (projectDir) {
     const absPath = path.resolve(projectDir);
     let match = projects.find(
-      (p) => p.dir === absPath || p.name.toLowerCase() === projectDir.toLowerCase()
+      (p) => p.dir === absPath || 
+             p.name.toLowerCase() === projectDir.toLowerCase() ||
+             path.relative(process.cwd(), p.dir).replace(/\\/g, "/").toLowerCase() === projectDir.replace(/\\/g, "/").toLowerCase()
     );
     if (match) {
       target = match;
@@ -559,7 +561,9 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
   if (projectDir) {
     const absPath = path.resolve(projectDir);
     let match = projects.find(
-      (p) => p.dir === absPath || p.name.toLowerCase() === projectDir.toLowerCase()
+      (p) => p.dir === absPath || 
+             p.name.toLowerCase() === projectDir.toLowerCase() ||
+             path.relative(process.cwd(), p.dir).replace(/\\/g, "/").toLowerCase() === projectDir.replace(/\\/g, "/").toLowerCase()
     );
     if (match) {
       target = match;
@@ -601,7 +605,9 @@ export async function resolveProjectDir(projectDir: string, tenantId?: string, r
   const projects = await discoverProjectsAsync(tenantId);
   const absPath = path.resolve(projectDir);
   const match = projects.find(
-    (p) => p.dir === absPath || (!requireExactPath && p.name.toLowerCase() === projectDir.toLowerCase())
+    (p) => p.dir === absPath || 
+           path.relative(process.cwd(), p.dir).replace(/\\/g, "/").toLowerCase() === projectDir.replace(/\\/g, "/").toLowerCase() ||
+           (!requireExactPath && p.name.toLowerCase() === projectDir.toLowerCase())
   );
   if (!match) return null;
   return {

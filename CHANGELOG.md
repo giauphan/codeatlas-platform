@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.13.1] - 2026-06-02
+
+### Fixed
+- **Path Resolution & Separation**: Standardized multi-tenant project path resolution using relative-path mapping and path slash normalization, completely eliminating false-negative 404 project analysis errors.
+- **sessionStorage Exhaustion Mitigation**: Engineered a high-performance in-memory cache fallback layer (`memoryAnalysisCache`) that silently takes over when sessionStorage limits are exceeded, ensuring large project payloads load seamlessly.
+- **Concurrent Fetch Orchestration**: Refactored the dashboard component's lifecycle initialization to coordinate and deduplicate mounting calls, preventing race conditions and stale directory swapping.
+
 ## [2.13.0] - 2026-06-01
 
 ### Added
