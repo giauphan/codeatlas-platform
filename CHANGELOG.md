@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.13.7] - 2026-06-02
+
+### Added
+- **Database Keep-Alive Ping**: Added static `ping()` method to `OracleMemoryService` executing a lightweight `SELECT 1 FROM DUAL`.
+- **Auto-Ping Background Task**: Integrated a background task running every 12 hours on HTTP server initialization. This generates database activity and prevents Oracle Always Free Autonomous Databases from being automatically paused/stopped.
+
 ## [2.13.6] - 2026-06-02
 
 ### Changed

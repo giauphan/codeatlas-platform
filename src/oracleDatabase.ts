@@ -547,4 +547,27 @@ export class OracleMemoryService {
       }
     }
   }
+
+  /**
+   * Health check ping to keep the Always Free Oracle Database active (prevents auto-stopping due to 7 days idle)
+   */
+  static async ping() {
+    let connection;
+    try {
+      const pool = await this.init();
+      connection = await pool.getConnection();
+      const result = await connection.execute("SELECT 1 FROM DUAL");
+      console.log("[Oracle DB] Keep-alive ping executed successfully:", result.rows);
+    } catch (err) {
+      console.error("[Oracle DB] Keep-alive ping failed:", err instanceof Error ? err.message : String(err));
+    } finally {
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error("[Oracle DB] Keep-alive ping connection close error:", closeErr);
+        }
+      }
+    }
+  }
 }

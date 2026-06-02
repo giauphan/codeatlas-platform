@@ -852,7 +852,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.13.6",
+        version: "2.13.7",
       },
       {
         capabilities: {
@@ -966,6 +966,21 @@ export function startHttpServer(port: number): Promise<void> {
       } else {
         console.error(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
       }
+
+      // Start a keep-alive database ping every 12 hours to prevent Oracle Free Tier auto-stop
+      const DB_PING_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+      setInterval(async () => {
+        try {
+          const { OracleMemoryService } = await import("../oracleDatabase.js");
+          if (process.env.ORACLE_CONN_STRING) {
+            console.error("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
+            await OracleMemoryService.ping();
+          }
+        } catch (err) {
+          console.error("[Keep-Alive] Failed to ping Oracle DB:", err);
+        }
+      }, DB_PING_INTERVAL_MS);
+
       resolve();
     });
   });
