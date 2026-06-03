@@ -129,7 +129,8 @@ describe('Project Settings REST API', () => {
     const newProjDir = path.join(mockTenantRoot, tenantId, 'another-project');
     // Ensure project dir exists but not .codeatlas
     fs.mkdirSync(newProjDir, { recursive: true });
-    // Write a dummy README.md so isProjectDirectory identifies it
+    fs.mkdirSync(path.join(newProjDir, '.git'), { recursive: true });
+    // Write a dummy README.md
     fs.writeFileSync(path.join(newProjDir, 'README.md'), '# Another Project', 'utf8');
 
     let postStatus: number | null = null;

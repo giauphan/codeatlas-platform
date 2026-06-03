@@ -1,6 +1,16 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [2.13.9] - 2026-06-03
+
+### Added / Fixed
+- **E2E Project Discovery Tests**: Created robust integration tests to verify project discovery criteria, including validation of `.git` folders, system/hidden directories exclusion, and Linux process (/proc) inspection for active IDE processes.
+- **Settings API E2E Compliance**: Updated settings integration test suite to align with hardened project validation.
+
+## [2.13.8] - 2026-06-03
+
+### Fixed / Changed
+- **Hardening CodeAtlas Workspace Indexing**: Prevent unwanted system directory indexing and enforce strict project discovery criteria. Enforced `.git` or `.codeatlas` folder presence check as a requirement for project validation, and integrated active IDE process detection (via `/proc` inspection) to identify valid open workspaces.
+- **Enterprise MCP Sync**: Synchronized client version to `2.2.3` and aligned workspace validation heuristics with the core server.
 
 ## [2.13.7] - 2026-06-02
 

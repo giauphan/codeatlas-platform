@@ -63,22 +63,75 @@ export function isSystemIdeDirectory(dir: string): boolean {
   return false;
 }
 
+export function getOpenIdeForDir(dir: string): string | null {
+  try {
+    const absPath = path.resolve(dir.trim());
+    if (!fs.existsSync('/proc')) return null;
+    const files = fs.readdirSync('/proc');
+    for (const file of files) {
+      if (/^\d+$/.test(file)) {
+        const pid = file;
+        const cmdlinePath = `/proc/${pid}/cmdline`;
+        try {
+          if (fs.existsSync(cmdlinePath)) {
+            const cmdline = fs.readFileSync(cmdlinePath, 'utf8');
+            const args = cmdline.split('\0').filter(Boolean);
+            if (args.length === 0) continue;
+            
+            const hasDirArg = args.some(arg => {
+              try {
+                return path.resolve(arg) === absPath;
+              } catch {
+                return false;
+              }
+            });
+            
+            if (hasDirArg) {
+              const exePath = args[0].toLowerCase();
+              const ideKeywords = ['code', 'vscode', 'cursor', 'windsurf', 'intellij', 'webstorm', 'phpstorm', 'idea', 'eclipse', 'sublime', 'gemini-cli'];
+              for (const keyword of ideKeywords) {
+                if (exePath.includes(keyword)) {
+                  return path.basename(args[0]);
+                }
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export function isProjectDirectory(dir: string): boolean {
   if (isSystemIdeDirectory(dir)) {
     return false;
   }
-  if (dir === process.cwd() || dir === process.env.CODEATLAS_PROJECT_DIR || dir.includes("/tenants/")) {
+  if (dir.includes("/tenants/")) {
     return true;
   }
   try {
-    return (
-      fs.existsSync(path.join(dir, "package.json")) ||
-      fs.existsSync(path.join(dir, "composer.json")) ||
-      fs.existsSync(path.join(dir, "requirements.txt")) ||
-      fs.existsSync(path.join(dir, ".git")) ||
-      fs.existsSync(path.join(dir, ".codeatlas")) ||
-      fs.existsSync(path.join(dir, "README.md"))
-    );
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+      return false;
+    }
+    const gitPath = path.join(dir, ".git");
+    if (fs.existsSync(gitPath)) {
+      return true;
+    }
+    const codeatlasPath = path.join(dir, ".codeatlas");
+    if (fs.existsSync(codeatlasPath)) {
+      return true;
+    }
+    const openIde = getOpenIdeForDir(dir);
+    if (openIde) {
+      console.error(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -88,20 +141,28 @@ export async function isProjectDirectoryAsync(dir: string): Promise<boolean> {
   if (isSystemIdeDirectory(dir)) {
     return false;
   }
-  if (dir === process.cwd() || dir === process.env.CODEATLAS_PROJECT_DIR || dir.includes("/tenants/")) {
+  if (dir.includes("/tenants/")) {
     return true;
   }
   try {
-    const checks = [
-      fileExists(path.join(dir, "package.json")),
-      fileExists(path.join(dir, "composer.json")),
-      fileExists(path.join(dir, "requirements.txt")),
-      fileExists(path.join(dir, ".git")),
-      fileExists(path.join(dir, ".codeatlas")),
-      fileExists(path.join(dir, "README.md"))
-    ];
-    const results = await Promise.all(checks);
-    return results.some(r => r === true);
+    const stat = await fs.promises.stat(dir);
+    if (!stat.isDirectory()) {
+      return false;
+    }
+    const gitPath = path.join(dir, ".git");
+    if (await fileExists(gitPath)) {
+      return true;
+    }
+    const codeatlasPath = path.join(dir, ".codeatlas");
+    if (await fileExists(codeatlasPath)) {
+      return true;
+    }
+    const openIde = getOpenIdeForDir(dir);
+    if (openIde) {
+      console.error(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
