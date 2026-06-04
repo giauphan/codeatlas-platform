@@ -16,7 +16,8 @@ import {
   unregisterProject
 } from "../services/projectService.js";
 import { authStorage } from "../context.js";
-import { registerTools } from "./mcpServer.js";
+import { registerTools } from "./mcpTools.js";
+import { logger } from "../logger.js";
 
 // Wrapper object to allow clean mocking of Firebase services in testing environments
 export const firebaseClient = {
@@ -40,7 +41,7 @@ export const localRateLimiter = (req: express.Request, res: express.Response, ne
   const activeTimestamps = timestamps.filter(t => now - t < limitWindowMs);
   
   if (activeTimestamps.length >= limitRequests) {
-    console.warn(`[Rate Limiter] Limit exceeded for tenant/IP: ${tenantId}`);
+    logger.warn(`[Rate Limiter] Limit exceeded for tenant/IP: ${tenantId}`);
     return res.status(429).json({ error: "Too many requests. Please try again in a minute." });
   }
   
@@ -97,9 +98,16 @@ export const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Enable CORS for dashboard
+// Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
+const allowedOrigins = process.env.ALLOWED_ORIGINS || '*';
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (allowedOrigins === '*' || !origin) {
+    res.header('Access-Control-Allow-Origin', '*');
+  } else if (allowedOrigins.split(',').map(s => s.trim()).includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -122,7 +130,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
             role = userDoc.data()?.role || userDoc.data()?.tier || "user";
           }
         } catch (e) {
-          console.error("Failed to fetch user role from Firestore:", e);
+          logger.error("Failed to fetch user role from Firestore:", e);
         }
       }
 
@@ -146,8 +154,14 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     }
   }
 
-  // 2. Support both header and query param for flexibility (Dashboard legacy vs MCP)
-  const clientKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string);
+  // 2. Support API key via header (primary) and query param (deprecated — warn)
+  let clientKey = (req.headers["x-api-key"] as string);
+  if (!clientKey) {
+    clientKey = (req.query.apiKey as string) || "";
+    if (clientKey) {
+      logger.warn("[Auth] API key passed via query parameter is deprecated and will be removed. Use x-api-key header instead.");
+    }
+  }
   try {
     const auth = await checkAuth(clientKey);
     (req as any).auth = auth; // Attach auth result to request
@@ -249,7 +263,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         const db = firebaseClient.getFirestore();
         const docId = ownerTenantId ? `${ownerTenantId}_${cleanProjectName}` : cleanProjectName;
         await db.collection('projects').doc(docId).delete();
-        console.log(`[Delete Project] Deleted Firestore document: ${docId}`);
+        logger.info(`[Delete Project] Deleted Firestore document: ${docId}`);
         
         // Securely handle legacy unscoped document cleanup if it exists
         if (ownerTenantId) {
@@ -261,14 +275,14 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
             const legacyTenantId = legacyData?.tenantId;
             if (!legacyTenantId || legacyTenantId === ownerTenantId) {
               await legacyRef.delete();
-              console.log(`[Delete Project] Cleaned up legacy Firestore document: ${legacyDocId}`);
+              logger.info(`[Delete Project] Cleaned up legacy Firestore document: ${legacyDocId}`);
             }
           }
         }
       }
-    } catch (firebaseErr: any) {
-      console.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
-      errors.push(`Firestore cleanup failed: ${firebaseErr.message || String(firebaseErr)}`);
+    } catch (firebaseErr: unknown) {
+      logger.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
+      errors.push(`Firestore cleanup failed: ${firebaseErr instanceof Error ? firebaseErr.message : String(firebaseErr)}`);
     }
 
     // 2. Remove semantic/relational/episodic memory from Oracle DB (if Oracle DB is configured)
@@ -277,9 +291,9 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         const { OracleMemoryService } = await import("../oracleDatabase.js");
         await OracleMemoryService.deleteProjectMemory(cleanProjectName, ownerTenantId);
       }
-    } catch (oracleErr: any) {
-      console.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
-      const errMsg = oracleErr.message || String(oracleErr);
+    } catch (oracleErr: unknown) {
+      logger.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
+      const errMsg = oracleErr instanceof Error ? oracleErr.message : String(oracleErr);
       // If it's a driver/library loading error (e.g. DPI-1047) or connection/network failure,
       // log as a warning and do not block local cleanup, since the DB is unreachable anyway.
       if (
@@ -289,7 +303,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         errMsg.includes("connection") ||
         errMsg.includes("connect")
       ) {
-        console.warn(`[Delete Project] Non-blocking Oracle library/connection warning during delete: ${errMsg}`);
+        logger.warn(`[Delete Project] Non-blocking Oracle library/connection warning during delete: ${errMsg}`);
       } else {
         errors.push(`Oracle DB cleanup failed: ${errMsg}`);
       }
@@ -322,7 +336,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         } else if (fs.existsSync(codeatlasDir)) {
           await fs.promises.rm(codeatlasDir, { recursive: true, force: true });
         }
-        console.log(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
+        logger.info(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
       }
 
       // If multi-tenant mode is active, the project resides within the tenants directory, and the directory is empty after index cleanup, clean up the empty tenant project folder too
@@ -331,26 +345,26 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
           const lstat = await fs.promises.lstat(fullProjectDir);
           if (lstat.isSymbolicLink()) {
             await fs.promises.unlink(fullProjectDir);
-            console.log(`[Delete Project] Unlinked tenant project symlink: ${fullProjectDir}`);
+            logger.info(`[Delete Project] Unlinked tenant project symlink: ${fullProjectDir}`);
           } else {
             const remainingFiles = await fs.promises.readdir(realProjectDir);
             if (remainingFiles.length === 0) {
               await fs.promises.rm(realProjectDir, { recursive: true, force: true });
-              console.log(`[Delete Project] Cleaned up empty tenant sandbox directory: ${realProjectDir}`);
+              logger.info(`[Delete Project] Cleaned up empty tenant sandbox directory: ${realProjectDir}`);
             }
           }
         }
       }
-    } catch (dirErr: any) {
-      errors.push(`Failed to clean up index directory: ${dirErr.message || String(dirErr)}`);
+    } catch (dirErr: unknown) {
+      errors.push(`Failed to clean up index directory: ${dirErr instanceof Error ? dirErr.message : String(dirErr)}`);
     }
 
     // 4. Unregister project from local registered list only if local cleanup was successful, or if force is enabled
     if (errors.length === 0 || isForce) {
       try {
         unregisterProject(fullProjectDir);
-      } catch (regErr: any) {
-        errors.push(`Failed to unregister project: ${regErr.message || String(regErr)}`);
+      } catch (regErr: unknown) {
+        errors.push(`Failed to unregister project: ${regErr instanceof Error ? regErr.message : String(regErr)}`);
       }
     }
 
@@ -368,7 +382,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       details: errors.length > 0 ? errors : undefined
     });
   } catch (err: unknown) {
-    console.error(`[Delete Project] Failed: ${(err instanceof Error ? err.message : String(err))}`);
+    logger.error(`[Delete Project] Failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -404,30 +418,11 @@ app.get("/api/projects/memory", authMiddleware, async (req, res) => {
 
     const { OracleMemoryService } = await import("../oracleDatabase.js");
     const memories = await authStorage.run(auth, async () => {
-      return await OracleMemoryService.getEpisodicMemories(cleanProjectName, eventType as any);
+      return await OracleMemoryService.getEpisodicMemories(cleanProjectName, eventType || undefined);
     });
 
-    const parsedMemories = memories.map((m: any) => {
-      let val = null;
-      try {
-        if (m.EVENT_DATA) {
-          if (typeof m.EVENT_DATA === "string") {
-            const parsed = JSON.parse(m.EVENT_DATA);
-            val = parsed.val !== undefined ? parsed.val : parsed;
-          } else if (typeof m.EVENT_DATA === "object") {
-            val = m.EVENT_DATA.val !== undefined ? m.EVENT_DATA.val : m.EVENT_DATA;
-          }
-        }
-      } catch (e) {
-        val = m.EVENT_DATA;
-      }
-      return {
-        id: m.ID,
-        eventType: m.EVENT_TYPE,
-        data: val,
-        createdAt: m.CREATED_AT
-      };
-    });
+    const rawMemories: Array<Record<string, unknown>> = (memories ?? []) as any;
+    const parsedMemories = OracleMemoryService.parseEpisodicMemories(rawMemories);
 
     res.json({
       success: true,
@@ -435,7 +430,7 @@ app.get("/api/projects/memory", authMiddleware, async (req, res) => {
       memories: parsedMemories
     });
   } catch (err: unknown) {
-    console.error(`[Get Project Memory] Failed: ${(err instanceof Error ? err.message : String(err))}`);
+    logger.error(`[Get Project Memory] Failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -485,15 +480,15 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
             indexingEnabled = parsed.indexingEnabled;
             checkedLocal = true;
           } else {
-            console.warn("[Settings API] Invalid settings file format: indexingEnabled is not a boolean");
+            logger.warn("[Settings API] Invalid settings file format: indexingEnabled is not a boolean");
           }
         } catch (parseErr) {
-          console.error("[Settings API] Corrupted settings file:", parseErr);
+          logger.error("[Settings API] Corrupted settings file:", parseErr);
         }
       }
-    } catch (e: any) {
-      console.error("[Settings API] Error reading settings file:", e);
-      if (e.code !== "ENOENT") {
+    } catch (e: unknown) {
+      logger.error("[Settings API] Error reading settings file:", e);
+      if (e instanceof Error && (e as NodeJS.ErrnoException).code !== "ENOENT") {
         return res.status(500).json({ error: `Failed to read local settings: ${e.message}` });
       }
     }
@@ -511,10 +506,9 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
             indexingEnabled = doc.data()?.indexingEnabled;
           }
         }
-      } catch (e: any) {
-        console.error("[Settings API] Error reading Firestore fallback:", e);
-        // If local read failed/corrupted AND firestore fallback fails, return a 500 error
-        return res.status(500).json({ error: `Failed to fetch settings from fallback storage: ${e.message}` });
+      } catch (e: unknown) {
+        logger.error("[Settings API] Error reading Firestore fallback:", e);
+        return res.status(500).json({ error: `Failed to fetch settings: ${e instanceof Error ? e.message : String(e)}` });
       }
     }
     
@@ -577,9 +571,9 @@ app.post("/api/projects/settings", authMiddleware, async (req, res) => {
         const docRef = db.collection('projects').doc(docId);
         await docRef.set({ indexingEnabled }, { merge: true });
       }
-    } catch (e: any) {
-      console.error("[Settings API] Error updating Firestore settings:", e);
-      throw new Error(`Firestore update failed: ${e.message || String(e)}`);
+    } catch (e: unknown) {
+      logger.error("[Settings API] Error updating Firestore settings:", e);
+      throw new Error(`Firestore update failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     
     res.json({ success: true, indexingEnabled });
@@ -678,10 +672,10 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
                     tenantId: tenantId
                   }, { merge: true });
                   await legacyRef.delete();
-                  console.error(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
+                  logger.info(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
                 }
               } catch (migrateErr) {
-                console.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
+                logger.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
               }
             }
 
@@ -695,10 +689,10 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
               status: 'synced',
               tenantId: tenantId
             }, { merge: true });
-            console.error(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
+            logger.info(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
           }
         } catch (e) {
-          console.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
+          logger.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
         }
 
         let businessRuleSaved = false;
@@ -711,15 +705,15 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
             const { OracleMemoryService } = await import("../oracleDatabase.js");
             if (businessRule) {
               await authStorage.run(auth, async () => {
-                console.error(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
-                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", businessRule);
+                logger.info(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
+                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", { text: businessRule });
                 businessRuleSaved = true;
               });
             }
             if (changeDescription) {
               await authStorage.run(auth, async () => {
-                console.error(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
-                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", changeDescription);
+                logger.info(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
+                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", { text: changeDescription });
                 changeDescriptionSaved = true;
               });
             }
@@ -731,18 +725,18 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
               Promise.resolve().then(async () => {
                 try {
                   await authStorage.run(auth, async () => {
-                    console.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
+                    logger.info(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
                     await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
                     await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
-                    console.error(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
+                    logger.info(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
                   });
                 } catch (oracleErr) {
-                  console.error(`[Sync API] Failed to async sync Knowledge Graph to Oracle 26ai:`, oracleErr);
+                  logger.error(`[Sync API] Failed to async sync Knowledge Graph to Oracle 26ai:`, oracleErr);
                 }
               });
             }
-          } catch (e: any) {
-            console.error(`[Sync API] Failed to initialize/sync Oracle DB connection: ${e}`);
+          } catch (e: unknown) {
+            logger.error(`[Sync API] Failed to initialize/sync Oracle DB connection: ${e}`);
             syncError = e instanceof Error ? e.message : String(e);
           }
         } else {
@@ -782,7 +776,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
       });
     }
   } catch (err: unknown) {
-    console.error(`[Sync API] Secure sync failed: ${(err instanceof Error ? err.message : String(err))}`);
+    logger.error(`[Sync API] Secure sync failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -806,9 +800,10 @@ app.use("/messages", authMiddleware);
 const transports = new Map<string, SSEServerTransport>();
 const sessionServers = new Map<string, McpServer>();
 const sessionOwnership = new Map<string, string>();
+const sessionGenerations = new Map<string, number>();
 
 app.get("/sse", async (req, res) => {
-  console.error("[SSE] New connection request");
+  logger.info("[SSE] New connection request");
   
   // Critical for Cloudflare/Nginx/Proxies to prevent buffering
   res.setHeader('Content-Type', 'text/event-stream');
@@ -816,8 +811,11 @@ app.get("/sse", async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   
-  const apiKey = (req.query.apiKey as string) || (req.headers["x-api-key"] as string) || "";
-  const messagesUrl = apiKey ? `/messages?apiKey=${encodeURIComponent(apiKey)}` : "/messages";
+  const apiKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string) || "";
+  if ((req.query.apiKey as string) && !(req.headers["x-api-key"] as string)) {
+    logger.warn("[SSE] API key passed via query parameter is deprecated. Use x-api-key header instead.");
+  }
+  const messagesUrl = "/messages";
   const transport = new SSEServerTransport(messagesUrl, res);
   
   // Store transport by sessionId immediately to prevent race conditions during initialize
@@ -826,12 +824,13 @@ app.get("/sse", async (req, res) => {
   if (sessionId) {
     // If a session with this ID already exists, clean up its server and transport first to avoid conflicts
     if (transports.has(sessionId)) {
-      console.error(`[SSE] Session ${sessionId} already exists. Cleaning up the old connection before establishing new one.`);
+      logger.warn(`[SSE] Session ${sessionId} already exists. Cleaning up the old connection before establishing new one.`);
       const oldTransport = transports.get(sessionId);
       const oldServer = sessionServers.get(sessionId);
       transports.delete(sessionId);
       sessionServers.delete(sessionId);
       sessionOwnership.delete(sessionId);
+      sessionGenerations.delete(sessionId);
       if (oldServer) {
         try {
           await oldServer.close();
@@ -852,7 +851,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.13.7",
+        version: "2.13.14",
       },
       {
         capabilities: {
@@ -864,6 +863,9 @@ app.get("/sse", async (req, res) => {
     );
     registerTools(sessionServer);
 
+    const currentGen = (sessionGenerations.get(sessionId) || 0) + 1;
+    sessionGenerations.set(sessionId, currentGen);
+
     transports.set(sessionId, transport);
     sessionServers.set(sessionId, sessionServer);
     
@@ -872,7 +874,7 @@ app.get("/sse", async (req, res) => {
       sessionOwnership.set(sessionId, auth.uid);
     }
     
-    console.error(`[SSE] Session established: ${sessionId}`);
+    logger.info(`[SSE] Session established: ${sessionId} (generation: ${currentGen})`);
 
     // Send a heartbeat ping every 15 seconds to prevent proxy/load balancer timeouts
     const heartbeatInterval = setInterval(() => {
@@ -881,19 +883,22 @@ app.get("/sse", async (req, res) => {
       }
     }, 15000);
 
+    const myGen = currentGen;
     // Cleanup on connection close with a 3-minute grace period
     res.on("close", async () => {
       clearInterval(heartbeatInterval);
-      console.error(`[SSE] Session connection closed: ${sessionId}. Keeping session alive for 3-minute grace period.`);
+      logger.info(`[SSE] Session connection closed: ${sessionId} (generation: ${myGen}). Keeping session alive for 3-minute grace period.`);
       
       // Keep the session in the map for a 3-minute grace period to prevent immediate 404 errors
       setTimeout(async () => {
-        if (transports.has(sessionId)) {
-          console.error(`[SSE] Grace period expired. Cleaning up session: ${sessionId}`);
+        // Only clean up if the current generation of this session matches the one that closed
+        if (sessionGenerations.get(sessionId) === myGen) {
+          logger.info(`[SSE] Grace period expired. Cleaning up session: ${sessionId} (generation: ${myGen})`);
           transports.delete(sessionId);
           const oldServer = sessionServers.get(sessionId);
           sessionServers.delete(sessionId);
           sessionOwnership.delete(sessionId);
+          sessionGenerations.delete(sessionId);
           if (oldServer) {
             try {
               await oldServer.close();
@@ -906,13 +911,15 @@ app.get("/sse", async (req, res) => {
           } catch (err) {
             // Ignore
           }
+        } else {
+          logger.info(`[SSE] Skip cleanup for session: ${sessionId} (current generation: ${sessionGenerations.get(sessionId) || 'none'} newer than closed generation: ${myGen})`);
         }
       }, 180000); // 3 minutes
     });
 
     await sessionServer.connect(transport);
   } else {
-    console.error("[SSE] Critical: failed to retrieve sessionId from transport.");
+    logger.error("[SSE] Critical: failed to retrieve sessionId from transport.");
     res.status(500).send("Failed to initialize session");
   }
 });
@@ -926,14 +933,14 @@ app.post("/messages", async (req, res) => {
     const ownerUid = sessionOwnership.get(sessionId);
     
     if (ownerUid && ownerUid !== auth?.uid) {
-      console.error(`[SSE] Security: session ownership mismatch. Session ${sessionId} belongs to ${ownerUid}, but request is from ${auth?.uid || 'unauthenticated'}`);
+      logger.error(`[SSE] Security: session ownership mismatch. Session ${sessionId} belongs to ${ownerUid}, but request is from ${auth?.uid || 'unauthenticated'}`);
       res.status(403).send("Forbidden: session ownership mismatch");
       return;
     }
 
     await transport.handlePostMessage(req, res, req.body);
   } else {
-    console.error(`[SSE] Critical: session not found. Requested: "${sessionId || ''}". No active transports available.`);
+    logger.error(`[SSE] Critical: session not found. Requested: "${sessionId || ''}". No active transports available.`);
     res.status(404).send("Session not found");
   }
 });
@@ -958,28 +965,37 @@ app.get("/api/docs/quick-setup", (req, res) => {
 export function startHttpServer(port: number): Promise<void> {
   return new Promise((resolve) => {
     app.listen(port, () => {
-      console.error(`CodeAtlas MCP SSE server running on port ${port}`);
-      console.error(`- SSE endpoint: http://localhost:${port}/sse`);
-      console.error(`- Message endpoint: http://localhost:${port}/messages`);
+      logger.info(`CodeAtlas MCP SSE server running on port ${port}`);
+      logger.info(`- SSE endpoint: http://localhost:${port}/sse`);
+      logger.info(`- Message endpoint: http://localhost:${port}/messages`);
       if (process.env.CODEATLAS_API_KEY) {
-        console.error(`- Security: API Key enabled`);
+        logger.info(`- Security: API Key enabled`);
       } else {
-        console.error(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
+        logger.info(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
       }
 
       // Start a keep-alive database ping every 12 hours to prevent Oracle Free Tier auto-stop
+      // Jitter ±15 minutes to prevent thundering herd if multiple instances restart simultaneously
       const DB_PING_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
-      setInterval(async () => {
-        try {
-          const { OracleMemoryService } = await import("../oracleDatabase.js");
-          if (process.env.ORACLE_CONN_STRING) {
-            console.error("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
-            await OracleMemoryService.ping();
+      const JITTER_MS = 15 * 60 * 1000; // 15 minutes
+      const scheduleNextPing = () => {
+        const jitter = Math.floor(Math.random() * JITTER_MS * 2 - JITTER_MS);
+        setTimeout(async () => {
+          try {
+            const { OracleMemoryService } = await import("../oracleDatabase.js");
+            if (process.env.ORACLE_CONN_STRING) {
+              logger.info("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
+              await OracleMemoryService.ping();
+            }
+          } catch (err) {
+            logger.error("[Keep-Alive] Failed to ping Oracle DB:", err);
           }
-        } catch (err) {
-          console.error("[Keep-Alive] Failed to ping Oracle DB:", err);
-        }
-      }, DB_PING_INTERVAL_MS);
+          scheduleNextPing(); // Schedule the next ping after this one completes
+        }, DB_PING_INTERVAL_MS + jitter);
+      };
+      // Fire the first ping with random initial delay (0-30min) to stagger across instances
+      const initialDelay = Math.floor(Math.random() * JITTER_MS * 2);
+      setTimeout(scheduleNextPing, initialDelay);
 
       resolve();
     });

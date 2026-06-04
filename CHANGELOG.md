@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.13.14] - 2026-06-04
+
+### Changed / Fixed
+- **SSE Transport**: Resolved race condition in SSE session connection close by implementing session generation/nonce tracking.
+- **Security Scanner**: Hardened vulnerability scanner to significantly reduce false-positive rates for hardcoded secrets and SQL Injection risk detection by introducing Camel/Snake boundary word checks and database/SQL context verification.
+- **MCP Presentation**: Updated HTTP Server import configuration to delegate registration via `mcpTools.ts` rather than the old monolith entrypoint `mcpServer.ts`.
+
+## [2.13.13] - 2026-06-04
+
+### Added / Changed
+- **CI / GitHub Actions**: Configured the code review step to write output to `review_report.md` and added a post-comment step using `actions/github-script` to post the review directly as a comment on the PR, tagging the PR author.
+- **CI / GitHub Actions**: Captured stderr for the code review step via `2>&1`, added non-zero exit handling, and made `context.payload.pull_request.user.login` fallback to `context.actor`.
+- **Logger**: Added `LOG_LEVEL` environment variable validation to reject invalid log level values at startup, defaulting to `info`.
+
+## [2.13.12] - 2026-06-04
+
+### Fixed / Changed
+- **CI / GitHub Actions**: Switched to `${{ github.token }}` instead of `${{ secrets.GITHUB_TOKEN }}` to resolve warning/errors with secret names starting with `GITHUB_`.
+- **CI / GitHub Actions**: Supported fallback to `secrets.COMMAND_CODE_API_KEY` for Command Code API Authentication.
+- **Unit Tests**: Added mock values for `ORACLE_PASSWORD` and `ORACLE_CONN_STRING` to fix failures in `OracleMemoryService` tests.
+
+## [2.13.11] - 2026-06-04
+
+### Fixed / Changed
+- **Command Code Proxy API Schema Mapping**: Added message sanitization logic in `scripts/command-code-proxy.ts` to translate unsupported roles (e.g. system, developer, tool) to `"user"` and merge consecutive duplicate roles, resolving `400 Bad Request` schema validation failures on the target Command Code API.
+
+## [2.13.10] - 2026-06-04
+
+### Added / Changed / Fixed
+- **Automated Pull Request Code Reviews**: Configured a non-interactive CI step in `.github/workflows/ci.yml` that performs code reviews automatically on pull requests using the `command-code` CLI.
+- **Go Plan API Bypass Proxy**: Implemented a local proxy script (`scripts/command-code-proxy.ts`) to translate standard OpenAI/Hermes API requests into the `/alpha/generate` NDJSON schema, bypassing the Command Code Go plan API access restrictions.
+- **Hermes Agent Integration**: Integrated Hermes to utilize the local proxy, routing agent workflows through Command Code's `/alpha/generate` endpoint seamlessly.
+
 ## [2.13.9] - 2026-06-03
 
 ### Added / Fixed

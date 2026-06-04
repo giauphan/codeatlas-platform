@@ -6,6 +6,7 @@ import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { AnalysisResult } from "./types.js";
 import { authStorage } from "../context.js";
+import { logger } from "../logger.js";
 
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
@@ -128,7 +129,7 @@ export function isProjectDirectory(dir: string): boolean {
     }
     const openIde = getOpenIdeForDir(dir);
     if (openIde) {
-      console.error(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
+      logger.info(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
       return true;
     }
     return false;
@@ -159,7 +160,7 @@ export async function isProjectDirectoryAsync(dir: string): Promise<boolean> {
     }
     const openIde = getOpenIdeForDir(dir);
     if (openIde) {
-      console.error(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
+      logger.info(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
       return true;
     }
     return false;
@@ -209,10 +210,10 @@ export function registerProject(dir: string): void {
     if (!projects.includes(absPath)) {
       projects.push(absPath);
       fs.writeFileSync(regPath, JSON.stringify(projects, null, 2));
-      console.error(`[Project-Registry] 📝 Registered new project: ${absPath}`);
+      logger.info(`[Project-Registry] 📝 Registered new project: ${absPath}`);
     }
   } catch (err) {
-    console.error(`[Project-Registry] ❌ Failed to register project: ${err}`);
+    logger.error(`[Project-Registry] ❌ Failed to register project: ${err}`);
   }
 }
 
@@ -234,12 +235,12 @@ export function unregisterProject(dir: string): void {
         const filtered = projects.filter((p) => p !== absPath);
         if (filtered.length !== projects.length) {
           fs.writeFileSync(regPath, JSON.stringify(filtered, null, 2));
-          console.error(`[Project-Registry] 📝 Unregistered project: ${absPath}`);
+          logger.info(`[Project-Registry] 📝 Unregistered project: ${absPath}`);
         }
       }
     }
   } catch (err) {
-    console.error(`[Project-Registry] ❌ Failed to unregister project: ${err}`);
+    logger.error(`[Project-Registry] ❌ Failed to unregister project: ${err}`);
     throw err;
   }
 }
@@ -281,7 +282,7 @@ export function scanForCodeatlasProjects(parentDir: string): string[] {
       }
     }
   } catch (err) {
-    console.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${err}`);
+    logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${err}`);
   }
   return discovered;
 }
@@ -325,7 +326,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     }
   } catch (err) {
-    console.error(`[Project-Discovery] ❌ Failed async scan for .codeatlas projects: ${err}`);
+    logger.error(`[Project-Discovery] ❌ Failed async scan for .codeatlas projects: ${err}`);
   }
   return discovered;
 }
@@ -485,7 +486,7 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
   if (projectDir) {
     const absPath = path.resolve(projectDir);
     if (isSystemIdeDirectory(absPath)) {
-      console.warn(`[Auto-Scan] 🛡️ Ignored IDE system/extensions directory from workspace indexing: ${absPath}`);
+      logger.warn(`[Auto-Scan] 🛡️ Ignored IDE system/extensions directory from workspace indexing: ${absPath}`);
       return null;
     }
     let match = projects.find(
@@ -517,13 +518,13 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
       onProjectLoadedCallback(target.dir);
     }
     if (!fs.existsSync(target.analysisPath)) {
-      console.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
+      logger.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
       return null;
     }
     const data = fs.readFileSync(target.analysisPath, "utf-8");
     return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
   } catch (err) {
-    console.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
+    logger.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
     return null;
   }
 }
@@ -696,7 +697,7 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
   if (projectDir) {
     const absPath = path.resolve(projectDir);
     if (isSystemIdeDirectory(absPath)) {
-      console.warn(`[Auto-Scan] 🛡️ Ignored IDE system/extensions directory from workspace indexing: ${absPath}`);
+      logger.warn(`[Auto-Scan] 🛡️ Ignored IDE system/extensions directory from workspace indexing: ${absPath}`);
       return null;
     }
     let match = projects.find(
@@ -728,14 +729,14 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
       onProjectLoadedCallback(target.dir);
     }
     if (!await fileExists(target.analysisPath)) {
-      console.error(`[Auto-Scan] ❌ Dynamic async scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
+      logger.error(`[Auto-Scan] ❌ Dynamic async scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
       return null;
     }
 
     const data = await fs.promises.readFile(target.analysisPath, "utf-8");
     return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
   } catch (err) {
-    console.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
+    logger.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
     return null;
   }
 }

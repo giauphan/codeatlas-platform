@@ -1,5 +1,6 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import * as crypto from "crypto";
+import { logger } from "./logger.js";
 
 /**
  * Domain Interface for User Authentication details
@@ -19,11 +20,14 @@ export interface IAuthRepository {
   updateLastUsed(uid: string, keyId: string): Promise<void>;
 }
 
+/** Activity log parameters (JSON-serializable key-value pairs) */
+export type ActivityParams = Record<string, unknown>;
+
 /**
  * Activity Logging Repository interface
  */
 export interface IActivityLogger {
-  logActivity(uid: string, keyId: string, tool: string, params: any, success: boolean): Promise<void>;
+  logActivity(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void>;
 }
 
 /**
@@ -73,7 +77,7 @@ export class FirestoreAuthRepository implements IAuthRepository {
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[FirestoreAuthRepository] Verification error: ${msg}`);
+      logger.error(`[FirestoreAuthRepository] Verification error: ${msg}`);
       throw new Error(`Authentication store connection failed: ${msg}`);
     }
   }
@@ -87,7 +91,7 @@ export class FirestoreAuthRepository implements IAuthRepository {
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[FirestoreAuthRepository] Update last used error: ${msg}`);
+      logger.error(`[FirestoreAuthRepository] Update last used error: ${msg}`);
     }
   }
 }
@@ -100,7 +104,7 @@ export class FirestoreActivityLogger implements IActivityLogger {
     return getFirestore();
   }
 
-  async logActivity(uid: string, keyId: string, tool: string, params: any, success: boolean): Promise<void> {
+  async logActivity(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void> {
     if (uid === 'admin') return; // Bypass logging for superadmin requests
 
     try {
@@ -123,7 +127,7 @@ export class FirestoreActivityLogger implements IActivityLogger {
       }, { merge: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[FirestoreActivityLogger] Failed to log activity: ${msg}`);
+      logger.error(`[FirestoreActivityLogger] Failed to log activity: ${msg}`);
     }
   }
 }
@@ -174,9 +178,9 @@ export class AuthenticateUserUseCase {
  * Use case: Recording user telemetry and requests
  */
 export class LogTelemetryUseCase {
-  constructor(private logger: IActivityLogger) {}
+  constructor(private activityLogger: IActivityLogger) {}
 
-  async execute(uid: string, keyId: string, tool: string, params: any, success: boolean): Promise<void> {
-    await this.logger.logActivity(uid, keyId, tool, params, success);
+  async execute(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void> {
+    await this.activityLogger.logActivity(uid, keyId, tool, params, success);
   }
 }
