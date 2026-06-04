@@ -4,6 +4,8 @@
 
 ### Added / Changed
 - **CI / GitHub Actions**: Configured the code review step to write output to `review_report.md` and added a post-comment step using `actions/github-script` to post the review directly as a comment on the PR, tagging the PR author.
+- **CI / GitHub Actions**: Captured stderr for the code review step via `2>&1`, added non-zero exit handling, and made `context.payload.pull_request.user.login` fallback to `context.actor`.
+- **Logger**: Added `LOG_LEVEL` environment variable validation to reject invalid log level values at startup, defaulting to `info`.
 
 ## [2.13.12] - 2026-06-04
 
