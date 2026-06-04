@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.14] - 2026-06-04
+
+### Changed / Fixed
+- **SSE Transport**: Resolved race condition in SSE session connection close by implementing session generation/nonce tracking.
+- **Security Scanner**: Hardened vulnerability scanner to significantly reduce false-positive rates for hardcoded secrets and SQL Injection risk detection by introducing Camel/Snake boundary word checks and database/SQL context verification.
+- **MCP Presentation**: Updated HTTP Server import configuration to delegate registration via `mcpTools.ts` rather than the old monolith entrypoint `mcpServer.ts`.
+
 ## [2.13.13] - 2026-06-04
 
 ### Added / Changed

@@ -16,7 +16,7 @@ import {
   unregisterProject
 } from "../services/projectService.js";
 import { authStorage } from "../context.js";
-import { registerTools } from "./mcpServer.js";
+import { registerTools } from "./mcpTools.js";
 import { logger } from "../logger.js";
 
 // Wrapper object to allow clean mocking of Firebase services in testing environments
@@ -106,6 +106,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
   } else if (allowedOrigins.split(',').map(s => s.trim()).includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
   }
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
@@ -820,6 +821,7 @@ app.use("/messages", authMiddleware);
 const transports = new Map<string, SSEServerTransport>();
 const sessionServers = new Map<string, McpServer>();
 const sessionOwnership = new Map<string, string>();
+const sessionGenerations = new Map<string, number>();
 
 app.get("/sse", async (req, res) => {
   logger.info("[SSE] New connection request");
@@ -849,6 +851,7 @@ app.get("/sse", async (req, res) => {
       transports.delete(sessionId);
       sessionServers.delete(sessionId);
       sessionOwnership.delete(sessionId);
+      sessionGenerations.delete(sessionId);
       if (oldServer) {
         try {
           await oldServer.close();
@@ -869,7 +872,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.13.13",
+        version: "2.13.14",
       },
       {
         capabilities: {
@@ -881,6 +884,9 @@ app.get("/sse", async (req, res) => {
     );
     registerTools(sessionServer);
 
+    const currentGen = (sessionGenerations.get(sessionId) || 0) + 1;
+    sessionGenerations.set(sessionId, currentGen);
+
     transports.set(sessionId, transport);
     sessionServers.set(sessionId, sessionServer);
     
@@ -889,7 +895,7 @@ app.get("/sse", async (req, res) => {
       sessionOwnership.set(sessionId, auth.uid);
     }
     
-    logger.info(`[SSE] Session established: ${sessionId}`);
+    logger.info(`[SSE] Session established: ${sessionId} (generation: ${currentGen})`);
 
     // Send a heartbeat ping every 15 seconds to prevent proxy/load balancer timeouts
     const heartbeatInterval = setInterval(() => {
@@ -898,19 +904,22 @@ app.get("/sse", async (req, res) => {
       }
     }, 15000);
 
+    const myGen = currentGen;
     // Cleanup on connection close with a 3-minute grace period
     res.on("close", async () => {
       clearInterval(heartbeatInterval);
-      logger.info(`[SSE] Session connection closed: ${sessionId}. Keeping session alive for 3-minute grace period.`);
+      logger.info(`[SSE] Session connection closed: ${sessionId} (generation: ${myGen}). Keeping session alive for 3-minute grace period.`);
       
       // Keep the session in the map for a 3-minute grace period to prevent immediate 404 errors
       setTimeout(async () => {
-        if (transports.has(sessionId)) {
-          logger.info(`[SSE] Grace period expired. Cleaning up session: ${sessionId}`);
+        // Only clean up if the current generation of this session matches the one that closed
+        if (sessionGenerations.get(sessionId) === myGen) {
+          logger.info(`[SSE] Grace period expired. Cleaning up session: ${sessionId} (generation: ${myGen})`);
           transports.delete(sessionId);
           const oldServer = sessionServers.get(sessionId);
           sessionServers.delete(sessionId);
           sessionOwnership.delete(sessionId);
+          sessionGenerations.delete(sessionId);
           if (oldServer) {
             try {
               await oldServer.close();
@@ -923,6 +932,8 @@ app.get("/sse", async (req, res) => {
           } catch (err) {
             // Ignore
           }
+        } else {
+          logger.info(`[SSE] Skip cleanup for session: ${sessionId} (current generation: ${sessionGenerations.get(sessionId) || 'none'} newer than closed generation: ${myGen})`);
         }
       }, 180000); // 3 minutes
     });
@@ -1003,7 +1014,9 @@ export function startHttpServer(port: number): Promise<void> {
           scheduleNextPing(); // Schedule the next ping after this one completes
         }, DB_PING_INTERVAL_MS + jitter);
       };
-      scheduleNextPing();
+      // Fire the first ping with random initial delay (0-30min) to stagger across instances
+      const initialDelay = Math.floor(Math.random() * JITTER_MS * 2);
+      setTimeout(scheduleNextPing, initialDelay);
 
       resolve();
     });

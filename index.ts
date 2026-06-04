@@ -61,7 +61,7 @@ async function main() {
     // Stdio Mode - for local use (e.g. Claude Desktop)
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    logger.error("CodeAtlas MCP server running on stdio");
+    logger.info("CodeAtlas MCP server running on stdio");
   }
 }
 

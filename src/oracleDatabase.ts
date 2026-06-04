@@ -116,8 +116,10 @@ export class OracleMemoryService {
       logger.info(`[Oracle RLS] Security Context set for tenant: ${tenantId}`);
     } catch (err: unknown) {
       logger.error("[Oracle RLS] Failed to set security context:", err instanceof Error ? err.message : String(err));
-      // Do not block execution if package/context is not installed (prevents local dev crashes)
-      if (process.env.NODE_ENV === "production") {
+      // Enforce RLS strictly. Allow bypass ONLY via explicit opt-in env var for local development, or in testing.
+      if (process.env.CODEATLAS_BYPASS_RLS === "true" || process.env.NODE_ENV === "test") {
+        logger.warn(`[Oracle RLS] Bypassing failed security context setup due to configuration.`);
+      } else {
         throw err;
       }
     }
@@ -554,26 +556,34 @@ export class OracleMemoryService {
         DELETE FROM ai_episodic_memory 
         WHERE project_name = :project AND tenant_id = :resolvedTenantId
       `;
-      await connection.execute(deleteEpisodic, { project, resolvedTenantId });
+      await connection.execute(deleteEpisodic, { project, resolvedTenantId }, { autoCommit: false });
 
       // 2. Delete semantic memory
       const deleteSemantic = `
         DELETE FROM ai_semantic_memory 
         WHERE project_name = :project AND tenant_id = :resolvedTenantId
       `;
-      await connection.execute(deleteSemantic, { project, resolvedTenantId });
+      await connection.execute(deleteSemantic, { project, resolvedTenantId }, { autoCommit: false });
 
       // 3. Delete relational memory
       const deleteRelational = `
         DELETE FROM ai_relational_memory 
         WHERE project_name = :project AND tenant_id = :resolvedTenantId
       `;
-      await connection.execute(deleteRelational, { project, resolvedTenantId });
+      await connection.execute(deleteRelational, { project, resolvedTenantId }, { autoCommit: false });
 
       await connection.commit();
       logger.info(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${resolvedTenantId}`);
     } catch (err) {
       logger.error("Error deleting project memory from Oracle DB:", err instanceof Error ? err.message : String(err));
+      if (connection) {
+        try {
+          await connection.rollback();
+          logger.info(`[Oracle Memory] Transaction rolled back for project deletion: ${project}`);
+        } catch (rollErr) {
+          logger.error("Error rolling back Oracle transaction:", rollErr);
+        }
+      }
       throw err;
     } finally {
       if (connection) {

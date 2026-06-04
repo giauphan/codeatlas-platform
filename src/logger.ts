@@ -25,7 +25,7 @@ function timestamp(): string {
   return new Date().toISOString();
 }
 
-function formatMeta(args: unknown[]): unknown {
+function formatMeta(args: unknown[]): Record<string, unknown> | undefined {
   // last arg if it's a plain object (not an Error) is treated as structured meta
   // Using slice to avoid mutating the caller's array
   if (args.length > 1) {
@@ -73,10 +73,14 @@ function log(level: Level, ...args: unknown[]): void {
     }
   } else {
     const prefix = `[${ts}] [${level.toUpperCase()}]`;
+    let output = `${prefix} ${message}`;
+    if (meta) {
+      output += ` ${JSON.stringify(meta)}`;
+    }
     if (level === "error") {
-      process.stderr.write(`${prefix} ${message}\n`);
+      process.stderr.write(output + "\n");
     } else {
-      process.stdout.write(`${prefix} ${message}\n`);
+      process.stdout.write(output + "\n");
     }
   }
 }

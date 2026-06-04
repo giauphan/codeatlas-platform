@@ -178,9 +178,9 @@ export class AuthenticateUserUseCase {
  * Use case: Recording user telemetry and requests
  */
 export class LogTelemetryUseCase {
-  constructor(private logger: IActivityLogger) {}
+  constructor(private activityLogger: IActivityLogger) {}
 
   async execute(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void> {
-    await this.logger.logActivity(uid, keyId, tool, params, success);
+    await this.activityLogger.logActivity(uid, keyId, tool, params, success);
   }
 }
