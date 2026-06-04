@@ -1,5 +1,6 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import * as crypto from "crypto";
+import { logger } from "./logger.js";
 
 /**
  * Domain Interface for User Authentication details
@@ -76,7 +77,7 @@ export class FirestoreAuthRepository implements IAuthRepository {
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[FirestoreAuthRepository] Verification error: ${msg}`);
+      logger.error(`[FirestoreAuthRepository] Verification error: ${msg}`);
       throw new Error(`Authentication store connection failed: ${msg}`);
     }
   }
@@ -90,7 +91,7 @@ export class FirestoreAuthRepository implements IAuthRepository {
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[FirestoreAuthRepository] Update last used error: ${msg}`);
+      logger.error(`[FirestoreAuthRepository] Update last used error: ${msg}`);
     }
   }
 }
@@ -126,7 +127,7 @@ export class FirestoreActivityLogger implements IActivityLogger {
       }, { merge: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[FirestoreActivityLogger] Failed to log activity: ${msg}`);
+      logger.error(`[FirestoreActivityLogger] Failed to log activity: ${msg}`);
     }
   }
 }

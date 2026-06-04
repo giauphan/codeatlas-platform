@@ -70,4 +70,4 @@ jobs:
           COMMANDCODE_API_KEY: ${{ secrets.COMMAND_CODE_API_KEY || secrets.COMMANDCODE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          npx -y command-code@latest --skip-onboarding --yolo -m deepseek/deepseek-v4-pro -p "/review"
+          npx -y command-code@latest --skip-onboarding --yolo -m deepseek/deepseek-v4-pro --max-turns 30 -p "/review"

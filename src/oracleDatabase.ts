@@ -1,6 +1,7 @@
 import oracledb from "oracledb";
 import * as path from "path";
 import { authStorage } from "./context.js";
+import { logger } from "./logger.js";
 
 // ── Type Definitions ─────────────────────────────────────────────────────────
 interface NvidiaEmbeddingData {
@@ -60,7 +61,7 @@ export class OracleMemoryService {
       try {
         // Activate Thick Mode by pointing to the Oracle Instant Client directory
         if (process.env.ORACLE_LIB_DIR) {
-          console.log("🚀 Initializing Oracle Client in Thick Mode...");
+          logger.info("🚀 Initializing Oracle Client in Thick Mode...");
           try {
             const initOptions: oracledb.InitialiseOptions = {
               configDir: process.env.ORACLE_WALLET_DIR
@@ -74,9 +75,9 @@ export class OracleMemoryService {
           } catch (initErr: unknown) {
             const msg = initErr instanceof Error ? initErr.message : String(initErr);
             if (msg.includes("already initialized")) {
-              console.log("ℹ️ Oracle Client is already initialized.");
+              logger.info("ℹ️ Oracle Client is already initialized.");
             } else {
-              console.warn("⚠️ Warning initializing Oracle Client in Thick Mode:", msg);
+              logger.warn("⚠️ Warning initializing Oracle Client in Thick Mode:", msg);
             }
           }
         }
@@ -92,9 +93,9 @@ export class OracleMemoryService {
           poolIncrement: 1
         });
         
-        console.log("✅ Oracle 26ai DB Pool initialized successfully (Thick Mode)");
+        logger.info("✅ Oracle 26ai DB Pool initialized successfully (Thick Mode)");
       } catch (err: unknown) {
-        console.error("❌ Failed to initialize Oracle DB pool:", err instanceof Error ? err.message : String(err));
+        logger.error("❌ Failed to initialize Oracle DB pool:", err instanceof Error ? err.message : String(err));
         throw err;
       }
     }
@@ -112,9 +113,9 @@ export class OracleMemoryService {
       // Invoke the context package to dynamically apply Row-Level Security row-filtering policies
       const sql = `BEGIN ADMIN.codeatlas_ctx_pkg.set_tenant(:tenantId); END;`;
       await connection.execute(sql, { tenantId });
-      console.log(`[Oracle RLS] Security Context set for tenant: ${tenantId}`);
+      logger.info(`[Oracle RLS] Security Context set for tenant: ${tenantId}`);
     } catch (err: unknown) {
-      console.error("[Oracle RLS] Failed to set security context:", err instanceof Error ? err.message : String(err));
+      logger.error("[Oracle RLS] Failed to set security context:", err instanceof Error ? err.message : String(err));
       // Do not block execution if package/context is not installed (prevents local dev crashes)
       if (process.env.NODE_ENV === "production") {
         throw err;
@@ -153,14 +154,14 @@ export class OracleMemoryService {
         
 
     } catch (err) {
-      console.error("Error saving episodic memory:", err instanceof Error ? err.message : String(err));
+      logger.error("Error saving episodic memory:", err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
       if (connection) {
         try {
           await connection.close();
         } catch (closeErr) {
-          console.error("Error closing connection:", closeErr);
+          logger.error("Error closing connection:", closeErr);
         }
       }
     }
@@ -193,14 +194,14 @@ export class OracleMemoryService {
       const result = await connection.execute(sql, binds as any);
       return result.rows ?? [];
     } catch (err) {
-      console.error("Error getting episodic memories:", err instanceof Error ? err.message : String(err));
+      logger.error("Error getting episodic memories:", err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
       if (connection) {
         try {
           await connection.close();
         } catch (closeErr) {
-          console.error("Error closing connection:", closeErr);
+          logger.error("Error closing connection:", closeErr);
         }
       }
     }
@@ -213,7 +214,7 @@ export class OracleMemoryService {
   private static async generateNvidiaEmbedding(text: string, inputType: 'passage' | 'query'): Promise<number[] | null> {
     const apiKey = process.env.NVIDIA_API_KEY;
     if (!apiKey) {
-      console.warn("[NVIDIA SDK] NVIDIA_API_KEY is not set. Skipping embedding generation.");
+      logger.warn("[NVIDIA SDK] NVIDIA_API_KEY is not set. Skipping embedding generation.");
       return null;
     }
 
@@ -235,7 +236,7 @@ export class OracleMemoryService {
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error(`[NVIDIA SDK] API returned error ${response.status}: ${errText}`);
+        logger.error(`[NVIDIA SDK] API returned error ${response.status}: ${errText}`);
         return null;
       }
 
@@ -245,7 +246,7 @@ export class OracleMemoryService {
       }
       return null;
     } catch (error) {
-      console.error("[NVIDIA SDK] Connection error to NVIDIA Embeddings API:", error);
+      logger.error("[NVIDIA SDK] Connection error to NVIDIA Embeddings API:", error);
       return null;
     }
   }
@@ -256,7 +257,7 @@ export class OracleMemoryService {
   private static async generateNvidiaEmbeddingsBatch(texts: string[], inputType: 'passage' | 'query'): Promise<number[][] | null> {
     const apiKey = process.env.NVIDIA_API_KEY;
     if (!apiKey) {
-      console.warn("[NVIDIA SDK] NVIDIA_API_KEY is not set. Skipping embedding generation.");
+      logger.warn("[NVIDIA SDK] NVIDIA_API_KEY is not set. Skipping embedding generation.");
       return null;
     }
 
@@ -283,7 +284,7 @@ export class OracleMemoryService {
 
         if (!response.ok) {
           const errText = await response.text();
-          console.error(`[NVIDIA SDK] API returned error ${response.status}: ${errText}`);
+          logger.error(`[NVIDIA SDK] API returned error ${response.status}: ${errText}`);
           return null;
         }
 
@@ -295,7 +296,7 @@ export class OracleMemoryService {
           return null;
         }
       } catch (error) {
-        console.error("[NVIDIA SDK] Connection error to NVIDIA Embeddings API:", error);
+        logger.error("[NVIDIA SDK] Connection error to NVIDIA Embeddings API:", error);
         return null;
       }
     }
@@ -350,14 +351,14 @@ export class OracleMemoryService {
         }
 
     } catch (err) {
-      console.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
+      logger.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
       if (connection) {
         try {
           await connection.close();
         } catch (closeErr) {
-          console.error("Error closing connection:", closeErr);
+          logger.error("Error closing connection:", closeErr);
         }
       }
     }
@@ -400,14 +401,14 @@ export class OracleMemoryService {
         
 
     } catch (err) {
-      console.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
+      logger.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
       if (connection) {
         try {
           await connection.close();
         } catch (closeErr) {
-          console.error("Error closing connection:", closeErr);
+          logger.error("Error closing connection:", closeErr);
         }
       }
     }
@@ -443,14 +444,14 @@ export class OracleMemoryService {
         return result.rows ?? [];
 
     } catch (err) {
-      console.error("Error searching semantic memory:", err instanceof Error ? err.message : String(err));
+      logger.error("Error searching semantic memory:", err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
       if (connection) {
         try {
           await connection.close();
         } catch (closeErr) {
-          console.error("Error closing connection:", closeErr);
+          logger.error("Error closing connection:", closeErr);
         }
       }
     }
@@ -521,14 +522,14 @@ export class OracleMemoryService {
         
 
     } catch (err) {
-      console.error("Error detecting smells:", err instanceof Error ? err.message : String(err));
+      logger.error("Error detecting smells:", err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
       if (connection) {
         try {
           await connection.close();
         } catch (closeErr) {
-          console.error("Error closing connection:", closeErr);
+          logger.error("Error closing connection:", closeErr);
         }
       }
     }
@@ -570,16 +571,16 @@ export class OracleMemoryService {
       await connection.execute(deleteRelational, { project, resolvedTenantId });
 
       await connection.commit();
-      console.log(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${resolvedTenantId}`);
+      logger.info(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${resolvedTenantId}`);
     } catch (err) {
-      console.error("Error deleting project memory from Oracle DB:", err instanceof Error ? err.message : String(err));
+      logger.error("Error deleting project memory from Oracle DB:", err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
       if (connection) {
         try {
           await connection.close();
         } catch (closeErr) {
-          console.error("Error closing connection:", closeErr);
+          logger.error("Error closing connection:", closeErr);
         }
       }
     }
@@ -594,15 +595,15 @@ export class OracleMemoryService {
       const pool = await this.init();
       connection = await pool.getConnection();
       const result = await connection.execute("SELECT 1 FROM DUAL");
-      console.log("[Oracle DB] Keep-alive ping executed successfully:", result.rows);
+      logger.info("[Oracle DB] Keep-alive ping executed successfully:", result.rows);
     } catch (err) {
-      console.error("[Oracle DB] Keep-alive ping failed:", err instanceof Error ? err.message : String(err));
+      logger.error("[Oracle DB] Keep-alive ping failed:", err instanceof Error ? err.message : String(err));
     } finally {
       if (connection) {
         try {
           await connection.close();
         } catch (closeErr) {
-          console.error("[Oracle DB] Keep-alive ping connection close error:", closeErr);
+          logger.error("[Oracle DB] Keep-alive ping connection close error:", closeErr);
         }
       }
     }

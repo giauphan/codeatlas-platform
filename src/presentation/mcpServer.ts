@@ -15,6 +15,7 @@ import {
 } from "../services/projectService.js";
 import { OracleMemoryService } from "../oracleDatabase.js";
 import { SecurityScanner } from "../securityScanner.js";
+import { logger } from "../logger.js";
 
 export function registerTools(server: McpServer) {
   // Tool -1: Analyze a project
@@ -489,7 +490,7 @@ export function registerTools(server: McpServer) {
       // Sync to Oracle 26ai
       if (enableEnterpriseSync !== false && process.env.ORACLE_CONN_STRING) {
         try {
-          console.error(`Syncing Knowledge Graph for ${loaded.projectName} to Oracle 26ai...`);
+          logger.error(`Syncing Knowledge Graph for ${loaded.projectName} to Oracle 26ai...`);
           await OracleMemoryService.saveSemanticMemory(loaded.projectName, nodes);
           await OracleMemoryService.saveRelationalMemory(loaded.projectName, links);
           if (businessRule) {
@@ -503,7 +504,7 @@ export function registerTools(server: McpServer) {
           syncSuccess = true;
         } catch (oracleErr: unknown) {
           syncError = oracleErr instanceof Error ? oracleErr.message : String(oracleErr);
-          console.error("Failed to sync to Oracle:", oracleErr);
+          logger.error("Failed to sync to Oracle:", oracleErr);
         }
       } else {
         if (enableEnterpriseSync === false) {

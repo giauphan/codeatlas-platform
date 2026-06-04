@@ -5,6 +5,7 @@ import {
   LogTelemetryUseCase 
 } from "../repositories.js";
 import { authStorage } from "../context.js";
+import { logger } from "../logger.js";
 
 const authRepo = new FirestoreAuthRepository();
 const activityLogger = new FirestoreActivityLogger();
@@ -38,6 +39,6 @@ export async function logActivity(auth: { uid: string; keyId: string }, tool: st
   try {
     await logTelemetryUseCase.execute(auth.uid, auth.keyId, tool, params, success);
   } catch (err: unknown) {
-    console.error("Failed to log activity:", err instanceof Error ? err.message : String(err));
+    logger.error("Failed to log activity:", err instanceof Error ? err.message : String(err));
   }
 }

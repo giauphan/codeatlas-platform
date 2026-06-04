@@ -17,6 +17,7 @@ import {
 } from "../services/projectService.js";
 import { authStorage } from "../context.js";
 import { registerTools } from "./mcpServer.js";
+import { logger } from "../logger.js";
 
 // Wrapper object to allow clean mocking of Firebase services in testing environments
 export const firebaseClient = {
@@ -40,7 +41,7 @@ export const localRateLimiter = (req: express.Request, res: express.Response, ne
   const activeTimestamps = timestamps.filter(t => now - t < limitWindowMs);
   
   if (activeTimestamps.length >= limitRequests) {
-    console.warn(`[Rate Limiter] Limit exceeded for tenant/IP: ${tenantId}`);
+    logger.warn(`[Rate Limiter] Limit exceeded for tenant/IP: ${tenantId}`);
     return res.status(429).json({ error: "Too many requests. Please try again in a minute." });
   }
   
@@ -128,7 +129,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
             role = userDoc.data()?.role || userDoc.data()?.tier || "user";
           }
         } catch (e) {
-          console.error("Failed to fetch user role from Firestore:", e);
+          logger.error("Failed to fetch user role from Firestore:", e);
         }
       }
 
@@ -157,7 +158,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
   if (!clientKey) {
     clientKey = (req.query.apiKey as string) || "";
     if (clientKey) {
-      console.warn("[Auth] API key passed via query parameter is deprecated and will be removed. Use x-api-key header instead.");
+      logger.warn("[Auth] API key passed via query parameter is deprecated and will be removed. Use x-api-key header instead.");
     }
   }
   try {
@@ -261,7 +262,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         const db = firebaseClient.getFirestore();
         const docId = ownerTenantId ? `${ownerTenantId}_${cleanProjectName}` : cleanProjectName;
         await db.collection('projects').doc(docId).delete();
-        console.log(`[Delete Project] Deleted Firestore document: ${docId}`);
+        logger.info(`[Delete Project] Deleted Firestore document: ${docId}`);
         
         // Securely handle legacy unscoped document cleanup if it exists
         if (ownerTenantId) {
@@ -273,13 +274,13 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
             const legacyTenantId = legacyData?.tenantId;
             if (!legacyTenantId || legacyTenantId === ownerTenantId) {
               await legacyRef.delete();
-              console.log(`[Delete Project] Cleaned up legacy Firestore document: ${legacyDocId}`);
+              logger.info(`[Delete Project] Cleaned up legacy Firestore document: ${legacyDocId}`);
             }
           }
         }
       }
     } catch (firebaseErr: unknown) {
-      console.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
+      logger.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
       errors.push(`Firestore cleanup failed: ${firebaseErr instanceof Error ? firebaseErr.message : String(firebaseErr)}`);
     }
 
@@ -290,7 +291,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         await OracleMemoryService.deleteProjectMemory(cleanProjectName, ownerTenantId);
       }
     } catch (oracleErr: unknown) {
-      console.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
+      logger.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
       const errMsg = oracleErr instanceof Error ? oracleErr.message : String(oracleErr);
       // If it's a driver/library loading error (e.g. DPI-1047) or connection/network failure,
       // log as a warning and do not block local cleanup, since the DB is unreachable anyway.
@@ -301,7 +302,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         errMsg.includes("connection") ||
         errMsg.includes("connect")
       ) {
-        console.warn(`[Delete Project] Non-blocking Oracle library/connection warning during delete: ${errMsg}`);
+        logger.warn(`[Delete Project] Non-blocking Oracle library/connection warning during delete: ${errMsg}`);
       } else {
         errors.push(`Oracle DB cleanup failed: ${errMsg}`);
       }
@@ -334,7 +335,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         } else if (fs.existsSync(codeatlasDir)) {
           await fs.promises.rm(codeatlasDir, { recursive: true, force: true });
         }
-        console.log(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
+        logger.info(`[Delete Project] Cleaned up directory: ${codeatlasDir}`);
       }
 
       // If multi-tenant mode is active, the project resides within the tenants directory, and the directory is empty after index cleanup, clean up the empty tenant project folder too
@@ -343,12 +344,12 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
           const lstat = await fs.promises.lstat(fullProjectDir);
           if (lstat.isSymbolicLink()) {
             await fs.promises.unlink(fullProjectDir);
-            console.log(`[Delete Project] Unlinked tenant project symlink: ${fullProjectDir}`);
+            logger.info(`[Delete Project] Unlinked tenant project symlink: ${fullProjectDir}`);
           } else {
             const remainingFiles = await fs.promises.readdir(realProjectDir);
             if (remainingFiles.length === 0) {
               await fs.promises.rm(realProjectDir, { recursive: true, force: true });
-              console.log(`[Delete Project] Cleaned up empty tenant sandbox directory: ${realProjectDir}`);
+              logger.info(`[Delete Project] Cleaned up empty tenant sandbox directory: ${realProjectDir}`);
             }
           }
         }
@@ -380,7 +381,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       details: errors.length > 0 ? errors : undefined
     });
   } catch (err: unknown) {
-    console.error(`[Delete Project] Failed: ${(err instanceof Error ? err.message : String(err))}`);
+    logger.error(`[Delete Project] Failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -449,7 +450,7 @@ app.get("/api/projects/memory", authMiddleware, async (req, res) => {
       memories: parsedMemories
     });
   } catch (err: unknown) {
-    console.error(`[Get Project Memory] Failed: ${(err instanceof Error ? err.message : String(err))}`);
+    logger.error(`[Get Project Memory] Failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -499,14 +500,14 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
             indexingEnabled = parsed.indexingEnabled;
             checkedLocal = true;
           } else {
-            console.warn("[Settings API] Invalid settings file format: indexingEnabled is not a boolean");
+            logger.warn("[Settings API] Invalid settings file format: indexingEnabled is not a boolean");
           }
         } catch (parseErr) {
-          console.error("[Settings API] Corrupted settings file:", parseErr);
+          logger.error("[Settings API] Corrupted settings file:", parseErr);
         }
       }
     } catch (e: unknown) {
-      console.error("[Settings API] Error reading settings file:", e);
+      logger.error("[Settings API] Error reading settings file:", e);
       if (e instanceof Error && (e as NodeJS.ErrnoException).code !== "ENOENT") {
         return res.status(500).json({ error: `Failed to read local settings: ${e.message}` });
       }
@@ -526,7 +527,7 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
           }
         }
       } catch (e: unknown) {
-        console.error("[Settings API] Error reading Firestore fallback:", e);
+        logger.error("[Settings API] Error reading Firestore fallback:", e);
         return res.status(500).json({ error: `Failed to fetch settings: ${e instanceof Error ? e.message : String(e)}` });
       }
     }
@@ -591,7 +592,7 @@ app.post("/api/projects/settings", authMiddleware, async (req, res) => {
         await docRef.set({ indexingEnabled }, { merge: true });
       }
     } catch (e: unknown) {
-      console.error("[Settings API] Error updating Firestore settings:", e);
+      logger.error("[Settings API] Error updating Firestore settings:", e);
       throw new Error(`Firestore update failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     
@@ -691,10 +692,10 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
                     tenantId: tenantId
                   }, { merge: true });
                   await legacyRef.delete();
-                  console.error(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
+                  logger.error(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
                 }
               } catch (migrateErr) {
-                console.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
+                logger.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
               }
             }
 
@@ -708,10 +709,10 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
               status: 'synced',
               tenantId: tenantId
             }, { merge: true });
-            console.error(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
+            logger.error(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
           }
         } catch (e) {
-          console.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
+          logger.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
         }
 
         let businessRuleSaved = false;
@@ -724,14 +725,14 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
             const { OracleMemoryService } = await import("../oracleDatabase.js");
             if (businessRule) {
               await authStorage.run(auth, async () => {
-                console.error(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
+                logger.error(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
                 await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", businessRule);
                 businessRuleSaved = true;
               });
             }
             if (changeDescription) {
               await authStorage.run(auth, async () => {
-                console.error(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
+                logger.error(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
                 await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", changeDescription);
                 changeDescriptionSaved = true;
               });
@@ -744,18 +745,18 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
               Promise.resolve().then(async () => {
                 try {
                   await authStorage.run(auth, async () => {
-                    console.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
+                    logger.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
                     await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
                     await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
-                    console.error(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
+                    logger.error(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
                   });
                 } catch (oracleErr) {
-                  console.error(`[Sync API] Failed to async sync Knowledge Graph to Oracle 26ai:`, oracleErr);
+                  logger.error(`[Sync API] Failed to async sync Knowledge Graph to Oracle 26ai:`, oracleErr);
                 }
               });
             }
           } catch (e: unknown) {
-            console.error(`[Sync API] Failed to initialize/sync Oracle DB connection: ${e}`);
+            logger.error(`[Sync API] Failed to initialize/sync Oracle DB connection: ${e}`);
             syncError = e instanceof Error ? e.message : String(e);
           }
         } else {
@@ -795,7 +796,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
       });
     }
   } catch (err: unknown) {
-    console.error(`[Sync API] Secure sync failed: ${(err instanceof Error ? err.message : String(err))}`);
+    logger.error(`[Sync API] Secure sync failed: ${(err instanceof Error ? err.message : String(err))}`);
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -821,7 +822,7 @@ const sessionServers = new Map<string, McpServer>();
 const sessionOwnership = new Map<string, string>();
 
 app.get("/sse", async (req, res) => {
-  console.error("[SSE] New connection request");
+  logger.error("[SSE] New connection request");
   
   // Critical for Cloudflare/Nginx/Proxies to prevent buffering
   res.setHeader('Content-Type', 'text/event-stream');
@@ -831,7 +832,7 @@ app.get("/sse", async (req, res) => {
   
   const apiKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string) || "";
   if ((req.query.apiKey as string) && !(req.headers["x-api-key"] as string)) {
-    console.warn("[SSE] API key passed via query parameter is deprecated. Use x-api-key header instead.");
+    logger.warn("[SSE] API key passed via query parameter is deprecated. Use x-api-key header instead.");
   }
   const messagesUrl = "/messages";
   const transport = new SSEServerTransport(messagesUrl, res);
@@ -842,7 +843,7 @@ app.get("/sse", async (req, res) => {
   if (sessionId) {
     // If a session with this ID already exists, clean up its server and transport first to avoid conflicts
     if (transports.has(sessionId)) {
-      console.error(`[SSE] Session ${sessionId} already exists. Cleaning up the old connection before establishing new one.`);
+      logger.error(`[SSE] Session ${sessionId} already exists. Cleaning up the old connection before establishing new one.`);
       const oldTransport = transports.get(sessionId);
       const oldServer = sessionServers.get(sessionId);
       transports.delete(sessionId);
@@ -888,7 +889,7 @@ app.get("/sse", async (req, res) => {
       sessionOwnership.set(sessionId, auth.uid);
     }
     
-    console.error(`[SSE] Session established: ${sessionId}`);
+    logger.error(`[SSE] Session established: ${sessionId}`);
 
     // Send a heartbeat ping every 15 seconds to prevent proxy/load balancer timeouts
     const heartbeatInterval = setInterval(() => {
@@ -900,12 +901,12 @@ app.get("/sse", async (req, res) => {
     // Cleanup on connection close with a 3-minute grace period
     res.on("close", async () => {
       clearInterval(heartbeatInterval);
-      console.error(`[SSE] Session connection closed: ${sessionId}. Keeping session alive for 3-minute grace period.`);
+      logger.error(`[SSE] Session connection closed: ${sessionId}. Keeping session alive for 3-minute grace period.`);
       
       // Keep the session in the map for a 3-minute grace period to prevent immediate 404 errors
       setTimeout(async () => {
         if (transports.has(sessionId)) {
-          console.error(`[SSE] Grace period expired. Cleaning up session: ${sessionId}`);
+          logger.error(`[SSE] Grace period expired. Cleaning up session: ${sessionId}`);
           transports.delete(sessionId);
           const oldServer = sessionServers.get(sessionId);
           sessionServers.delete(sessionId);
@@ -928,7 +929,7 @@ app.get("/sse", async (req, res) => {
 
     await sessionServer.connect(transport);
   } else {
-    console.error("[SSE] Critical: failed to retrieve sessionId from transport.");
+    logger.error("[SSE] Critical: failed to retrieve sessionId from transport.");
     res.status(500).send("Failed to initialize session");
   }
 });
@@ -942,14 +943,14 @@ app.post("/messages", async (req, res) => {
     const ownerUid = sessionOwnership.get(sessionId);
     
     if (ownerUid && ownerUid !== auth?.uid) {
-      console.error(`[SSE] Security: session ownership mismatch. Session ${sessionId} belongs to ${ownerUid}, but request is from ${auth?.uid || 'unauthenticated'}`);
+      logger.error(`[SSE] Security: session ownership mismatch. Session ${sessionId} belongs to ${ownerUid}, but request is from ${auth?.uid || 'unauthenticated'}`);
       res.status(403).send("Forbidden: session ownership mismatch");
       return;
     }
 
     await transport.handlePostMessage(req, res, req.body);
   } else {
-    console.error(`[SSE] Critical: session not found. Requested: "${sessionId || ''}". No active transports available.`);
+    logger.error(`[SSE] Critical: session not found. Requested: "${sessionId || ''}". No active transports available.`);
     res.status(404).send("Session not found");
   }
 });
@@ -974,13 +975,13 @@ app.get("/api/docs/quick-setup", (req, res) => {
 export function startHttpServer(port: number): Promise<void> {
   return new Promise((resolve) => {
     app.listen(port, () => {
-      console.error(`CodeAtlas MCP SSE server running on port ${port}`);
-      console.error(`- SSE endpoint: http://localhost:${port}/sse`);
-      console.error(`- Message endpoint: http://localhost:${port}/messages`);
+      logger.error(`CodeAtlas MCP SSE server running on port ${port}`);
+      logger.error(`- SSE endpoint: http://localhost:${port}/sse`);
+      logger.error(`- Message endpoint: http://localhost:${port}/messages`);
       if (process.env.CODEATLAS_API_KEY) {
-        console.error(`- Security: API Key enabled`);
+        logger.error(`- Security: API Key enabled`);
       } else {
-        console.error(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
+        logger.error(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
       }
 
       // Start a keep-alive database ping every 12 hours to prevent Oracle Free Tier auto-stop
@@ -989,11 +990,11 @@ export function startHttpServer(port: number): Promise<void> {
         try {
           const { OracleMemoryService } = await import("../oracleDatabase.js");
           if (process.env.ORACLE_CONN_STRING) {
-            console.error("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
+            logger.error("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
             await OracleMemoryService.ping();
           }
         } catch (err) {
-          console.error("[Keep-Alive] Failed to ping Oracle DB:", err);
+          logger.error("[Keep-Alive] Failed to ping Oracle DB:", err);
         }
       }, DB_PING_INTERVAL_MS);
 

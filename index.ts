@@ -15,6 +15,7 @@ import { app, startHttpServer } from "./src/presentation/httpServer.js";
 
 // Import Domain / Application Services
 import { checkAuth } from "./src/services/authService.js";
+import { logger } from "./src/logger.js";
 import { 
   getStats, 
   discoverProjects, 
@@ -38,14 +39,14 @@ if (!apps || apps.length === 0) {
           projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
         });
       } else {
-        console.error(`Firebase Service Account not found at: ${absolutePath}`);
-        console.warn("Skipping Firebase Admin initialization with explicit cert since file was not found.");
+        logger.error(`Firebase Service Account not found at: ${absolutePath}`);
+        logger.warn("Skipping Firebase Admin initialization with explicit cert since file was not found.");
       }
     } else {
-      console.warn("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Firebase Admin initialization skipped.");
+      logger.warn("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Firebase Admin initialization skipped.");
     }
   } catch (e) {
-    console.error("Firebase Admin initialization failed. Ensure GOOGLE_APPLICATION_CREDENTIALS is set.");
+    logger.error("Firebase Admin initialization failed. Ensure GOOGLE_APPLICATION_CREDENTIALS is set.");
   }
 }
 
@@ -60,7 +61,7 @@ async function main() {
     // Stdio Mode - for local use (e.g. Claude Desktop)
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("CodeAtlas MCP server running on stdio");
+    logger.error("CodeAtlas MCP server running on stdio");
   }
 }
 
@@ -78,7 +79,7 @@ const isMain = (process.argv[1] && (
 );
 
 if (isMain) {
-  main().catch(console.error);
+  main().catch((err: unknown) => logger.error(err));
 }
 
 // Re-export core modules/helpers to maintain compatibility with test suite

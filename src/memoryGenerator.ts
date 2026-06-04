@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { AnalysisResult, GraphNode } from './services/types.js';
+import { logger } from "./logger.js";
 
 /**
  * Auto-generates .agents/memory/ folder from analysis data.
@@ -25,7 +26,7 @@ function generateRules(workspaceRoot: string): void {
   try {
     fs.mkdirSync(rulesDir, { recursive: true });
   } catch {
-    console.error('CodeAtlas: Failed to create .agents/rules/ directory');
+    logger.error('CodeAtlas: Failed to create .agents/rules/ directory');
     return;
   }
 
@@ -263,7 +264,7 @@ Add to \`.cursor/mcp.json\`:
 \`\`\`
 `;
       fs.writeFileSync(cursorRulePath, cursorRule);
-      console.log('CodeAtlas: Generated .cursor/rules/codeatlas.mdc');
+      logger.info('CodeAtlas: Generated .cursor/rules/codeatlas.mdc');
     } catch {
       // Cursor not in use, skip silently
     }
@@ -281,7 +282,7 @@ claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
 \`\`\`
 `;
       fs.writeFileSync(claudeRulePath, claudeRule);
-      console.log('CodeAtlas: Generated CLAUDE.md');
+      logger.info('CodeAtlas: Generated CLAUDE.md');
     } catch {
       // Skip silently
     }
@@ -292,7 +293,7 @@ claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
   if (!fs.existsSync(windsurfRulePath)) {
     try {
       fs.writeFileSync(windsurfRulePath, codeatlasRule);
-      console.log('CodeAtlas: Generated .windsurfrules');
+      logger.info('CodeAtlas: Generated .windsurfrules');
     } catch {
       // Skip silently
     }
