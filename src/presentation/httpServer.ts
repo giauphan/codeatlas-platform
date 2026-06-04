@@ -727,14 +727,14 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
             if (businessRule) {
               await authStorage.run(auth, async () => {
                 logger.info(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
-                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", businessRule);
+                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", { text: businessRule });
                 businessRuleSaved = true;
               });
             }
             if (changeDescription) {
               await authStorage.run(auth, async () => {
                 logger.info(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
-                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", changeDescription);
+                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", { text: changeDescription });
                 changeDescriptionSaved = true;
               });
             }

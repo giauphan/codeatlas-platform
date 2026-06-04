@@ -27,11 +27,13 @@ function timestamp(): string {
 
 function formatMeta(args: unknown[]): Record<string, unknown> | undefined {
   // last arg if it's a plain object (not an Error) is treated as structured meta
-  // Using slice to avoid mutating the caller's array
+  // We pop it from args to prevent it from being stringified twice (once in the
+  // message body, once as JSON metadata). This is safe because log() uses rest
+  // params, so args is always a local Array, never the caller's arguments.
   if (args.length > 1) {
     const last = args[args.length - 1];
     if (typeof last === "object" && last !== null && !(last instanceof Error)) {
-      return last as Record<string, unknown>;
+      return args.pop() as Record<string, unknown>;
     }
   }
   return undefined;
