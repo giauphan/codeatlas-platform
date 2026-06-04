@@ -53,6 +53,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -70,4 +71,25 @@ jobs:
           COMMANDCODE_API_KEY: ${{ secrets.COMMAND_CODE_API_KEY || secrets.COMMANDCODE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          npx -y command-code@latest --skip-onboarding --yolo -m deepseek/deepseek-v4-pro --max-turns 30 -p "/review"
+          npx -y command-code@latest --skip-onboarding --yolo -m deepseek/deepseek-v4-pro --max-turns 30 -p "/review" > review_report.md
+          cat review_report.md
+
+      - name: Post Comment to PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('review_report.md')) {
+              const report = fs.readFileSync('review_report.md', 'utf8').trim();
+              if (report) {
+                const prUser = context.payload.pull_request.user.login;
+                const commentBody = `cc @${prUser}\n\n${report}`;
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: commentBody
+                });
+              }
+            }

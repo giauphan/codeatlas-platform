@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.13.13] - 2026-06-04
+
+### Added / Changed
+- **CI / GitHub Actions**: Configured the code review step to write output to `review_report.md` and added a post-comment step using `actions/github-script` to post the review directly as a comment on the PR, tagging the PR author.
+
 ## [2.13.12] - 2026-06-04
 
 ### Fixed / Changed

@@ -869,7 +869,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.13.12",
+        version: "2.13.13",
       },
       {
         capabilities: {
