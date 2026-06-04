@@ -66,8 +66,8 @@ jobs:
 
       - name: Run Code Review
         env:
-          COMMAND_CODE_API_KEY: ${{ secrets.COMMANDCODE_API_KEY }}
-          COMMANDCODE_API_KEY: ${{ secrets.COMMANDCODE_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMAND_CODE_API_KEY: ${{ secrets.COMMAND_CODE_API_KEY || secrets.COMMANDCODE_API_KEY }}
+          COMMANDCODE_API_KEY: ${{ secrets.COMMAND_CODE_API_KEY || secrets.COMMANDCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           npx -y command-code@latest --skip-onboarding --yolo -m deepseek/deepseek-v4-pro -p "/review"

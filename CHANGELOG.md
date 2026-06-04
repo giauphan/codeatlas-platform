@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.12] - 2026-06-04
+
+### Fixed / Changed
+- **CI / GitHub Actions**: Switched to `${{ github.token }}` instead of `${{ secrets.GITHUB_TOKEN }}` to resolve warning/errors with secret names starting with `GITHUB_`.
+- **CI / GitHub Actions**: Supported fallback to `secrets.COMMAND_CODE_API_KEY` for Command Code API Authentication.
+- **Unit Tests**: Added mock values for `ORACLE_PASSWORD` and `ORACLE_CONN_STRING` to fix failures in `OracleMemoryService` tests.
+
 ## [2.13.11] - 2026-06-04
 
 ### Fixed / Changed

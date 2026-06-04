@@ -829,8 +829,11 @@ app.get("/sse", async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   
-  const apiKey = (req.query.apiKey as string) || (req.headers["x-api-key"] as string) || "";
-  const messagesUrl = apiKey ? `/messages?apiKey=${encodeURIComponent(apiKey)}` : "/messages";
+  const apiKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string) || "";
+  if ((req.query.apiKey as string) && !(req.headers["x-api-key"] as string)) {
+    console.warn("[SSE] API key passed via query parameter is deprecated. Use x-api-key header instead.");
+  }
+  const messagesUrl = "/messages";
   const transport = new SSEServerTransport(messagesUrl, res);
   
   // Store transport by sessionId immediately to prevent race conditions during initialize
@@ -865,7 +868,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.13.11",
+        version: "2.13.12",
       },
       {
         capabilities: {

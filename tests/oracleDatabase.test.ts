@@ -3,6 +3,9 @@ import assert from 'node:assert';
 import oracledb from 'oracledb';
 import { OracleMemoryService } from '../src/oracleDatabase.js';
 
+process.env.ORACLE_PASSWORD = 'mock_password';
+process.env.ORACLE_CONN_STRING = 'mock_connection_string';
+
 describe('OracleMemoryService', () => {
   afterEach(() => {
     mock.restoreAll();
