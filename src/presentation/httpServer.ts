@@ -422,28 +422,7 @@ app.get("/api/projects/memory", authMiddleware, async (req, res) => {
     });
 
     const rawMemories: Array<Record<string, unknown>> = (memories ?? []) as any;
-    const parsedMemories = rawMemories.map((m) => {
-      let val = null;
-      try {
-        if (m.EVENT_DATA) {
-          if (typeof m.EVENT_DATA === "string") {
-            const parsed = JSON.parse(m.EVENT_DATA);
-            val = parsed.val !== undefined ? parsed.val : parsed;
-          } else if (typeof m.EVENT_DATA === "object" && m.EVENT_DATA !== null) {
-            const eventData: Record<string, unknown> = m.EVENT_DATA as any;
-            val = eventData.val !== undefined ? eventData.val : eventData;
-          }
-        }
-      } catch (e) {
-        val = m.EVENT_DATA;
-      }
-      return {
-        id: m.ID,
-        eventType: m.EVENT_TYPE,
-        data: val,
-        createdAt: m.CREATED_AT
-      };
-    });
+    const parsedMemories = OracleMemoryService.parseEpisodicMemories(rawMemories);
 
     res.json({
       success: true,

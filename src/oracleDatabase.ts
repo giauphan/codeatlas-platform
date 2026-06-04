@@ -618,4 +618,33 @@ export class OracleMemoryService {
       }
     }
   }
+
+  /**
+   * Parses raw episodic memory rows from Oracle DB into a consistent format.
+   * Shared between httpServer.ts and mcpTools.ts to avoid duplication.
+   */
+  static parseEpisodicMemories(memories: Array<Record<string, unknown>>): Array<{ id: unknown; eventType: unknown; data: unknown; createdAt: unknown }> {
+    return memories.map((m) => {
+      let val = null;
+      try {
+        if (m.EVENT_DATA) {
+          if (typeof m.EVENT_DATA === "string") {
+            const parsed: Record<string, unknown> = JSON.parse(m.EVENT_DATA as string);
+            val = parsed.val !== undefined ? parsed.val : parsed;
+          } else if (typeof m.EVENT_DATA === "object" && m.EVENT_DATA !== null) {
+            const eventData = m.EVENT_DATA as Record<string, unknown>;
+            val = eventData.val !== undefined ? eventData.val : eventData;
+          }
+        }
+      } catch (e) {
+        val = m.EVENT_DATA;
+      }
+      return {
+        id: m.ID,
+        eventType: m.EVENT_TYPE,
+        data: val,
+        createdAt: m.CREATED_AT
+      };
+    });
+  }
 }
