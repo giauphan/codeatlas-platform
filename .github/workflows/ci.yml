@@ -45,3 +45,29 @@ jobs:
       - name: Run analyzer tests
         working-directory: ./
         run: pnpm test
+
+  review:
+    name: Command Code PR Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run Code Review
+        env:
+          COMMAND_CODE_API_KEY: ${{ secrets.COMMANDCODE_API_KEY }}
+          COMMANDCODE_API_KEY: ${{ secrets.COMMANDCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx -y command-code@latest --skip-onboarding --yolo -p "/review"

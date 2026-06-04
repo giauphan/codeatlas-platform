@@ -97,9 +97,15 @@ export const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Enable CORS for dashboard
+// Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
+const allowedOrigins = process.env.ALLOWED_ORIGINS || '*';
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (allowedOrigins === '*' || !origin) {
+    res.header('Access-Control-Allow-Origin', '*');
+  } else if (allowedOrigins.split(',').includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -146,8 +152,14 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     }
   }
 
-  // 2. Support both header and query param for flexibility (Dashboard legacy vs MCP)
-  const clientKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string);
+  // 2. Support API key via header (primary) and query param (deprecated — warn)
+  let clientKey = (req.headers["x-api-key"] as string);
+  if (!clientKey) {
+    clientKey = (req.query.apiKey as string) || "";
+    if (clientKey) {
+      console.warn("[Auth] API key passed via query parameter is deprecated and will be removed. Use x-api-key header instead.");
+    }
+  }
   try {
     const auth = await checkAuth(clientKey);
     (req as any).auth = auth; // Attach auth result to request
@@ -853,7 +865,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.13.7",
+        version: "2.13.11",
       },
       {
         capabilities: {

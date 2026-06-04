@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.13.11] - 2026-06-04
+
+### Fixed / Changed
+- **Command Code Proxy API Schema Mapping**: Added message sanitization logic in `scripts/command-code-proxy.ts` to translate unsupported roles (e.g. system, developer, tool) to `"user"` and merge consecutive duplicate roles, resolving `400 Bad Request` schema validation failures on the target Command Code API.
+
+## [2.13.10] - 2026-06-04
+
+### Added / Changed / Fixed
+- **Automated Pull Request Code Reviews**: Configured a non-interactive CI step in `.github/workflows/ci.yml` that performs code reviews automatically on pull requests using the `command-code` CLI.
+- **Go Plan API Bypass Proxy**: Implemented a local proxy script (`scripts/command-code-proxy.ts`) to translate standard OpenAI/Hermes API requests into the `/alpha/generate` NDJSON schema, bypassing the Command Code Go plan API access restrictions.
+- **Hermes Agent Integration**: Integrated Hermes to utilize the local proxy, routing agent workflows through Command Code's `/alpha/generate` endpoint seamlessly.
+
 ## [2.13.9] - 2026-06-03
 
 ### Added / Fixed
