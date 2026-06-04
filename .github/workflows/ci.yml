@@ -71,7 +71,7 @@ jobs:
           COMMANDCODE_API_KEY: ${{ secrets.COMMAND_CODE_API_KEY || secrets.COMMANDCODE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          npx -y command-code@latest --skip-onboarding --yolo -m deepseek/deepseek-v4-pro --max-turns 30 -p "/review" > review_report.md
+          npx -y command-code@latest --skip-onboarding --yolo -m deepseek/deepseek-v4-pro --max-turns 30 -p "/review" > review_report.md 2>&1 || echo "::warning::Command Code review exited with code $?"
           cat review_report.md
 
       - name: Post Comment to PR
@@ -83,7 +83,7 @@ jobs:
             if (fs.existsSync('review_report.md')) {
               const report = fs.readFileSync('review_report.md', 'utf8').trim();
               if (report) {
-                const prUser = context.payload.pull_request.user.login;
+                const prUser = context.payload.pull_request?.user?.login || context.actor;
                 const commentBody = `cc @${prUser}\n\n${report}`;
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
@@ -91,5 +91,6 @@ jobs:
                   issue_number: context.issue.number,
                   body: commentBody
                 });
+                console.log(`Posted review comment for @${prUser}`);
               }
             }
