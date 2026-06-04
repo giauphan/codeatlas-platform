@@ -129,7 +129,7 @@ export function isProjectDirectory(dir: string): boolean {
     }
     const openIde = getOpenIdeForDir(dir);
     if (openIde) {
-      logger.error(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
+      logger.info(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
       return true;
     }
     return false;
@@ -160,7 +160,7 @@ export async function isProjectDirectoryAsync(dir: string): Promise<boolean> {
     }
     const openIde = getOpenIdeForDir(dir);
     if (openIde) {
-      logger.error(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
+      logger.info(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
       return true;
     }
     return false;
@@ -210,7 +210,7 @@ export function registerProject(dir: string): void {
     if (!projects.includes(absPath)) {
       projects.push(absPath);
       fs.writeFileSync(regPath, JSON.stringify(projects, null, 2));
-      logger.error(`[Project-Registry] 📝 Registered new project: ${absPath}`);
+      logger.info(`[Project-Registry] 📝 Registered new project: ${absPath}`);
     }
   } catch (err) {
     logger.error(`[Project-Registry] ❌ Failed to register project: ${err}`);
@@ -235,7 +235,7 @@ export function unregisterProject(dir: string): void {
         const filtered = projects.filter((p) => p !== absPath);
         if (filtered.length !== projects.length) {
           fs.writeFileSync(regPath, JSON.stringify(filtered, null, 2));
-          logger.error(`[Project-Registry] 📝 Unregistered project: ${absPath}`);
+          logger.info(`[Project-Registry] 📝 Unregistered project: ${absPath}`);
         }
       }
     }

@@ -104,7 +104,7 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins === '*' || !origin) {
     res.header('Access-Control-Allow-Origin', '*');
-  } else if (allowedOrigins.split(',').includes(origin)) {
+  } else if (allowedOrigins.split(',').map(s => s.trim()).includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
   }
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
@@ -692,7 +692,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
                     tenantId: tenantId
                   }, { merge: true });
                   await legacyRef.delete();
-                  logger.error(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
+                  logger.info(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
                 }
               } catch (migrateErr) {
                 logger.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
@@ -709,7 +709,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
               status: 'synced',
               tenantId: tenantId
             }, { merge: true });
-            logger.error(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
+            logger.info(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
           }
         } catch (e) {
           logger.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
@@ -725,14 +725,14 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
             const { OracleMemoryService } = await import("../oracleDatabase.js");
             if (businessRule) {
               await authStorage.run(auth, async () => {
-                logger.error(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
+                logger.info(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
                 await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", businessRule);
                 businessRuleSaved = true;
               });
             }
             if (changeDescription) {
               await authStorage.run(auth, async () => {
-                logger.error(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
+                logger.info(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
                 await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", changeDescription);
                 changeDescriptionSaved = true;
               });
@@ -745,10 +745,10 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
               Promise.resolve().then(async () => {
                 try {
                   await authStorage.run(auth, async () => {
-                    logger.error(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
+                    logger.info(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
                     await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
                     await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
-                    logger.error(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
+                    logger.info(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
                   });
                 } catch (oracleErr) {
                   logger.error(`[Sync API] Failed to async sync Knowledge Graph to Oracle 26ai:`, oracleErr);
@@ -822,7 +822,7 @@ const sessionServers = new Map<string, McpServer>();
 const sessionOwnership = new Map<string, string>();
 
 app.get("/sse", async (req, res) => {
-  logger.error("[SSE] New connection request");
+  logger.info("[SSE] New connection request");
   
   // Critical for Cloudflare/Nginx/Proxies to prevent buffering
   res.setHeader('Content-Type', 'text/event-stream');
@@ -843,7 +843,7 @@ app.get("/sse", async (req, res) => {
   if (sessionId) {
     // If a session with this ID already exists, clean up its server and transport first to avoid conflicts
     if (transports.has(sessionId)) {
-      logger.error(`[SSE] Session ${sessionId} already exists. Cleaning up the old connection before establishing new one.`);
+      logger.warn(`[SSE] Session ${sessionId} already exists. Cleaning up the old connection before establishing new one.`);
       const oldTransport = transports.get(sessionId);
       const oldServer = sessionServers.get(sessionId);
       transports.delete(sessionId);
@@ -889,7 +889,7 @@ app.get("/sse", async (req, res) => {
       sessionOwnership.set(sessionId, auth.uid);
     }
     
-    logger.error(`[SSE] Session established: ${sessionId}`);
+    logger.info(`[SSE] Session established: ${sessionId}`);
 
     // Send a heartbeat ping every 15 seconds to prevent proxy/load balancer timeouts
     const heartbeatInterval = setInterval(() => {
@@ -901,12 +901,12 @@ app.get("/sse", async (req, res) => {
     // Cleanup on connection close with a 3-minute grace period
     res.on("close", async () => {
       clearInterval(heartbeatInterval);
-      logger.error(`[SSE] Session connection closed: ${sessionId}. Keeping session alive for 3-minute grace period.`);
+      logger.info(`[SSE] Session connection closed: ${sessionId}. Keeping session alive for 3-minute grace period.`);
       
       // Keep the session in the map for a 3-minute grace period to prevent immediate 404 errors
       setTimeout(async () => {
         if (transports.has(sessionId)) {
-          logger.error(`[SSE] Grace period expired. Cleaning up session: ${sessionId}`);
+          logger.info(`[SSE] Grace period expired. Cleaning up session: ${sessionId}`);
           transports.delete(sessionId);
           const oldServer = sessionServers.get(sessionId);
           sessionServers.delete(sessionId);
@@ -975,28 +975,35 @@ app.get("/api/docs/quick-setup", (req, res) => {
 export function startHttpServer(port: number): Promise<void> {
   return new Promise((resolve) => {
     app.listen(port, () => {
-      logger.error(`CodeAtlas MCP SSE server running on port ${port}`);
-      logger.error(`- SSE endpoint: http://localhost:${port}/sse`);
-      logger.error(`- Message endpoint: http://localhost:${port}/messages`);
+      logger.info(`CodeAtlas MCP SSE server running on port ${port}`);
+      logger.info(`- SSE endpoint: http://localhost:${port}/sse`);
+      logger.info(`- Message endpoint: http://localhost:${port}/messages`);
       if (process.env.CODEATLAS_API_KEY) {
-        logger.error(`- Security: API Key enabled`);
+        logger.info(`- Security: API Key enabled`);
       } else {
-        logger.error(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
+        logger.info(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
       }
 
       // Start a keep-alive database ping every 12 hours to prevent Oracle Free Tier auto-stop
+      // Jitter ±15 minutes to prevent thundering herd if multiple instances restart simultaneously
       const DB_PING_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
-      setInterval(async () => {
-        try {
-          const { OracleMemoryService } = await import("../oracleDatabase.js");
-          if (process.env.ORACLE_CONN_STRING) {
-            logger.error("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
-            await OracleMemoryService.ping();
+      const JITTER_MS = 15 * 60 * 1000; // 15 minutes
+      const scheduleNextPing = () => {
+        const jitter = Math.floor(Math.random() * JITTER_MS * 2 - JITTER_MS);
+        setTimeout(async () => {
+          try {
+            const { OracleMemoryService } = await import("../oracleDatabase.js");
+            if (process.env.ORACLE_CONN_STRING) {
+              logger.info("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
+              await OracleMemoryService.ping();
+            }
+          } catch (err) {
+            logger.error("[Keep-Alive] Failed to ping Oracle DB:", err);
           }
-        } catch (err) {
-          logger.error("[Keep-Alive] Failed to ping Oracle DB:", err);
-        }
-      }, DB_PING_INTERVAL_MS);
+          scheduleNextPing(); // Schedule the next ping after this one completes
+        }, DB_PING_INTERVAL_MS + jitter);
+      };
+      scheduleNextPing();
 
       resolve();
     });

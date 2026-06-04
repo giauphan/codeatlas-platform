@@ -490,7 +490,7 @@ export function registerTools(server: McpServer) {
       // Sync to Oracle 26ai
       if (enableEnterpriseSync !== false && process.env.ORACLE_CONN_STRING) {
         try {
-          logger.error(`Syncing Knowledge Graph for ${loaded.projectName} to Oracle 26ai...`);
+          logger.info(`Syncing Knowledge Graph for ${loaded.projectName} to Oracle 26ai...`);
           await OracleMemoryService.saveSemanticMemory(loaded.projectName, nodes);
           await OracleMemoryService.saveRelationalMemory(loaded.projectName, links);
           if (businessRule) {

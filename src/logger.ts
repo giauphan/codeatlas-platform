@@ -27,9 +27,12 @@ function timestamp(): string {
 
 function formatMeta(args: unknown[]): unknown {
   // last arg if it's a plain object (not an Error) is treated as structured meta
-  const last = args[args.length - 1];
-  if (args.length > 1 && typeof last === "object" && last !== null && !(last instanceof Error)) {
-    return args.pop() as Record<string, unknown>;
+  // Using slice to avoid mutating the caller's array
+  if (args.length > 1) {
+    const last = args[args.length - 1];
+    if (typeof last === "object" && last !== null && !(last instanceof Error)) {
+      return last as Record<string, unknown>;
+    }
   }
   return undefined;
 }
