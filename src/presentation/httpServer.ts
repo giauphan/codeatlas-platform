@@ -266,9 +266,9 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
           }
         }
       }
-    } catch (firebaseErr: any) {
+    } catch (firebaseErr: unknown) {
       console.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
-      errors.push(`Firestore cleanup failed: ${firebaseErr.message || String(firebaseErr)}`);
+      errors.push(`Firestore cleanup failed: ${firebaseErr instanceof Error ? firebaseErr.message : String(firebaseErr)}`);
     }
 
     // 2. Remove semantic/relational/episodic memory from Oracle DB (if Oracle DB is configured)
@@ -277,9 +277,9 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
         const { OracleMemoryService } = await import("../oracleDatabase.js");
         await OracleMemoryService.deleteProjectMemory(cleanProjectName, ownerTenantId);
       }
-    } catch (oracleErr: any) {
+    } catch (oracleErr: unknown) {
       console.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
-      const errMsg = oracleErr.message || String(oracleErr);
+      const errMsg = oracleErr instanceof Error ? oracleErr.message : String(oracleErr);
       // If it's a driver/library loading error (e.g. DPI-1047) or connection/network failure,
       // log as a warning and do not block local cleanup, since the DB is unreachable anyway.
       if (
@@ -341,16 +341,16 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
           }
         }
       }
-    } catch (dirErr: any) {
-      errors.push(`Failed to clean up index directory: ${dirErr.message || String(dirErr)}`);
+    } catch (dirErr: unknown) {
+      errors.push(`Failed to clean up index directory: ${dirErr instanceof Error ? dirErr.message : String(dirErr)}`);
     }
 
     // 4. Unregister project from local registered list only if local cleanup was successful, or if force is enabled
     if (errors.length === 0 || isForce) {
       try {
         unregisterProject(fullProjectDir);
-      } catch (regErr: any) {
-        errors.push(`Failed to unregister project: ${regErr.message || String(regErr)}`);
+      } catch (regErr: unknown) {
+        errors.push(`Failed to unregister project: ${regErr instanceof Error ? regErr.message : String(regErr)}`);
       }
     }
 
@@ -404,18 +404,20 @@ app.get("/api/projects/memory", authMiddleware, async (req, res) => {
 
     const { OracleMemoryService } = await import("../oracleDatabase.js");
     const memories = await authStorage.run(auth, async () => {
-      return await OracleMemoryService.getEpisodicMemories(cleanProjectName, eventType as any);
+      return await OracleMemoryService.getEpisodicMemories(cleanProjectName, eventType || undefined);
     });
 
-    const parsedMemories = memories.map((m: any) => {
+    const rawMemories: Array<Record<string, unknown>> = (memories ?? []) as any;
+    const parsedMemories = rawMemories.map((m) => {
       let val = null;
       try {
         if (m.EVENT_DATA) {
           if (typeof m.EVENT_DATA === "string") {
             const parsed = JSON.parse(m.EVENT_DATA);
             val = parsed.val !== undefined ? parsed.val : parsed;
-          } else if (typeof m.EVENT_DATA === "object") {
-            val = m.EVENT_DATA.val !== undefined ? m.EVENT_DATA.val : m.EVENT_DATA;
+          } else if (typeof m.EVENT_DATA === "object" && m.EVENT_DATA !== null) {
+            const eventData: Record<string, unknown> = m.EVENT_DATA as any;
+            val = eventData.val !== undefined ? eventData.val : eventData;
           }
         }
       } catch (e) {
@@ -491,9 +493,9 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
           console.error("[Settings API] Corrupted settings file:", parseErr);
         }
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("[Settings API] Error reading settings file:", e);
-      if (e.code !== "ENOENT") {
+      if (e instanceof Error && (e as NodeJS.ErrnoException).code !== "ENOENT") {
         return res.status(500).json({ error: `Failed to read local settings: ${e.message}` });
       }
     }
@@ -511,10 +513,9 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
             indexingEnabled = doc.data()?.indexingEnabled;
           }
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error("[Settings API] Error reading Firestore fallback:", e);
-        // If local read failed/corrupted AND firestore fallback fails, return a 500 error
-        return res.status(500).json({ error: `Failed to fetch settings from fallback storage: ${e.message}` });
+        return res.status(500).json({ error: `Failed to fetch settings: ${e instanceof Error ? e.message : String(e)}` });
       }
     }
     
@@ -577,9 +578,9 @@ app.post("/api/projects/settings", authMiddleware, async (req, res) => {
         const docRef = db.collection('projects').doc(docId);
         await docRef.set({ indexingEnabled }, { merge: true });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("[Settings API] Error updating Firestore settings:", e);
-      throw new Error(`Firestore update failed: ${e.message || String(e)}`);
+      throw new Error(`Firestore update failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     
     res.json({ success: true, indexingEnabled });
@@ -741,7 +742,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
                 }
               });
             }
-          } catch (e: any) {
+          } catch (e: unknown) {
             console.error(`[Sync API] Failed to initialize/sync Oracle DB connection: ${e}`);
             syncError = e instanceof Error ? e.message : String(e);
           }

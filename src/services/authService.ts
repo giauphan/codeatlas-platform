@@ -34,7 +34,7 @@ export async function checkAuth(apiKey?: string): Promise<{ tier: string; uid: s
 /**
  * Log activity using Clean Architecture Use Case
  */
-export async function logActivity(auth: { uid: string; keyId: string }, tool: string, params: any, success: boolean = true) {
+export async function logActivity(auth: { uid: string; keyId: string }, tool: string, params: Record<string, unknown>, success: boolean = true) {
   try {
     await logTelemetryUseCase.execute(auth.uid, auth.keyId, tool, params, success);
   } catch (err: unknown) {

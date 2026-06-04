@@ -2,12 +2,48 @@ import oracledb from "oracledb";
 import * as path from "path";
 import { authStorage } from "./context.js";
 
+// ── Type Definitions ─────────────────────────────────────────────────────────
+interface NvidiaEmbeddingData {
+  embedding: number[];
+  index: number;
+  object: string;
+}
+
+interface NvidiaEmbeddingResponse {
+  data: NvidiaEmbeddingData[];
+  model: string;
+  usage: { prompt_tokens: number; total_tokens: number };
+}
+
+interface GraphEntity {
+  id: string;
+  label: string;
+  type: string;
+  filePath?: string;
+  line?: number;
+}
+
+interface GraphLink {
+  source: string;
+  target: string;
+  type: string;
+}
+
+interface ArchSmells {
+  circularDependencies: unknown[];
+  godObjects: unknown[];
+  deadCode: unknown[];
+}
+
 // Connection configuration helper to evaluate environment variables at runtime
-const getDbConfig = () => ({
-  user: process.env.ORACLE_USER || "ADMIN",
-  password: process.env.ORACLE_PASSWORD || "",
-  connectString: process.env.ORACLE_CONN_STRING || ""
-});
+const getDbConfig = () => {
+  const user = process.env.ORACLE_USER || "ADMIN";
+  const password = process.env.ORACLE_PASSWORD;
+  const connectString = process.env.ORACLE_CONN_STRING;
+  if (!password) throw new Error("ORACLE_PASSWORD environment variable is required");
+  if (!connectString) throw new Error("ORACLE_CONN_STRING environment variable is required");
+  return { user, password, connectString };
+};
 
 /**
  * Service to manage AI Memory on Oracle Database 26ai.
@@ -26,8 +62,8 @@ export class OracleMemoryService {
         if (process.env.ORACLE_LIB_DIR) {
           console.log("🚀 Initializing Oracle Client in Thick Mode...");
           try {
-            const initOptions: any = {
-              configDir: process.env.ORACLE_WALLET_DIR // Contains tnsnames.ora and wallet files
+            const initOptions: oracledb.InitialiseOptions = {
+              configDir: process.env.ORACLE_WALLET_DIR
             };
             // On Linux, passing libDir is not supported in initOracleClient() and causes DPI-1047 or crash.
             // Systems libraries must be configured via LD_LIBRARY_PATH or ldconfig on Linux.
@@ -35,11 +71,12 @@ export class OracleMemoryService {
               initOptions.libDir = process.env.ORACLE_LIB_DIR;
             }
             oracledb.initOracleClient(initOptions);
-          } catch (initErr: any) {
-            if (initErr.message && initErr.message.includes("already initialized")) {
+          } catch (initErr: unknown) {
+            const msg = initErr instanceof Error ? initErr.message : String(initErr);
+            if (msg.includes("already initialized")) {
               console.log("ℹ️ Oracle Client is already initialized.");
             } else {
-              console.warn("⚠️ Warning initializing Oracle Client in Thick Mode:", initErr.message || String(initErr));
+              console.warn("⚠️ Warning initializing Oracle Client in Thick Mode:", msg);
             }
           }
         }
@@ -88,7 +125,7 @@ export class OracleMemoryService {
   /**
    * Tier 1: Episodic JSON - Stores business events (Business Rules / Change Logs)
    */
-  static async saveEpisodicMemory(project: string, eventType: "BUSINESS_RULE" | "CHANGE_LOG", data: any) {
+  static async saveEpisodicMemory(project: string, eventType: "BUSINESS_RULE" | "CHANGE_LOG", data: Record<string, unknown>) {
     let connection;
     try {
       const pool = await this.init();
@@ -144,7 +181,7 @@ export class OracleMemoryService {
         FROM ai_episodic_memory
         WHERE project_name = :project
       `;
-      const binds: any = { project };
+      const binds: Record<string, unknown> = { project };
 
       if (eventType) {
         sql += ` AND event_type = :eventType`;
@@ -153,8 +190,8 @@ export class OracleMemoryService {
 
       sql += ` ORDER BY created_at DESC`;
 
-      const result = await connection.execute(sql, binds);
-      return result.rows || [];
+      const result = await connection.execute(sql, binds as any);
+      return result.rows ?? [];
     } catch (err) {
       console.error("Error getting episodic memories:", err instanceof Error ? err.message : String(err));
       throw err;
@@ -202,8 +239,8 @@ export class OracleMemoryService {
         return null;
       }
 
-      const data: any = await response.json();
-      if (data && data.data && data.data[0] && data.data[0].embedding) {
+      const data: NvidiaEmbeddingResponse = await response.json();
+      if (data?.data?.[0]?.embedding) {
         return data.data[0].embedding;
       }
       return null;
@@ -250,9 +287,9 @@ export class OracleMemoryService {
           return null;
         }
 
-        const data: any = await response.json();
-        if (data && data.data) {
-          const embeddings = data.data.map((item: any) => item.embedding);
+        const data: NvidiaEmbeddingResponse = await response.json();
+        if (data?.data) {
+          const embeddings = data.data.map((item: NvidiaEmbeddingData) => item.embedding);
           results.push(...embeddings);
         } else {
           return null;
@@ -269,7 +306,7 @@ export class OracleMemoryService {
   /**
    * Tier 2: Semantic Memory - Stores code entity embeddings
    */
-  static async saveSemanticMemory(project: string, entities: any[]) {
+  static async saveSemanticMemory(project: string, entities: GraphEntity[]) {
     // Generate embeddings for the entities chunk-by-chunk FIRST without holding a connection
     const contents = entities.map(e => `Entity: ${e.label}, Type: ${e.type}, Path: ${e.filePath}`);
     const embeddings = await this.generateNvidiaEmbeddingsBatch(contents, 'passage');
@@ -308,8 +345,8 @@ export class OracleMemoryService {
 
         const dbChunkSize = 500;
         for (let i = 0; i < binds.length; i += dbChunkSize) {
-          const chunk = binds.slice(i, i + dbChunkSize);
-          await connection.executeMany(sql, chunk as any[], { autoCommit: true });
+          const chunk: any[] = binds.slice(i, i + dbChunkSize);
+          await connection.executeMany(sql, chunk, { autoCommit: true });
         }
 
     } catch (err) {
@@ -329,7 +366,7 @@ export class OracleMemoryService {
   /**
    * Tier 3: Relational Memory - Stores relationships (Knowledge Graph)
    */
-  static async saveRelationalMemory(project: string, links: any[]) {
+  static async saveRelationalMemory(project: string, links: GraphLink[]) {
     let connection;
     try {
       const pool = await this.init();
@@ -357,7 +394,7 @@ export class OracleMemoryService {
 
         const dbChunkSize = 1000;
         for (let i = 0; i < binds.length; i += dbChunkSize) {
-          const chunk = binds.slice(i, i + dbChunkSize);
+          const chunk: any[] = binds.slice(i, i + dbChunkSize);
           await connection.executeMany(sql, chunk, { autoCommit: true });
         }
         
@@ -397,13 +434,13 @@ export class OracleMemoryService {
           FETCH FIRST :limit ROWS ONLY
         `;
         
-        const binds: any = { project, limit };
+        const binds: Record<string, unknown> = { project, limit };
         if (queryVector) {
           binds.queryVector = new Float32Array(queryVector);
         }
         
-        const result = await connection.execute(sql, binds);
-        return result.rows;
+        const result = await connection.execute(sql, binds as any);
+        return result.rows ?? [];
 
     } catch (err) {
       console.error("Error searching semantic memory:", err instanceof Error ? err.message : String(err));
@@ -430,7 +467,7 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await this.setSessionContext(connection);
       
-        const smells: any = {
+        const smells: ArchSmells = {
           circularDependencies: [],
           godObjects: [],
           deadCode: []
@@ -445,8 +482,8 @@ export class OracleMemoryService {
             COLUMNS (a.entity_name, a.file_path)
           )
         `;
-        const circularRes = await connection.execute(circularSql, { project });
-        smells.circularDependencies = circularRes.rows;
+        const circularRes = await connection.execute(circularSql, { project } as any);
+        smells.circularDependencies = (circularRes.rows ?? []) as unknown[];
 
         // 2. Detect God Objects (Entities with excessively high incoming relationships / high in-degree)
         const godSql = `
@@ -462,8 +499,8 @@ export class OracleMemoryService {
           ORDER BY in_degree DESC
           FETCH FIRST 10 ROWS ONLY
         `;
-        const godRes = await connection.execute(godSql, { project });
-        smells.godObjects = godRes.rows;
+        const godRes = await connection.execute(godSql, { project } as any);
+        smells.godObjects = (godRes.rows ?? []) as unknown[];
 
         // 3. Detect Dead Code (Entities with zero incoming relationships, and not main entry points)
         const deadSql = `
@@ -477,8 +514,8 @@ export class OracleMemoryService {
             )
           FETCH FIRST 20 ROWS ONLY
         `;
-        const deadRes = await connection.execute(deadSql, { project });
-        smells.deadCode = deadRes.rows;
+        const deadRes = await connection.execute(deadSql, { project } as any);
+        smells.deadCode = (deadRes.rows ?? []) as unknown[];
 
         return smells;
         

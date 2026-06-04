@@ -8,6 +8,7 @@ export interface SecurityFinding {
   filePath: string;
   line: number | null;
   snippet?: string;
+  project?: string;
 }
 
 export class SecurityScanner {

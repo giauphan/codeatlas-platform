@@ -493,15 +493,15 @@ export function registerTools(server: McpServer) {
           await OracleMemoryService.saveSemanticMemory(loaded.projectName, nodes);
           await OracleMemoryService.saveRelationalMemory(loaded.projectName, links);
           if (businessRule) {
-            await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "BUSINESS_RULE", businessRule);
+            await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "BUSINESS_RULE", { text: businessRule });
             businessRuleSaved = true;
           }
           if (changeDescription) {
-            await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "CHANGE_LOG", changeDescription);
+            await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "CHANGE_LOG", { text: changeDescription });
             changeDescriptionSaved = true;
           }
           syncSuccess = true;
-        } catch (oracleErr: any) {
+        } catch (oracleErr: unknown) {
           syncError = oracleErr instanceof Error ? oracleErr.message : String(oracleErr);
           console.error("Failed to sync to Oracle:", oracleErr);
         }
@@ -561,15 +561,17 @@ export function registerTools(server: McpServer) {
         const filterType = eventType === "all" ? undefined : eventType;
         const memories = await OracleMemoryService.getEpisodicMemories(loaded.projectName, filterType);
 
-        const parsedMemories = memories.map((m: any) => {
+        const rawMemories: Array<Record<string, unknown>> = (memories ?? []) as any;
+        const parsedMemories = rawMemories.map((m) => {
           let val = null;
           try {
             if (m.EVENT_DATA) {
               if (typeof m.EVENT_DATA === "string") {
-                const parsed = JSON.parse(m.EVENT_DATA);
+                const parsed: Record<string, unknown> = JSON.parse(m.EVENT_DATA as string);
                 val = parsed.val !== undefined ? parsed.val : parsed;
-              } else if (typeof m.EVENT_DATA === "object") {
-                val = m.EVENT_DATA.val !== undefined ? m.EVENT_DATA.val : m.EVENT_DATA;
+              } else if (typeof m.EVENT_DATA === "object" && m.EVENT_DATA !== null) {
+                const eventData = m.EVENT_DATA as Record<string, unknown>;
+                val = eventData.val !== undefined ? eventData.val : eventData;
               }
             }
           } catch (e) {
@@ -591,7 +593,7 @@ export function registerTools(server: McpServer) {
         };
 
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      } catch (err: any) {
+      } catch (err: unknown) {
         return { content: [{ type: "text" as const, text: `Failed to retrieve system memory: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
       }
     }
@@ -1110,7 +1112,19 @@ export function registerTools(server: McpServer) {
       }
 
       const isEnterprise = auth.tier === 'enterprise';
-      const scanResults: any[] = [];
+      // Project scan summary (not individual SecurityFinding)
+      interface ProjectScanSummary {
+        project: string;
+        riskLevel?: string;
+        securityScore?: number | string;
+        vulnerabilities?: number;
+        circularDependencies?: number;
+        deadCode?: number;
+        adminInsights?: string | null;
+        details?: Record<string, unknown>;
+        error?: string;
+      }
+      const scanResults: ProjectScanSummary[] = [];
       const limit = maxProjects || (isEnterprise ? projects.length : 3);
       const projectsToScan = projects.slice(0, limit);
 

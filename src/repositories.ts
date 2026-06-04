@@ -19,11 +19,14 @@ export interface IAuthRepository {
   updateLastUsed(uid: string, keyId: string): Promise<void>;
 }
 
+/** Activity log parameters (JSON-serializable key-value pairs) */
+export type ActivityParams = Record<string, unknown>;
+
 /**
  * Activity Logging Repository interface
  */
 export interface IActivityLogger {
-  logActivity(uid: string, keyId: string, tool: string, params: any, success: boolean): Promise<void>;
+  logActivity(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void>;
 }
 
 /**
@@ -100,7 +103,7 @@ export class FirestoreActivityLogger implements IActivityLogger {
     return getFirestore();
   }
 
-  async logActivity(uid: string, keyId: string, tool: string, params: any, success: boolean): Promise<void> {
+  async logActivity(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void> {
     if (uid === 'admin') return; // Bypass logging for superadmin requests
 
     try {
@@ -176,7 +179,7 @@ export class AuthenticateUserUseCase {
 export class LogTelemetryUseCase {
   constructor(private logger: IActivityLogger) {}
 
-  async execute(uid: string, keyId: string, tool: string, params: any, success: boolean): Promise<void> {
+  async execute(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void> {
     await this.logger.logActivity(uid, keyId, tool, params, success);
   }
 }
