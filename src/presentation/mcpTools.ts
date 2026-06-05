@@ -562,7 +562,7 @@ export function registerTools(server: McpServer) {
         const filterType = eventType === "all" ? undefined : eventType;
         const memories = await OracleMemoryService.getEpisodicMemories(loaded.projectName, filterType);
 
-        const rawMemories: Array<Record<string, unknown>> = (memories ?? []) as any;
+        const rawMemories = (memories ?? []) as unknown as Array<Record<string, unknown>>;
         const parsedMemories = OracleMemoryService.parseEpisodicMemories(rawMemories);
 
         const result = {
@@ -1115,7 +1115,7 @@ export function registerTools(server: McpServer) {
 
           const vulnerabilities = SecurityScanner.scan(loaded.analysis);
           
-          const stats = getStats(loaded.analysis as any);
+          const stats = getStats(loaded.analysis as AnalysisResultLocal);
           const circularDeps = stats.circularDeps || 0;
           const deadCode = stats.deadCode || 0;
           

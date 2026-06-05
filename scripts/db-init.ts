@@ -107,7 +107,7 @@ async function run() {
           entity_name VARCHAR2(255),
           file_path VARCHAR2(1000),
           content CLOB,
-          embedding VECTOR(1536, FLOAT32),
+          embedding VECTOR(4096, FLOAT32),
           tenant_id VARCHAR2(255) DEFAULT 'admin' NOT NULL
       )
     `, "CREATE TABLE ai_semantic_memory");

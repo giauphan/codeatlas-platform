@@ -100,6 +100,9 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
 const allowedOrigins = process.env.ALLOWED_ORIGINS || '*';
+if (allowedOrigins === '*') {
+  logger.info('[CORS] No ALLOWED_ORIGINS set — CORS is open to all origins. Set ALLOWED_ORIGINS env var to restrict.');
+}
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins === '*' || !origin) {
@@ -165,7 +168,6 @@ export const authMiddleware = async (req: express.Request, res: express.Response
   try {
     const auth = await checkAuth(clientKey);
     (req as any).auth = auth; // Attach auth result to request
-    
     // Assign auth context for the entire asynchronous flow below
     authStorage.run(auth, () => {
       next();
@@ -421,7 +423,7 @@ app.get("/api/projects/memory", authMiddleware, async (req, res) => {
       return await OracleMemoryService.getEpisodicMemories(cleanProjectName, eventType || undefined);
     });
 
-    const rawMemories: Array<Record<string, unknown>> = (memories ?? []) as any;
+    const rawMemories = (memories ?? []) as Array<Record<string, unknown>>;
     const parsedMemories = OracleMemoryService.parseEpisodicMemories(rawMemories);
 
     res.json({
@@ -682,7 +684,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
             await docRef.set({
               name: cleanProjectName,
               path: projectDir,
-              stats: (analysis as any).stats || analysis.entityCounts || {},
+              stats: (analysis as { stats?: unknown; entityCounts?: unknown }).stats || analysis.entityCounts || {},
               lastIndexed: new Date().toISOString(),
               nodesCount: analysis.graph?.nodes?.length || 0,
               linksCount: analysis.graph?.links?.length || 0,
@@ -819,7 +821,7 @@ app.get("/sse", async (req, res) => {
   const transport = new SSEServerTransport(messagesUrl, res);
   
   // Store transport by sessionId immediately to prevent race conditions during initialize
-  const sessionId = (transport as any).sessionId;
+  const sessionId = transport.sessionId;
   
   if (sessionId) {
     // If a session with this ID already exists, clean up its server and transport first to avoid conflicts
