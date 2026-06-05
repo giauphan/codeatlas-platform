@@ -52,21 +52,24 @@ jobs:
             cd /var/www/codeatlas-ai
             git pull origin main
 
-            # 2. Ensure pnpm is available
+            # 2. Fix permissions (node_modules may be owned by root from previous deploys)
+            sudo chown -R "$(whoami):$(whoami)" .
+
+            # 3. Ensure pnpm is available
             export PATH="$HOME/.npm-global/bin:$PATH"
             which pnpm >/dev/null 2>&1 || npm install -g pnpm
 
-            # 3. Install dependencies
+            # 4. Install dependencies
             pnpm install
 
-            # 4. Build
+            # 5. Build
             pnpm run build
 
-            # 5. Run DB auto-migration (idempotent — auto-fixes vector dim etc.)
+            # 6. Run DB auto-migration (idempotent — auto-fixes vector dim etc.)
             echo "📦 Running DB migration..."
             npm run db:init
 
-            # 6. Restart service
+            # 7. Restart service
             echo "🔄 Restarting service..."
             pm2 restart codeatlas-enterprise || pm2 start dist/index.js --name codeatlas-enterprise
 
