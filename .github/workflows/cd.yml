@@ -52,9 +52,9 @@ jobs:
             cd /var/www/codeatlas-ai
             git pull origin main
 
-            # 2. Ensure pnpm is available (try corepack first, then fallback)
-            corepack enable 2>/dev/null && corepack prepare pnpm@9 --activate 2>/dev/null || true
-            type pnpm >/dev/null 2>&1 || { corepack enable && corepack prepare pnpm@9 --activate; }
+            # 2. Ensure pnpm is available
+            export PATH="$HOME/.npm-global/bin:$PATH"
+            which pnpm >/dev/null 2>&1 || npm install -g pnpm
 
             # 3. Install dependencies
             pnpm install
