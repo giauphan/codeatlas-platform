@@ -67,14 +67,14 @@ jobs:
 
             # 6. Run DB auto-migration (idempotent — auto-fixes vector dim etc.)
             echo "📦 Running DB migration..."
-            npm run db:init
+            npm run db-init
 
             # 7. Restart service
             echo "🔄 Restarting service..."
             pm2 restart codeatlas-enterprise || pm2 start dist/index.js --name codeatlas-enterprise
 
-            # 7. Health check
+            # 8. Health check
             sleep 3
-            curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || echo "⚠️ Health check failed"
+            curl -s --max-time 5 -o /dev/null -w "%{http_code}" http://localhost:8080/health || echo "⚠️ Health check failed"
 
             echo "✅ Deploy complete!"
