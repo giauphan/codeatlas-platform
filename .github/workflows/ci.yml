@@ -23,7 +23,7 @@ jobs:
           node-version: 20
 
       - name: Enable pnpm via corepack
-        run: corepack enable && corepack prepare pnpm@latest --activate
+        run: corepack enable && corepack prepare pnpm@9 --activate
 
       - name: Install dependencies (Root)
         run: pnpm install
