@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { AnalysisResult, GraphNode } from './services/types.js';
-import { logger } from "./logger.js";
+import { AnalysisResult, GraphNode } from '../types/index.js';
+import { logger } from "../utils/logger.js";
 
 /**
  * Auto-generates .agents/memory/ folder from analysis data.

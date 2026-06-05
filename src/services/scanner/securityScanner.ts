@@ -1,4 +1,4 @@
-import { AnalysisResult, GraphNode } from "./services/types.js";
+import { AnalysisResult, GraphNode } from "../../types/index.js";
 import * as path from "path";
 
 export interface SecurityFinding {

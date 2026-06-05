@@ -1,7 +1,8 @@
 import { test, describe, mock, afterEach } from 'node:test';
 import assert from 'node:assert';
 import oracledb from 'oracledb';
-import { OracleMemoryService } from '../src/oracleDatabase.js';
+import { OracleMemoryService } from '../../src/services/memoryService.js';
+import { initPool } from '../../src/database/connection.js';
 
 process.env.ORACLE_PASSWORD = 'mock_password';
 process.env.ORACLE_CONN_STRING = 'mock_connection_string';
@@ -9,8 +10,6 @@ process.env.ORACLE_CONN_STRING = 'mock_connection_string';
 describe('OracleMemoryService', () => {
   afterEach(() => {
     mock.restoreAll();
-    // Reset pool
-    (OracleMemoryService as any).pool = null;
   });
 
   test('should handle missing connection gracefully in detectArchitecturalSmells', async () => {
@@ -46,7 +45,7 @@ describe('OracleMemoryService', () => {
     });
 
     try {
-      await OracleMemoryService.init();
+      await initPool();
       assert.fail('Should have thrown an error');
     } catch (e: any) {
       assert.strictEqual(e.message, 'Simulated pool creation error');
@@ -67,7 +66,7 @@ describe('OracleMemoryService', () => {
     });
 
     try {
-      await OracleMemoryService.init();
+      await initPool();
     } finally {
       Object.defineProperty(process, 'platform', {
         value: originalPlatform,

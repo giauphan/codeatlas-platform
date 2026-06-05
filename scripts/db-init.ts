@@ -144,6 +144,41 @@ async function run() {
           )
     `, "CREATE PROPERTY GRAPH ai_knowledge_graph");
 
+    // ── Auto-migration: Fix vector dimension if needed ──────
+    try {
+      const [col] = (await connection!.execute(
+        `SELECT data_type, data_length
+         FROM all_tab_columns
+         WHERE table_name = 'AI_SEMANTIC_MEMORY' AND column_name = 'EMBEDDING'`
+      )).rows as any[] || [];
+      if (col) {
+        const dim = col.DATA_LENGTH || 0;
+        if (dim !== 4096) {
+          console.log(`   ⚠️ Vector dim mismatch: ${dim}→4096. Auto-fixing...`);
+          try {
+            await connection!.execute(
+              `ALTER TABLE ai_semantic_memory MODIFY (embedding VECTOR(4096, FLOAT32))`,
+              {}, { autoCommit: true }
+            );
+          } catch {
+            await connection!.execute(
+              `ALTER TABLE ai_semantic_memory DROP COLUMN embedding`,
+              {}, { autoCommit: true }
+            );
+            await connection!.execute(
+              `ALTER TABLE ai_semantic_memory ADD (embedding VECTOR(4096, FLOAT32))`,
+              {}, { autoCommit: true }
+            );
+          }
+          console.log("   └─ ✅ Fixed to VECTOR(4096, FLOAT32)");
+        } else {
+          console.log("   ✅ Vector dimension already 4096.");
+        }
+      }
+    } catch (err: any) {
+      console.warn("   ⚠️ Vector check skipped:", err.message);
+    }
+
     console.log("\n🔒 2. Setting up Virtual Private Database (VPD) RLS Context...");
 
     await execSql(`

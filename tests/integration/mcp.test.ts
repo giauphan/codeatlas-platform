@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { server, getStats, discoverProjects } from '../index.js';
+import { server, getStats, discoverProjects } from '../../src/index.js';
 
 describe('Model Context Protocol (MCP) Server Integration', () => {
   test('should be a valid McpServer instance', () => {

@@ -2,9 +2,10 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
-import { authStorage } from '../src/context.js';
-import { discoverProjects, loadAnalysis } from '../index.js';
-import { OracleMemoryService } from '../src/oracleDatabase.js';
+import { authStorage } from '../../src/utils/context.js';
+import { discoverProjects, loadAnalysis } from '../../src/index.js';
+import { OracleMemoryService } from '../../src/services/memoryService.js';
+import { setSessionContext } from '../../src/database/connection.js';
 
 describe('SaaS Multi-Tenancy Security & VPD Integration', () => {
   const mockTenantRoot = path.join(process.cwd(), 'tests', 'mock_tenants');
@@ -136,11 +137,7 @@ describe('SaaS Multi-Tenancy Security & VPD Integration', () => {
       executedParams = null;
 
       const runTest = async () => {
-        // Access private setSessionContext using type-casting
-        const service = OracleMemoryService as any;
-        if (typeof service.setSessionContext === 'function') {
-          await service.setSessionContext(mockConnection);
-        }
+        await setSessionContext(mockConnection);
       };
 
       if (uid) {

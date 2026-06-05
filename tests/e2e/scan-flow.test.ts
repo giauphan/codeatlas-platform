@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import http from 'http';
 import { spawn } from 'child_process';
-import { app } from '../src/presentation/httpServer.js';
+import { app } from '../../src/presentation/httpServer.js';
 
 describe('MCP Auto-Scan & Database Sync Integration', () => {
   let server: http.Server;

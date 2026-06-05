@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { unregisterProject } from '../src/services/projectService.js';
+import { unregisterProject } from '../../src/services/projectService.js';
 
 // Setup Mock Request & Response Types for Express
 interface MockResponse {

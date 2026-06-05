@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn, ChildProcess } from 'node:child_process';
-import { isProjectDirectory, isProjectDirectoryAsync, getOpenIdeForDir } from '../src/services/projectService.js';
+import { isProjectDirectory, isProjectDirectoryAsync, getOpenIdeForDir } from '../../src/services/projectService.js';
 
 describe('Project Discovery Hardening & Workspace Validation', () => {
   const tmpBaseDir = path.join(process.cwd(), 'tests', 'temp_discovery_test');

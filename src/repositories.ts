@@ -1,6 +1,6 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import * as crypto from "crypto";
-import { logger } from "./logger.js";
+import { logger } from "./utils/logger.js";
 
 /**
  * Domain Interface for User Authentication details

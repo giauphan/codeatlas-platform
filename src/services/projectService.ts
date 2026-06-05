@@ -4,9 +4,9 @@ import * as https from "https";
 import * as os from "os";
 import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { AnalysisResult } from "./types.js";
-import { authStorage } from "../context.js";
-import { logger } from "../logger.js";
+import { AnalysisResult } from "../types/index.js";
+import { authStorage } from "../utils/context.js";
+import { logger } from "../utils/logger.js";
 
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };

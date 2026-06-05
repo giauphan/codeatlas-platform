@@ -7,13 +7,13 @@
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "codeatlas-mcp": "dist/index.js"
+    "codeatlas-mcp": "dist/src/index.js"
   },
   "scripts": {
     "build": "tsc",
-    "start": "LD_LIBRARY_PATH=./instantclient node dist/index.js",
-    "dev": "LD_LIBRARY_PATH=./instantclient tsx index.ts",
-    "test": "LD_LIBRARY_PATH=./instantclient node --import tsx --test tests/*.test.ts",
+    "start": "LD_LIBRARY_PATH=./instantclient node dist/src/index.js",
+    "dev": "LD_LIBRARY_PATH=./instantclient tsx src/index.ts",
+    "test": "LD_LIBRARY_PATH=./instantclient node --import tsx --test tests/**/*.test.ts",
     "db-init": "LD_LIBRARY_PATH=./instantclient tsx scripts/db-init.ts"
   },
   "devDependencies": {

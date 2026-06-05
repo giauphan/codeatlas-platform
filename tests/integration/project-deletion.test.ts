@@ -3,9 +3,9 @@ import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { app, firebaseClient } from '../src/presentation/httpServer.js';
-import { authStorage } from '../src/context.js';
-import { OracleMemoryService } from '../src/oracleDatabase.js';
+import { app, firebaseClient } from '../../src/presentation/httpServer.js';
+import { authStorage } from '../../src/utils/context.js';
+import { OracleMemoryService } from '../../src/services/memoryService.js';
 
 describe('Project Deletion and Tenant Sandbox Cleanup', () => {
   const mockTenantRoot = path.resolve(path.join(process.cwd(), 'tests', 'mock_tenants'));

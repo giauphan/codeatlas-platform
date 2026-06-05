@@ -7,7 +7,7 @@ import {
   IActivityLogger, 
   AuthData,
   FirestoreAuthRepository
-} from '../src/repositories.js';
+} from '../../src/repositories.js';
 
 describe('Clean Architecture Repositories & Use Cases', () => {
 

@@ -10,12 +10,12 @@ import * as url from "url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 
 // Import Presentation Adapters
-import { server } from "./src/presentation/mcpServer.js";
-import { app, startHttpServer } from "./src/presentation/httpServer.js";
+import { server } from "./presentation/mcpServer.js";
+import { app, startHttpServer } from "./presentation/httpServer.js";
 
 // Import Domain / Application Services
-import { checkAuth } from "./src/services/authService.js";
-import { logger } from "./src/logger.js";
+import { checkAuth } from "./services/authService.js";
+import { logger } from "./utils/logger.js";
 import { 
   getStats, 
   discoverProjects, 
@@ -23,7 +23,7 @@ import {
   discoverProjectsAsync, 
   loadAnalysisAsync, 
   fileExists 
-} from "./src/services/projectService.js";
+} from "./services/projectService.js";
 
 // Initialize Firebase Admin (Infrastructure Configuration at Composition Root)
 const apps = getApps();

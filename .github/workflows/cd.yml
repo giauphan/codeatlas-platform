@@ -1,0 +1,76 @@
+name: CD — Deploy to Live
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Build, Test & Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: TypeScript check
+        run: npx tsc --noEmit --skipLibCheck
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Run tests
+        run: pnpm test
+
+      # ── Deploy to Oracle Live Server ─────────────────────
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIVE_HOST }}
+          username: ${{ secrets.LIVE_USER }}
+          key: ${{ secrets.LIVE_SSH_KEY }}
+          port: ${{ secrets.LIVE_PORT || 22 }}
+          script: |
+            set -e
+            echo "🚀 Deploying CodeAtlas to live..."
+
+            # 1. Pull latest code
+            cd /var/www/codeatlas-ai
+            git pull origin main
+
+            # 2. Install dependencies
+            pnpm install
+
+            # 3. Build
+            pnpm run build
+
+            # 4. Run DB auto-migration (idempotent — auto-fixes vector dim etc.)
+            echo "📦 Running DB migration..."
+            npm run db:init
+
+            # 5. Restart service
+            echo "🔄 Restarting service..."
+            pm2 restart codeatlas || pm2 start dist/index.js --name codeatlas
+
+            # 6. Health check
+            sleep 3
+            curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health || echo "⚠️ Health check failed"
+
+            echo "✅ Deploy complete!"

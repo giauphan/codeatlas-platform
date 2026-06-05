@@ -4,8 +4,8 @@ import {
   AuthenticateUserUseCase, 
   LogTelemetryUseCase 
 } from "../repositories.js";
-import { authStorage } from "../context.js";
-import { logger } from "../logger.js";
+import { authStorage } from "../utils/context.js";
+import { logger } from "../utils/logger.js";
 
 const authRepo = new FirestoreAuthRepository();
 const activityLogger = new FirestoreActivityLogger();

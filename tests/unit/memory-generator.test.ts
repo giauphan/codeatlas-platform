@@ -2,8 +2,8 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import { generateMemory } from '../src/memoryGenerator.js';
-import { AnalysisResult, GraphData } from '../src/types.js';
+import { generateMemory } from '../../src/services/memoryGenerator.js';
+import { AnalysisResult, GraphData } from '../../src/types/index.js';
 
 describe('Memory Generator', () => {
   const workspaceRoot = path.join(process.cwd(), 'tests', 'mock_workspace');

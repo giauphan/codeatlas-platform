@@ -13,9 +13,9 @@ import {
   AnalysisResultLocal,
   registerProject
 } from "../services/projectService.js";
-import { OracleMemoryService } from "../oracleDatabase.js";
-import { SecurityScanner } from "../securityScanner.js";
-import { logger } from "../logger.js";
+import { OracleMemoryService } from "../services/memoryService.js";
+import { SecurityScanner } from "../services/scanner/securityScanner.js";
+import { logger } from "../utils/logger.js";
 
 export function registerTools(server: McpServer) {
   // Tool -1: Analyze a project

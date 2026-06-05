@@ -2,8 +2,8 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
-import { app, firebaseClient } from '../src/presentation/httpServer.js';
-import { authStorage } from '../src/context.js';
+import { app, firebaseClient } from '../../src/presentation/httpServer.js';
+import { authStorage } from '../../src/utils/context.js';
 
 describe('Project Settings REST API', () => {
   const mockTenantRoot = path.join(process.cwd(), 'tests', 'mock_settings_projects');

@@ -3,10 +3,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import * as fs from "fs";
 import * as path from "path";
-import { getAuth } from "firebase-admin/auth";
 import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { checkAuth, logActivity } from "../services/authService.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { 
   discoverProjectsAsync, 
   loadAnalysisAsync, 
@@ -15,9 +15,9 @@ import {
   resolveProjectDir,
   unregisterProject
 } from "../services/projectService.js";
-import { authStorage } from "../context.js";
+import { authStorage } from "../utils/context.js";
 import { registerTools } from "./mcpTools.js";
-import { logger } from "../logger.js";
+import { logger } from "../utils/logger.js";
 
 // Wrapper object to allow clean mocking of Firebase services in testing environments
 export const firebaseClient = {
@@ -116,66 +116,6 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
-
-// Authentication middleware for ALL API routes
-export const authMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  // 1. Support Firebase ID Token (Bearer Token) for Dashboard
-  const authHeader = req.headers["authorization"];
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.substring(7);
-    try {
-      const decodedToken = await getAuth().verifyIdToken(token);
-      let role = (decodedToken.role as string) || "user";
-      if (role !== "admin") {
-        try {
-          const userDoc = await firebaseClient.getFirestore().collection("users").doc(decodedToken.uid).get();
-          if (userDoc.exists) {
-            role = userDoc.data()?.role || userDoc.data()?.tier || "user";
-          }
-        } catch (e) {
-          logger.error("Failed to fetch user role from Firestore:", e);
-        }
-      }
-
-      const auth = {
-        tier: "enterprise",
-        uid: decodedToken.uid,
-        email: decodedToken.email,
-        role: role,
-        keyId: "firebase-session"
-      };
-      (req as any).auth = auth;
-      
-      // Assign auth context for the entire asynchronous flow below
-      authStorage.run(auth, () => {
-        next();
-      });
-      return;
-    } catch (err: unknown) {
-      res.status(401).json({ error: `Invalid Firebase ID Token: ${(err instanceof Error ? err.message : String(err))}` });
-      return;
-    }
-  }
-
-  // 2. Support API key via header (primary) and query param (deprecated — warn)
-  let clientKey = (req.headers["x-api-key"] as string);
-  if (!clientKey) {
-    clientKey = (req.query.apiKey as string) || "";
-    if (clientKey) {
-      logger.warn("[Auth] API key passed via query parameter is deprecated and will be removed. Use x-api-key header instead.");
-    }
-  }
-  try {
-    const auth = await checkAuth(clientKey);
-    (req as any).auth = auth; // Attach auth result to request
-    // Assign auth context for the entire asynchronous flow below
-    authStorage.run(auth, () => {
-      next();
-    });
-  } catch (err: unknown) {
-    res.status(401).json({ error: (err instanceof Error ? err.message : String(err)) });
-  }
-};
 
 // REST API: Get all discovered projects
 app.get("/api/projects", authMiddleware, async (req, res) => {
@@ -290,7 +230,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
     // 2. Remove semantic/relational/episodic memory from Oracle DB (if Oracle DB is configured)
     try {
       if (process.env.ORACLE_CONN_STRING) {
-        const { OracleMemoryService } = await import("../oracleDatabase.js");
+        const { OracleMemoryService } = await import("../services/memoryService.js");
         await OracleMemoryService.deleteProjectMemory(cleanProjectName, ownerTenantId);
       }
     } catch (oracleErr: unknown) {
@@ -418,7 +358,7 @@ app.get("/api/projects/memory", authMiddleware, async (req, res) => {
       });
     }
 
-    const { OracleMemoryService } = await import("../oracleDatabase.js");
+    const { OracleMemoryService } = await import("../services/memoryService.js");
     const memories = await authStorage.run(auth, async () => {
       return await OracleMemoryService.getEpisodicMemories(cleanProjectName, eventType || undefined);
     });
@@ -704,7 +644,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
         // Sync to Oracle 26ai (episodic memory is processed synchronously to expose failures to callers)
         if (auth && process.env.ORACLE_CONN_STRING) {
           try {
-            const { OracleMemoryService } = await import("../oracleDatabase.js");
+            const { OracleMemoryService } = await import("../services/memoryService.js");
             if (businessRule) {
               await authStorage.run(auth, async () => {
                 logger.info(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
@@ -984,10 +924,10 @@ export function startHttpServer(port: number): Promise<void> {
         const jitter = Math.floor(Math.random() * JITTER_MS * 2 - JITTER_MS);
         setTimeout(async () => {
           try {
-            const { OracleMemoryService } = await import("../oracleDatabase.js");
+            const { ping } = await import("../database/connection.js");
             if (process.env.ORACLE_CONN_STRING) {
               logger.info("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
-              await OracleMemoryService.ping();
+              await ping();
             }
           } catch (err) {
             logger.error("[Keep-Alive] Failed to ping Oracle DB:", err);
