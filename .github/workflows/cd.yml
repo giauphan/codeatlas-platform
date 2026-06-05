@@ -20,12 +20,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8
+      - name: Enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@latest --activate
 
       - name: Install dependencies
         run: pnpm install
@@ -55,22 +52,25 @@ jobs:
             cd /var/www/codeatlas-ai
             git pull origin main
 
-            # 2. Install dependencies
+            # 2. Ensure pnpm is available
+            which pnpm >/dev/null 2>&1 || npm install -g pnpm
+
+            # 3. Install dependencies
             pnpm install
 
-            # 3. Build
+            # 4. Build
             pnpm run build
 
-            # 4. Run DB auto-migration (idempotent — auto-fixes vector dim etc.)
+            # 5. Run DB auto-migration (idempotent — auto-fixes vector dim etc.)
             echo "📦 Running DB migration..."
             npm run db:init
 
-            # 5. Restart service
+            # 6. Restart service
             echo "🔄 Restarting service..."
-            pm2 restart codeatlas || pm2 start dist/index.js --name codeatlas
+            pm2 restart codeatlas-enterprise || pm2 start dist/index.js --name codeatlas-enterprise
 
-            # 6. Health check
+            # 7. Health check
             sleep 3
-            curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health || echo "⚠️ Health check failed"
+            curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || echo "⚠️ Health check failed"
 
             echo "✅ Deploy complete!"
