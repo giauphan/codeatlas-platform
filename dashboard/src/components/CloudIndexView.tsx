@@ -102,7 +102,7 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
                   Indexing Depth: Level 4 (Full Analysis)<br/>
                   Exclusions: node_modules, .git, build, dist<br/>
-                  Target Directory: /home/biibon/CodeAtlas
+                  Target Directory: {analysis?.projectDir || 'active-workspace'}
                 </motion.div>
               )}
             </div>

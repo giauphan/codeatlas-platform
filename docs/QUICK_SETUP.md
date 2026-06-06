@@ -57,8 +57,8 @@ npm run build && npx pm2 restart 0
 ### Step 3.2: Backend Server Configuration
 1. Clone the repository and install dependencies:
    ```bash
-   git clone https://github.com/giauphan/CodeAtlas.git
-   cd CodeAtlas
+   git clone https://github.com/your-org/codeatlas-enterprise.git
+   cd codeatlas-enterprise
    npm install
    ```
 
@@ -154,7 +154,7 @@ Add this server block to your `.gemini/settings.json`:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
     }
   }
 }
@@ -170,7 +170,7 @@ Add this to your `claude_desktop_config.json`:
   "mcpServers": {
     "codeatlas": {
       "command": "node",
-      "args": ["/home/biibon/CodeAtlas/dist/index.js"]
+      "args": ["/absolute/path/to/your/codeatlas-enterprise/dist/src/index.js"]
     }
   }
 }

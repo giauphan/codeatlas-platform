@@ -2,7 +2,7 @@
   "name": "codeatlas-enterprise",
   "displayName": "CodeAtlas Enterprise (Oracle 26ai Edition)",
   "description": "AI-powered codebase insights — MCP Server and Remote API",
-  "version": "2.13.14",
+  "version": "2.13.16",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
@@ -15,6 +15,9 @@
     "dev": "LD_LIBRARY_PATH=./instantclient tsx src/index.ts",
     "test": "LD_LIBRARY_PATH=./instantclient node --import tsx --test tests/**/*.test.ts",
     "db-init": "LD_LIBRARY_PATH=./instantclient tsx scripts/db-init.ts"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
@@ -34,10 +37,5 @@
     "oracledb": "^6.5.0",
     "py-ast": "^1.9.0",
     "zod": "^3.22.4"
-  },
-  "pnpm": {
-    "overrides": {
-      "uuid": "11.1.1"
-    }
   }
 }

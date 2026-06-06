@@ -1,4 +1,7 @@
 ---
+description: CodeAtlas MCP Integration — Auto-read memory, use MCP tools before coding, sync after changes
+globs: *
+alwaysApply: true
 trigger: always_on
 ---
 
@@ -54,7 +57,7 @@ If CodeAtlas MCP is not configured, add it:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
     }
   }
 }
@@ -66,7 +69,7 @@ If CodeAtlas MCP is not configured, add it:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
     }
   }
 }
@@ -74,10 +77,22 @@ If CodeAtlas MCP is not configured, add it:
 
 **Claude Code CLI**:
 ```bash
-claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
+claude mcp add codeatlas -- npx -y -p codeatlas-enterprise codeatlas-mcp
 ```
 
 ### Important
 - Data is automatically indexed by the client on startup or modification and synced to the server database via the API (`/api/projects/sync`).
 - If no analysis is loaded, verify that the client has completed indexing and synchronized with the remote server.
+
+### Example Workflow
+
+```
+User: "fix login timeout"
+
+1. trace_feature_flow(keyword: "login")              → find related files
+2. generate_feature_flow_diagram(keyword: "login")   → see execution flow
+3. Read files in readingOrder                        → understand logic
+4. Fix the code                                      → implement fix
+5. sync_system_memory(changeDescription: "Fixed login timeout") → save context
+```
 

@@ -29,7 +29,7 @@ Choose your AI platform:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
     }
   }
 }
@@ -41,7 +41,7 @@ Choose your AI platform:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
     }
   }
 }
@@ -49,7 +49,7 @@ Choose your AI platform:
 
 **Claude Code CLI**:
 ```bash
-claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
+claude mcp add codeatlas -- npx -y -p codeatlas-enterprise codeatlas-mcp
 ```
 
 **Windsurf / Other MCP-compatible editors**:
@@ -58,7 +58,7 @@ claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
     }
   }
 }

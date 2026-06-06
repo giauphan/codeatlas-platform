@@ -20,7 +20,7 @@ declare global {
         /** Email associated with the Firebase session (optional for API-key auth) */
         email?: string;
         /** Role such as admin, user, viewer */
-        role: string;
+        role?: string;
         /** Identifier for the authentication method (firebase-session | api-key) */
         keyId: string;
       };

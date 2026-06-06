@@ -5,7 +5,7 @@ import { registerTools } from "./mcpTools.js";
 export const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.13.14",
+    version: "2.13.16",
   },
   {
     capabilities: {

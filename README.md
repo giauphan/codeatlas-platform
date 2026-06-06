@@ -2,9 +2,9 @@
 
 **Standalone MCP Server & Remote API for AI-powered codebase intelligence**
 
-[![Version](https://img.shields.io/badge/version-2.0.0-gold)](https://github.com/giauphan/CodeAtlas/releases)
+[![Version](https://img.shields.io/badge/version-2.13.16-gold)](#)
 [![Oracle](https://img.shields.io/badge/Oracle-26ai%20Native-red?logo=oracle)](https://www.oracle.com/database/)
-[![MCP](https://img.shields.io/npm/v/@giauphan/codeatlas-mcp?label=MCP%20Server&logo=npm)](https://www.npmjs.com/package/@giauphan/codeatlas-mcp)
+[![MCP](https://img.shields.io/npm/v/codeatlas-enterprise?label=MCP%20Server&logo=npm)](https://www.npmjs.com/package/codeatlas-enterprise)
 
 CodeAtlas Enterprise is a production-grade, standalone server that transforms your codebase into a **Knowledge Graph**. Built on **Oracle 26ai**, it provides deep architectural reasoning, security scanning, and persistent AI memory for enterprise-scale teams.
 
@@ -26,8 +26,8 @@ CodeAtlas Enterprise is a production-grade, standalone server that transforms yo
 
 ### 2. Installation
 ```bash
-git clone https://github.com/giauphan/CodeAtlas.git
-cd CodeAtlas
+git clone https://github.com/your-org/codeatlas-enterprise.git
+cd codeatlas-enterprise
 npm install
 npm run build
 ```

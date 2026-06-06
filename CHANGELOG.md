@@ -10,6 +10,7 @@
 ## [2.13.15] - 2026-06-06
 
 ### Changed
+- **Documentation**: Updated all setup instructions and template generators to reference the enterprise package (`codeatlas-enterprise` via npx) instead of the deprecated public package name (`@giauphan/codeatlas-mcp`).
 - **Documentation**: Updated all setup instructions and template generators to reflect the renamed rule files and their new locations.
 - **Version Bump**: Synchronized version in `httpServer.ts` to match release.
 

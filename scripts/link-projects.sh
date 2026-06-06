@@ -12,7 +12,8 @@ TENANT_ID=$1
 shift
 
 # Root paths
-TENANTS_ROOT="/home/biibon/CodeAtlas/tenants"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TENANTS_ROOT="$SCRIPT_DIR/../tenants"
 USER_DIR="$TENANTS_ROOT/$TENANT_ID"
 
 echo "⚙️ Creating tenant directory at: $USER_DIR"
@@ -20,8 +21,8 @@ mkdir -p "$USER_DIR"
 
 # If no specific projects are provided, list available ones and exit
 if [ $# -eq 0 ]; then
-  echo "💡 No specific projects provided. Here are the available projects in /home/biibon/:"
-  find /home/biibon/ -maxdepth 1 -type d -not -path '*/.*' -not -path '/home/biibon/' | sed 's|/home/biibon/||'
+  echo "💡 No specific projects provided. Here are the available projects in $HOME:"
+  find "$HOME" -maxdepth 1 -type d -not -path '*/.*' -not -path "$HOME" | sed "s|$HOME/||"
   echo ""
   echo "To link a project, run:"
   echo "./link_projects.sh $TENANT_ID <project_name>"
@@ -30,7 +31,7 @@ fi
 
 # Link each specified project
 for PROJECT_NAME in "$@"; do
-  SRC_PATH="/home/biibon/$PROJECT_NAME"
+  SRC_PATH="$HOME/$PROJECT_NAME"
   DEST_PATH="$USER_DIR/$PROJECT_NAME"
   
   if [ ! -d "$SRC_PATH" ]; then

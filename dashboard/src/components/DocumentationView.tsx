@@ -71,7 +71,7 @@ export const DocumentationView: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
             <span style={{ background: 'rgba(0, 240, 255, 0.12)', color: 'var(--primary-neon)', fontSize: '0.75rem', fontWeight: 800, padding: '0.25rem 0.75rem', borderRadius: '20px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
-              v2.4.1 — Enterprise
+              v2.13.16 — Enterprise
             </span>
             <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <Sparkles size={14} color="#FFD700" /> Thick Mode Active
@@ -106,7 +106,29 @@ export const DocumentationView: React.FC = () => {
             }}
             className="docs-btn-hover"
           >
-            <BookOpen size={18} /> Open Markdown Guide <ExternalLink size={14} />
+            <BookOpen size={18} /> Quick Setup Guide <ExternalLink size={14} />
+          </a>
+          <a
+            href={`${backendUrl}/api/docs/memory-setup`}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '12px',
+              padding: '0.75rem 1.25rem',
+              color: '#fff',
+              fontSize: '0.9rem',
+              fontWeight: 700,
+              textDecoration: 'none',
+              transition: 'all 0.2s ease',
+            }}
+            className="docs-btn-hover"
+          >
+            <BookOpen size={18} /> AI Memory Guide <ExternalLink size={14} />
           </a>
         </div>
       </div>
@@ -248,14 +270,14 @@ export const DocumentationView: React.FC = () => {
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"],
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"],
       "env": {
         "CODEATLAS_API_KEY": "YOUR_API_KEY_HERE"
       }
     }
   }
 }`}</pre>
-                        {renderCopyButton(`{\n  "mcpServers": {\n    "codeatlas": {\n      "command": "npx",\n      "args": ["-y", "@giauphan/codeatlas-mcp"],\n      "env": {\n        "CODEATLAS_API_KEY": "YOUR_API_KEY_HERE"\n      }\n    }\n  }\n}`, 'vscode_mcp_env')}
+                        {renderCopyButton(`{\n  "mcpServers": {\n    "codeatlas": {\n      "command": "npx",\n      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"],\n      "env": {\n        "CODEATLAS_API_KEY": "YOUR_API_KEY_HERE"\n      }\n    }\n  }\n}`, 'vscode_mcp_env')}
                       </div>
                     </div>
 
@@ -266,11 +288,126 @@ export const DocumentationView: React.FC = () => {
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp", "--apiKey=YOUR_API_KEY_HERE"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp", "--apiKey=YOUR_API_KEY_HERE"]
     }
   }
 }`}</pre>
-                        {renderCopyButton(`{\n  "mcpServers": {\n    "codeatlas": {\n      "command": "npx",\n      "args": ["-y", "@giauphan/codeatlas-mcp", "--apiKey=YOUR_API_KEY_HERE"]\n    }\n  }\n}`, 'vscode_mcp_arg')}
+                        {renderCopyButton(`{\n  "mcpServers": {\n    "codeatlas": {\n      "command": "npx",\n      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp", "--apiKey=YOUR_API_KEY_HERE"]\n    }\n  }\n}`, 'vscode_mcp_arg')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 style={{ color: 'var(--primary-neon)', fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ArrowRight size={16} /> 3. AI Rules & Auto-Memory Templates (MDC / MD)
+                  </h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: '1.5' }}>
+                    To ensure your AI assistant automatically leverages CodeAtlas MCP tools, understands context, and synchronizes codebase changes back to the knowledge graph, create the following rules files in your workspace root:
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+                    <div>
+                      <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.5rem' }}>1. Cursor AI Rules (<code>.cursor/rules/codeatlas.mdc</code>)</div>
+                      <div style={{ position: 'relative', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1.25rem', fontFamily: 'monospace', fontSize: '0.8rem', color: '#a6e22e', overflowX: 'auto', maxHeight: '250px', overflowY: 'auto' }}>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--text-muted)' }}>{`---
+description: CodeAtlas MCP Integration — Auto-read memory, use MCP tools before coding, sync after changes
+globs: *
+alwaysApply: true
+---
+
+# CodeAtlas MCP — Codebase Intelligence
+
+An MCP server named \`codeatlas\` is available. It provides code analysis data including project structure, dependencies, and code insights.
+
+**Always use CodeAtlas MCP tools BEFORE manual file searches — faster and gives relationship context.**
+
+## Workflow
+1. **Before making changes** → call \`trace_feature_flow\` with a keyword to find related files
+2. **Looking for a function/class** → call \`search_entities\`. NEVER use grep or find commands.
+3. **Understanding connections** → call \`get_dependencies\` for import/call relationships
+4. **High-level overview** → call \`generate_system_flow\` for Mermaid architecture diagram
+5. **Execution flow of a feature** → call \`generate_feature_flow_diagram\` for call-chain Mermaid diagram
+6. **Exploring a file** → call \`get_file_entities\` to see all entities in that file
+7. **After making changes** → call \`sync_system_memory\` to update AI memory`}</pre>
+                        {renderCopyButton(`---\ndescription: CodeAtlas MCP Integration — Auto-read memory, use MCP tools before coding, sync after changes\nglobs: *\nalwaysApply: true\n---\n\n# CodeAtlas MCP — Codebase Intelligence\n\nAn MCP server named \`codeatlas\` is available. It provides code analysis data including project structure, dependencies, and code insights.\n\n**Always use CodeAtlas MCP tools BEFORE manual file searches — faster and gives relationship context.**\n\n## Workflow\n1. **Before making changes** → call \`trace_feature_flow\` with a keyword to find related files\n2. **Looking for a function/class** → call \`search_entities\`. NEVER use grep or find commands.\n3. **Understanding connections** → call \`get_dependencies\` for import/call relationships\n4. **High-level overview** → call \`generate_system_flow\` for Mermaid architecture diagram\n5. **Execution flow of a feature** → call \`generate_feature_flow_diagram\` for call-chain Mermaid diagram\n6. **Exploring a file** → call \`get_file_entities\` to see all entities in that file\n7. **After making changes** → call \`sync_system_memory\` to update AI memory`, 'cursor_rules_mdc')}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.5rem' }}>2. CodeAtlas MCP Workflow (<code>.agents/rules/codeatlas-mcp.md</code>)</div>
+                      <div style={{ position: 'relative', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1.25rem', fontFamily: 'monospace', fontSize: '0.8rem', color: '#a6e22e', overflowX: 'auto', maxHeight: '250px', overflowY: 'auto' }}>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--text-muted)' }}>{`---
+description: CodeAtlas MCP Integration — Auto-read memory, use MCP tools before coding, sync after changes
+globs: *
+alwaysApply: true
+trigger: always_on
+---
+
+## CodeAtlas MCP — Codebase Intelligence
+
+An MCP server named \`codeatlas\` is available. It provides code analysis data including project structure, dependencies, and code insights.
+
+**Always use CodeAtlas MCP tools BEFORE manual file searches — faster and gives relationship context.**
+
+### Workflow
+
+1. **Before making changes** → call \`trace_feature_flow\` with a keyword to find related files
+2. **Looking for a function/class** → call \`search_entities\`. NEVER use grep or find commands.
+3. **Understanding connections** → call \`get_dependencies\` for import/call relationships
+4. **High-level overview** → call \`generate_system_flow\` for Mermaid architecture diagram
+5. **Execution flow of a feature** → call \`generate_feature_flow_diagram\` for call-chain Mermaid diagram
+6. **Exploring a file** → call \`get_file_entities\` to see all entities in that file
+7. **After making changes** → call \`sync_system_memory\` to update AI memory
+
+### Important
+- Data is automatically indexed by the client on startup or modification and synced to the server database via the API (\`/api/projects/sync\`).
+- If no analysis is loaded, verify that the client has completed indexing and synchronized with the remote server.
+
+### Example Workflow
+
+\`\`\`
+User: "fix login timeout"
+
+1. trace_feature_flow(keyword: "login")              → find related files
+2. generate_feature_flow_diagram(keyword: "login")   → see execution flow
+3. Read files in readingOrder                        → understand logic
+4. Fix the code                                      → implement fix
+5. sync_system_memory(changeDescription: "Fixed login timeout") → save context
+\`\`\``}</pre>
+                        {renderCopyButton(`---\ndescription: CodeAtlas MCP Integration — Auto-read memory, use MCP tools before coding, sync after changes\nglobs: *\nalwaysApply: true\ntrigger: always_on\n---\n\n## CodeAtlas MCP — Codebase Intelligence\n\nAn MCP server named \`codeatlas\` is available. It provides code analysis data including project structure, dependencies, and code insights.\n\n**Always use CodeAtlas MCP tools BEFORE manual file searches — faster and gives relationship context.**\n\n### Workflow\n\n1. **Before making changes** → call \`trace_feature_flow\` with a keyword to find related files\n2. **Looking for a function/class** → call \`search_entities\`. NEVER use grep or find commands.\n3. **Understanding connections** → call \`get_dependencies\` for import/call relationships\n4. **High-level overview** → call \`generate_system_flow\` for Mermaid architecture diagram\n5. **Execution flow of a feature** → call \`generate_feature_flow_diagram\` for call-chain Mermaid diagram\n6. **Exploring a file** → call \`get_file_entities\` to see all entities in that file\n7. **After making changes** → call \`sync_system_memory\` to update AI memory\n\n### Important\n- Data is automatically indexed by the client on startup or modification and synced to the server database via the API (\`/api/projects/sync\`).\n- If no analysis is loaded, verify that the client has completed indexing and synchronized with the remote server.\n\n### Example Workflow\n\n\`\`\`\nUser: \"fix login timeout\"\n\n1. trace_feature_flow(keyword: \"login\")              → find related files\n2. generate_feature_flow_diagram(keyword: \"login\")   → see execution flow\n3. Read files in readingOrder                        → understand logic\n4. Fix the code                                      → implement fix\n5. sync_system_memory(changeDescription: \"Fixed login timeout\") → save context\n\`\`\``, 'generic_rules_md')}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.5rem' }}>3. AI Memory & Auto-Sync (<code>.agents/rules/auto-memory.md</code>)</div>
+                      <div style={{ position: 'relative', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1.25rem', fontFamily: 'monospace', fontSize: '0.8rem', color: '#a6e22e', overflowX: 'auto', maxHeight: '250px', overflowY: 'auto' }}>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--text-muted)' }}>{`---
+trigger: always_on
+---
+
+## AI System Memory — Auto-Read & Auto-Sync
+
+### 🧠 MANDATORY: Remote Memory & Telemetry System
+All system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas telemetry server and Oracle 26ai Knowledge Graph database. The local \`.agents/memory\` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance. 
+Use the CodeAtlas MCP tools to query or search relationships, dependencies, and insights directly from the indexed system knowledge.
+
+### 🔎 MANDATORY: Use CodeAtlas MCP to Understand Code BEFORE Making Changes
+**NEVER start coding without understanding the codebase first.** Follow this flow:
+1. **User describes a problem/feature** → FIRST call \`trace_feature_flow\` with a keyword
+2. **Need to find a specific function/class** → call \`search_entities\`. NEVER use grep or find commands.
+3. **Need to understand how things connect** → call \`get_dependencies\`
+4. **Need a high-level overview** → call \`generate_system_flow\`
+5. **Need to see execution flow of a feature** → call \`generate_feature_flow_diagram\`
+6. **Need to know what's in a specific file** → call \`get_file_entities\`
+
+### 🔄 MANDATORY: Sync Memory After Changes
+**After completing ANY code changes, you MUST call \`sync_system_memory\`:**
+1. **\`changeDescription\`** (ALWAYS required): What you just changed
+2. **\`businessRule\`** (ALWAYS extract if user mentions ANY domain logic):
+   - ALWAYS save when user mentions Conditions, Permissions, Limits, or Filters.
+   - If you are unsure whether something is a business rule, SAVE IT ANYWAY.`}</pre>
+                        {renderCopyButton(`---\ntrigger: always_on\n---\n\n## AI System Memory — Auto-Read & Auto-Sync\n\n### 🧠 MANDATORY: Remote Memory & Telemetry System\nAll system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas telemetry server and Oracle 26ai Knowledge Graph database. The local \`.agents/memory\` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance. \nUse the CodeAtlas MCP tools to query or search relationships, dependencies, and insights directly from the indexed system knowledge.\n\n### 🔎 MANDATORY: Use CodeAtlas MCP to Understand Code BEFORE Making Changes\n**NEVER start coding without understanding the codebase first.** Follow this flow:\n1. **User describes a problem/feature** → FIRST call \`trace_feature_flow\` with a keyword\n2. **Need to find a specific function/class** → call \`search_entities\`. NEVER use grep or find commands.\n3. **Need to understand how things connect** → call \`get_dependencies\`\n4. **Need a high-level overview** → call \`generate_system_flow\`\n5. **Need to see execution flow of a feature** → call \`generate_feature_flow_diagram\`\n6. **Need to know what's in a specific file** → call \`get_file_entities\`\n\n### 🔄 MANDATORY: Sync Memory After Changes\n**After completing ANY code changes, you MUST call \`sync_system_memory\`:**\n1. **\`changeDescription\`** (ALWAYS required): What you just changed\n2. **\`businessRule\`** (ALWAYS extract if user mentions ANY domain logic):\n   - ALWAYS save when user mentions Conditions, Permissions, Limits, or Filters.\n   - If you are unsure whether something is a business rule, SAVE IT ANYWAY.`, 'auto_memory_rules_md')}
                       </div>
                     </div>
                   </div>

@@ -1,8 +1,8 @@
 import { PythonParser } from '../codeatlas-mcp-enterprise/src/analyzer/pythonParser.ts';
 import * as fs from 'fs';
 
-const filePath = '/home/biibon/auto-edit-video-reup-tool/worker/voice_translator.py';
-const code = fs.readFileSync(filePath, 'utf-8');
+const filePath = './sample_python_file.py';
+const code = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : 'def hello(): pass';
 
 console.log('Starting parse...');
 try {

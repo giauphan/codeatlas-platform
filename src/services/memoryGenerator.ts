@@ -78,7 +78,7 @@ If CodeAtlas MCP is not configured, add it:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
     }
   }
 }
@@ -90,7 +90,7 @@ If CodeAtlas MCP is not configured, add it:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
     }
   }
 }
@@ -98,7 +98,7 @@ If CodeAtlas MCP is not configured, add it:
 
 **Claude Code CLI**:
 \`\`\`bash
-claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
+claude mcp add codeatlas -- npx -y -p codeatlas-enterprise codeatlas-mcp
 \`\`\`
 
 ### Important
@@ -257,7 +257,7 @@ Add to \`.cursor/mcp.json\`:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "@giauphan/codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
     }
   }
 }
@@ -278,7 +278,7 @@ Add to \`.cursor/mcp.json\`:
 ## Setup
 
 \`\`\`bash
-claude mcp add codeatlas -- npx -y @giauphan/codeatlas-mcp
+claude mcp add codeatlas -- npx -y -p codeatlas-enterprise codeatlas-mcp
 \`\`\`
 `;
       fs.writeFileSync(claudeRulePath, claudeRule);
