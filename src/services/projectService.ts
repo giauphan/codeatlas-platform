@@ -112,9 +112,6 @@ export function isProjectDirectory(dir: string): boolean {
   if (isSystemIdeDirectory(dir)) {
     return false;
   }
-  if (dir.includes("/tenants/")) {
-    return true;
-  }
   try {
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
       return false;
@@ -125,12 +122,12 @@ export function isProjectDirectory(dir: string): boolean {
     }
     const codeatlasPath = path.join(dir, ".codeatlas");
     if (fs.existsSync(codeatlasPath)) {
-      return true;
-    }
-    const openIde = getOpenIdeForDir(dir);
-    if (openIde) {
-      logger.info(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
-      return true;
+      // Must be a project .codeatlas (has analysis.json or settings.json),
+      // not the global config directory at ~/.codeatlas/
+      if (fs.existsSync(path.join(codeatlasPath, "analysis.json")) ||
+          fs.existsSync(path.join(codeatlasPath, "settings.json"))) {
+        return true;
+      }
     }
     return false;
   } catch {
@@ -141,9 +138,6 @@ export function isProjectDirectory(dir: string): boolean {
 export async function isProjectDirectoryAsync(dir: string): Promise<boolean> {
   if (isSystemIdeDirectory(dir)) {
     return false;
-  }
-  if (dir.includes("/tenants/")) {
-    return true;
   }
   try {
     const stat = await fs.promises.stat(dir);
@@ -156,12 +150,12 @@ export async function isProjectDirectoryAsync(dir: string): Promise<boolean> {
     }
     const codeatlasPath = path.join(dir, ".codeatlas");
     if (await fileExists(codeatlasPath)) {
-      return true;
-    }
-    const openIde = getOpenIdeForDir(dir);
-    if (openIde) {
-      logger.info(`[Project-Discovery] 🖥️ Project ${dir} is active in IDE: ${openIde}`);
-      return true;
+      // Must be a project .codeatlas (has analysis.json or settings.json),
+      // not the global config directory at ~/.codeatlas/
+      if (await fileExists(path.join(codeatlasPath, "analysis.json")) ||
+          await fileExists(path.join(codeatlasPath, "settings.json"))) {
+        return true;
+      }
     }
     return false;
   } catch {

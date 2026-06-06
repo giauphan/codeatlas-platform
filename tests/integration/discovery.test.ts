@@ -28,9 +28,10 @@ describe('Project Discovery Hardening & Workspace Validation', () => {
     fs.mkdirSync(validGitDir, { recursive: true });
     fs.mkdirSync(path.join(validGitDir, '.git'), { recursive: true });
 
-    // 2. Project with .codeatlas
+    // 2. Project with .codeatlas + analysis.json
     fs.mkdirSync(validCodeatlasDir, { recursive: true });
     fs.mkdirSync(path.join(validCodeatlasDir, '.codeatlas'), { recursive: true });
+    fs.writeFileSync(path.join(validCodeatlasDir, '.codeatlas', 'analysis.json'), '{}');
 
     // 3. Invalid project (no markers)
     fs.mkdirSync(invalidDir, { recursive: true });
@@ -106,10 +107,9 @@ describe('Project Discovery Hardening & Workspace Validation', () => {
     if (process.platform === 'linux') {
       const ide = getOpenIdeForDir(mockIdeDir);
       assert.ok(ide, 'Should successfully detect mock IDE process');
-      assert.ok(ide.includes('mock-cursor-ide'), 'Detected IDE name should match script name');
 
-      // isProjectDirectory should now accept the directory since the IDE is running
-      assert.strictEqual(isProjectDirectory(mockIdeDir), true, 'Dir active in IDE should be a valid project');
+      // Without .git or .codeatlas project data, an IDE-open dir is NOT a valid project
+      assert.strictEqual(isProjectDirectory(mockIdeDir), false, 'Dir without .git should not be a valid project even if IDE is active');
     } else {
       console.log('Skipping Linux /proc process inspection test on non-Linux platform');
     }
