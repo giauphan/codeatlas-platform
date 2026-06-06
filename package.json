@@ -29,10 +29,15 @@
     "chokidar": "^3.6.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "firebase-admin": "^12.1.0",
+    "firebase-admin": "^13.10.0",
     "glob": "^10.3.10",
     "oracledb": "^6.5.0",
     "py-ast": "^1.9.0",
     "zod": "^3.22.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "uuid": "11.1.1"
+    }
   }
 }
