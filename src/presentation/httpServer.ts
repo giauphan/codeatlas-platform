@@ -105,12 +105,16 @@ if (allowedOrigins === '*') {
 }
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (allowedOrigins === '*' || !origin) {
+  if (!origin) {
+    // Server-initiated request (e.g. curl, Postman, mobile app) — allow
     res.header('Access-Control-Allow-Origin', '*');
-  } else if (allowedOrigins.split(',').map(s => s.trim()).includes(origin)) {
+  } else if (allowedOrigins === '*' || allowedOrigins.split(',').map(s => s.trim()).includes(origin)) {
+    // Origin is allowed — echo back the specific origin for proper credential support
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
   }
+  // Else: origin is NOT in the allowed list — omit the Access-Control-Allow-Origin header
+  // so the browser properly rejects the cross-origin request
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -811,7 +815,7 @@ app.get("/sse", async (req, res) => {
     transports.set(sessionId, transport);
     sessionServers.set(sessionId, sessionServer);
     
-    const auth = (req as any).auth;
+    const auth = req.auth;
     if (auth && auth.uid) {
       sessionOwnership.set(sessionId, auth.uid);
     }
@@ -871,7 +875,7 @@ app.post("/messages", async (req, res) => {
   let transport = sessionId ? transports.get(sessionId) : undefined;
 
   if (transport) {
-    const auth = (req as any).auth;
+    const auth = req.auth;
     const ownerUid = sessionOwnership.get(sessionId);
     
     if (ownerUid && ownerUid !== auth?.uid) {

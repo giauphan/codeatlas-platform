@@ -35,7 +35,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
         role: role,
         keyId: "firebase-session"
       };
-      (req as any).auth = auth;
+      req.auth = auth;
 
       // Assign auth context for the entire asynchronous flow below
       authStorage.run(auth, () => {
@@ -58,7 +58,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
   }
   try {
     const auth = await checkAuth(clientKey);
-    (req as any).auth = auth; // Attach auth result to request
+    req.auth = auth; // Attach auth result to request
     // Assign auth context for the entire asynchronous flow below
     authStorage.run(auth, () => {
       next();
