@@ -1,4 +1,5 @@
 import express from "express";
+import { IncomingMessage } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import * as fs from "fs";
@@ -112,9 +113,11 @@ app.use((req, res, next) => {
     // Origin is allowed — echo back the specific origin for proper credential support
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
+  } else {
+    // Origin is NOT in the allowed list — omit the Access-Control-Allow-Origin header
+    // so the browser properly rejects the cross-origin request
+    res.header('Vary', 'Origin');
   }
-  // Else: origin is NOT in the allowed list — omit the Access-Control-Allow-Origin header
-  // so the browser properly rejects the cross-origin request
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -797,7 +800,7 @@ app.get("/sse", async (req, res) => {
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.13.14",
+        version: "2.13.16",
       },
       {
         capabilities: {
@@ -884,7 +887,7 @@ app.post("/messages", async (req, res) => {
       return;
     }
 
-    await transport.handlePostMessage(req, res, req.body);
+    await transport.handlePostMessage(req as unknown as IncomingMessage, res, req.body);
   } else {
     logger.error(`[SSE] Critical: session not found. Requested: "${sessionId || ''}". No active transports available.`);
     res.status(404).send("Session not found");
@@ -892,11 +895,24 @@ app.post("/messages", async (req, res) => {
 });
 
 // Secure endpoint to serve markdown documentation
-app.get("/api/docs/quick-setup", (req, res) => {
+app.get("/api/docs/quick-setup", authMiddleware, (req, res) => {
   try {
     const docPath = path.join(process.cwd(), "docs", "QUICK_SETUP.md");
     if (!fs.existsSync(docPath)) {
       return res.status(404).send("Documentation guide not found.");
+    }
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.sendFile(docPath);
+  } catch (e: unknown) {
+    res.status(500).send((e instanceof Error ? e.message : String(e)));
+  }
+});
+
+app.get("/api/docs/memory-setup", authMiddleware, (req, res) => {
+  try {
+    const docPath = path.join(process.cwd(), "docs", "AI-MEMORY-SETUP.md");
+    if (!fs.existsSync(docPath)) {
+      return res.status(404).send("AI Memory Setup documentation not found.");
     }
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.sendFile(docPath);

@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.13.16] - 2026-06-06
+
+### Added / Changed / Fixed
+- **Documentation View**: Integrated copyable rule panels for Cursor AI Rules (`.cursor/rules/codeatlas.mdc`), General MCP Rules (`.agents/rules/codeatlas-mcp.md`), and Auto-Memory Rules (`.agents/rules/auto-memory.md`) within the MCP setup tab.
+- **Documentation View**: Linked both "Quick Setup Guide" and "AI Memory Guide" in the top-right header section of the System Documentation view.
+- **Security**: Added `authMiddleware` to the documentation markdown endpoints (`/api/docs/quick-setup` and `/api/docs/memory-setup`) to prevent unauthorized access to configuration files and project documentation structure.
+
+## [2.13.15] - 2026-06-06
+
+### Changed
+- **Documentation**: Updated all setup instructions and template generators to reflect the renamed rule files and their new locations.
+- **Version Bump**: Synchronized version in `httpServer.ts` to match release.
+
+### Fixed
+- **Type Safety**: Added Express Request type augmentation (`src/types/express.d.ts`) — properly typed `req.auth` property instead of `(req as any).auth`
+- **CORS**: Added explicit `else` branch with `Vary: Origin` header for rejected origins so browser properly rejects unlisted origins
+- **Type Cast**: Added `IncomingMessage` import and proper type cast in `/messages` handler for strict TypeScript compatibility
+
 ## [2.13.14] - 2026-06-04
 
 ### Changed / Fixed
@@ -24,7 +42,7 @@
 ## [2.13.11] - 2026-06-04
 
 ### Fixed / Changed
-- **Command Code Proxy API Schema Mapping**: Added message sanitization logic in `scripts/command-code-proxy.ts` to translate unsupported roles (e.g. system, developer, tool) to `"user"` and merge consecutive duplicate roles, resolving `400 Bad Request` schema validation failures on the target Command Code API.
+- **Command Code Proxy API Schema Mapping**: Added message sanitization logic in `scripts/command-code-proxy.ts` to translate unsupported roles (e.g. system, developer, tool) to "user" and merge consecutive duplicate roles, resolving `400 Bad Request` schema validation failures on the target Command Code API.
 
 ## [2.13.10] - 2026-06-04
 
@@ -169,7 +187,7 @@
 ## [2.11.13] - 2026-05-24
 
 ### Fixed
-- **Dashboard Cache Invalidation**: Implemented project-specific cache-key storage (`ca_analysis_cache_\${projectDir}`) in `Dashboard.tsx` to resolve stale UI counts on dashboard selection and reload.
+- **Dashboard Cache Invalidation**: Implemented project-specific cache-key storage (`ca_analysis_cache_\\${projectDir}`) in `Dashboard.tsx` to resolve stale UI counts on dashboard selection and reload.
 - **Cache Clearing**: Added automatic clearing of project-specific cached analysis upon project deletion, logout, session expiration, and explicit re-indexing.
 
 ## [2.11.12] - 2026-05-23
