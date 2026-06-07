@@ -18,6 +18,7 @@ import {
 } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { registerTools } from "./mcpTools.js";
+import { registerDreamingRoutes } from "./dreamingRoutes.js";
 import { logger } from "../utils/logger.js";
 
 // Wrapper object to allow clean mocking of Firebase services in testing environments
@@ -123,6 +124,9 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
+
+// REST API Dreaming (dream memories)
+registerDreamingRoutes(app);
 
 // REST API: Get all discovered projects
 app.get("/api/projects", authMiddleware, async (req, res) => {
