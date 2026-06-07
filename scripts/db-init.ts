@@ -129,6 +129,20 @@ async function run() {
       )
     `, "CREATE TABLE ai_relational_memory");
 
+    await execSql(`
+      CREATE TABLE ai_dreaming_memory (
+          id VARCHAR2(255) PRIMARY KEY,
+          session_id VARCHAR2(255),
+          project VARCHAR2(255),
+          memory_type VARCHAR2(50),
+          content CLOB,
+          embedding VECTOR,
+          importance NUMBER(1),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          tenant_id VARCHAR2(255)
+      )
+    `, "CREATE TABLE ai_dreaming_memory");
+
     // Optional property graph
     await execSql(`
       CREATE PROPERTY GRAPH ai_knowledge_graph

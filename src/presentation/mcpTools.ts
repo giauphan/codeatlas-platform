@@ -14,6 +14,7 @@ import {
   registerProject
 } from "../services/projectService.js";
 import { OracleMemoryService } from "../services/memoryService.js";
+import { OracleDreamingService } from "../services/dreamingService.js";
 import { SecurityScanner } from "../services/scanner/securityScanner.js";
 import { logger } from "../utils/logger.js";
 
@@ -575,6 +576,63 @@ export function registerTools(server: McpServer) {
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (err: unknown) {
         return { content: [{ type: "text" as const, text: `Failed to retrieve system memory: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    }
+  );
+
+  // Tool 7.6: Save Dream Memory
+  server.tool(
+    "save_dream_memory",
+    "Save a dreaming memory entry (mistake, user preference, project knowledge, or pattern) extracted from session analysis into Oracle 26ai Knowledge Graph. Call this after the dreaming system analyzes conversations.",
+    {
+      memory_type: z.enum(['MISTAKE','PREFERENCE','KNOWLEDGE','PATTERN']).describe("Type of dreaming memory entry"),
+      content: z.string().describe("The dream entry content — what was learned or observed"),
+      importance: z.number().optional().default(5).describe("Importance level 1-10 (higher = more influential)"),
+      session_id: z.string().optional().describe("Session identifier from which this dream was extracted"),
+      project: z.string().optional().describe("Project name or path"),
+    },
+    async ({ memory_type, content, importance, session_id, project }: { memory_type: 'MISTAKE' | 'PREFERENCE' | 'KNOWLEDGE' | 'PATTERN'; content: string; importance?: number; session_id?: string; project?: string }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "save_dream_memory", { memory_type, content, importance, session_id, project });
+      try {
+        const loaded = project ? await loadAnalysisAsync(project) : null;
+        const projectName = loaded ? loaded.projectName : (project || "global");
+        const memId = await OracleDreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, importance ?? 5);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, id: memId, memory_type }, null, 2) }] };
+      } catch (err: unknown) {
+        return { content: [{ type: "text" as const, text: `Failed to save dream memory: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    }
+  );
+
+  // Tool 7.7: Query Dream Memories
+  server.tool(
+    "query_dream_memories",
+    "Query dreaming memories by semantic similarity. Given a user message or question, finds the most relevant past mistakes, preferences, knowledge, and patterns stored from previous sessions.",
+    {
+      query: z.string().describe("The search query (user message or question) to find relevant dream memories"),
+      project: z.string().optional().describe("Project name or path"),
+      limit: z.number().optional().default(10).describe("Maximum number of results to return"),
+    },
+    async ({ query, project, limit }: { query: string; project?: string; limit?: number }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "query_dream_memories", { query, project, limit });
+      try {
+        const loaded = project ? await loadAnalysisAsync(project) : null;
+        const projectName = loaded ? loaded.projectName : (project || "global");
+        const rows = await OracleDreamingService.queryDreamMemories(projectName, query, limit ?? 10);
+        const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
+        const memories = rawMemories.map((r: Record<string, unknown>) => ({
+          id: r.ID,
+          session_id: r.SESSION_ID,
+          memory_type: r.MEMORY_TYPE,
+          content: r.CONTENT,
+          importance: r.IMPORTANCE,
+          created_at: r.CREATED_AT instanceof Date ? r.CREATED_AT.toISOString() : String(r.CREATED_AT ?? ""),
+        }));
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, count: memories.length, memories }, null, 2) }] };
+      } catch (err: unknown) {
+        return { content: [{ type: "text" as const, text: `Failed to query dream memories: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
       }
     }
   );
