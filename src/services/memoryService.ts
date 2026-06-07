@@ -13,9 +13,9 @@ import type { GraphEntity, GraphLink, ArchSmells } from "../types/index.js";
 export class OracleMemoryService {
 
   /**
-   * Typed wrapper around connection.execute() to avoid scattered `as any` casts.
+   * Typed wrapper around connection.execute() to avoid scattered unchecked casts.
    * The Oracle driver's bind parameter types are too complex to match perfectly
-   * with Record<string, unknown>, so the cast is isolated here.
+   * with Record<string, unknown>, so the cast is isolated in this single method.
    */
   private static async executeAsync(
     connection: Connection,
