@@ -48,14 +48,8 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     }
   }
 
-  // 2. Support API key via header (primary) and query param (deprecated — warn)
-  let clientKey = (req.headers["x-api-key"] as string);
-  if (!clientKey) {
-    clientKey = (req.query.apiKey as string) || "";
-    if (clientKey) {
-      logger.warn("[Auth] API key passed via query parameter is deprecated and will be removed. Use x-api-key header instead.");
-    }
-  }
+  // 2. Support API key via header only
+  const clientKey = (req.headers["x-api-key"] as string) || "";
   try {
     const auth = await checkAuth(clientKey);
     req.auth = auth; // Attach auth result to request

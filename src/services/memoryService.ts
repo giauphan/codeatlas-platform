@@ -1,4 +1,5 @@
 import oracledb from "oracledb";
+import type { Connection } from "oracledb";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { initPool, setSessionContext } from "../database/connection.js";
@@ -10,6 +11,19 @@ import type { GraphEntity, GraphLink, ArchSmells } from "../types/index.js";
  * Employs Thick Mode (via Oracle Instant Client) to support stable mTLS connections.
  */
 export class OracleMemoryService {
+
+  /**
+   * Typed wrapper around connection.execute() to avoid scattered `as any` casts.
+   * The Oracle driver's bind parameter types are too complex to match perfectly
+   * with Record<string, unknown>, so the cast is isolated here.
+   */
+  private static async executeAsync(
+    connection: Connection,
+    sql: string,
+    binds: Record<string, unknown>
+  ) {
+    return connection.execute(sql, binds as oracledb.BindParameters);
+  }
 
   /**
    * Tier 1: Episodic JSON - Stores business events (Business Rules / Change Logs)
@@ -78,7 +92,7 @@ export class OracleMemoryService {
 
       sql += ` ORDER BY created_at DESC`;
 
-      const result = await connection.execute(sql, binds as any);
+      const result = await OracleMemoryService.executeAsync(connection, sql, binds);
       return result.rows ?? [];
     } catch (err) {
       logger.error("Error getting episodic memories:", err instanceof Error ? err.message : String(err));
@@ -229,7 +243,7 @@ export class OracleMemoryService {
         binds.queryVector = new Float32Array(queryVector);
       }
 
-      const result = await connection.execute(sql, binds as any);
+      const result = await OracleMemoryService.executeAsync(connection, sql, binds);
       return result.rows ?? [];
 
     } catch (err) {
@@ -272,7 +286,7 @@ export class OracleMemoryService {
             COLUMNS (a.entity_name, a.file_path)
           )
         `;
-      const circularRes = await connection.execute(circularSql, { project } as any);
+      const circularRes = await OracleMemoryService.executeAsync(connection, circularSql, { project });
       smells.circularDependencies = (circularRes.rows ?? []) as unknown[];
 
       // 2. Detect God Objects (Entities with excessively high incoming relationships / high in-degree)
@@ -289,7 +303,7 @@ export class OracleMemoryService {
           ORDER BY in_degree DESC
           FETCH FIRST 10 ROWS ONLY
         `;
-      const godRes = await connection.execute(godSql, { project } as any);
+      const godRes = await OracleMemoryService.executeAsync(connection, godSql, { project });
       smells.godObjects = (godRes.rows ?? []) as unknown[];
 
       // 3. Detect Dead Code (Entities with zero incoming relationships, and not main entry points)
@@ -304,7 +318,7 @@ export class OracleMemoryService {
             )
           FETCH FIRST 20 ROWS ONLY
         `;
-      const deadRes = await connection.execute(deadSql, { project } as any);
+      const deadRes = await OracleMemoryService.executeAsync(connection, deadSql, { project });
       smells.deadCode = (deadRes.rows ?? []) as unknown[];
 
       return smells;

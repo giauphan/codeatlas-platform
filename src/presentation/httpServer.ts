@@ -100,16 +100,16 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
-const allowedOrigins = process.env.ALLOWED_ORIGINS || '*';
+const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
 if (allowedOrigins === '*') {
-  logger.info('[CORS] No ALLOWED_ORIGINS set — CORS is open to all origins. Set ALLOWED_ORIGINS env var to restrict.');
+  logger.info('[CORS] ALLOWED_ORIGINS set to wildcard — open to all origins. Set specific origins for production.');
 }
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (!origin) {
-    // Server-initiated request (e.g. curl, Postman, mobile app) — allow
+    // Server-initiated request (e.g. curl, Postman, mobile app) — allow all
     res.header('Access-Control-Allow-Origin', '*');
-  } else if (allowedOrigins === '*' || allowedOrigins.split(',').map(s => s.trim()).includes(origin)) {
+  } else if (allowedOrigins.split(',').map(s => s.trim()).includes(origin) || allowedOrigins === '*') {
     // Origin is allowed — echo back the specific origin for proper credential support
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
@@ -760,10 +760,7 @@ app.get("/sse", async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   
-  const apiKey = (req.headers["x-api-key"] as string) || (req.query.apiKey as string) || "";
-  if ((req.query.apiKey as string) && !(req.headers["x-api-key"] as string)) {
-    logger.warn("[SSE] API key passed via query parameter is deprecated. Use x-api-key header instead.");
-  }
+  const apiKey = (req.headers["x-api-key"] as string) || "";
   const messagesUrl = "/messages";
   const transport = new SSEServerTransport(messagesUrl, res);
   
