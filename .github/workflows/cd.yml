@@ -9,6 +9,8 @@ jobs:
     name: Build, Test & Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -24,7 +26,7 @@ jobs:
       - name: Install Oracle Instant Client
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q libaio1 unzip
+          sudo apt-get install -y -q libaio1t64 unzip || sudo apt-get install -y -q libaio1 unzip
           mkdir -p /opt/oracle
           curl -sL "https://download.oracle.com/otn_software/linux/instantclient/1919000/instantclient-basic-linux.x64-19.19.0.0.0dbru.zip" -o /tmp/ic.zip
           unzip -q /tmp/ic.zip -d /opt/oracle/
