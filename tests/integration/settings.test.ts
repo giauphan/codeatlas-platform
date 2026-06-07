@@ -19,6 +19,8 @@ describe('Project Settings REST API', () => {
     // Create a mock project for this tenant
     const projDir = path.join(mockTenantRoot, tenantId, 'my-project');
     fs.mkdirSync(path.join(projDir, '.codeatlas'), { recursive: true });
+    // Write a minimal settings.json so isProjectDirectory recognizes the project
+    fs.writeFileSync(path.join(projDir, '.codeatlas', 'settings.json'), JSON.stringify({}), 'utf-8');
   });
 
   after(() => {
