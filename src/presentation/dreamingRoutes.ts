@@ -7,18 +7,18 @@ import { logger } from "../utils/logger.js";
 
 /**
  * REST API routes for Oracle Dreaming (dream memories).
- * Both endpoints accept `apiKey` as a query parameter for authentication,
- * enabling standalone usage from external clients.
+ * Authentication via x-api-key header only.
  */
 export function registerDreamingRoutes(app: express.Application): void {
 
   // ------------------------------------------------------------------
   // DELETE /api/dreams/delete
-  // Query params: id, apiKey
+  // Query params: id
+  // API key via x-api-key header only
   // ------------------------------------------------------------------
   app.delete("/api/dreams/delete", async (req, res) => {
     try {
-      const apiKey = req.query.apiKey as string | undefined;
+      const apiKey = req.headers['x-api-key'] as string | undefined;
       const auth = await checkAuth(apiKey);
 
       const id = req.query.id as string | undefined;
@@ -50,12 +50,12 @@ export function registerDreamingRoutes(app: express.Application): void {
 
   // ------------------------------------------------------------------
   // POST /api/dreams/save
-  // Query params: apiKey
+  // API key via x-api-key header only
   // Body: { memory_type, content, importance?, session_id?, project? }
   // ------------------------------------------------------------------
   app.post("/api/dreams/save", async (req, res) => {
     try {
-      const apiKey = req.query.apiKey as string | undefined;
+      const apiKey = req.headers['x-api-key'] as string | undefined;
       const auth = await checkAuth(apiKey);
 
       const { memory_type, content, importance, session_id, project } = req.body as {
@@ -114,11 +114,12 @@ export function registerDreamingRoutes(app: express.Application): void {
 
   // ------------------------------------------------------------------
   // GET /api/dreams/query
-  // Query params: query, project?, limit?, apiKey
+  // Query params: query, project?, limit?
+  // API key via x-api-key header only
   // ------------------------------------------------------------------
   app.get("/api/dreams/query", async (req, res) => {
     try {
-      const apiKey = req.query.apiKey as string | undefined;
+      const apiKey = req.headers['x-api-key'] as string | undefined;
       const auth = await checkAuth(apiKey);
 
       const queryText = req.query.query as string | undefined;

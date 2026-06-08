@@ -102,15 +102,16 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
-if (allowedOrigins === '*') {
+const WILDCARD = '*';
+if (allowedOrigins === WILDCARD) {
   logger.info('[CORS] ALLOWED_ORIGINS set to wildcard — open to all origins. Set specific origins for production.');
 }
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (!origin) {
     // Server-initiated request (e.g. curl, Postman, mobile app) — allow all
-    res.header('Access-Control-Allow-Origin', '*');
-  } else if (allowedOrigins.split(',').map(s => s.trim()).includes(origin) || allowedOrigins === '*') {
+    res.header('Access-Control-Allow-Origin', WILDCARD);
+  } else if (allowedOrigins.split(',').map(s => s.trim()).includes(origin) || allowedOrigins === WILDCARD) {
     // Origin is allowed — echo back the specific origin for proper credential support
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
