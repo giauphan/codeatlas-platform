@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.14.1] - 2026-06-13
+
+### Fixed
+- **Multi-Tenant Project Discovery**: Excluded the server root directory (`process.cwd()`) from project discovery when running in multi-tenant mode (`CODEATLAS_MULTI_TENANT="true"`). This prevents duplicate/ambiguous entries of `codeatlas-ai` in the project selection dropdown.
+
+## [2.14.0] - 2026-06-07
+
+### Refactored
+- **Authentication**: Centralized CORS wildcard configuration and migrated API key authentication from URL query parameters to `x-api-key` headers for enhanced security.
+
 ## [2.13.16] - 2026-06-06
 
 ### Added / Changed / Fixed

@@ -2,7 +2,7 @@
 
 **Standalone MCP Server & Remote API for AI-powered codebase intelligence**
 
-[![Version](https://img.shields.io/badge/version-2.13.16-gold)](#)
+[![Version](https://img.shields.io/badge/version-2.14.1-gold)](#)
 [![Oracle](https://img.shields.io/badge/Oracle-26ai%20Native-red?logo=oracle)](https://www.oracle.com/database/)
 [![MCP](https://img.shields.io/npm/v/codeatlas-enterprise?label=MCP%20Server&logo=npm)](https://www.npmjs.com/package/codeatlas-enterprise)
 

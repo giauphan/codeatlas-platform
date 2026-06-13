@@ -358,7 +358,9 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       if (process.env.CODEATLAS_PROJECT_DIR) {
         searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
       }
-      searchDirs.push(process.cwd());
+      if (process.env.CODEATLAS_MULTI_TENANT !== "true") {
+        searchDirs.push(process.cwd());
+      }
 
       const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
       if (fs.existsSync(tenantRoot)) {
@@ -559,7 +561,9 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       if (process.env.CODEATLAS_PROJECT_DIR) {
         searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
       }
-      searchDirs.push(process.cwd());
+      if (process.env.CODEATLAS_MULTI_TENANT !== "true") {
+        searchDirs.push(process.cwd());
+      }
 
       const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
       if (await fileExists(tenantRoot)) {
