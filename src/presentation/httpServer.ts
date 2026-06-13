@@ -183,7 +183,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       isInsideTenantRoot = !!relativePath && !(relativePath === ".." || relativePath.startsWith(".." + path.sep)) && !path.isAbsolute(relativePath);
       
       const isSystemAdmin = auth
-        ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
+        ? (auth.uid === "admin" || auth.role === "admin")
         : false;
         
       if (!isSystemAdmin) {

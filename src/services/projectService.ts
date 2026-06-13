@@ -333,7 +333,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
     const auth = authStorage.getStore();
     const isSystemAdmin = auth
-      ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
+      ? (auth.uid === "admin" || auth.role === "admin")
       : (tenantId === "admin");
 
     // 1. If tenantId is provided, always add the tenant's own projects
@@ -531,7 +531,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
     const auth = authStorage.getStore();
     const isSystemAdmin = auth
-      ? (auth.uid === "admin" || auth.role === "admin" || auth.email === "admin@genrostore.com")
+      ? (auth.uid === "admin" || auth.role === "admin")
       : (tenantId === "admin");
 
     // 1. If tenantId is provided, always add the tenant's own projects
