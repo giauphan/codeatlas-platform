@@ -217,8 +217,32 @@ export const Dashboard: React.FC = () => {
 
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState({ totalRequests: 0 });
-  const [projects, setProjects] = useState<{ name: string; dir: string }[]>([]);
+  const [projects, setProjects] = useState<{ name: string; dir: string }[]>(() => {
+    // Restore project list from session cache on mount
+    try {
+      const cached = sessionStorage.getItem('ca_projects_cache');
+      if (cached) return JSON.parse(cached);
+    } catch {
+      sessionStorage.removeItem('ca_projects_cache');
+    }
+    return [];
+  });
   const user = auth.currentUser;
+
+  const clearAllCaches = () => {
+    setProjects([]);
+    setSelectedProjectDir('');
+    setAnalysis(null);
+    memoryAnalysisCache.clear();
+    sessionStorage.removeItem('ca_selected_project_dir');
+    sessionStorage.removeItem('ca_analysis_cache');
+    Object.keys(sessionStorage).forEach(k => {
+      if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
+        sessionStorage.removeItem(k);
+      }
+    });
+    sessionStorage.removeItem('ca_projects_cache');
+  };
 
   const getAuthHeaders = async () => {
     // Check for active token key session first
@@ -292,16 +316,44 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (forceRefresh = false) => {
+    // Return cached data immediately if available (and not forced)
+    if (!forceRefresh) {
+      try {
+        const cached = sessionStorage.getItem('ca_projects_cache');
+        if (cached) {
+          const data = JSON.parse(cached) as { name: string; dir: string }[];
+          setProjects(data);
+          if (data.length > 0) {
+            const hasSelected = data.some((p: { name: string; dir: string }) => p.dir === selectedProjectDir);
+            if (!hasSelected || !selectedProjectDir) {
+              const defaultDir = data[0].dir;
+              setSelectedProjectDir(defaultDir);
+              safeSessionStorageSetItem('ca_selected_project_dir', defaultDir);
+              fetchAnalysis(defaultDir);
+            } else {
+              fetchAnalysis(selectedProjectDir);
+            }
+          }
+          // Still fetch from network in background to refresh if stale
+          // Falls through to network refresh below (stale-while-revalidate)
+        }
+      } catch {
+        sessionStorage.removeItem('ca_projects_cache');
+      }
+    }
+
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch(`${API_BASE}/api/projects`, { headers });
       if (resp.ok) {
         const data = await resp.json();
         setProjects(data);
+        // Cache in sessionStorage for next visit
+        safeSessionStorageSetItem('ca_projects_cache', JSON.stringify(data));
         if (data.length > 0) {
           // If the selected project is not in the list, default to the first one
-          const hasSelected = data.some((p: any) => p.dir === selectedProjectDir);
+          const hasSelected = data.some((p: { name: string; dir: string }) => p.dir === selectedProjectDir);
           if (!hasSelected || !selectedProjectDir) {
             const defaultDir = data[0].dir;
             setSelectedProjectDir(defaultDir);
@@ -312,43 +364,14 @@ export const Dashboard: React.FC = () => {
           }
         } else {
           // Reset project states if the user has no projects
-          setSelectedProjectDir('');
-          sessionStorage.removeItem('ca_selected_project_dir');
-          setAnalysis(null);
-          memoryAnalysisCache.clear();
-          sessionStorage.removeItem('ca_analysis_cache');
-          Object.keys(sessionStorage).forEach(k => {
-            if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
-              sessionStorage.removeItem(k);
-            }
-          });
+          clearAllCaches();
         }
       } else {
-        setProjects([]);
-        setSelectedProjectDir('');
-        sessionStorage.removeItem('ca_selected_project_dir');
-        setAnalysis(null);
-        memoryAnalysisCache.clear();
-        sessionStorage.removeItem('ca_analysis_cache');
-        Object.keys(sessionStorage).forEach(k => {
-          if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
-            sessionStorage.removeItem(k);
-          }
-        });
+        clearAllCaches();
       }
     } catch (err) {
       console.error("Failed to fetch projects:", err);
-      setProjects([]);
-      setSelectedProjectDir('');
-      sessionStorage.removeItem('ca_selected_project_dir');
-      setAnalysis(null);
-      memoryAnalysisCache.clear();
-      sessionStorage.removeItem('ca_analysis_cache');
-      Object.keys(sessionStorage).forEach(k => {
-        if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
-          sessionStorage.removeItem(k);
-        }
-      });
+      clearAllCaches();
     }
   };
 
@@ -454,17 +477,7 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!user) {
       // Clear user states on logout immediately
-      setProjects([]);
-      setAnalysis(null);
-      setSelectedProjectDir('');
-      memoryAnalysisCache.clear();
-      sessionStorage.removeItem('ca_analysis_cache');
-      sessionStorage.removeItem('ca_selected_project_dir');
-      Object.keys(sessionStorage).forEach(k => {
-        if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
-          sessionStorage.removeItem(k);
-        }
-      });
+      clearAllCaches();
       return;
     }
     

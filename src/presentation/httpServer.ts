@@ -738,11 +738,26 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
 // Serve static files from built dashboard
 const dashboardDistPath = path.join(process.cwd(), "dashboard", "dist");
 if (fs.existsSync(dashboardDistPath)) {
-  app.use(express.static(dashboardDistPath));
+  const oneYear = 365 * 24 * 60 * 60 * 1000;
+  app.use(express.static(dashboardDistPath, {
+    maxAge: oneYear,
+    immutable: true,
+    setHeaders: (res: express.Response, filePath: string) => {
+      // index.html must always be fresh so browser picks up new JS/CSS hashes
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      }
+    }
+  }));
   
   // SPA support: redirect all non-API routes to index.html
+  // Only match routes that are NOT existing static files (prevents overriding cached assets)
   app.get(/^\/(?!sse|messages|api).*/, (req, res) => {
-    res.sendFile(path.join(dashboardDistPath, "index.html"));
+    res.sendFile(path.join(dashboardDistPath, "index.html"), {
+      headers: {
+        "Cache-Control": "no-cache, must-revalidate"
+      }
+    });
   });
 }
 
