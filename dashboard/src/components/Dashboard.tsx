@@ -98,6 +98,15 @@ const safeSessionStorageSetItem = (key: string, value: string) => {
   }
 };
 
+/** Generation counter to discard stale fetch responses (fixes race condition) */
+let fetchGeneration = 0;
+
+const getDefaultProjectWithDir = (data: { name: string; dir: string }[], savedDir: string) => {
+  // Prefer saved directory from session, fallback to first project
+  if (savedDir && data.some(p => p.dir === savedDir)) return savedDir;
+  return data.length > 0 ? data[0].dir : '';
+};
+
 export const Dashboard: React.FC = () => {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [newKeyName, setNewKeyName] = useState('');
@@ -317,61 +326,70 @@ export const Dashboard: React.FC = () => {
   };
 
   const fetchProjects = async (forceRefresh = false) => {
-    // Return cached data immediately if available (and not forced)
+    const generation = ++fetchGeneration;
+    let cacheApplied = false;
+
+    // Step 1: Cache-first — show stale data immediately while network refreshes
     if (!forceRefresh) {
       try {
         const cached = sessionStorage.getItem('ca_projects_cache');
         if (cached) {
           const data = JSON.parse(cached) as { name: string; dir: string }[];
           setProjects(data);
+          cacheApplied = true;
           if (data.length > 0) {
-            const hasSelected = data.some((p: { name: string; dir: string }) => p.dir === selectedProjectDir);
-            if (!hasSelected || !selectedProjectDir) {
-              const defaultDir = data[0].dir;
-              setSelectedProjectDir(defaultDir);
-              safeSessionStorageSetItem('ca_selected_project_dir', defaultDir);
-              fetchAnalysis(defaultDir);
-            } else {
-              fetchAnalysis(selectedProjectDir);
-            }
+            // Use saved session selection if still valid, otherwise default to first
+            const savedDir = sessionStorage.getItem('ca_selected_project_dir');
+            const dir = getDefaultProjectWithDir(data, savedDir);
+            setSelectedProjectDir(dir);
+            safeSessionStorageSetItem('ca_selected_project_dir', dir);
+            fetchAnalysis(dir);
           }
-          // Still fetch from network in background to refresh if stale
-          // Falls through to network refresh below (stale-while-revalidate)
         }
       } catch {
         sessionStorage.removeItem('ca_projects_cache');
       }
     }
 
+    // Step 2: Network refresh (stale-while-revalidate)
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch(`${API_BASE}/api/projects`, { headers });
+
+      // Race condition guard: discard response if a newer fetch started
+      if (generation !== fetchGeneration) return;
+
       if (resp.ok) {
         const data = await resp.json();
         setProjects(data);
-        // Cache in sessionStorage for next visit
         safeSessionStorageSetItem('ca_projects_cache', JSON.stringify(data));
+
         if (data.length > 0) {
-          // If the selected project is not in the list, default to the first one
           const hasSelected = data.some((p: { name: string; dir: string }) => p.dir === selectedProjectDir);
-          if (!hasSelected || !selectedProjectDir) {
+          if (hasSelected && selectedProjectDir) {
+            // Skip fetchAnalysis if cache already handled it (avoids double call)
+            if (!cacheApplied) {
+              fetchAnalysis(selectedProjectDir);
+            }
+          } else {
+            // Selected project changed — pick default and fetch fresh data
             const defaultDir = data[0].dir;
             setSelectedProjectDir(defaultDir);
             safeSessionStorageSetItem('ca_selected_project_dir', defaultDir);
             fetchAnalysis(defaultDir);
-          } else {
-            fetchAnalysis(selectedProjectDir);
           }
         } else {
-          // Reset project states if the user has no projects
           clearAllCaches();
         }
       } else {
-        clearAllCaches();
+        // Only clear caches if cache didn't already restore data
+        if (!cacheApplied) {
+          clearAllCaches();
+        }
       }
     } catch (err) {
       console.error("Failed to fetch projects:", err);
-      clearAllCaches();
+      // Preserve cached data on network error (graceful degradation)
     }
   };
 
@@ -431,7 +449,8 @@ export const Dashboard: React.FC = () => {
         }
 
         if (errorMessage.includes("Remote cleanup failure")) {
-          const forceConfirm = confirm(`Remote DB cleanup failed: ${errorMessage}\n\nDo you want to force local deletion and unregister the project anyway?`);
+          const forceConfirm = confirm(`Remote DB cleanup failed: ${errorMessage}\
+\nDo you want to force local deletion and unregister the project anyway?`);
           if (forceConfirm) {
             try {
               const forceResp = await fetch(`${API_BASE}/api/projects?projectDir=${encodeURIComponent(selectedProjectDir)}&force=true`, {
