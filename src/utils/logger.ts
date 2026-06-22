@@ -14,10 +14,12 @@
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 } as const;
 type Level = keyof typeof LOG_LEVELS;
 
-const currentLevel: Level =
-  (Object.prototype.hasOwnProperty.call(LOG_LEVELS, process.env.LOG_LEVEL ?? "")
-    ? (process.env.LOG_LEVEL as Level)
-    : "info");
+const currentLevel: Level = Object.prototype.hasOwnProperty.call(
+  LOG_LEVELS,
+  process.env.LOG_LEVEL ?? "",
+)
+  ? (process.env.LOG_LEVEL as Level)
+  : "info";
 const isJson = process.env.LOG_FORMAT === "json";
 const threshold = LOG_LEVELS[currentLevel];
 
