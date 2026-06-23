@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn, ChildProcess } from 'node:child_process';
-import { isProjectDirectory, isProjectDirectoryAsync, getOpenIdeForDir } from '../../src/services/projectService.js';
+import { isProjectDirectory, isProjectDirectoryAsync, getOpenIdeForDirAsync } from '../../src/services/projectService.js';
 
 describe('Project Discovery Hardening & Workspace Validation', () => {
   const tmpBaseDir = path.join(process.cwd(), 'tests', 'temp_discovery_test');
@@ -103,9 +103,9 @@ describe('Project Discovery Hardening & Workspace Validation', () => {
     assert.strictEqual(res, false, 'Random dir should not be a valid project async');
   });
 
-  test('getOpenIdeForDir & process detection - should detect open IDE processes for directory', () => {
+  test('getOpenIdeForDir & process detection - should detect open IDE processes for directory', async () => {
     if (process.platform === 'linux') {
-      const ide = getOpenIdeForDir(mockIdeDir);
+      const ide = await getOpenIdeForDirAsync(mockIdeDir);
       assert.ok(ide, 'Should successfully detect mock IDE process');
 
       // Without .git or .codeatlas project data, an IDE-open dir is NOT a valid project

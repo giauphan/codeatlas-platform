@@ -64,42 +64,72 @@ export function isSystemIdeDirectory(dir: string): boolean {
   return false;
 }
 
-export function getOpenIdeForDir(dir: string): string | null {
+const IDE_KEYWORDS = ['code', 'vscode', 'cursor', 'windsurf', 'intellij', 'webstorm', 'phpstorm', 'idea', 'eclipse', 'sublime', 'gemini-cli'];
+
+export async function getOpenIdeForDirAsync(dir: string): Promise<string | null> {
   try {
     const absPath = path.resolve(dir.trim());
-    if (!fs.existsSync('/proc')) return null;
-    const files = fs.readdirSync('/proc');
-    for (const file of files) {
-      if (/^\d+$/.test(file)) {
-        const pid = file;
-        const cmdlinePath = `/proc/${pid}/cmdline`;
-        try {
-          if (fs.existsSync(cmdlinePath)) {
-            const cmdline = fs.readFileSync(cmdlinePath, 'utf8');
-            const args = cmdline.split('\0').filter(Boolean);
-            if (args.length === 0) continue;
-            
-            const hasDirArg = args.some(arg => {
-              try {
-                return path.resolve(arg) === absPath;
-              } catch {
-                return false;
-              }
-            });
-            
-            if (hasDirArg) {
-              const exePath = args[0].toLowerCase();
-              const ideKeywords = ['code', 'vscode', 'cursor', 'windsurf', 'intellij', 'webstorm', 'phpstorm', 'idea', 'eclipse', 'sublime', 'gemini-cli'];
-              for (const keyword of ideKeywords) {
-                if (exePath.includes(keyword)) {
-                  return path.basename(args[0]);
-                }
-              }
+    try {
+      await fs.promises.access('/proc');
+    } catch {
+      return null;
+    }
+
+    const files = await fs.promises.readdir('/proc');
+    const basename = path.basename(absPath);
+
+    const checkPid = async (file: string): Promise<string | null> => {
+      if (!/^\d+$/.test(file)) return null;
+      const cmdlinePath = `/proc/${file}/cmdline`;
+      try {
+        const cmdline = await fs.promises.readFile(cmdlinePath, 'utf8');
+
+        let hasIdeKeyword = false;
+        for(let i=0; i < IDE_KEYWORDS.length; i++) {
+            if (cmdline.includes(IDE_KEYWORDS[i])) {
+                hasIdeKeyword = true;
+                break;
+            }
+        }
+        if (!hasIdeKeyword) return null;
+
+        if (!cmdline.includes(basename) && !cmdline.includes(absPath)) {
+            return null;
+        }
+
+        const args = cmdline.split('\0').filter(Boolean);
+        if (args.length === 0) return null;
+
+        const hasDirArg = args.some(arg => {
+          try {
+            return path.resolve(arg) === absPath;
+          } catch {
+            return false;
+          }
+        });
+
+        if (hasDirArg) {
+          const exePath = args[0].toLowerCase();
+          for (const keyword of IDE_KEYWORDS) {
+            if (exePath.includes(keyword)) {
+              return path.basename(args[0]);
             }
           }
-        } catch {
-          // ignore
         }
+      } catch {
+        // ignore
+      }
+      return null;
+    };
+
+    const pids = files.filter(f => /^\d+$/.test(f));
+    const chunkSize = 50;
+
+    for (let i = 0; i < pids.length; i += chunkSize) {
+      const chunk = pids.slice(i, i + chunkSize);
+      const results = await Promise.all(chunk.map(checkPid));
+      for (const res of results) {
+        if (res !== null) return res;
       }
     }
   } catch {
