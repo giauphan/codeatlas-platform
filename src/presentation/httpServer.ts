@@ -145,6 +145,33 @@ app.get("/api/projects", authMiddleware, async (req, res) => {
   }
 });
 
+
+/**
+ * Cleans up an empty tenant project folder if it's within the tenant root sandbox.
+ */
+async function cleanUpEmptyTenantProjectFolder(
+  realProjectDir: string,
+  normalizedTenantRoot: string,
+  fullProjectDir: string
+): Promise<void> {
+  if (process.env.CODEATLAS_MULTI_TENANT !== "true") return;
+  if (realProjectDir === normalizedTenantRoot) return;
+  if (!fs.existsSync(realProjectDir)) return;
+
+  const lstat = await fs.promises.lstat(fullProjectDir);
+  if (lstat.isSymbolicLink()) {
+    await fs.promises.unlink(fullProjectDir);
+    logger.info(`[Delete Project] Unlinked tenant project symlink: ${fullProjectDir}`);
+    return;
+  }
+
+  const remainingFiles = await fs.promises.readdir(realProjectDir);
+  if (remainingFiles.length === 0) {
+    await fs.promises.rm(realProjectDir, { recursive: true, force: true });
+    logger.info(`[Delete Project] Cleaned up empty tenant sandbox directory: ${realProjectDir}`);
+  }
+}
+
 // REST API: Remove project and its associated data
 app.delete("/api/projects", authMiddleware, async (req, res) => {
   try {
@@ -294,20 +321,8 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
       }
 
       // If multi-tenant mode is active, the project resides within the tenants directory, and the directory is empty after index cleanup, clean up the empty tenant project folder too
-      if (process.env.CODEATLAS_MULTI_TENANT === "true" && isInsideTenantRoot) {
-        if (realProjectDir !== normalizedTenantRoot && fs.existsSync(realProjectDir)) {
-          const lstat = await fs.promises.lstat(fullProjectDir);
-          if (lstat.isSymbolicLink()) {
-            await fs.promises.unlink(fullProjectDir);
-            logger.info(`[Delete Project] Unlinked tenant project symlink: ${fullProjectDir}`);
-          } else {
-            const remainingFiles = await fs.promises.readdir(realProjectDir);
-            if (remainingFiles.length === 0) {
-              await fs.promises.rm(realProjectDir, { recursive: true, force: true });
-              logger.info(`[Delete Project] Cleaned up empty tenant sandbox directory: ${realProjectDir}`);
-            }
-          }
-        }
+      if (isInsideTenantRoot) {
+        await cleanUpEmptyTenantProjectFolder(realProjectDir, normalizedTenantRoot, fullProjectDir);
       }
     } catch (dirErr: unknown) {
       errors.push(`Failed to clean up index directory: ${dirErr instanceof Error ? dirErr.message : String(dirErr)}`);
