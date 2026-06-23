@@ -102,27 +102,28 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
-const WILDCARD = '*';
-if (allowedOrigins === WILDCARD) {
-  logger.info('[CORS] ALLOWED_ORIGINS set to wildcard — open to all origins. Set specific origins for production.');
-}
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!origin) {
-    // Server-initiated request (e.g. curl, Postman, mobile app) — allow all
-    res.header('Access-Control-Allow-Origin', WILDCARD);
-  } else if (allowedOrigins.split(',').map(s => s.trim()).includes(origin) || allowedOrigins === WILDCARD) {
-    // Origin is allowed — echo back the specific origin for proper credential support
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Vary', 'Origin');
-  } else {
-    // Origin is NOT in the allowed list — omit the Access-Control-Allow-Origin header
-    // so the browser properly rejects the cross-origin request
-    res.header('Vary', 'Origin');
+  if (origin) {
+    const allowedList = allowedOrigins.split(',').map(s => s.trim());
+    if (allowedList.includes(origin)) {
+      // Origin is allowed — echo back the specific origin for proper credential support
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+    } else {
+      // Origin is NOT in the allowed list — omit the Access-Control-Allow-Origin header
+      // so the browser properly rejects the cross-origin request
+      res.header('Vary', 'Origin');
+    }
   }
+
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
   next();
 });
 
