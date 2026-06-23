@@ -61,9 +61,10 @@ jobs:
             set -e
             echo "🚀 Deploying CodeAtlas to live..."
 
-            # 1. Pull latest code
+            # 1. Sync to latest code (fetch + hard reset to avoid divergent branch errors)
             cd /var/www/codeatlas-ai
-            git pull origin main
+            git fetch origin
+            git reset --hard origin/main
 
             # 2. Fix permissions (node_modules may be owned by root from previous deploys)
             sudo chown -R "$(whoami):$(whoami)" .
