@@ -18,6 +18,7 @@ CLAUDE.md
 # Secrets
 .env
 .env.*
+!.env.example
 .npmrc
 *.json
 !package.json
