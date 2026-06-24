@@ -1,20 +1,37 @@
 {
-  "name": "codeatlas-enterprise",
-  "displayName": "CodeAtlas Enterprise (Oracle 26ai Edition)",
-  "description": "AI-powered codebase insights — MCP Server and Remote API",
+  "name": "codeatlas-ai",
+  "displayName": "CodeAtlas AI",
+  "description": "AI-powered codebase intelligence platform — MCP Server, AST analysis, semantic memory and architectural insights for any codebase.",
   "version": "2.14.1",
-  "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "codeatlas-mcp": "dist/src/index.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/giauphan/codeatlas-ai.git"
+  },
+  "homepage": "https://github.com/giauphan/codeatlas-ai#readme",
+  "bugs": {
+    "url": "https://github.com/giauphan/codeatlas-ai/issues"
+  },
+  "keywords": [
+    "codeatlas",
+    "mcp",
+    "modelcontextprotocol",
+    "code-analysis",
+    "ast",
+    "ai",
+    "codebase-intelligence",
+    "developer-tools"
+  ],
   "scripts": {
     "build": "tsc",
-    "start": "LD_LIBRARY_PATH=./instantclient node dist/src/index.js",
-    "dev": "LD_LIBRARY_PATH=./instantclient tsx src/index.ts",
-    "test": "LD_LIBRARY_PATH=./instantclient node --experimental-test-module-mocks --import tsx --test tests/**/*.test.ts",
-    "db-init": "LD_LIBRARY_PATH=./instantclient tsx scripts/db-init.ts"
+    "start": "node dist/src/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "node --experimental-test-module-mocks --import tsx --test tests/**/*.test.ts",
+    "db-init": "tsx scripts/db-init.ts"
   },
   "overrides": {
     "uuid": "11.1.1"

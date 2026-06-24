@@ -30,3 +30,6 @@ wallet/
 .rooignore
 .clinerules
 atlas-intelligence-node-firebase-adminsdk-fbsvc-6c9d06254d.json
+
+# Oracle Instant Client (download separately)
+instantclient/

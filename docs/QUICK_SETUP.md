@@ -1,190 +1,149 @@
-# 🗺️ CodeAtlas Enterprise — Quickstart & Setup Guide
+# CodeAtlas AI — Quick Setup Guide
 
-Welcome to **CodeAtlas Enterprise (Oracle 26ai Edition)**! This comprehensive guide will walk you through the system architecture, quick local setup, production hosting, and configuring your AI editor (Cursor, VS Code, Claude) to use the codebase intelligence engine.
+This guide will help you get CodeAtlas AI up and running in minutes.
 
----
+## Prerequisites
 
-## 🏗️ 1. Architecture Overview
+- **Node.js** v20.0.0 or higher
+- **npm** or **pnpm** (recommended)
+- **Oracle Instant Client** (optional — for Thick Mode database connectivity)
 
-CodeAtlas operates as a unified, high-performance ecosystem bridging your local code workspace, modern interactive visualization, and persistent database-backed intelligence.
+## Installation
 
-```mermaid
-graph TD
-    subgraph Client ["💻 Developer Interface"]
-        Cursor["🤖 Cursor / VS Code"]
-        Browser["🌐 Web Browser (Dashboard)"]
-    end
-
-    subgraph Backend ["⚡ CodeAtlas Core Server (Port 8080)"]
-        Express["🚀 Express HTTP Server"]
-        MCPEngine["🧠 MCP Server Protocol"]
-        Watcher["🔍 Auto-Indexing Watcher"]
-    end
-
-    subgraph Storage ["💾 Cloud & Enterprise Data Tiers"]
-        Oracle["🔴 Oracle Database 26ai (mTLS/Wallet)"]
-        Firebase["🔥 Firebase Analytics & Auth"]
-    end
-
-    Cursor <-->|SSE Protocol| MCPEngine
-    Browser <-->|HTTP / React Static| Express
-    Watcher -->|Analyze Changes| Oracle
-    Express <-->|Thick Mode Driver| Oracle
-    Express <-->|Telemetry & RBAC| Firebase
-```
-
----
-
-## ⚡ 2. One-Command Quickstart (Dev Mode)
-
-If you have Node.js and the Oracle client already configured, simply run:
+### 1. Clone and Install
 
 ```bash
-# Start both backend server and frontend compiler concurrently
-npm run build && npx pm2 restart 0
+git clone https://github.com/giauphan/codeatlas-ai.git
+cd codeatlas-ai
+pnpm install
+pnpm run build
 ```
 
----
+### 2. Environment Configuration
 
-## 🛠️ 3. Step-by-Step Installation
-
-### Step 3.1: Prerequisites
-* **Node.js**: `v20.0.0` or higher
-* **Oracle Instant Client**: Required for Thick Mode database connection (pre-packaged in `./instantclient`)
-
----
-
-### Step 3.2: Backend Server Configuration
-1. Clone the repository and install dependencies:
-   ```bash
-   git clone https://github.com/your-org/codeatlas-enterprise.git
-   cd codeatlas-enterprise
-   npm install
-   ```
-
-2. Configure your environment variables in `.env`:
-   ```env
-   PORT=8080
-   CODEATLAS_API_KEY="your_api_key_here"
-   
-   # Oracle 26ai Cloud Database Credentials
-   ORACLE_USER="ADMIN"
-   ORACLE_PASSWORD="your_database_password"
-   ORACLE_CONN_STRING="(description=(address=(protocol=tcps)(port=1522)(host=adb.ap-singapore-1.oraclecloud.com))...)"
-   ORACLE_LIB_DIR="./instantclient"
-   ORACLE_WALLET_DIR="./wallet"
-   ORACLE_WALLET_PASSWORD="your_wallet_password"
-   ```
-
-3. Build and initialize the server database schemas:
-   ```bash
-   npm run build
-   npm run db-init
-   ```
-
----
-
-### Step 3.3: Interactive React Dashboard Build
-Build the stunning neural frontend dashboard. This creates optimized production assets inside `dashboard/dist`, which the backend automatically serves static-ready:
+Copy the example environment file and fill in your details:
 
 ```bash
-cd dashboard
-npm install
-npm run build
-cd ..
+cp .env.example .env
 ```
 
----
+Required variables:
+```
+ORACLE_PASSWORD=your_oracle_password
+ORACLE_CONN_STRING=your_oracle_connection_string
+```
 
-### Step 3.4: Run in Production with PM2 (Recommended)
-Keep the server running resiliently in the background using PM2:
+Optional variables:
+```
+PORT=8080
+CODEATLAS_API_KEY=your_api_key
+NVIDIA_API_KEY=nvapi-your_nvidia_key
+CODEATLAS_MULTI_TENANT=true
+```
+
+### 3. Set Up Oracle Instant Client (if using Thick Mode)
+
+Download [Oracle Instant Client](https://www.oracle.com/database/technologies/instant-client/linux-x86-64-downloads.html) Basic Light package and extract it:
 
 ```bash
-# Start/Restart the process under PM2
-npx pm2 start dist/index.js --name "codeatlas-enterprise" --env PORT=8080
-
-# Monitor logs in real time
-npx pm2 logs
+mkdir -p /opt/oracle
+cd /opt/oracle
+unzip instantclient-basiclite-linux.x64-21.16.0.0.0dbru.zip
+# Set the library path
+export LD_LIBRARY_PATH=/opt/oracle/instantclient_21_16:$LD_LIBRARY_PATH
 ```
 
-The enterprise server is now running on **`http://localhost:8080`**!
+### 4. Initialize Database
 
----
-
-## 📊 4. Knowledge Graph Interactive Guide
-
-The interactive **Knowledge Network** provides dynamic physics-based visualization of your codebase:
-
-```
-                  [ Knowledge Network HUD ]
-┌────────────────────────────────────────────────────────┐
-│  🖱️ Mouse Drag  ---------> Pan across the canvas        │
-│  🔍 Scroll Wheel -------> Smooth zoom (0.2x to 6.0x)   │
-│  ⚡ Node Drag    ---------> Inspect specific imports     │
-│  📺 Maximize     ---------> Enter Fullscreen Canvas     │
-└────────────────────────────────────────────────────────┘
+```bash
+npm run db-init
 ```
 
-### Fullscreen Mode 📺
-* **Enter Fullscreen**: Click the glassmorphic `Maximize` button inside the HUD panel at the bottom-right of the graph.
-* **Layout Transition**: The parent borders are dynamically streamlined to `0px` and the background transitions to a solid `#0A0C10` color.
-* **Exit**: Click the `Minimize` button or press the **`Escape`** key on your keyboard.
+### 5. Start the Server
 
----
+```bash
+# Development mode with hot reload
+npm run dev
 
-## 🤖 5. Configure Your AI Editor (MCP Client)
+# Production mode
+npm start
+```
 
-Connect your AI coding assistants to CodeAtlas to allow them to explore the codebase, generate system flows, and track business rules.
+The server will start at **http://localhost:8080**.
 
-### 5.1: Cursor Configuration
-1. Open Cursor Settings -> **Models** -> **MCP**.
-2. Click **+ Add New MCP Tool**.
-3. Fill in the parameters:
-   * **Name**: `codeatlas`
-   * **Type**: `sse`
-   * **URL**: `http://localhost:8080/sse`
+## AI Editor Integration
 
----
+### Cursor / Windsurf
 
-### 5.2: VS Code Configuration (Gemini / Antigravity)
-Add this server block to your `.gemini/settings.json`:
+Add to `.cursor/mcp.json` or `mcp_config.json`:
 
 ```json
 {
   "mcpServers": {
     "codeatlas": {
-      "command": "npx",
-      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
+      "url": "http://localhost:8080/sse"
     }
   }
 }
 ```
 
----
+### Claude Desktop
 
-### 5.3: Claude Desktop Configuration
-Add this to your `claude_desktop_config.json`:
+Add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "codeatlas": {
       "command": "node",
-      "args": ["/absolute/path/to/your/codeatlas-enterprise/dist/src/index.js"]
+      "args": ["path/to/codeatlas-ai/dist/src/index.js"]
     }
   }
 }
 ```
 
----
+### VS Code (GitHub Copilot)
 
-## ⚡ 6. CLI & Development Command Reference
+Use the SSE endpoint directly via the MCP protocol.
 
-| Action | Command | Scope |
-| :--- | :--- | :--- |
-| **Setup DB** | `npm run db-init` | Initialize Oracle schemas & tables |
-| **Compile Server** | `npm run build` | Compile TypeScript backend server |
-| **Compile Frontend** | `npm run build` *(in /dashboard)* | Build static production assets |
-| **Start Dev Server** | `npm run dev` | Launch server with active `tsx` watcher |
-| **Run Unit Tests** | `npm run test` | Run full test suite (24/24 passing) |
-| **Restart Backend** | `npx pm2 restart 0` | Reload active running server |
+## Running with PM2
+
+```bash
+npm install -g pm2
+pm2 start dist/src/index.js --name codeatlas-enterprise
+pm2 save
+pm2 startup
+```
+
+## Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage
+node --experimental-test-coverage --import tsx --test tests/**/*.test.ts
+```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/sse` | GET | SSE endpoint for MCP |
+| `/messages` | POST | Message endpoint for MCP |
+| `/api/projects` | GET | List projects |
+| `/api/projects/sync` | POST | Sync analysis data |
+| `/api/analysis` | GET | Get analysis data |
+| `/api/projects/settings` | GET/POST | Project settings |
+
+## Troubleshooting
+
+**Q: `ORA-12514` TNS listener error?**
+A: Verify your `ORACLE_CONN_STRING` format: `host:port/service_name`
+
+**Q: `LD_LIBRARY_PATH` not found?**
+A: Ensure Oracle Instant Client is downloaded and `LD_LIBRARY_PATH` is set correctly.
+
+**Q: Port already in use?**
+A: Change the `PORT` environment variable or kill the existing process.
