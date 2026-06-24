@@ -108,7 +108,7 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
     };
 
     // Run delete route handler
-    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@example.com' };
     await new Promise<void>((resolve) => {
       authStorage.run(auth, async () => {
         await handler(reqA, resA, () => {});
@@ -195,7 +195,7 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
       }
     };
 
-    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@example.com' };
     await new Promise<void>((resolve) => {
       authStorage.run(auth, async () => {
         await handler(reqC, resC, () => {});
@@ -248,7 +248,7 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
       }
     };
 
-    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@example.com' };
     await new Promise<void>((resolve) => {
       authStorage.run(auth, async () => {
         await handler(reqB, resB, () => {});
@@ -315,7 +315,7 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
       }
     };
 
-    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@example.com' };
     await new Promise<void>((resolve) => {
       authStorage.run(auth, async () => {
         await handler(reqSym, resSym, () => {});
@@ -490,7 +490,7 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
         }
       };
 
-      const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+      const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@example.com' };
       await new Promise<void>((resolve) => {
         authStorage.run(auth, async () => {
           await handler(reqB, resB, () => {});
@@ -626,7 +626,7 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
       }
     };
 
-    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@example.com' };
     await new Promise<void>((resolve) => {
       authStorage.run(auth, async () => {
         await handler(reqB, resB, () => {});
@@ -672,7 +672,7 @@ describe('Project Deletion and Tenant Sandbox Cleanup', () => {
       }
     };
 
-    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@genrostore.com' };
+    const auth = { uid: 'admin', role: 'admin', tier: 'enterprise', keyId: 'mock-key', email: 'admin@example.com' };
     await new Promise<void>((resolve) => {
       authStorage.run(auth, async () => {
         await handler(reqB, resB, () => {});
