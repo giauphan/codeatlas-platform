@@ -2,23 +2,6 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// -----------------------------------------------------------------------------
-// IMPORTANT: FIREBASE CONFIGURATION
-// -----------------------------------------------------------------------------
-// For security, DO NOT hardcode your Firebase credentials here.
-// Instead, use environment variables and a build process to inject them.
-//
-// Example using Vite:
-// 1. Create a .env.local file in the /dashboard directory.
-// 2. Add your Firebase config there, prefixed with VITE_:
-//    VITE_FIREBASE_API_KEY=your-api-key
-//    VITE_FIREBASE_AUTH_DOMAIN=your-auth-domain
-//    ...
-// 3. Access them in this file like this:
-//    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-//
-// This ensures your keys are not committed to version control.
-// -----------------------------------------------------------------------------
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",

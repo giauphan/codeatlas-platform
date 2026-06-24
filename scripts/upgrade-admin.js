@@ -12,6 +12,13 @@ if (!getApps().length) {
 
 const db = getFirestore();
 
+const email = process.argv[2];
+if (!email) {
+  console.error('Usage: node upgrade-admin.js <email>');
+  console.error('Example: node upgrade-admin.js admin@example.com');
+  process.exit(1);
+}
+
 async function upgradeUser(email) {
   try {
     const usersSnapshot = await db.collection('users').where('email', '==', email).get();
@@ -34,4 +41,4 @@ async function upgradeUser(email) {
   }
 }
 
-upgradeUser('admin@genrostore.com');
+upgradeUser(email);
