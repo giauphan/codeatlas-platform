@@ -43,8 +43,11 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit --skipLibCheck
 
-      - name: Build
+      - name: Build server
         run: pnpm run build
+
+      - name: Build dashboard
+        run: cd dashboard && pnpm install && pnpm run build
 
       - name: Run tests
         run: pnpm test
@@ -76,8 +79,12 @@ jobs:
             # 4. Install dependencies
             pnpm install
 
-            # 5. Build
+            # 5. Build main server
             pnpm run build
+
+            # 5b. Build dashboard
+            echo "🏗️ Building dashboard..."
+            cd dashboard && pnpm install && pnpm run build && cd ..
 
             # 6. Run DB auto-migration (idempotent — auto-fixes vector dim etc.)
             echo "📦 Running DB migration..."
