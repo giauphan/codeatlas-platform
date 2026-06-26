@@ -16,22 +16,37 @@ function App() {
       ? 'http://localhost:8080'
       : window.location.origin;
     
-    fetch(`${API_BASE}/api/version`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(data => {
-        const ver = data.version || 'unknown';
-        const stored = localStorage.getItem('ca_version');
-        if (stored && stored !== ver) {
-          console.log(`[Version] ${stored} → ${ver}. Hard reloading...`);
-          localStorage.setItem('ca_version', ver);
-          window.location.reload();
-        } else {
-          localStorage.setItem('ca_version', ver);
-        }
-      })
-      .catch(() => {
-        // Server not reachable or no version endpoint — skip check
-      });
+    const checkVersion = () => {
+      fetch(`${API_BASE}/api/version`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => {
+          const ver = data.version || 'unknown';
+          const stored = localStorage.getItem('ca_version');
+          if (stored && stored !== ver) {
+            console.log(`[Version] ${stored} → ${ver}. Reloading...`);
+            localStorage.setItem('ca_version', ver);
+            window.location.reload();
+          } else {
+            localStorage.setItem('ca_version', ver);
+          }
+        })
+        .catch(() => {});
+    };
+    
+    // Check on mount
+    checkVersion();
+    
+    // Check every 5 minutes — catches users who leave tab open for months
+    const interval = setInterval(checkVersion, 5 * 60 * 1000);
+    
+    // Check on tab focus (user returns after hours/days)
+    const onFocus = () => { checkVersion(); };
+    window.addEventListener('focus', onFocus);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   useEffect(() => {
