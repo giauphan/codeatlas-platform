@@ -15,6 +15,7 @@ import {
   LogOut, 
   Globe, 
   Network, 
+  Brain,
   ShieldCheck, 
   LayoutDashboard,
   BookOpen
@@ -24,6 +25,7 @@ import {
 import { ControlCenterView } from './ControlCenterView';
 import { KnowledgeGraphView } from './KnowledgeGraphView';
 import { CloudIndexView } from './CloudIndexView';
+import { DreamMemoryView } from './DreamMemoryView';
 import { DocumentationView } from './DocumentationView';
 
 // API Configuration
@@ -625,6 +627,8 @@ export const Dashboard: React.FC = () => {
         );
       case 'Documentation':
         return <DocumentationView />;
+      case 'Dream Memory':
+        return <DreamMemoryView />;
       default:
         return null;
     }
@@ -650,6 +654,7 @@ export const Dashboard: React.FC = () => {
             { icon: LayoutDashboard, label: 'Control Center' },
             { icon: Network, label: 'Knowledge Graph' },
             { icon: Globe, label: 'Cloud Index' },
+            { icon: Brain, label: 'Dream Memory' },
             { icon: BookOpen, label: 'Documentation' },
           ].map((item) => (
             <motion.div
