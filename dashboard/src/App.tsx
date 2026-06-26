@@ -10,6 +10,30 @@ function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // ── Version cache buster: hard reload when server deploys a new version ──
+  useEffect(() => {
+    const API_BASE = window.location.origin.includes('localhost:5173')
+      ? 'http://localhost:8080'
+      : window.location.origin;
+    
+    fetch(`${API_BASE}/api/version`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        const ver = data.version || 'unknown';
+        const stored = localStorage.getItem('ca_version');
+        if (stored && stored !== ver) {
+          console.log(`[Version] ${stored} → ${ver}. Hard reloading...`);
+          localStorage.setItem('ca_version', ver);
+          window.location.reload();
+        } else {
+          localStorage.setItem('ca_version', ver);
+        }
+      })
+      .catch(() => {
+        // Server not reachable or no version endpoint — skip check
+      });
+  }, []);
+
   useEffect(() => {
     // Check for an active API Key session in secure session storage
     const savedApiKey = sessionStorage.getItem('ca_api_key');

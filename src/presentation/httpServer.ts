@@ -552,6 +552,16 @@ app.post("/api/projects/settings", authMiddleware, async (req, res) => {
   }
 });
 
+// ── Version endpoint — returns current deployed version for cache busting ──
+app.get("/api/version", (_req, res) => {
+  let version = "unknown";
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf-8"));
+    version = pkg.version || "unknown";
+  } catch {}
+  res.json({ version, buildTime: Date.now() });
+});
+
 // REST API: Get analysis data
 app.get("/api/analysis", authMiddleware, async (req, res) => {
   try {
@@ -761,7 +771,10 @@ if (fs.existsSync(dashboardDistPath)) {
     setHeaders: (res: express.Response, filePath: string) => {
       // index.html must always be fresh so browser picks up new JS/CSS hashes
       if (filePath.endsWith(".html")) {
-        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+        res.setHeader("Cache-Control", "no-cache, must-revalidate, proxy-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+        res.setHeader("X-Accel-Expires", "0"); // disable nginx caching
       }
     }
   }));
@@ -771,7 +784,10 @@ if (fs.existsSync(dashboardDistPath)) {
   app.get(/^\/(?!sse|messages|api).*/, (req, res) => {
     res.sendFile(path.join(dashboardDistPath, "index.html"), {
       headers: {
-        "Cache-Control": "no-cache, must-revalidate"
+        "Cache-Control": "no-cache, must-revalidate, proxy-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Accel-Expires": "0"
       }
     });
   });
