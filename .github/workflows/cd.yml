@@ -90,9 +90,10 @@ jobs:
             echo "📦 Running DB migration..."
             npm run db-init
 
-            # 7. Restart service
-            echo "🔄 Restarting service..."
-            pm2 restart codeatlas-enterprise || pm2 start dist/index.js --name codeatlas-enterprise
+            # 7. Restart service with increased heap memory (prevents OOM crashes)
+            echo "🔄 Restarting service with max-old-space-size=4096..."
+            pm2 stop codeatlas-enterprise 2>/dev/null || true
+            NODE_OPTIONS="--max-old-space-size=4096" pm2 start dist/index.js --name codeatlas-enterprise -o /dev/null -e /home/ubuntu/.pm2/logs/codeatlas-enterprise-error.log
 
             # 8. Health check
             sleep 3
