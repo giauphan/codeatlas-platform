@@ -764,29 +764,38 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
 // Serve static files from built dashboard
 const dashboardDistPath = path.join(process.cwd(), "dashboard", "dist");
 if (fs.existsSync(dashboardDistPath)) {
-  const oneYear = 365 * 24 * 60 * 60 * 1000;
-  app.use(express.static(dashboardDistPath, {
-    maxAge: oneYear,
+  // Assets with hashed filenames (JS, CSS, fonts, images) can be cached forever
+  app.use(/^\/(assets|fonts|images)\/.+/, express.static(dashboardDistPath, {
+    maxAge: "1y",
     immutable: true,
+    etag: false,
+    lastModified: false
+  }));
+  
+  // index.html must NEVER be cached — always serve fresh so browser picks up new hashed assets
+  app.use(express.static(dashboardDistPath, {
+    maxAge: 0,
+    etag: true,
+    lastModified: true,
     setHeaders: (res: express.Response, filePath: string) => {
-      // index.html must always be fresh so browser picks up new JS/CSS hashes
       if (filePath.endsWith(".html")) {
-        res.setHeader("Cache-Control", "no-cache, must-revalidate, proxy-revalidate");
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, proxy-revalidate");
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");
-        res.setHeader("X-Accel-Expires", "0"); // disable nginx caching
+        res.setHeader("Surrogate-Control", "no-store");
+        res.setHeader("X-Accel-Expires", "0");
       }
     }
   }));
   
   // SPA support: redirect all non-API routes to index.html
-  // Only match routes that are NOT existing static files (prevents overriding cached assets)
   app.get(/^\/(?!sse|messages|api).*/, (req, res) => {
     res.sendFile(path.join(dashboardDistPath, "index.html"), {
       headers: {
-        "Cache-Control": "no-cache, must-revalidate, proxy-revalidate",
+        "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate",
         "Pragma": "no-cache",
         "Expires": "0",
+        "Surrogate-Control": "no-store",
         "X-Accel-Expires": "0"
       }
     });
@@ -796,6 +805,7 @@ if (fs.existsSync(dashboardDistPath)) {
 // Auth middleware for SSE endpoints
 app.use("/sse", authMiddleware);
 app.use("/messages", authMiddleware);
+
 
 // Multi-session support for concurrent users/reconnections
 const transports = new Map<string, SSEServerTransport>();
