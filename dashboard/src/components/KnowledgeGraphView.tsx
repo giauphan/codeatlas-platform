@@ -134,12 +134,23 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     const centerY = 350;
     
     // Sort and slice: place all module nodes first, then fill up to 150 total nodes
-    const modules = filteredNodes.filter((n: any) => n.type === 'module');
-    const nonModules = filteredNodes.filter((n: any) => n.type !== 'module');
+    // ⚡ Bolt: Single pass iteration to categorize nodes instead of multiple filter calls
+    const modules = [];
+    const nonModules = [];
+    for (let i = 0; i < filteredNodes.length; i++) {
+      const n = filteredNodes[i];
+      if (n.type === 'module') modules.push(n);
+      else nonModules.push(n);
+    }
     const prioritizedNodes = [...modules, ...nonModules].slice(0, 150);
 
-    const moduleCount = prioritizedNodes.filter((n: any) => n.type === 'module').length;
-    const nonModuleCount = prioritizedNodes.filter((n: any) => n.type !== 'module').length;
+    // ⚡ Bolt: Calculate counts from prioritized nodes without redundant filters
+    let moduleCount = 0;
+    let nonModuleCount = 0;
+    for (let i = 0; i < prioritizedNodes.length; i++) {
+      if (prioritizedNodes[i].type === 'module') moduleCount++;
+      else nonModuleCount++;
+    }
 
     const initialNodes = prioritizedNodes.map((n, i) => {
       const isModule = n.type === 'module';
@@ -174,7 +185,12 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
         // Clone nodes to update positions/velocities
         const nodes = prevNodes.map(n => ({ ...n }));
-        const nodeMap = new Map(nodes.map(n => [n.id, n]));
+        // ⚡ Bolt: Optimize nodeMap creation to avoid intermediate array allocations
+        const nodeMap = new Map();
+        for (let i = 0; i < nodes.length; i++) {
+          const n = nodes[i];
+          nodeMap.set(n.id, n);
+        }
 
         const centerX = 550;
         const centerY = 350;
@@ -297,13 +313,31 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   // Construct links array from simulation node coordinates
   const simulatedLinks = useMemo(() => {
     if (!analysis || !analysis.graph || !analysis.graph.links || simNodes.length === 0) return [];
-    const nodeMap = new Map(simNodes.map(n => [n.id, n]));
-    return analysis.graph.links
-      .filter((l: any) => nodeMap.has(l.source) && nodeMap.has(l.target))
-      .map(l => ({
-        source: nodeMap.get(l.source),
-        target: nodeMap.get(l.target)
-      }));
+
+    // ⚡ Bolt: Optimize nodeMap creation to avoid intermediate array allocations
+    const nodeMap = new Map();
+    for (let i = 0; i < simNodes.length; i++) {
+      const n = simNodes[i];
+      nodeMap.set(n.id, n);
+    }
+
+    const links = analysis.graph.links;
+    // ⚡ Bolt: Use a single loop pre-allocated array instead of .filter().map() to minimize GC pressure
+    const result = new Array(links.length);
+    let resultIdx = 0;
+
+    for (let i = 0; i < links.length; i++) {
+      const l = links[i];
+      const source = nodeMap.get(l.source);
+      const target = nodeMap.get(l.target);
+      if (source && target) {
+        result[resultIdx++] = { source, target };
+      }
+    }
+
+    // Trim the array to the actual number of valid links
+    result.length = resultIdx;
+    return result;
   }, [analysis, simNodes]);
 
   // Handle Drag-and-Drop Coordinates inside SVG (supports transformed zoom/pan)

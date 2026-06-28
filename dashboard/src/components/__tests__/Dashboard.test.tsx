@@ -52,6 +52,7 @@ vi.mock('lucide-react', () => {
     ShieldCheck: MockIcon,
     LayoutDashboard: MockIcon,
     BookOpen: MockIcon,
+    Brain: MockIcon,
   };
 });
 
