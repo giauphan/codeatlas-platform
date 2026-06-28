@@ -19,6 +19,9 @@ import {
 import { authStorage } from "../utils/context.js";
 import { registerTools } from "./mcpTools.js";
 import { registerDreamingRoutes } from "./dreamingRoutes.js";
+import { mountA2ARoutes } from "./a2a/a2aRoutes.js";
+import { mountHeartbeatRoutes } from "./a2a/heartbeatRoutes.js";
+import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { logger } from "../utils/logger.js";
 
 // Wrapper object to allow clean mocking of Firebase services in testing environments
@@ -984,11 +987,17 @@ app.get("/api/docs/memory-setup", authMiddleware, (req, res) => {
  * Start the HTTP/SSE Express server on a specified port
  */
 export function startHttpServer(port: number): Promise<void> {
+  // Mount A2A (Agent-to-Agent) routes — Agent Card + JSON-RPC + REST
+  mountA2ARoutes(app, a2aExecutor, `http://localhost:${port}`);
+  mountHeartbeatRoutes(app);
+
   return new Promise((resolve) => {
     app.listen(port, () => {
       logger.info(`CodeAtlas MCP SSE server running on port ${port}`);
       logger.info(`- SSE endpoint: http://localhost:${port}/sse`);
       logger.info(`- Message endpoint: http://localhost:${port}/messages`);
+      logger.info(`- A2A Agent Card: http://localhost:${port}/.well-known/agent-card.json`);
+      logger.info(`- A2A JSON-RPC: http://localhost:${port}/a2a/jsonrpc`);
       if (process.env.CODEATLAS_API_KEY) {
         logger.info(`- Security: API Key enabled`);
       } else {

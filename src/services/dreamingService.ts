@@ -8,7 +8,7 @@ import { generateEmbedding } from "./embeddingService.js";
 /**
  * Memory types for dreaming memories
  */
-export type DreamMemoryType = 'MISTAKE' | 'PREFERENCE' | 'KNOWLEDGE' | 'PATTERN';
+export type DreamMemoryType = 'MISTAKE' | 'PREFERENCE' | 'KNOWLEDGE' | 'PATTERN' | 'A2A_SHARED_CONTEXT';
 
 export interface DreamMemory {
   id: string;

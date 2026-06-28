@@ -17,6 +17,23 @@ import { OracleMemoryService } from "../services/memoryService.js";
 import { OracleDreamingService } from "../services/dreamingService.js";
 import { SecurityScanner } from "../services/scanner/securityScanner.js";
 import { logger } from "../utils/logger.js";
+import { registerTool } from "./a2a/agentCard.js";
+import { a2aExecutor } from "./a2a/a2aExecutor.js";
+
+/** Auto-register tool metadata for A2A Agent Card AND register handler on executor */
+function a2a(name: string, description: string, params: string[]) {
+  registerTool({ name, description, params });
+  a2aExecutor.registerToolHandler(name, async (p: Record<string, unknown>) => {
+    // Forward call to MCP server — this stub returns the tool is available.
+    // Full dispatch is handled by the MCP stdio client.
+    return {
+      tool: name,
+      params: p,
+      note: `Tool '${name}' is available via MCP. Call it through the MCP stdio transport for full execution.`,
+      description,
+    };
+  });
+}
 
 export function registerTools(server: McpServer) {
   // Tool -1: Analyze a project
@@ -1215,4 +1232,23 @@ export function registerTools(server: McpServer) {
       };
     }
   );
+
+  // === A2A Agent Card auto-registration ===
+  // Each tool maps to an A2A Skill in /.well-known/agent-card.json
+  a2a("analyze", "Perform deep code analysis on a local project directory. Generates .codeatlas/analysis.json.", ["path", "maxFiles"]);
+  a2a("list_projects", "List all projects that have been analyzed by CodeAtlas. Returns project names, paths, and last analysis time.", []);
+  a2a("get_project_structure", "Get all modules, classes, functions, and variables in the analyzed project directory.", ["project", "type", "limit"]);
+  a2a("get_dependencies", "Get import/call/containment/implements relationships between code entities.", ["project", "source", "target", "relationship", "limit"]);
+  a2a("get_insights", "Get AI-generated code insights including refactoring suggestions and quality metrics.", []);
+  a2a("search_entities", "Search for functions, classes, modules, or variables by name across the codebase.", ["project", "query", "type"]);
+  a2a("get_file_entities", "Get all entities (classes, functions, variables) defined in a specific file.", ["project", "filePath"]);
+  a2a("generate_system_flow", "Auto-generate a Mermaid flowchart diagram showing module dependency architecture.", ["project", "scope", "feature", "maxNodes"]);
+  a2a("sync_system_memory", "Create or update the .agents/memory/ folder with auto-generated documentation and rules.", ["project", "businessRule", "changeDescription", "enableEnterpriseSync"]);
+  a2a("get_system_memory", "Retrieve auto-generated system documentation and episodic memories for a project.", ["project", "eventType"]);
+  a2a("save_dream_memory", "Save a dreaming memory entry (mistake, preference, knowledge, pattern) with vector embedding.", ["memory_type", "content", "importance", "session_id", "project"]);
+  a2a("query_dream_memories", "Query dreaming memories by semantic similarity using Oracle 26ai vector search.", ["query", "project", "limit"]);
+  a2a("trace_feature_flow", "Trace the complete execution flow of a feature through the codebase.", ["project", "keyword", "depth"]);
+  a2a("generate_feature_flow_diagram", "Generate a Mermaid diagram showing the execution flow of a feature (call chains).", ["project", "keyword", "diagramType", "depth", "maxNodes"]);
+  a2a("detect_architectural_smells", "Knowledge Graph Reasoning: Use Oracle 26ai to detect circular dependencies, god objects, and dead code.", ["project"]);
+  a2a("scan_enterprise_vulnerabilities", "Enterprise Scanner: Automatically scan all projects for security vulnerabilities and code smells.", ["maxProjects"]);
 }

@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerTools } from "./mcpTools.js";
+import { registerA2ATools } from "./a2a/a2aTools.js";
 
 // Create the global MCP server instance
 export const server = new McpServer(
@@ -17,3 +18,4 @@ export const server = new McpServer(
 );
 
 registerTools(server);
+registerA2ATools(server);
