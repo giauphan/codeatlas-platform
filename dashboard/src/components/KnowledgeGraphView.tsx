@@ -392,6 +392,17 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     return simNodes.find(n => n.id === hoveredId) || null;
   }, [hoveredId, simNodes]);
 
+  // ⚡ Bolt: Pre-calculate connection counts in a single pass to avoid multiple .filter() array allocations during 60 FPS renders
+  let outgoingCount = 0;
+  let incomingCount = 0;
+  if (selectedNode) {
+    for (let i = 0; i < simulatedLinks.length; i++) {
+      const link = simulatedLinks[i];
+      if (link.source.id === selectedNode.id) outgoingCount++;
+      if (link.target.id === selectedNode.id) incomingCount++;
+    }
+  }
+
   return (
     <div style={{ height: 'calc(100vh - 8rem)', display: 'flex', flexDirection: 'column' }} onMouseUp={handleMouseUp}>
       <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -794,13 +805,13 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.85rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
                   <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#FFB400' }}>
-                    {simulatedLinks.filter(l => l.source.id === selectedNode.id).length}
+                    {outgoingCount}
                   </div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 800 }}>OUTGOING CALLS</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.85rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
                   <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#00FF94' }}>
-                    {simulatedLinks.filter(l => l.target.id === selectedNode.id).length}
+                    {incomingCount}
                   </div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 800 }}>INCOMING REFS</div>
                 </div>
