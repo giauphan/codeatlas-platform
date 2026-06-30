@@ -38,3 +38,5 @@ instantclient/
 .jules/
 pr_description.md
 .Jules/
+test.py
+test.sh
