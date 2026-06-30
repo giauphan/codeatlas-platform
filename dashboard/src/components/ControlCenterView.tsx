@@ -1,13 +1,13 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Activity, 
-  Database, 
-  Globe, 
-  Copy, 
-  Check, 
-  Trash2, 
-  RefreshCw 
+import {
+  Activity,
+  Database,
+  Globe,
+  Copy,
+  Check,
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 
 interface ControlCenterProps {
@@ -25,20 +25,41 @@ interface ControlCenterProps {
   clearCreatedKey?: () => void;
 }
 
-export const ControlCenterView: React.FC<ControlCenterProps> = ({ 
-  stats, 
-  keys, 
-  analysis, 
-  createKey, 
-  deleteKey, 
-  copyToClipboard, 
-  copiedId, 
-  newKeyName, 
-  setNewKeyName, 
+export const ControlCenterView: React.FC<ControlCenterProps> = ({
+  stats,
+  keys,
+  analysis,
+  createKey,
+  deleteKey,
+  copyToClipboard,
+  copiedId,
+  newKeyName,
+  setNewKeyName,
   loading,
   createdKey,
   clearCreatedKey
 }) => {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopyNewToken = () => {
+    if (!createdKey) return;
+    copyToClipboard(createdKey, 'new_key');
+    if (clearCreatedKey) {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(clearCreatedKey, 5000);
+    }
+  };
+
   return (
     <>
       <header style={{ marginBottom: '3.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -80,11 +101,11 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   {k.key && (
-                    <button onClick={() => copyToClipboard(k.key, k.id)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', padding: '0.75rem', borderRadius: '12px', cursor: 'pointer', color: copiedId === k.id ? 'var(--primary-neon)' : '#fff' }}>
+                    <button aria-label={`Copy token: ${k.name ?? 'unnamed'}`} title={`Copy token: ${k.name ?? 'unnamed'}`} onClick={() => copyToClipboard(k.key, k.id)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', padding: '0.75rem', borderRadius: '12px', cursor: 'pointer', color: copiedId === k.id ? 'var(--primary-neon)' : '#fff' }}>
                       {copiedId === k.id ? <Check size={20} /> : <Copy size={20} />}
                     </button>
                   )}
-                  <button onClick={() => deleteKey(k.id)} style={{ background: 'rgba(255, 75, 75, 0.05)', border: 'none', padding: '0.75rem', borderRadius: '12px', cursor: 'pointer', color: '#ff4b4b' }}><Trash2 size={20} /></button>
+                  <button aria-label={`Delete token: ${k.name ?? 'unnamed'}`} title={`Delete token: ${k.name ?? 'unnamed'}`} onClick={() => deleteKey(k.id)} style={{ background: 'rgba(255, 75, 75, 0.05)', border: 'none', padding: '0.75rem', borderRadius: '12px', cursor: 'pointer', color: '#ff4b4b' }}><Trash2 size={20} /></button>
                 </div>
               </motion.div>
             ))}
@@ -100,7 +121,9 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                 <code style={{ flex: 1, color: '#fff', fontSize: '0.95rem', background: 'rgba(0,0,0,0.4)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,255,148,0.2)', wordBreak: 'break-all' }}>{createdKey}</code>
                 <button
-                  onClick={() => { copyToClipboard(createdKey, 'new_key'); if (clearCreatedKey) setTimeout(clearCreatedKey, 5000); }}
+                  aria-label="Copy new token"
+                  title="Copy new token"
+                  onClick={handleCopyNewToken}
                   style={{ background: '#00FF94', border: 'none', padding: '1rem', borderRadius: '12px', cursor: 'pointer', color: '#000' }}
                 >
                   {copiedId === 'new_key' ? <Check size={20} /> : <Copy size={20} />}
