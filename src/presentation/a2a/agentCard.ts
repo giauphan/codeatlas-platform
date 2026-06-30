@@ -72,15 +72,24 @@ export function getToolCount(): number {
   return toolRegistry.length;
 }
 
+let cachedPackageVersion: string | undefined;
+
 /**
  * Read version from package.json (npm_package_version is only available in npm scripts).
  */
 function getPackageVersion(): string {
+  if (cachedPackageVersion !== undefined) {
+    return cachedPackageVersion;
+  }
+
   try {
     const pkgPath = path.join(process.cwd(), "package.json");
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-    return pkg.version || "unknown";
+    const version = pkg.version || "unknown";
+    cachedPackageVersion = version;
+    return version;
   } catch {
+    cachedPackageVersion = "unknown";
     return "unknown";
   }
 }
@@ -90,4 +99,11 @@ function getPackageVersion(): string {
  */
 export function getTools(): MCPToolMeta[] {
   return [...toolRegistry];
+}
+
+/**
+ * Clear the package version cache (useful for tests).
+ */
+export function clearPackageVersionCache(): void {
+  cachedPackageVersion = undefined;
 }
