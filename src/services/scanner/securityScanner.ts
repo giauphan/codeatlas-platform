@@ -19,8 +19,30 @@ export class SecurityScanner {
     const findings: SecurityFinding[] = [];
     const nodes = analysis.graph.nodes;
 
-    const unsafeFuncs = ["eval", "exec", "system", "child_process", "spawn", "shell_exec"];
-    const dbKeywords = ["db", "database", "repository", "model", "oracle", "postgres", "mysql", "sqlite", "sql", "connection", "pool", "transaction"];
+    const nodesMap = new Map(nodes.map((n: GraphNode) => [n.id, n]));
+
+    const unsafeFuncs = [
+      "eval",
+      "exec",
+      "system",
+      "child_process",
+      "spawn",
+      "shell_exec",
+    ];
+    const dbKeywords = [
+      "db",
+      "database",
+      "repository",
+      "model",
+      "oracle",
+      "postgres",
+      "mysql",
+      "sqlite",
+      "sql",
+      "connection",
+      "pool",
+      "transaction",
+    ];
 
     // Helper to identify test, mock or diagnostic files
     const isTestOrMockFile = (filePath: string): boolean => {
@@ -40,16 +62,38 @@ export class SecurityScanner {
 
     // Helper to detect if a variable name represents a real security secret/token/password
     const isSecretVariable = (label: string): boolean => {
-      const parts = label.split(/(?<=[a-z])(?=[A-Z])|[_.-]/).map(p => p.toLowerCase());
+      const parts = label
+        .split(/(?<=[a-z])(?=[A-Z])|[_.-]/)
+        .map((p) => p.toLowerCase());
       const nonSecretSubstrings = [
-        "expired", "count", "length", "type", "url", "path", "status", "valid", 
-        "error", "failed", "success", "check", "verify", "duration", "limit", 
-        "payload", "header", "name", "id", "store", "storage", "service", 
-        "provider", "client"
+        "expired",
+        "count",
+        "length",
+        "type",
+        "url",
+        "path",
+        "status",
+        "valid",
+        "error",
+        "failed",
+        "success",
+        "check",
+        "verify",
+        "duration",
+        "limit",
+        "payload",
+        "header",
+        "name",
+        "id",
+        "store",
+        "storage",
+        "service",
+        "provider",
+        "client",
       ];
-      
+
       // If the label contains any non-secret metadata word, skip it to prevent false positives
-      if (parts.some(part => nonSecretSubstrings.includes(part))) {
+      if (parts.some((part) => nonSecretSubstrings.includes(part))) {
         return false;
       }
 
@@ -62,13 +106,31 @@ export class SecurityScanner {
           // Verify if it is preceded or followed by security-relevant context
           if (i > 0) {
             const prev = parts[i - 1];
-            if (prev === "api" || prev === "private" || prev === "access" || prev === "secret" || prev === "encryption" || prev === "decryption" || prev === "auth" || prev === "session") {
+            if (
+              prev === "api" ||
+              prev === "private" ||
+              prev === "access" ||
+              prev === "secret" ||
+              prev === "encryption" ||
+              prev === "decryption" ||
+              prev === "auth" ||
+              prev === "session"
+            ) {
               return true;
             }
           }
           if (i < parts.length - 1) {
             const next = parts[i + 1];
-            if (next === "api" || next === "private" || next === "access" || next === "secret" || next === "encryption" || next === "decryption" || next === "auth" || next === "session") {
+            if (
+              next === "api" ||
+              next === "private" ||
+              next === "access" ||
+              next === "secret" ||
+              next === "encryption" ||
+              next === "decryption" ||
+              next === "auth" ||
+              next === "session"
+            ) {
               return true;
             }
           }
@@ -81,19 +143,19 @@ export class SecurityScanner {
     const isSqlRelated = (node: GraphNode): boolean => {
       // 1. Check file path
       const fp = (node.filePath || "").toLowerCase();
-      if (dbKeywords.some(k => fp.includes(k))) {
+      if (dbKeywords.some((k) => fp.includes(k))) {
         return true;
       }
 
       // 2. Check node label itself
       const labelLower = node.label.toLowerCase();
-      if (dbKeywords.some(k => labelLower.includes(k))) {
+      if (dbKeywords.some((k) => labelLower.includes(k))) {
         return true;
       }
 
       // 3. Check connected nodes (incoming / outgoing calls or imports)
       const connectedNodeIds = new Set<string>();
-      analysis.graph.links.forEach(link => {
+      analysis.graph.links.forEach((link) => {
         if (link.source === node.id) {
           connectedNodeIds.add(link.target);
         } else if (link.target === node.id) {
@@ -102,11 +164,15 @@ export class SecurityScanner {
       });
 
       for (const id of connectedNodeIds) {
-        const otherNode = analysis.graph.nodes.find(n => n.id === id);
+        const otherNode = nodesMap.get(id);
         if (otherNode) {
           const otherLabel = otherNode.label.toLowerCase();
           const otherFp = (otherNode.filePath || "").toLowerCase();
-          if (dbKeywords.some(k => otherLabel.includes(k) || otherFp.includes(k))) {
+          if (
+            dbKeywords.some(
+              (k) => otherLabel.includes(k) || otherFp.includes(k),
+            )
+          ) {
             return true;
           }
         }
@@ -131,7 +197,7 @@ export class SecurityScanner {
             type: "HARDCODED_SECRET",
             message: `Potential hardcoded secret found in variable: ${node.label}`,
             filePath: filePath || "unknown",
-            line: node.line || null
+            line: node.line || null,
           });
         }
       }
@@ -144,7 +210,7 @@ export class SecurityScanner {
             type: "UNSAFE_FUNCTION",
             message: `Use of potentially dangerous function: ${node.label}`,
             filePath: filePath || "unknown",
-            line: node.line || null
+            line: node.line || null,
           });
         }
 
@@ -160,7 +226,7 @@ export class SecurityScanner {
             type: "SQL_INJECTION_RISK",
             message: `Potential SQL Injection risk in database call: ${node.label}. Ensure parameterized queries are used.`,
             filePath: filePath || "unknown",
-            line: node.line || null
+            line: node.line || null,
           });
         }
       }
