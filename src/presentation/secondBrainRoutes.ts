@@ -8,7 +8,7 @@ import { logger } from "../utils/logger.js";
 
 export function mountSecondBrainRoutes(app: express.Application): void {
   // POST /api/memory/outcome — Record task outcome
-  app.post("/api/memory/outcome", checkAuth, async (req, res) => {
+  app.post("/api/memory/outcome", checkAuth, async (req: express.Request, res: express.Response) => {
     try {
       const outcome = req.body as TaskOutcome;
       if (!outcome.task || !outcome.result) {
@@ -24,7 +24,7 @@ export function mountSecondBrainRoutes(app: express.Application): void {
   });
 
   // POST /api/memory/inject — Build context block from relevant memories
-  app.post("/api/memory/inject", checkAuth, async (req, res) => {
+  app.post("/api/memory/inject", checkAuth, async (req: express.Request, res: express.Response) => {
     try {
       const { task, project, limit } = req.body as {
         task: string;

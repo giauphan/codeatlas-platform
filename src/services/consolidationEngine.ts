@@ -3,12 +3,22 @@
  *
  * Deduplicates similar dreams, extracts concepts, updates knowledge base.
  * Designed to run both on-demand (API) and as a nightly cron job.
+ *
+ * NOTE: Oracle `execute()` returns rows as `any[][]` (array of arrays).
+ * All row access uses positional indexes, not property names.
  */
 
 import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
+
+// Row index helpers for Oracle queries
+const R_IDX = Object.freeze({
+  ID: 0, CONTENT: 1, EMBEDDING: 2, IMPORTANCE: 3,
+  MEMORY_TYPE: 4, PROJECT: 5, LABEL: 6, DESCRIPTION: 7,
+  CATEGORY: 8, CONFIDENCE: 9, EVIDENCE_COUNT: 10, STATUS: 11,
+});
 
 export interface ConsolidationJob {
   project?: string;
@@ -104,14 +114,14 @@ export class ConsolidationEngine {
         const toRemove: string[] = [];
 
         for (let i = 0; i < group.length; i++) {
-          if (toRemove.includes(String(group[i].ID))) continue;
+          if (toRemove.includes(String(group[i][R_IDX.ID]))) continue;
 
           for (let j = i + 1; j < group.length; j++) {
-            if (toRemove.includes(String(group[j].ID))) continue;
+            if (toRemove.includes(String(group[j][R_IDX.ID]))) continue;
 
             // Cosine similarity on embeddings (both must exist)
-            const embI = group[i].EMBEDDING;
-            const embJ = group[j].EMBEDDING;
+            const embI = group[i][R_IDX.EMBEDDING];
+            const embJ = group[j][R_IDX.EMBEDDING];
             if (!embI || !embJ) continue;
 
             const similarity = this.cosineSimilarity(
@@ -121,9 +131,9 @@ export class ConsolidationEngine {
 
             if (similarity > 0.85) {
               // Merge: keep the one with higher importance
-              const keepIdx = Number(group[i].IMPORTANCE) >= Number(group[j].IMPORTANCE) ? i : j;
+              const keepIdx = Number(group[i][R_IDX.IMPORTANCE]) >= Number(group[j][R_IDX.IMPORTANCE]) ? i : j;
               const removeIdx = keepIdx === i ? j : i;
-              toRemove.push(String(group[removeIdx].ID));
+              toRemove.push(String(group[removeIdx][R_IDX.ID]));
             }
           }
         }
@@ -181,7 +191,7 @@ export class ConsolidationEngine {
       // Group by project for concept extraction
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
-        const proj = String(row.PROJECT || "default");
+        const proj = String(row[R_IDX.PROJECT] || "default");
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push(row);
       }
@@ -192,7 +202,7 @@ export class ConsolidationEngine {
         // Take top 10 highest-importance dreams per project for concept extraction
         const topDreams = group.slice(0, 10);
         const combinedContent = topDreams
-          .map((d) => `[${d.MEMORY_TYPE}] ${d.CONTENT}`)
+          .map((d) => `[${d[R_IDX.MEMORY_TYPE]}] ${d[R_IDX.CONTENT]}`)
           .join("\n\n");
 
         // Generate a concept label and description from the content
@@ -235,7 +245,7 @@ export class ConsolidationEngine {
               desc: conceptDescription,
               embedding: new Float32Array(conceptEmbedding),
               proj,
-              sources: JSON.stringify(topDreams.map((d) => d.ID)),
+              sources: JSON.stringify(topDreams.map((d) => d[R_IDX.ID])),
             } as any,
             { autoCommit: true }
           );
@@ -314,7 +324,7 @@ export class ConsolidationEngine {
   private extractLabel(dreams: any[]): string {
     // Try to find a PATTERN or KNOWLEDGE dream with the most descriptive content
     for (const type of ["PATTERN", "KNOWLEDGE", "MISTAKE"]) {
-      const match = dreams.find((d) => d.MEMORY_TYPE === type);
+      const match = dreams.find((d) => d[R_IDX.MEMORY_TYPE] === type);
       if (match) {
         const content = String(match.CONTENT || "");
         return content.length > 80 ? content.slice(0, 80) : content;

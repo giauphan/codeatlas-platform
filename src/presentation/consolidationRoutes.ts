@@ -8,7 +8,7 @@ import { logger } from "../utils/logger.js";
 
 export function mountConsolidationRoutes(app: express.Application): void {
   // POST /api/consolidation/run — Run consolidation job manually
-  app.post("/api/consolidation/run", checkAuth, async (req, res) => {
+  app.post("/api/consolidation/run", checkAuth, async (req: express.Request, res: express.Response) => {
     try {
       const job: ConsolidationJob = req.body;
       if (!job.operations || job.operations.length === 0) {
@@ -24,7 +24,7 @@ export function mountConsolidationRoutes(app: express.Application): void {
   });
 
   // GET /api/concepts/search — Search concepts by text
-  app.get("/api/concepts/search", checkAuth, async (req, res) => {
+  app.get("/api/concepts/search", checkAuth, async (req: express.Request, res: express.Response) => {
     try {
       const query = String(req.query.query || "");
       const project = req.query.project as string | undefined;
@@ -64,14 +64,14 @@ export function mountConsolidationRoutes(app: express.Application): void {
           binds as any
         );
 
-        const concepts = (result.rows || []).map((r) => ({
-          id: String(r.ID),
-          label: String(r.LABEL),
-          description: String(r.DESCRIPTION || ""),
-          category: String(r.CATEGORY || "lesson"),
-          confidence: Number(r.CONFIDENCE),
-          evidenceCount: Number(r.EVIDENCE_COUNT),
-          project: String(r.PROJECT || ""),
+        const concepts = (result.rows || []).map((r: any[]) => ({
+          id: String(r[0]),
+          label: String(r[1]),
+          description: String(r[2] || ""),
+          category: String(r[3] || "lesson"),
+          confidence: Number(r[4]),
+          evidenceCount: Number(r[5]),
+          project: String(r[6] || ""),
         }));
 
         res.json({ concepts });
