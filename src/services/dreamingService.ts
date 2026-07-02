@@ -84,7 +84,7 @@ export class OracleDreamingService {
 
       // Initialize Second Brain tables
       try {
-        const sbSql = \`
+        const sbSql = `
           BEGIN
             EXECUTE IMMEDIATE 'CREATE TABLE codeatlas_concepts (
               id            VARCHAR2(36) PRIMARY KEY,
@@ -107,7 +107,7 @@ export class OracleDreamingService {
               ELSE RAISE;
               END IF;
           END;
-        \`;
+        `;
         await connection.execute(sbSql);
         logger.info("[SecondBrain] Tables initialized");
       } catch (err) {
