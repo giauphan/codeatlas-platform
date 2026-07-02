@@ -18,7 +18,8 @@ import {
   Brain,
   ShieldCheck, 
   LayoutDashboard,
-  BookOpen
+  BookOpen,
+  Lightbulb
 } from 'lucide-react';
 
 // Decoupled sub-views
@@ -26,6 +27,7 @@ import { ControlCenterView } from './ControlCenterView';
 import { KnowledgeGraphView } from './KnowledgeGraphView';
 import { CloudIndexView } from './CloudIndexView';
 import { DreamMemoryView } from './DreamMemoryView';
+import { SecondBrainView } from './SecondBrainView';
 import { DocumentationView } from './DocumentationView';
 
 // API Configuration
@@ -629,6 +631,8 @@ export const Dashboard: React.FC = () => {
         return <DocumentationView />;
       case 'Dream Memory':
         return <DreamMemoryView />;
+      case 'Second Brain':
+        return <SecondBrainView />;
       default:
         return null;
     }
@@ -655,6 +659,7 @@ export const Dashboard: React.FC = () => {
             { icon: Network, label: 'Knowledge Graph' },
             { icon: Globe, label: 'Cloud Index' },
             { icon: Brain, label: 'Dream Memory' },
+            { icon: Lightbulb, label: 'Second Brain' },
             { icon: BookOpen, label: 'Documentation' },
           ].map((item) => (
             <motion.div

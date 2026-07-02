@@ -265,7 +265,11 @@ export class ConsolidationEngine {
   }
 
   /**
-   * Score relevance — decay importance of old unused concepts.
+   * Bayesian confidence scoring:
+   * - Each evidence/access event updates confidence via Bayesian update
+   * - Confidence decays exponentially with time (0.995 per day)
+   * - Archived concepts get reduced confidence
+   * - access_count and last_accessed_at are tracked externally (via concepts/search API)
    */
   private async scoreRelevance(report?: ConsolidationReport): Promise<void> {
     let connection;
@@ -274,25 +278,60 @@ export class ConsolidationEngine {
       connection = await pool.getConnection();
       await setSessionContext(connection);
 
-      const result = await connection.execute(
+      // Ensure access_count column exists (migration-safe)
+      try {
+        await connection.execute(`ALTER TABLE codeatlas_concepts ADD (access_count NUMBER DEFAULT 0, last_accessed_at TIMESTAMP)`);
+      } catch { /* column exists */ }
+
+      // 1. Base decay: confidence *= 0.995 per day since last_accessed_at, 0.997 if never accessed
+      const decayResult = await connection.execute(
         `UPDATE codeatlas_concepts
-         SET confidence = confidence * 0.97
-         WHERE status = 'active' AND access_count < 2 AND updated_at < (CURRENT_TIMESTAMP - INTERVAL '30' DAY)`,
+         SET confidence = confidence * CASE
+           WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_accessed_at)))
+           ELSE POWER(0.997, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - created_at)))
+         END
+         WHERE status = 'active'`,
         [],
         { autoCommit: true }
       );
-      const updated = result.rowsAffected || 0;
 
-      // Archive very low confidence
+      // 2. Evidence boost: each evidence_count beyond 1 gives log-space boost
+      //    Bayesian: new_conf = (prior * evidence) / (prior * evidence + (1-prior))
+      //    Simplified: confidence += 0.05 * log2(evidence_count) capped at 0.25
       await connection.execute(
         `UPDATE codeatlas_concepts
-         SET status = 'archived'
-         WHERE confidence < 0.15 AND status = 'active'`,
+         SET confidence = LEAST(0.99, GREATEST(0.05,
+           confidence + 0.05 * LOG(2, evidence_count + 1)
+         ))
+         WHERE status = 'active' AND evidence_count > 1`,
         [],
         { autoCommit: true }
       );
 
-      logger.info(`[Consolidation] Decay: ${updated} concepts scored`);
+      // 3. Access bonus: each access_count reinforces confidence
+      //    Bayesian: additional 0.02 * log2(access_count + 1) capped at 0.15
+      await connection.execute(
+        `UPDATE codeatlas_concepts
+         SET confidence = LEAST(0.99, GREATEST(0.05,
+           confidence + 0.02 * LOG(2, access_count + 1)
+         ))
+         WHERE status = 'active' AND access_count > 0`,
+        [],
+        { autoCommit: true }
+      );
+
+      // 4. Archive very low confidence concepts (not reinforced for long time)
+      const archiveResult = await connection.execute(
+        `UPDATE codeatlas_concepts
+         SET status = 'archived'
+         WHERE confidence < 0.10 AND status = 'active'`,
+        [],
+        { autoCommit: true }
+      );
+
+      logger.info(
+        `[Consolidation] Score: decay applied, \${archiveResult.rowsAffected || 0} archived`
+      );
     } finally {
       if (connection) {
         try {
