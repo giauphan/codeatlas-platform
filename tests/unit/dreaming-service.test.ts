@@ -341,10 +341,12 @@ describe('OracleDreamingService', () => {
 
       await OracleDreamingService.initialize();
 
-      // Should have executed the CREATE TABLE PL/SQL block
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 1);
+      // Should have executed 2 PL/SQL blocks (dream table + concepts table)
+      assert.strictEqual(mockConnection.execute.mock.calls.length, 2);
       const sql = mockConnection.execute.mock.calls[0].arguments[0] as string;
+      const sql2 = mockConnection.execute.mock.calls[1].arguments[0] as string;
       assert.ok(sql.includes('CREATE TABLE ai_dreaming_memory'));
+      assert.ok(sql2.includes('codeatlas_concepts'));
     });
 
     test('handles table already existing (ORA-00955 swallowed)', async () => {
@@ -356,8 +358,8 @@ describe('OracleDreamingService', () => {
 
       await OracleDreamingService.initialize();
 
-      // Should succeed without throwing
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 1);
+      // Should succeed without throwing (2 PL/SQL blocks)
+      assert.strictEqual(mockConnection.execute.mock.calls.length, 2);
     });
 
     test('throws on initPool failure', async () => {
