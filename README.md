@@ -13,12 +13,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/giauphan/codeatlas-ai/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/giauphan/codeatlas-platform/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <a href="#"><img src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js" alt="Node.js 20+"></a>
   <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.4-3178C6?logo=typescript" alt="TypeScript 5.4"></a>
   <a href="https://www.oracle.com/database/"><img src="https://img.shields.io/badge/Oracle-26ai%20Native-red?logo=oracle" alt="Oracle 26ai"></a>
   <a href="https://www.npmjs.com/package/codeatlas-enterprise"><img src="https://img.shields.io/npm/v/codeatlas-enterprise?label=MCP%20Server&logo=npm" alt="MCP Server"></a>
-  <a href="https://github.com/giauphan/codeatlas-ai/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/giauphan/codeatlas-ai/ci.yml?branch=main&logo=github" alt="CI"></a>
+  <a href="https://github.com/giauphan/codeatlas-platform/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/giauphan/codeatlas-platform/ci.yml?branch=main&logo=github" alt="CI"></a>
   <a href="#"><img src="https://img.shields.io/badge/Vite-5-646CFF?logo=vite" alt="Vite 5"></a>
 </p>
 
@@ -197,8 +197,8 @@ CodeAtlas AI follows a **Clean Architecture** pattern with clear separation of c
 
 ```bash
 # Clone the repository
-git clone https://github.com/giauphan/codeatlas-ai.git
-cd codeatlas-ai
+git clone https://github.com/giauphan/codeatlas-platform.git
+cd codeatlas-platform
 
 # Install dependencies
 pnpm install
@@ -255,7 +255,7 @@ pnpm run start
 #### PM2 (Production Process Manager)
 ```bash
 npm install -g pm2
-pm2 start dist/src/index.js --name codeatlas-ai
+pm2 start dist/src/index.js --name codeatlas-platform
 pm2 save
 pm2 startup
 ```
@@ -450,7 +450,7 @@ In addition to MCP, CodeAtlas AI provides a full REST API for remote access and 
 ## 📁 Project Structure
 
 ```
-codeatlas-ai/
+codeatlas-platform/
 ├── src/
 │   ├── index.ts                       # Composition root — entry point
 │   ├── config/
@@ -699,5 +699,5 @@ furnished to do so, subject to the following conditions:
 <p align="center">
   Built with ❤️ by <a href="https://github.com/giauphan">GiauPhan</a><br>
   Powered by <a href="https://www.oracle.com/database/">Oracle 26ai</a> · <a href="https://www.nvidia.com/en-us/ai/">NVIDIA NIM</a> · <a href="https://firebase.google.com/">Firebase</a><br>
-  <a href="https://github.com/giauphan/codeatlas-ai">GitHub</a> · <a href="https://www.npmjs.com/package/codeatlas-enterprise">npm</a> · <a href="https://github.com/giauphan/codeatlas-ai/issues">Issues</a>
+  <a href="https://github.com/giauphan/codeatlas-platform">GitHub</a> · <a href="https://www.npmjs.com/package/codeatlas-enterprise">npm</a> · <a href="https://github.com/giauphan/codeatlas-platform/issues">Issues</a>
 </p>

@@ -11,8 +11,8 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 1. **Fork** the repository
 2. **Clone** your fork:
    ```bash
-   git clone git@github.com:your-username/codeatlas-ai.git
-   cd codeatlas-ai
+   git clone git@github.com:your-username/codeatlas-platform.git
+   cd codeatlas-platform
    ```
 3. **Install dependencies**:
    ```bash
@@ -87,4 +87,4 @@ scripts/         — Utility scripts
 
 ## Questions?
 
-Open a [discussion](https://github.com/giauphan/codeatlas-ai/discussions) or [issue](https://github.com/giauphan/codeatlas-ai/issues).
+Open a [discussion](https://github.com/giauphan/codeatlas-platform/discussions) or [issue](https://github.com/giauphan/codeatlas-platform/issues).
