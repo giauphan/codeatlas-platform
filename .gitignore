@@ -40,8 +40,6 @@ pr_description.md
 .Jules/
 test.py
 test.sh
-test.py
-test.sh
 submit.sh
 test_parse.js
 pr.md
