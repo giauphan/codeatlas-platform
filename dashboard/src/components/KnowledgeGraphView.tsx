@@ -311,9 +311,9 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   }, [analysis, draggedNodeId, mousePos]);
 
   // Construct links array from simulation node coordinates
-  const simulatedLinks = useMemo(() => {
-    if (!analysis || !analysis.graph || !analysis.graph.links || simNodes.length === 0) return [];
-
+  // ⚡ Bolt: Removed useMemo here because simNodes updates at 60fps, making memoization useless and adding overhead
+  let simulatedLinks: any[] = [];
+  if (analysis && analysis.graph && analysis.graph.links && simNodes.length > 0) {
     // ⚡ Bolt: Optimize nodeMap creation to avoid intermediate array allocations
     const nodeMap = new Map();
     for (let i = 0; i < simNodes.length; i++) {
@@ -337,8 +337,8 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
     // Trim the array to the actual number of valid links
     result.length = resultIdx;
-    return result;
-  }, [analysis, simNodes]);
+    simulatedLinks = result;
+  }
 
   // Handle Drag-and-Drop Coordinates inside SVG (supports transformed zoom/pan)
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -387,10 +387,8 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     setActiveFilters(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
   };
 
-  const selectedNode = useMemo(() => {
-    if (!hoveredId) return null;
-    return simNodes.find(n => n.id === hoveredId) || null;
-  }, [hoveredId, simNodes]);
+  // ⚡ Bolt: Removed useMemo here because simNodes updates at 60fps, making memoization useless and adding overhead
+  const selectedNode = hoveredId ? (simNodes.find(n => n.id === hoveredId) || null) : null;
 
   // ⚡ Bolt: Pre-calculate connection counts in a single pass to avoid multiple .filter() array allocations during 60 FPS renders
   let outgoingCount = 0;
