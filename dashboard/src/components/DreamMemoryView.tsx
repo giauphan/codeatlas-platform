@@ -82,6 +82,7 @@ export function DreamMemoryView() {
           <Search size={18} style={{ position: 'absolute', left: '1.25rem', top: '1.1rem', color: 'var(--text-muted)' }} />
           <input
             type="text" className="glass-input" placeholder="Search memories semantically..."
+            aria-label="Search memories semantically"
             style={{ paddingLeft: '3.25rem', width: '100%' }}
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           />

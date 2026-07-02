@@ -52,19 +52,28 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
           {/* MAIN INDEXING PANEL */}
           <div className="glass-panel" style={{ padding: '2.5rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(13, 17, 23, 0.4)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2.5rem' }}>
-              <div style={{ 
-                width: '24px', height: '24px', border: '2px solid var(--primary-neon)', borderRadius: '6px', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                cursor: isUpdatingSettings ? 'not-allowed' : 'pointer',
-                opacity: isUpdatingSettings ? 0.6 : 1,
-                background: isIndexingEnabled ? 'var(--primary-neon)' : 'transparent'
-              }} onClick={handleToggleClick}>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isIndexingEnabled}
+                aria-label="Enable Codebase Indexing"
+                disabled={isUpdatingSettings}
+                style={{
+                  width: '24px', height: '24px', border: '2px solid var(--primary-neon)', borderRadius: '6px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: isUpdatingSettings ? 'not-allowed' : 'pointer',
+                  opacity: isUpdatingSettings ? 0.6 : 1,
+                  background: isIndexingEnabled ? 'var(--primary-neon)' : 'transparent',
+                  padding: 0
+                }}
+                onClick={handleToggleClick}
+              >
                 {isUpdatingSettings ? (
                   <Loader2 className="animate-spin" size={14} color={isIndexingEnabled ? "#000" : "var(--primary-neon)"} />
                 ) : (
                   isIndexingEnabled && <Check size={16} color="#000" strokeWidth={4} />
                 )}
-              </div>
+              </button>
               <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>Enable Codebase Indexing</span>
               <div style={{ padding: '0.25rem 0.6rem', borderRadius: '100px', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                 <Activity size={12} style={{ display: 'inline', marginRight: '4px' }} /> Active Monitoring

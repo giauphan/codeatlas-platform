@@ -57,7 +57,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState(['module', 'function', 'class', 'variable']);
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
-  
+
   // Interactive Viewport Pan & Zoom States
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -72,7 +72,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   // Toggle fullscreen mode using HTML5 Fullscreen API
   const toggleFullscreen = () => {
     if (!graphContainerRef.current) return;
-    
+
     if (!document.fullscreenElement) {
       graphContainerRef.current.requestFullscreen()
         .then(() => setIsFullscreen(true))
@@ -89,7 +89,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
-    
+
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
@@ -132,7 +132,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   useEffect(() => {
     const centerX = 550;
     const centerY = 350;
-    
+
     // Sort and slice: place all module nodes first, then fill up to 150 total nodes
     // ⚡ Bolt: Single pass iteration to categorize nodes instead of multiple filter calls
     const modules = [];
@@ -158,12 +158,12 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       const angle = isModule 
         ? (i * 2 * Math.PI) / (moduleCount || 1)
         : (i * 2 * Math.PI) / (nonModuleCount || 1);
-      
+
       // Distribute radius outward in concentric rings to prevent overlap congestion
       const radius = isModule 
         ? 90 + (Math.floor(i / 12) * 35) 
         : 220 + (Math.floor(i / 15) * 45);
-        
+
       return {
         ...n,
         x: centerX + Math.cos(angle) * radius + (Math.random() - 0.5) * 15,
@@ -178,7 +178,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   // Run Physics Loop (Force-Directed Simulation at 60fps)
   useEffect(() => {
     let animationId: number;
-    
+
     const updatePhysics = () => {
       setSimNodes(prevNodes => {
         if (prevNodes.length === 0) return prevNodes;
@@ -213,12 +213,12 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               const force = (minDist - dist) * 0.08;
               const pushX = (dx / dist) * force;
               const pushY = (dy / dist) * force;
-              
+
               // Cap push force to prevent physics explosion from overlapping nodes
               const maxPush = 2.2;
               const cappedPushX = Math.max(-maxPush, Math.min(maxPush, pushX));
               const cappedPushY = Math.max(-maxPush, Math.min(maxPush, pushY));
-              
+
               n1.vx += cappedPushX;
               n1.vy += cappedPushY;
               n2.vx -= cappedPushX;
@@ -237,17 +237,17 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               const dy = targetNode.y - sourceNode.y;
               const dist = Math.sqrt(dx * dx + dy * dy) || 1;
               const desiredDist = sourceNode.type === 'module' || targetNode.type === 'module' ? 95 : 65;
-              
+
               // Pull connected nodes together
               const force = (dist - desiredDist) * 0.035;
               const pullX = (dx / dist) * force;
               const pullY = (dy / dist) * force;
-              
+
               // Cap link pull force to ensure stability
               const maxPull = 1.8;
               const cappedPullX = Math.max(-maxPull, Math.min(maxPull, pullX));
               const cappedPullY = Math.max(-maxPull, Math.min(maxPull, pullY));
-              
+
               sourceNode.vx += cappedPullX;
               sourceNode.vy += cappedPullY;
               targetNode.vx -= cappedPullX;
@@ -290,7 +290,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             n.vx *= -0.5;
             n.x = 1050;
           }
-          
+
           if (n.y <= 50) {
             n.vy *= -0.5;
             n.y = 50;
@@ -352,15 +352,15 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
     if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
-    
+
     // Scale screen coordinate to SVG viewBox (1100x700)
     const rawX = ((e.clientX - rect.left) / rect.width) * 1100;
     const rawY = ((e.clientY - rect.top) / rect.height) * 700;
-    
+
     // Transform coordinates back to node coordinate space considering Zoom and Pan
     const transformedX = (rawX - pan.x) / zoom;
     const transformedY = (rawY - pan.y) / zoom;
-    
+
     setMousePos({ x: transformedX, y: transformedY });
   };
 
@@ -438,7 +438,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
           <div style={{ position: 'absolute', top: '2rem', left: '2rem', zIndex: 10, display: 'flex', gap: '1rem', width: 'auto', maxWidth: 'calc(100% - 4rem)' }}>
             <div style={{ position: 'relative', width: '260px' }}>
               <Search size={18} style={{ position: 'absolute', left: '1.25rem', top: '1.1rem', color: 'var(--text-muted)' }} />
-              <input type="text" className="glass-input" placeholder="Search logic clusters..." style={{ paddingLeft: '3.25rem', background: 'rgba(0,0,0,0.6)', borderRadius: '16px' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+              <input type="text" aria-label="Search logic clusters" className="glass-input" placeholder="Search logic clusters..." style={{ paddingLeft: '3.25rem', background: 'rgba(0,0,0,0.6)', borderRadius: '16px' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
 
             {projects && projects.length > 0 && (
@@ -511,6 +511,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                 transition: 'all 0.2s',
               }}
               title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary-neon)'; e.currentTarget.style.color = '#000'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = '#fff'; }}
             >
@@ -538,6 +539,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                 fontSize: '1.1rem'
               }}
               title="Zoom In"
+              aria-label="Zoom In"
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary-neon)'; e.currentTarget.style.color = '#000'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = '#fff'; }}
             >
@@ -564,6 +566,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                 letterSpacing: '0.05em'
               }}
               title="Reset Viewport"
+              aria-label="Reset Viewport"
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'; e.currentTarget.style.color = '#fff'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
             >
@@ -588,6 +591,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                 fontSize: '1.1rem'
               }}
               title="Zoom Out"
+              aria-label="Zoom Out"
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary-neon)'; e.currentTarget.style.color = '#000'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = '#fff'; }}
             >
@@ -605,7 +609,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             onMouseLeave={handleMouseUp}
             onMouseUp={handleMouseUp}
             style={{ 
-              userSelect: 'none', 
+              userSelect: 'none',
               cursor: isPanning ? 'grabbing' : (draggedNodeId ? 'grabbing' : 'grab'),
               width: '100%',
               height: '100%'
@@ -629,25 +633,25 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             {/* Background invisible rect to capture pan clicks/drag events anywhere on empty space */}
             <rect 
               id="svg-bg"
-              width="1100" 
-              height="700" 
-              fill="transparent" 
+              width="1100"
+              height="700"
+              fill="transparent"
               style={{ pointerEvents: 'all' }}
             />
 
             {/* Scale/Pan Transformed Viewport Group */}
             <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-              
+
               {/* Neural Links (Spring lines) */}
               {simulatedLinks.map((link, i) => (
-                <line 
-                  key={`link-${i}`} 
-                  x1={link.source.x} 
-                  y1={link.source.y} 
-                  x2={link.target.x} 
-                  y2={link.target.y} 
-                  stroke="url(#linkGradient)" 
-                  strokeWidth={hoveredId === link.source.id || hoveredId === link.target.id ? "2.5" : "1.2"} 
+                <line
+                  key={`link-${i}`}
+                  x1={link.source.x}
+                  y1={link.source.y}
+                  x2={link.target.x}
+                  y2={link.target.y}
+                  stroke="url(#linkGradient)"
+                  strokeWidth={hoveredId === link.source.id || hoveredId === link.target.id ? "2.5" : "1.2"}
                   strokeOpacity={hoveredId === link.source.id || hoveredId === link.target.id ? "0.9" : "0.45"}
                   style={{ transition: 'stroke-width 0.2s, stroke-opacity 0.2s' }}
                 />
@@ -659,8 +663,8 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                 if (i % 3 !== 0) return null;
                 return (
                   <circle key={`pulse-${i}`} r="3" fill="#00F0FF">
-                    <animateMotion 
-                      dur={`${2 + (i % 3) * 1.5}s`} 
+                    <animateMotion
+                      dur={`${2 + (i % 3) * 1.5}s`}
                       repeatCount="indefinite"
                       path={`M ${link.source.x} ${link.source.y} L ${link.target.x} ${link.target.y}`}
                     />
@@ -671,33 +675,33 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               {/* Neural Nodes */}
               {simNodes.map((node, i) => {
                 const isModule = node.type === 'module';
-                const color = node.type === 'module' 
-                  ? '#00F0FF' 
-                  : node.type === 'class' 
-                    ? '#FFB400' 
-                    : node.type === 'variable' 
-                      ? '#00FF94' 
+                const color = node.type === 'module'
+                  ? '#00F0FF'
+                  : node.type === 'class'
+                    ? '#FFB400'
+                    : node.type === 'variable'
+                      ? '#00FF94'
                       : '#FF00A8';
 
                 const radius = isModule ? 9 : node.type === 'class' ? 6.5 : node.type === 'variable' ? 4 : 5.5;
                 const isHovered = hoveredId === node.id;
 
                 return (
-                  <g 
-                    key={node.id} 
-                    onMouseEnter={() => setHoveredId(node.id)} 
+                  <g
+                    key={node.id}
+                    onMouseEnter={() => setHoveredId(node.id)}
                     onMouseLeave={() => setHoveredId(null)}
                     onMouseDown={(e) => handleNodeMouseDown(node.id, e)}
                     style={{ cursor: draggedNodeId === node.id ? 'grabbing' : 'grab' }}
                   >
                     {/* Outer Orbit Halo Ring for Modules */}
                     {isModule && (
-                      <circle 
-                        cx={node.x} 
-                        cy={node.y} 
-                        r="18" 
-                        fill="none" 
-                        stroke={`${color}22`} 
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r="18"
+                        fill="none"
+                        stroke={`${color}22`}
                         strokeWidth="1.5"
                         strokeDasharray="4 2"
                       >
@@ -714,22 +718,22 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
                     {/* Node Glow Shadow Backing */}
                     {isHovered && (
-                      <circle 
-                        cx={node.x} 
-                        cy={node.y} 
-                        r={radius + 6} 
-                        fill={color} 
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r={radius + 6}
+                        fill={color}
                         opacity="0.3"
                         filter="url(#glow)"
                       />
                     )}
 
                     {/* Core Node Dot */}
-                    <circle 
-                      cx={node.x} 
-                      cy={node.y} 
-                      r={isHovered ? radius + 2.5 : radius} 
-                      fill={isHovered ? color : `${color}cc`} 
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={isHovered ? radius + 2.5 : radius}
+                      fill={isHovered ? color : `${color}cc`}
                       stroke="rgba(0,0,0,0.6)"
                       strokeWidth="1.5"
                       style={{ transition: 'r 0.15s, fill 0.15s' }}
@@ -737,14 +741,14 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
                     {/* Floating Text Labels */}
                     {(isHovered || isModule) && (
-                      <text 
-                        x={node.x + 14} 
-                        y={node.y + 4} 
-                        fill={isHovered ? '#fff' : 'rgba(255,255,255,0.7)'} 
-                        style={{ 
-                          fontSize: isModule ? '11.5px' : '10px', 
-                          fontWeight: isHovered ? 800 : 600, 
-                          pointerEvents: 'none', 
+                      <text
+                        x={node.x + 14}
+                        y={node.y + 4}
+                        fill={isHovered ? '#fff' : 'rgba(255,255,255,0.7)'}
+                        style={{
+                          fontSize: isModule ? '11.5px' : '10px',
+                          fontWeight: isHovered ? 800 : 600,
+                          pointerEvents: 'none',
                           fontFamily: 'monospace',
                           textShadow: '0 1px 4px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.9)'
                         }}
@@ -761,14 +765,14 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
         {/* Stats & Interactive Tooltip Sidebar */}
         <div className="glass-panel" style={{ borderRadius: '32px', padding: '2rem', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto' }}>
-          
+
           {selectedNode ? (
             // Holographic Tooltip Details on Hover
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '1rem' }}>
-                <div style={{ 
-                  width: '38px', height: '38px', 
-                  background: selectedNode.type === 'module' ? 'rgba(0, 240, 255, 0.1)' : 'rgba(255, 0, 168, 0.1)', 
+                <div style={{
+                  width: '38px', height: '38px',
+                  background: selectedNode.type === 'module' ? 'rgba(0, 240, 255, 0.1)' : 'rgba(255, 0, 168, 0.1)',
                   borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: selectedNode.type === 'module' ? '#00F0FF' : '#FF00A8'
                 }}>
@@ -860,16 +864,16 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                   <p style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.6)', margin: '0 0 1rem 0', lineHeight: 1.4 }}>
                     Permanently delete the project index, Firestore telemetry, and Oracle AI Database records.
                   </p>
-                  <button 
+                  <button
                     data-testid="delete-project-btn"
-                    style={{ 
-                      width: '100%', 
-                      padding: '0.6rem', 
-                      borderRadius: '10px', 
-                      background: 'rgba(255, 75, 75, 0.1)', 
-                      border: '1px solid #FF4B4B', 
-                      color: '#FF4B4B', 
-                      fontWeight: 700, 
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem',
+                      borderRadius: '10px',
+                      background: 'rgba(255, 75, 75, 0.1)',
+                      border: '1px solid #FF4B4B',
+                      color: '#FF4B4B',
+                      fontWeight: 700,
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                       fontSize: '0.8rem'
