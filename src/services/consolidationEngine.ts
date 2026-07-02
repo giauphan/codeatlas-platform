@@ -104,7 +104,7 @@ export class ConsolidationEngine {
       // Group by project to avoid cross-project false positives
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
-        const proj = String(row.project || "default");
+        const proj = String(row[R_IDX.PROJECT] || "default");
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push(row);
       }
