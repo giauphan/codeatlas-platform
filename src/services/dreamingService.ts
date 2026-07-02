@@ -8,7 +8,7 @@ import { generateEmbedding } from "./embeddingService.js";
 /**
  * Memory types for dreaming memories
  */
-export type DreamMemoryType = 'MISTAKE' | 'PREFERENCE' | 'KNOWLEDGE' | 'PATTERN' | 'A2A_SHARED_CONTEXT';
+export type DreamMemoryType = 'MISTAKE' | 'PREFERENCE' | 'KNOWLEDGE' | 'PATTERN' | 'A2A_SHARED_CONTEXT' | 'FEEDBACK';
 
 export interface DreamMemory {
   id: string;
@@ -64,10 +64,11 @@ export class OracleDreamingService {
             memory_type VARCHAR2(50),
             content     CLOB,
             embedding   VECTOR,
-            importance  NUMBER(1),
+            importance  NUMBER(2),
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             tenant_id   VARCHAR2(255)
           )';
+          EXECUTE IMMEDIATE 'COMMENT ON TABLE ai_dreaming_memory IS ''Dreaming memories with vector embeddings for semantic search''';
         EXCEPTION
           WHEN OTHERS THEN
             IF SQLCODE = -955 THEN
@@ -80,6 +81,38 @@ export class OracleDreamingService {
 
       await connection.execute(createTableSql);
       logger.info("[Oracle Dreaming] Table ai_dreaming_memory initialized successfully");
+
+      // Initialize Second Brain tables
+      try {
+        const sbSql = \`
+          BEGIN
+            EXECUTE IMMEDIATE 'CREATE TABLE codeatlas_concepts (
+              id            VARCHAR2(36) PRIMARY KEY,
+              label         VARCHAR2(500) NOT NULL,
+              description   CLOB,
+              category      VARCHAR2(50),
+              embedding     VECTOR(1024, FLOAT64),
+              project       VARCHAR2(255),
+              confidence    NUMBER(3,2) DEFAULT 0.50,
+              source_ids    CLOB,
+              evidence_count NUMBER DEFAULT 1,
+              status        VARCHAR2(20) DEFAULT ''active'',
+              created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              tenant_id     VARCHAR2(255)
+            )';
+            EXECUTE IMMEDIATE 'COMMENT ON TABLE codeatlas_concepts IS ''AI Second Brain concepts''';
+          EXCEPTION
+            WHEN OTHERS THEN
+              IF SQLCODE = -955 THEN NULL;
+              ELSE RAISE;
+              END IF;
+          END;
+        \`;
+        await connection.execute(sbSql);
+        logger.info("[SecondBrain] Tables initialized");
+      } catch (err) {
+        logger.error("[SecondBrain] Failed to init tables:", err instanceof Error ? err.message : String(err));
+      }
     } catch (err) {
       logger.error("[Oracle Dreaming] Failed to initialize table:", err instanceof Error ? err.message : String(err));
       throw err;

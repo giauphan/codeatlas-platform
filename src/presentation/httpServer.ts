@@ -19,6 +19,7 @@ import {
 import { authStorage } from "../utils/context.js";
 import { registerTools } from "./mcpTools.js";
 import { registerDreamingRoutes } from "./dreamingRoutes.js";
+import { mountSecondBrainRoutes } from "./secondBrainRoutes.js";
 import { mountA2ARoutes } from "./a2a/a2aRoutes.js";
 import { mountHeartbeatRoutes } from "./a2a/heartbeatRoutes.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
@@ -987,7 +988,8 @@ app.get("/api/docs/memory-setup", authMiddleware, (req, res) => {
  * Start the HTTP/SSE Express server on a specified port
  */
 export function startHttpServer(port: number): Promise<void> {
-  // Mount A2A (Agent-to-Agent) routes — Agent Card + JSON-RPC + REST
+  registerDreamingRoutes(app);
+  mountSecondBrainRoutes(app);
   mountA2ARoutes(app, a2aExecutor, `http://localhost:${port}`);
   mountHeartbeatRoutes(app);
 
