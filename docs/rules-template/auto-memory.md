@@ -1,0 +1,87 @@
+---
+trigger: always_on
+---
+
+## AI System Memory — Auto-Read & Auto-Sync
+
+### 🧠 MANDATORY: Remote Memory & Telemetry System
+All system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas telemetry server and Oracle 26ai Knowledge Graph database. The local `.agents/memory` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance. 
+Use the CodeAtlas MCP tools to query or search relationships, dependencies, and insights directly from the indexed system knowledge.
+
+
+### 🔎 MANDATORY: Use CodeAtlas MCP to Understand Code BEFORE Making Changes
+
+**NEVER start coding without understanding the codebase first.** Follow this flow:
+
+1. **User describes a problem/feature** → FIRST call `trace_feature_flow` with a keyword
+   - Returns the list of related files in `readingOrder`
+   - Read those files to understand the current implementation
+
+2. **Need to find a specific function/class** → call `search_entities`. NEVER use grep or find commands.
+   - `search_entities` is faster and includes relationship data (who calls it, who imports it)
+
+3. **Need to understand how things connect** → call `get_dependencies`
+   - Shows import/call/containment relationships between modules
+
+4. **Need a high-level overview** → call `generate_system_flow`
+   - Returns a Mermaid diagram showing the full system architecture
+
+5. **Need to see execution flow of a feature** → call `generate_feature_flow_diagram`
+   - Returns a Mermaid flowchart or sequence diagram showing the call chain
+   - Shows: entry point → controller → service → model step-by-step
+
+6. **Need to know what's in a specific file** → call `get_file_entities`
+   - Returns all classes, functions, variables in that file
+
+**Example flow when user says "fix login timeout":**
+```
+1. trace_feature_flow(keyword: "login")     → get list of related files
+2. generate_feature_flow_diagram(keyword: "login") → see execution flow
+3. Read files in readingOrder               → understand current logic
+4. Fix the code                             → make changes
+5. sync_system_memory(changeDescription: "Fixed login timeout") → update memory
+```
+
+### 🔄 MANDATORY: Sync Memory After Changes
+
+**After completing ANY code changes, you MUST call `sync_system_memory`:**
+
+1. **`changeDescription`** (ALWAYS required): What you just changed
+   - Example: `"Fixed login timeout by adding retry logic"`
+
+2. **`businessRule`** (ALWAYS extract if user mentions ANY domain logic):
+   - ALWAYS save when user mentions:
+     - Conditions: "only process videos > 30s", "skip if under 1000 likes"
+     - Permissions: "VIP users skip email verification"
+     - Limits: "free tier limited to 5 projects"
+     - Filters: "ignore duplicate entries", "only crawl public profiles"
+   - Even if user says it casually, YOU MUST SAVE IT
+   - If you are unsure whether something is a business rule, SAVE IT ANYWAY
+
+**Example:**
+```
+User: "fix upload bug, nhớ là chỉ lấy video trên 500 likes thôi"
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        → This is a business rule! MUST save it.
+
+sync_system_memory(
+  changeDescription: "Fixed upload bug",
+  businessRule: "Only process videos with 500+ likes"
+)
+```
+
+**DO NOT SKIP THIS STEP.** If you forget to sync, the next conversation loses all context.
+
+### Available Memory Tools
+
+| Tool | When to use |
+|------|-------------|
+| `generate_system_flow` | See/understand system architecture (module imports) |
+| `generate_feature_flow_diagram` | See execution flow of a feature (call chains) |
+| `sync_system_memory` | After code changes (ALWAYS call this) |
+| `trace_feature_flow` | Before working on a feature (understand context) |
+| `get_project_structure` | Detailed entity listing |
+| `get_dependencies` | Specific dependency relationships |
+| `search_entities` | Find function/class by name |
+| `get_file_entities` | Contents of a specific file |
+| `get_insights` | Code quality / architecture analysis |

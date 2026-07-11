@@ -1,0 +1,835 @@
+# Changelog
+
+## [2.14.1] - 2026-06-13
+
+### Fixed
+- **Multi-Tenant Project Discovery**: Excluded the server root directory (`process.cwd()`) from project discovery when running in multi-tenant mode (`CODEATLAS_MULTI_TENANT="true"`). This prevents duplicate/ambiguous entries of `codeatlas-ai` in the project selection dropdown.
+
+## [2.14.0] - 2026-06-07
+
+### Refactored
+- **Authentication**: Centralized CORS wildcard configuration and migrated API key authentication from URL query parameters to `x-api-key` headers for enhanced security.
+
+## [2.13.16] - 2026-06-06
+
+### Added / Changed / Fixed
+- **Documentation View**: Integrated copyable rule panels for Cursor AI Rules (`.cursor/rules/codeatlas.mdc`), General MCP Rules (`.agents/rules/codeatlas-mcp.md`), and Auto-Memory Rules (`.agents/rules/auto-memory.md`) within the MCP setup tab.
+- **Documentation View**: Linked both "Quick Setup Guide" and "AI Memory Guide" in the top-right header section of the System Documentation view.
+- **Security**: Added `authMiddleware` to the documentation markdown endpoints (`/api/docs/quick-setup` and `/api/docs/memory-setup`) to prevent unauthorized access to configuration files and project documentation structure.
+
+## [2.13.15] - 2026-06-06
+
+### Changed
+- **Documentation**: Updated all setup instructions and template generators to reference the enterprise package (`codeatlas-enterprise` via npx) instead of the deprecated public package name (`@giauphan/codeatlas-mcp`).
+- **Documentation**: Updated all setup instructions and template generators to reflect the renamed rule files and their new locations.
+- **Version Bump**: Synchronized version in `httpServer.ts` to match release.
+
+### Fixed
+- **Type Safety**: Added Express Request type augmentation (`src/types/express.d.ts`) — properly typed `req.auth` property instead of `(req as any).auth`
+- **CORS**: Added explicit `else` branch with `Vary: Origin` header for rejected origins so browser properly rejects unlisted origins
+- **Type Cast**: Added `IncomingMessage` import and proper type cast in `/messages` handler for strict TypeScript compatibility
+
+## [2.13.14] - 2026-06-04
+
+### Changed / Fixed
+- **SSE Transport**: Resolved race condition in SSE session connection close by implementing session generation/nonce tracking.
+- **Security Scanner**: Hardened vulnerability scanner to significantly reduce false-positive rates for hardcoded secrets and SQL Injection risk detection by introducing Camel/Snake boundary word checks and database/SQL context verification.
+- **MCP Presentation**: Updated HTTP Server import configuration to delegate registration via `mcpTools.ts` rather than the old monolith entrypoint `mcpServer.ts`.
+
+## [2.13.13] - 2026-06-04
+
+### Added / Changed
+- **CI / GitHub Actions**: Configured the code review step to write output to `review_report.md` and added a post-comment step using `actions/github-script` to post the review directly as a comment on the PR, tagging the PR author.
+- **CI / GitHub Actions**: Captured stderr for the code review step via `2>&1`, added non-zero exit handling, and made `context.payload.pull_request.user.login` fallback to `context.actor`.
+- **Logger**: Added `LOG_LEVEL` environment variable validation to reject invalid log level values at startup, defaulting to `info`.
+
+## [2.13.12] - 2026-06-04
+
+### Fixed / Changed
+- **CI / GitHub Actions**: Switched to `${{ github.token }}` instead of `${{ secrets.GITHUB_TOKEN }}` to resolve warning/errors with secret names starting with `GITHUB_`.
+- **CI / GitHub Actions**: Supported fallback to `secrets.COMMAND_CODE_API_KEY` for Command Code API Authentication.
+- **Unit Tests**: Added mock values for `ORACLE_PASSWORD` and `ORACLE_CONN_STRING` to fix failures in `OracleMemoryService` tests.
+
+## [2.13.11] - 2026-06-04
+
+### Fixed / Changed
+- **Command Code Proxy API Schema Mapping**: Added message sanitization logic in `scripts/command-code-proxy.ts` to translate unsupported roles (e.g. system, developer, tool) to "user" and merge consecutive duplicate roles, resolving `400 Bad Request` schema validation failures on the target Command Code API.
+
+## [2.13.10] - 2026-06-04
+
+### Added / Changed / Fixed
+- **Automated Pull Request Code Reviews**: Configured a non-interactive CI step in `.github/workflows/ci.yml` that performs code reviews automatically on pull requests using the `command-code` CLI.
+- **Go Plan API Bypass Proxy**: Implemented a local proxy script (`scripts/command-code-proxy.ts`) to translate standard OpenAI/Hermes API requests into the `/alpha/generate` NDJSON schema, bypassing the Command Code Go plan API access restrictions.
+- **Hermes Agent Integration**: Integrated Hermes to utilize the local proxy, routing agent workflows through Command Code's `/alpha/generate` endpoint seamlessly.
+
+## [2.13.9] - 2026-06-03
+
+### Added / Fixed
+- **E2E Project Discovery Tests**: Created robust integration tests to verify project discovery criteria, including validation of `.git` folders, system/hidden directories exclusion, and Linux process (/proc) inspection for active IDE processes.
+- **Settings API E2E Compliance**: Updated settings integration test suite to align with hardened project validation.
+
+## [2.13.8] - 2026-06-03
+
+### Fixed / Changed
+- **Hardening CodeAtlas Workspace Indexing**: Prevent unwanted system directory indexing and enforce strict project discovery criteria. Enforced `.git` or `.codeatlas` folder presence check as a requirement for project validation, and integrated active IDE process detection (via `/proc` inspection) to identify valid open workspaces.
+- **Enterprise MCP Sync**: Synchronized client version to `2.2.3` and aligned workspace validation heuristics with the core server.
+
+## [2.13.7] - 2026-06-02
+
+### Added
+- **Database Keep-Alive Ping**: Added static `ping()` method to `OracleMemoryService` executing a lightweight `SELECT 1 FROM DUAL`.
+- **Auto-Ping Background Task**: Integrated a background task running every 12 hours on HTTP server initialization. This generates database activity and prevents Oracle Always Free Autonomous Databases from being automatically paused/stopped.
+
+## [2.13.6] - 2026-06-02
+
+### Changed
+- **NJS-040 Connection Starvation Fix**: Refactored `saveSemanticMemory` and `searchSemanticMemory` in `OracleMemoryService` to generate NVIDIA embeddings *before* acquiring an Oracle database connection. This prevents holding connection pool slots idle for long periods during external API latency, completely eliminating NJS-040 timeout errors.
+
+## [2.13.5] - 2026-06-02
+
+### Changed
+- **Security Scanner Performance Optimization**: Refactored `SecurityScanner.scan` to combine multiple nodes-list iterations into a single $O(N)$ pass. Cached normalization paths to prevent redundant string manipulation, drastically reducing CPU usage and memory footprint during project-wide vulnerability scans.
+
+## [2.13.4] - 2026-06-02
+
+### Added
+- **API Gateway Rate Limiting**: Added local in-memory rate limiting middleware `localRateLimiter` (60 requests/minute limit per tenant/IP) to prevent server/database overload.
+- **Sequential Sync Task Queue**: Implemented a concurrency-limiting task queue (`syncQueue` with concurrency = 1) for the `/api/projects/sync` endpoint. This serializes database-intensive knowledge graph writes and prevents connection pool exhaustion or lock contention during high-volume synchronizations.
+
+### Changed
+- **Relational Memory Batched Writes**: Updated relational memory link insertion query in `OracleMemoryService.saveRelationalMemory` to execute in batches of 1000 items.
+
+## [2.13.3] - 2026-06-02
+
+### Fixed
+- **Oracle DB Connection Timing (NJS-125)**: Postponed evaluation of database configuration environment variables to runtime inside the connection pool initialization helper. Also moved `dotenv.config()` invocation to the absolute top of the index.ts entrypoint, preventing early module imports from reading empty/unloaded environment variables.
+
+## [2.13.2] - 2026-06-02
+
+### Fixed
+- **Oracle DB Episodic Memory Bug**: Fixed silent failure during episodic memory sync by wrapping primitive/string values inside a structured JSON object (`{ val: data }`) before binding with native `oracledb.DB_TYPE_JSON`.
+- **Database Error Propagation**: Hardened error handling in `OracleMemoryService` by propagating (re-throwing) database errors rather than catching and swallowing them, allowing REST APIs and MCP tools to properly detect and report failures.
+
+## [2.13.1] - 2026-06-02
+
+### Fixed
+- **Path Resolution & Separation**: Standardized multi-tenant project path resolution using relative-path mapping and path slash normalization, completely eliminating false-negative 404 project analysis errors.
+- **sessionStorage Exhaustion Mitigation**: Engineered a high-performance in-memory cache fallback layer (`memoryAnalysisCache`) that silently takes over when sessionStorage limits are exceeded, ensuring large project payloads load seamlessly.
+- **Concurrent Fetch Orchestration**: Refactored the dashboard component's lifecycle initialization to coordinate and deduplicate mounting calls, preventing race conditions and stale directory swapping.
+
+## [2.13.0] - 2026-06-01
+
+### Added
+- **Episodic Memory Retrieval (GET)**: Implemented full-circle support for querying saved Change Logs and Business Rules from the Oracle 26ai database.
+- **`get_system_memory` MCP Tool**: Added a new tool to query, filter, and parse episodic memory entries by project name and event type directly from the Knowledge Graph database.
+- **`GET /api/projects/memory` REST API Endpoint**: Added a secure HTTP API endpoint to retrieve episodic memory entries with robust JSON parsing.
+
+## [2.12.8] - 2026-06-01
+
+### Fixed
+- **Dynamic Cross-Platform Antigravity Detection**: Replaced the hardcoded `/config/Downloads/Antigravity` fallback check with a dynamic, multi-platform resolution of `~/.gemini/antigravity` relative to `os.homedir()`, guaranteeing robust active workspace filtering for local users across Windows, macOS, and Linux.
+- **Enterprise MCP Version**: Bumped enterprise MCP package to `2.1.53`.
+
+## [2.12.7] - 2026-06-01
+
+### Fixed
+- **Cross-Platform Claude Desktop Paths**: Added full support for macOS and Windows Claude Desktop configuration files (`Library/Application Support/Claude/claude_desktop_config.json` and `AppData/Roaming/Claude/claude_desktop_config.json`) inside the fallback API key resolver, ensuring seamless plug-and-play setup for clients across all operating systems.
+- **Enterprise MCP Version**: Bumped enterprise MCP package to `2.1.52`.
+
+## [2.12.6] - 2026-06-01
+
+### Fixed
+- **Enterprise MCP Sync Credentials Security**: Resolved background secure cloud sync 401 Unauthorized issues by replacing direct env-var reliance with config-aware fallback resolution in the enterprise watcher and sync services, prioritizing `.gemini/antigravity/mcp_config.json` configuration values over stale/polluted environments.
+- **Enterprise MCP Version**: Bumped enterprise MCP package to `2.1.51` to ship the credentials resolution framework.
+
+## [2.12.5] - 2026-05-30
+
+### Fixed
+- **Passive Event Listener preventDefault Warnings**: Resolved console warnings and scroll interference (`Unable to preventDefault inside passive event listener invocation`) on SVG wheel gestures by attaching the wheel listener directly to the SVG element in `KnowledgeGraphView.tsx` with `{ passive: false }`.
+- **Silent Cache Eviction**: Refactored the quota eviction mechanism in `Dashboard.tsx` to clear old analysis storage silently and use a clean `console.info` fallback, completely removing collapsible stack traces and yellow warnings.
+
+## [2.12.4] - 2026-05-30
+
+### Fixed
+- **Information Disclosure Vulnerability**: Resolved a high-severity path disclosure security bug by mapping and sanitizing all absolute filesystem project directories to relative paths across `GET /api/projects`, `GET /api/analysis`, and `POST /api/projects/sync` endpoints.
+- **Double-Write Cache Optimization**: Optimized the frontend analysis caching mechanism in `Dashboard.tsx` to save cache in a single dedicated location rather than duplicate writes, instantly saving 50% of the storage quota.
+- **Graceful Quota Handling**: Replaced console error traces in `safeSessionStorageSetItem` with a graceful notice warning when project analysis payloads exceed maximum storage limits, allowing smooth memory-only operation.
+
+## [2.12.3] - 2026-05-30
+
+### Fixed
+- **Dashboard Storage Quota Hardening**: Replaced direct `sessionStorage.setItem` calls in `Dashboard.tsx` with a robust `safeSessionStorageSetItem` wrapper that catches `QuotaExceededError` and `NS_ERROR_DOM_QUOTA_REACHED` errors, clears older cached project analysis data (`ca_analysis_cache_*`) to reclaim storage space, and retries the save operation.
+
+## [2.12.2] - 2026-05-28
+
+
+### Fixed / Changed
+- **Static Analysis Heuristic Refinements**: Hardened the static vulnerability scanner in `src/securityScanner.ts` to ignore test files, mock files, and scratch/diagnostic directories.
+- **UseCase Exclusion**: Prevented standard TS/JS Use-Case design execution patterns (e.g. `execute()`) and Use-Case classes from triggering false-positive SQL Injection findings.
+- **Enterprise MCP Sync**: Updated `codeatlas-mcp-enterprise` repository version to `2.1.50` and synchronized its security scanner heuristics to ignore test/mock files and UseCase command patterns.
+
+## [2.12.1] - 2026-05-25
+
+### Fixed / Changed
+- **Race Condition Resolution**: Prevented indexing settings database/filesystem inconsistency by propagating Firestore write failures immediately to return 500 error on POST requests.
+- **Corrupted Settings JSON Fallback**: Wrapped JSON parser in the GET settings endpoint to prevent server crashes on corrupted settings files, falling back to Firestore database configuration.
+- **Optimistic State Management**: Refactored the dashboard project settings checkbox to perform optimistic UI updates with robust error rollback, and show loading states.
+- **Project-Specific Settings Cache**: Replaced the global session storage cache key with project-specific settings caches (`codeatlas_indexing_enabled_{projectDir}`), clearing them properly on project deletion or user logout.
+- **Parameter Validation & Typings**: Strengthened project settings API parameters validation to restrict inputs to non-empty strings and boolean flags.
+- **Stable UI Click Handlers**: Wrapped frontend click and state callbacks in stable `useCallback` hooks to prevent unnecessary component re-renders.
+- **Enhanced Test Coverage**: Added comprehensive negative/edge-case tests to `settings.test.ts` verifying parameter validation, Firestore failures, corrupted files, and correct HTTP status codes.
+
+## [2.12.0] - 2026-05-24
+
+### Added
+- **Indexing Settings Endpoints**: Introduced `GET /api/projects/settings` and `POST /api/projects/settings` REST API routes to retrieve and save codebase-level indexing configurations (e.g. `indexingEnabled`).
+- **Dynamic File Watcher Toggle**: Integrated the indexing configuration check in the enterprise MCP `watcherService` to respect the auto-scan settings and skip local indexing/telemetry pushes if disabled.
+
+## [2.11.15] - 2026-05-24
+
+### Changed / Removed
+- **Menu Simplification**: Removed the 'Logic Engines' ('Logic Models') view component, sidebar menu item, and corresponding unit test coverage from the dashboard.
+
+## [2.11.14] - 2026-05-24
+
+### Fixed
+- **Knowledge Graph Node Prioritization**: Prioritized module type nodes in the front-end simulation graph to prevent module nodes from being cut off due to the performance rendering limit.
+
+## [2.11.13] - 2026-05-24
+
+### Fixed
+- **Dashboard Cache Invalidation**: Implemented project-specific cache-key storage (`ca_analysis_cache_\\${projectDir}`) in `Dashboard.tsx` to resolve stale UI counts on dashboard selection and reload.
+- **Cache Clearing**: Added automatic clearing of project-specific cached analysis upon project deletion, logout, session expiration, and explicit re-indexing.
+
+## [2.11.12] - 2026-05-23
+
+### Fixed
+- **Local Memory Elimination**: Removed the remaining local filesystem writes inside the `sync_system_memory` tool handler on both server and client repositories.
+- **Unified Episodic Cloud Sync**: Updated the client's `syncAnalysisToServer` and the server's POST `/api/projects/sync` endpoint to securely transmit and store `businessRule` and `changeDescription` directly in the database.
+
+## [2.11.11] - 2026-05-23
+
+### Changed / Fixed
+- **Database-First Memory Refactoring**: Removed local system memory file generation in `.agents/memory/` across both server and client MCP gateway components. System mapping, business rules, and change logs are now managed and synchronized exclusively in the Oracle 26ai Knowledge Graph database.
+- **Rule Template Updates**: Rewrote MCP, Cursor, Claude Code, and Windsurf auto-generated rules to direct the AI to query the central database instead of looking for local `.agents/memory` files.
+- **Test Alignment**: Refactored the unit tests in `tests/memoryGenerator.test.ts` to reflect the removal of local files and verify proper rule folder/file creation.
+
+## [2.11.10] - 2026-05-23
+
+### Fixed
+- **Variable Count in Summary Stats**: Added missing variable extraction counts to the final `entityCounts` payload generated by the code analyzer, resolving the bug where `Variables` showed `0` in the dashboard sidebar despite variable nodes correctly rendering in the Knowledge Network graph.
+
+## [2.11.9] - 2026-05-23
+
+### Fixed
+- **Path Leakage Protection**: Sanitized and normalized all local workspace paths (`filePath`) to relative paths prior to serialization and remote synchronization. This stops sensitive local absolute paths (e.g. `/home/biibon/...`) from being transmitted to the cloud database and Oracle 26ai Knowledge Graph.
+- **Dynamic Path Resolution**: Local MCP server tools dynamically resolve absolute file paths for local consumption (e.g. for the local LLM/IDE), preserving complete local-first functionality while maintaining clean/portable synced metadata.
+
+## [2.11.8] - 2026-05-23
+
+### Added / Changed
+- **Embedding Integration for Auto-Indexing**: Integrated NVIDIA embedding generation into the standard workspace synchronization flow. Telemetry requests hitting `POST /api/projects/sync` now automatically schedule background vector embeddings and save relational mapping of AST structures directly into the Oracle 26ai Database.
+- **Always-on Semantic Memory Sync**: Defaulted the manual `sync_system_memory` tool's `enableEnterpriseSync` flag to `true` for both the client enterprise gateway and the remote server.
+
+## [2.11.7] - 2026-05-23
+
+### Added / Fixed
+- Add unit tests for `force=true` project deletion override and connection failure warnings.
+- Fix unit tests for Oracle client Thick Mode initialization to run correctly on Linux platforms.
+
+## [2.11.6] - 2026-05-23
+
+### Added / Fixed
+- Implement `force=true` query parameter support in `DELETE /api/projects` endpoint to bypass remote DB/Firestore cleanup errors and proceed with local directory cleanup and unregistration.
+- Add confirmation flow in the React Neural Dashboard to allow users to force delete projects locally if a remote cleanup fails.
+- Calculate and display dynamic index coverage in `KnowledgeGraphView.tsx` and `CloudIndexView.tsx` based on actual analyzed vs skipped file metrics, replacing the hardcoded "85%" value.
+
+## [2.11.5] - 2026-05-23
+
+### Fixed / Changed
+- Configure Virtual Private Database (VPD) session context using target tenant ID before deleting project data in Oracle Database.
+- Securely check for and clean up unclaimed or matching tenant legacy unscoped Firestore documents.
+- Restrict directory traversal checks to strictly block path traversal while supporting double-dot-prefixed directory names inside the sandbox.
+- Retain project registration in `registered_projects.json` if local index directory cleanup fails, ensuring the operation can be retried.
+
+## [2.11.4] - 2026-05-23
+
+### Fixed / Changed
+- Defer local indexing directory deletion and registry unregistration until remote database cleanups (Firestore, Oracle DB) succeed.
+- Implement canonical path resolution using `fs.promises.realpath` to secure multi-tenant sandbox boundary checks against symlink traversal.
+- Support safe symlink project unlinking and symlink `.codeatlas` file removal without target traversal.
+- Add comprehensive integration tests verifying cleanup order, symlink handling, and sandbox validation under failure states.
+
+## [2.11.3] - 2026-05-23
+
+### Fixed / Changed
+- Derive target project owner tenant ID from resolved project path for Firestore and Oracle DB cleanup.
+- Implement robust relative-path checking (`path.relative`) for tenant sandbox path-boundary checks.
+- Safely clean up tenant directories only when they are empty after `.codeatlas` index directory removal.
+- Add comprehensive integration tests for project deletion boundary checks and sandbox directory cleanup.
+
+## [2.11.2] - 2026-05-23
+
+### Fixed / Changed
+- Enforce strict exact-path matching during project deletion to prevent name-matching ambiguity.
+- Support safe clean up of empty tenant project folders inside the multi-tenant directory.
+- Restrict Firestore deletion to scoped tenant documents to prevent cross-tenant data loss.
+- Propagate Oracle DB memory and project-unregister errors to the API delete response.
+- Validate project directory query parameter type on the server and safely handle non-JSON error responses in the frontend.
+
+## [2.11.1] - 2026-05-23
+
+### Changed
+- Added Danger Zone project removal control to the Knowledge Graph tab.
+- Added comprehensive unit tests for project deletion in both backend controllers and frontend dashboard views.
+
+## [2.11.0] - 2026-05-23
+
+### Added
+- **Project Deletion & Remote Cleanup**: Added `DELETE /api/projects` endpoint and Danger Zone component in the Dashboard to clean up local indexed directories, unregister projects, and purge Firestore telemetry and Oracle 26ai Database memory records (episodic, semantic, relational).
+
+## [2.10.4] - 2026-05-22
+
+### Changed / Fixed
+- **Robust Client Binary Resolution in Integration Tests**: Improved sibling client binary lookup to gracefully skip startup E2E tests in environments where the client is not checked out (like CI runners).
+
+## [2.10.3] - 2026-05-22
+
+### Added
+- **NVIDIA API Key Env Config**: Added `NVIDIA_API_KEY` placeholder configuration variable to `.env.example` to support standard environment setup.
+
+## [2.10.2] - 2026-05-22
+
+### Changed / Fixed
+- **Source Comments in English**: Translated all Vietnamese database schema comments and code comments in the codebase to English to match formatting guidelines.
+- **Typecast connection.executeMany Binds**: Cast parameter binds to `any[]` in `oracleDatabase.ts` to satisfy the TypeScript compilation requirements.
+
+
+## [2.10.1] - 2026-05-22
+
+### Removed
+- **Unnecessary Files & Legacy Components**: Completely removed the legacy AST parser (`src/analyzer`) and local filesystem watcher (`watcherService`) from the central server codebase, delegating these local-first tasks entirely to the client enterprise MCP repo.
+
+## [2.10.0] - 2026-05-22
+
+### Added
+- **Automated Workspace Indexing and Watching**: Hooked in the `watcherService` and `CodeAnalyzer` into the server's lifecycle. The server now auto-scans active project workspaces for `.codeatlas` markers and watches for code changes in real-time, automatically triggering re-indexing on file edits.
+- **Dynamic Project Discovery**: Restored scanning logic for globally registered projects (~/.codeatlas/registered_projects.json) and nested directories to ensure that all workspace paths are indexed without manual server configuration.
+- **Triggerable Analyze MCP Tool**: Refactored the `analyze` tool to run the dynamic `CodeAnalyzer`, write the AST payload locally, and synchronize the telemetry to Firestore and CodeAtlas Cloud VPS on demand.
+
+## [2.9.11] - 2026-05-18
+
+### Fixed / Added
+- **Multi-Tenant Access Isolation Hierarchy**: Standardized project discovery for Multi-Tenant mode. Standard tenants can only discover projects within their own `tenants/{tenantId}/` workspace. System Administrators can view both their own user tenant projects, system-wide projects, and all projects synced across all other tenant workspaces.
+
+## [2.9.10] - 2026-05-18
+
+### Added / Migration
+- **Runtime Telemetry Migration Fallback**: Added automatic backward-compatible runtime migration of legacy Firestore documents. When syncing under a tenant, the server automatically detects legacy non-prefixed documents, safely migrates and merges their historical telemetry data into the new isolated `${tenantId}_${projectName}` documents, and cleans up legacy duplicate documents.
+
+## [2.9.9] - 2026-05-18
+
+### Fixed / Added
+- **Multi-Tenant Firestore Isolation**: Fixed the telemetry linkage bug where projects with identical names from different users could overwrite each other in the Firestore database. Telemetry documents are now uniquely identified using `${tenantId}_${projectName}`.
+- **Single-Tenant Project Discovery**: Hardened the discovery service to scan the `projects/` sub-directory when `CODEATLAS_MULTI_TENANT` is disabled, allowing projects synced to the server in single-tenant environments to be fully indexed and accessible via MCP tools.
+
+## [2.9.8] - 2026-05-18
+
+### Changed / Removed
+- **Architectural Separation of Concerns**: Completely removed the legacy AST parser (`src/analyzer`) and local filesystem watcher (`watcherService`) from the central server codebase.
+- **Dependency Simplification**: Grew lighter by un-installing bulky libraries like `@typescript-eslint/typescript-estree`, `py-ast`, `chokidar`, and `glob` from the remote server, preventing node-gyp compile issues and saving over 50% package footprint.
+- **REST Sync & Isolation**: Standardized the server to act as a purely lightweight database/API hub. Server now exclusively consumes pre-analyzed AST payloads synced from the local `codeatlas-enterprise` client, returning descriptive guides on local reindexing endpoints.
+
+## [2.9.7] - 2026-05-18
+
+### Fixed / Changed
+- **Stdio Stream Isolation**: Migrated all raw `console.log` statements in the client package (`codeatlas-enterprise`) to `console.error`. This prevents logs and diagnostics from polluting `stdout`, which is strictly reserved for JSON-RPC frame framing, resolving `invalid character '=' looking for beginning of value` errors during server initialization.
+
+## [2.9.6] - 2026-05-18
+
+### Fixed / Changed
+- **NPM Package Binary Name Fix**: Updated `package.json` in the `codeatlas-mcp-enterprise` client package to map `"bin"` directly to `"codeatlas-enterprise"`, aligning the binary name with the package name. This ensures that executing `npx -y codeatlas-enterprise` invokes our new secure Local-First JS script directly, instead of falling back to cached legacy packages or causing Supergateway 401 connection errors.
+
+## [2.9.5] - 2026-05-18
+
+### Changed / Removed / Security
+- **Strict Client-Side Security Hardening**: Completely removed sensitive Firestore, Firebase Admin, and Oracle database integrations/schema definitions from the distributed local MCP package (`codeatlas-mcp-enterprise`).
+- **REST Sync Strategy**: Refactored background auto-scans to securely POST local AST `.codeatlas/analysis.json` data to the secure remote VPS server using standard Bearer Token HTTPS endpoints (`/api/projects/sync`), preventing exposure of database credentials and internal database structures in local installations.
+- **In-Process Watcher Pipeline**: Refactored the file watcher to run indexing dynamically in-process on change events, eliminating manual subprocesses and configuration overhead.
+- **Dependency Reduction**: Removed heavy native `oracledb` and `firebase-admin` packages from the client node dependencies, resulting in a lightweight, robust, compilation-error-free, and enterprise-secure client setup.
+
+## [2.9.4] - 2026-05-18
+
+### Fixed / Changed
+- **Robust Firebase & Firestore Initialization**: Guarded index.ts and run_indexing.ts to safely handle missing or deleted Firebase credentials. Checked for file existence on disk before passing Google application credentials paths to cert(), avoiding fatal unhandled initialization crashes on startup.
+- **Fail-Safe Background Auto-Indexing**: Wrapped the background auto-scanner CLI to dynamically resolve and load the Firestore instance only if Firebase Admin initialized successfully, allowing indexing to proceed locally even without Firestore sync capabilities.
+
+## [2.9.3] - 2026-05-18
+
+### Changed / Refactored
+- **Clean Architecture Refactoring**: Decoupled the massive server file by separating presentation logic and application services cleanly. Express routing, security middleware, and Server-Sent Events (SSE) session management are extracted into the `src/presentation/httpServer.ts` adapter layer.
+- **Obsolete Tool Registrations Purged**: Purged duplicate code registration logic within the main server file in favor of the unified tool mappings defined inside the `src/presentation/mcpServer.ts` adapter layer.
+- **Thin Composition Root**: Index.ts is now streamlined to serve as a pure composition root that initializes application-wide configurations, triggers background scans, and spins up the selected transport (SSE or Stdio).
+
+## [2.9.2] - 2026-05-18
+
+### Changed / Added
+- **Automated Directory Discovery & Dynamic Codebase Auto-Scanning**: Removed the strict requirement for a pre-generated `.codeatlas/analysis.json` file during project discovery. Relaxed `discoverProjects` / `discoverProjectsAsync` to automatically identify any developer project directory by checking for standard metadata heuristics (such as `package.json`, `.git`, `.codeatlas`, or `README.md`).
+- **Dynamic Background Codebase Scanning**: Implemented an automated background scanner using `CodeAnalyzer`. If a project lacks a pre-existing analysis file, the server dynamically instantiates a parser, indexes the project, saves the resulting JSON locally, and optionally syncs telemetry metrics to Firestore asynchronously on the fly.
+- **Server Startup Indexing**: Added non-blocking background discovery and initial scanning on server startup (`main()`) to automatically index all candidate projects asynchronously without introducing boot delays.
+
+## [2.9.1] - 2026-05-18
+
+### Changed / Fixed
+- **Asynchronous File System Operations**: Fully refactored `loadAnalysis` and `discoverProjects` to non-blocking promised-based asynchronous counterparts (`loadAnalysisAsync` and `discoverProjectsAsync`).
+- **Asynchronous MCP Tools**: Updated all codebase intelligence tools (`sync_system_memory`, `trace_feature_flow`, `generate_feature_flow_diagram`, `detect_architectural_smells`, `scan_enterprise_vulnerabilities`) to asynchronously query project data and perform non-blocking filesystem I/O operations under high concurrent load.
+- **Dynamic SSE Server Versioning Alignment**: Bumped the version of dynamic session-specific MCP server instances to `"2.9.1"` in Server-Sent Events (SSE) mode, ensuring complete version alignment across dynamic and static server endpoints.
+
+## [2.8.0] - 2026-05-18
+
+### Added / Changed
+- **Secure Cryptographic API Key Hashing**: Implemented cryptographic SHA-256 API key hashing on both the browser front-end (via Web Crypto `crypto.subtle`) and the Node backend server (via Node `crypto`). Plain-text API keys are never persisted in the Firestore database; only the cryptographically hashed string (`keyHash`) and a public key preview (`keyPreview`) are stored.
+- **Single-Exposure Secret Copying**: Configured the dashboard UI to display the newly generated API key exactly once upon creation for secure copying, after which the key is hidden forever.
+- **Unhashed Legacy Backwards Compatibility**: Implemented a robust fallback layer in the authentication store verification flow to support legacy unhashed API keys seamlessly.
+- **PR Merge & Branch Lifecycle Management**: Safely integrated and merged Pull Request #3 (`feat: Store and verify API keys using cryptographic hashing`) into `main`. Deleted the remote PR branch `hash-api-keys-5588962574063343813` and pruned the local environment.
+
+## [2.7.4] - 2026-05-17
+
+### Fixed
+- **PR Merge & Branch Lifecycle Management**: Verified, reviewed, and successfully merged Pull Request #1 (`Fix Command Injection in Auto-Indexing Watcher`) into `main`. Safely deleted the stale remote branch `fix-command-injection-index-2713636837679567816` from GitHub and pruned the local environment.
+- **System Stability Verification**: Confirmed flawless build status and type safety for both the MCP Server (root) and the Neural Dashboard (dashboard/), with 100% of integration test suites executing successfully.
+
+## [2.7.3] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Credentials & Wallet Secret Hardening**: Removed hardcoded Firebase Admin SDK credential JSON file and sensitive Oracle Wallet materials from Git tracking. All credentials now safely load via environment variables (`GOOGLE_APPLICATION_CREDENTIALS` and `TNS_ADMIN`).
+- **SSE Session Ownership Verification**: Implemented multi-session ownership verification for Server-Sent Events `/sse` and `/messages`, completely preventing unauthorized session hijacking or cross-user SSE data access.
+- **Oracle VPD Production Fail-Closed Policy**: Enforced dynamic fail-closed behavior for Oracle RLS/VPD security context binding in production environments to guarantee complete tenant boundary isolation.
+
+## [2.7.2] - 2026-05-17
+
+### Fixed
+- **Command Injection Mitigation**: Hardened the auto-indexing project watcher, refactoring insecure dynamic shell `exec` calls to secure, parameterized `execFile` invocations.
+
+## [2.7.1] - 2026-05-17
+
+### Fixed
+- **Token Verification & Validation Bug**: Fixed a bug where entering any arbitrary key or token in the "TOKEN" authentication tab would allow standard users to bypass client-side validation and enter a broken dashboard UI. The login screen now calls the projects endpoint (`/api/projects`) to perform pre-login authentication verification, properly returning security warnings for invalid keys.
+
+## [2.7.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Enterprise-Grade Token & API Key Session Isolation**: Replaced the hardcoded super admin backdoor access button with a dynamic, secure, and ephemeral Token/API Key session manager in the browser. Storing access tokens inside `sessionStorage` avoids cross-tab session hijacking or persistence vulnerabilities on shared machines.
+- **Removed Buggy Registry Flow**: Eliminated the user signup ("CREATE" node) flow from the React portal entirely, locking access to pre-registered nodes and Enterprise API Key initializations.
+- **Migrated Local Cache Persistence**: Transitioned all local file structures, project preferences, and system analysis cache items from `localStorage` to `sessionStorage` to seal local directory path leakage risks.
+
+## [2.6.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Dynamic Role-Based Super Admin Authorization Flow**: Replaced the email-specific hardcode with a dynamic lookup of the user's role from their Firestore document (`users/{uid}`) or custom token claims (`decodedToken.role`), supporting clean-architecture enterprise standards.
+- **Upgraded upgrade_admin Script**: Updated the administrative bootstrap script to automatically set `role: 'admin'` in Firestore to grant proper, dynamic permissions to administrative accounts.
+
+## [2.5.3] - 2026-05-17
+
+### Fixed / Changed
+- **Fixed Multi-Tenant Project Leak Bug**: Replaced the hardcoded `SUPER_ADMIN_KEY` for fetching projects in `Dashboard.tsx` with dynamic, authenticated Firebase user ID Bearer tokens (`Authorization: Bearer <ID_TOKEN>`).
+- **Hardened Multi-Tenant Isolation Boundaries**: Updated the `authMiddleware` in `index.ts` to decode and verify Firebase ID tokens using `firebase-admin`, preventing standard users from bypassing boundaries to access super-admin (/home) directory structures.
+- **Harden Reindex Endpoint**: Secured the `/api/reindex` route to strictly validate that the requested `projectDir` lies within the authenticated tenant's directory.
+
+## [2.5.2] - 2026-05-17
+
+### Fixed / Changed
+- **Added Remote API Key Setup in Documentation**: Updated the dashboard MCP integration guide (`DocumentationView.tsx`) to show exactly how to configure the `CODEATLAS_API_KEY` for VS Code (via `env` and `args` options) and added `?apiKey=YOUR_API_KEY_HERE` to the Cursor AI SSE URL table row.
+
+## [2.5.1] - 2026-05-17
+
+### Fixed / Changed
+- **Removed Irrelevant Local Quickstart Tab**: Refactored the dashboard documentation view, removing local developer server-management instructions (`npm run dev`, `npm run build`, `npm run test`) to fully focus on MCP client configuration settings.
+- **Dynamic Secure Markdown Documentation HTTP Endpoint**: Added a secure Express route (`/api/docs/quick-setup`) to serve the system guide `QUICK_SETUP.md` dynamically.
+- **Fixed Browser Path Security Error**: Rewrote the "Open Markdown Guide" HUD anchor link in the dashboard to load via the new secure HTTP API endpoint, eliminating browser `file:///` path security block errors.
+
+## [2.5.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Multi-Project Swapping Engine**: Engineered active directory discovery (`/api/projects`) and real-time project switching for live codebase graphs in the Knowledge Network.
+- **Glassmorphic Project Selector**: Integrated a gorgeous select dropdown beside the graph search input inside the Knowledge Network SVG canvas to fluidly query project analytics.
+- **Project Switcher Documentation**: Added a comprehensive `MULTI_PROJECT_SWITCHER.md` document detailing installation, configuration, internal routing mechanisms, and client dashboard integration.
+
+## [2.4.1] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Immersive Fullscreen Graph Canvas**: Added native HTML5 Fullscreen API support to enable interactive edge-to-edge network visualization.
+- **Dynamic Resize Optimization**: Integrated state-driven CSS style triggers that automatically adjust parent layout border-radii, boundaries, and background backing properties to `#0A0C10` on entering fullscreen mode.
+- **Glassmorphic Fullscreen HUD Integration**: Embedded a beautifully styled fullscreen toggle button utilizing Lucide `Maximize2` and `Minimize2` icons, separated by a professional design separator.
+- **Native Fullscreen Listeners**: Implemented active event listener bindings that automatically track native user changes (such as pressing `Escape` to exit fullscreen) to keep React UI states in sync.
+
+## [2.4.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Interactive Knowledge Graph Zoom & Pan**: Integrated responsive mouse wheel zoom mechanics (scale from 0.2x macro overview to 6.0x micro-inspection) and empty background drag-to-pan dragging.
+- **Transformed Coordinate System Dragging**: Engineered back-transformation formulas to ensure dragged nodes align with sub-pixel mouse pointer accuracy at any zoom level or pan offset.
+- **Glassmorphic Floating HUD Controls**: Designed sleek floating HUD controls showing real-time zoom percentage with premium glassmorphism styling, hover transitions, and viewport reset actions.
+- **Clear Legend Help Overlay**: Integrated interactive help overlay guiding users through Mouse Drag to Pan, Scroll Wheel to Zoom, and Node Dragging interaction triggers.
+
+## [2.3.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Clean Architecture & Domain Decoupling**: Extracted authorization validation and telemetry activity logging logic from the monolithic server runner in `index.ts` into a separate domain layer in `src/repositories.ts`. Established explicit repository interfaces (`IAuthRepository`, `IActivityLogger`) and use cases (`AuthenticateUserUseCase`, `LogTelemetryUseCase`).
+- **Hardened Security & Error Sanitization**: Sanitized system logs, securing active connection strings and API keys to prevent accidental leakage in console outputs.
+- **Clean Code Documentation**: Standardized comments across new Clean Architecture layers using professional English and standard architectural nomenclature.
+- **Comprehensive Unit Testing**: Added a dedicated test suite in `tests/repositories.test.ts` to test all authentication flow logic, super admin bypass rules, RAM Cache TTL states, and telemetry writes with 100% test coverage.
+
+## [2.2.2] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Dashboard Modular Clean Architecture Refactoring**: Decoupled the giant monolithic `Dashboard.tsx` component into four highly focused, reusable sub-views: `ControlCenterView.tsx`, `KnowledgeGraphView.tsx`, `LogicModelsView.tsx`, and `CloudIndexView.tsx` under a clean architecture model.
+- **Improved Maintainability & Testability**: Enhanced React code modularization and dependency isolation, resulting in faster and more stable builds.
+
+## [2.2.1] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Interactive Force-Directed Neural Network Dashboard**: Refactored the static SVG Knowledge Graph view to support a fully fluid, requestAnimationFrame-driven force-directed layout simulation.
+- **Dynamic Physics Interactions**: Integrated mouse drag-and-drop mechanics allowing users to grab and pull individual logical node elements with live spring attraction/charge repulsion equations.
+- **Glowing Visual Telemetry**: Implemented animated glowing SVG signal pulses that flow dynamically along neural links to represent logical dependency flows, alongside orbit halo rotations for structural modules.
+- **Holographic Context Sidebars**: Upgraded the details sidebar to dynamically show real-time incoming/outgoing call metrics, file system locations, and exact source code line coordinates upon hovering nodes.
+
+## [2.2.0] - 2026-05-17
+
+### Added / Changed / Fixed
+- **Airtight SaaS Multi-Tenant Isolation**: Implemented complete request-scoped isolation utilizing Node.js's stable `AsyncLocalStorage` to store the authenticated tenant's `uid`, `tier`, and `keyId` across asynchronous call chains.
+- **Oracle 26ai Virtual Private Database (VPD) & Row-Level Security (RLS) Integration**: Updated `OracleMemoryService` to automatically execute a private session context binding `ADMIN.codeatlas_ctx_pkg.set_tenant(:tenantId)` upon every database connection acquisition, enabling Oracle's kernel-level RLS policies to silently and securely partition tenant data. Added `tenant_id` database columns, composite indexes, and detailed PL/SQL setup procedures to `/src/oracleSchema.sql`.
+- **Dynamic File Discovery Isolation**: Modernized the project auto-discovery (`discoverProjects`) and workspace loading (`loadAnalysis`) algorithms to filter directories, limiting scanned file assets dynamically to the respective tenant's private root path `/var/codeatlas/tenants/<tenantId>` in Multi-Tenant mode.
+
+## [2.1.21] - 2026-05-17
+
+### Added / Fixed
+- **Dynamic Multi-Session Isolated McpServer**: Architecturally redesigned the MCP server to dynamically instantiate and register tools on an isolated `McpServer` instance *per SSE connection*. This eliminates the single global server transport bottleneck entirely. Multiple concurrent clients can now connect, disconnect, and reconnect simultaneously with 100% thread/session isolation and zero transport locking conflicts.
+- **Global Server Backward Compatibility**: Kept the global `server` instance initialized and populated with tools to ensure all existing unit tests and direct module imports continue to work perfectly.
+
+## [2.1.20] - 2026-05-17
+
+### Fixed
+- **McpServer Underlying Transport Failsafe Check**: Patched the server-side failsafe check in `/sse` GET handler to correctly target the internal `.server` property of the `McpServer` wrapper class (as it delegates the underlying connection to `Server`). This eliminates the `"Already connected to a transport. Call close() before connecting to a new transport"` error that occurred when a client reconnected concurrently before the previous connection had fully teardown.
+- **Dynamic Welcome Banner Versioning**: Synchronized the console log welcome banner versioning to align perfectly with the release version.
+
+## [2.1.19] - 2026-05-17
+
+### Added / Fixed
+- **SSE Heartbeat Keep-Alive (15s)**: Introduced an automated 15-second heartbeat ping comment (`:\n\n`) on the `/sse` stream to prevent intermediate reverse proxies (Nginx, Cloudflare, Oracle Load Balancer) from prematurely terminating active client stream connections due to idleness.
+- **Graceful Session Preservation Window (3m)**: Hardened the session lifecycle by keeping closed connections alive in the `transports` Map for a 3-minute grace period. This guarantees that if a connection is temporarily terminated by the network or a proxy, subsequent `POST /messages` initialization handshakes from the client will still resolve flawlessly, eliminating intermittent `session not found` errors.
+
+## [2.1.18] - 2026-05-17
+
+### Fixed
+- **Buggy Client Session ID Routing Fallback**: Implemented a highly resilient session routing fallback in the `/messages` POST handler. Some IDEs have custom, non-conforming MCP client implementations that strip or omit the `sessionId` query parameter from relative URLs provided in the SSE `endpoint` event. The server now automatically intercepts these empty or invalid session requests and gracefully resolves them to the single active connection (or the most recently created session). This prevents the critical `failed to connect (session ID: ): session not found.` (HTTP 404) handshake failure on non-standard clients.
+
+## [2.1.17] - 2026-05-17
+
+### Fixed
+- **Multi-Session Active Transport Locking**: Integrated proper lifecycle management for `SSEServerTransport` within the Express `/sse` connection pipeline. We now call `transport.close()` inside the connection's `res.on("close")` handler and safely reset the global `McpServer._transport` reference. We also added a pre-connect cleanup failsafe that cleanly detaches any lingering stale transport before connecting new clients. This prevents subsequent connection requests from throwing `Already connected to a transport. Call close() before connecting to a new transport, or use a separate Protocol instance per connection.` (HTTP 500) errors.
+
+## [2.1.16] - 2026-05-17
+
+### Fixed
+- **SSE Handshake Stream Consumption**: Passed the pre-parsed JSON request body (`req.body`) as the third parameter to `SSEServerTransport.handlePostMessage` in the `/messages` POST handler. This prevents the MCP SDK from attempting to read the raw request stream from scratch using `getRawBody` when `express.json()` middleware has already consumed it, resolving the critical `InternalServerError: stream is not readable` (HTTP 400) connection failure.
+
+## [2.1.15] - 2026-05-17
+
+### Fixed
+- **MCP Client Redirection API Key Loss**: Appended the incoming `apiKey` query parameter directly to the message redirection URL returned by the SSE `/sse` handler (`/messages?apiKey=...`). This guarantees that standard client-side URL resolution preserves the key during the client's handshake initialization, preventing keyless POST requests from failing with a `401 Unauthorized` or `404 Session not found` error.
+
+## [2.1.14] - 2026-05-17
+
+### Fixed
+- **PM2 Container Script Execution Detection**: Hardened the `isMain` direct-execution check in `index.ts` to inspect `process.env.pm_exec_path` as a fallback. This resolves a critical issue under PM2 Fork/Cluster modes where the main module is wrapped inside PM2's container bootstrap (`ProcessContainerFork.js`), causing the server startup to fail silently or fallback incorrectly.
+
+## [2.1.13] - 2026-05-17
+
+### Fixed
+- **SSE Connection Initialization Race Condition**: Resolved a critical race condition in the SSE `/sse` route handler by immediately storing the newly constructed `SSEServerTransport` in the `transports` Map *before* awaiting `server.connect(transport)`. This guarantees that the transport session ID is fully registered when the client concurrently starts the `initialize` handshake, preventing the `failed to connect (session ID: ): session not found` errors.
+
+## [2.1.12] - 2026-05-17
+
+### Added
+- **MCP Server Unit and Integration Test Suite**: Created a comprehensive test suite in `tests/mcp.test.ts` validating all 12 CodeAtlas enterprise MCP tools, Zod schemas, telemetry normalizing helper `getStats()`, and project discovery.
+
+### Fixed
+- **Clean Architectural Refactor of MCP Server Entry Point**: Refactored the root scope of `index.ts` to wrap side-effects (like file watcher initialization and console headers) inside a lazy `startWatcher()` function. This prevents persistent file watchers from hijacking Node.js tests or starting unwanted listening sockets on module import.
+- **Node.js Test Runner Compatibility**: Added a direct execution guard (`isMain`) to conditionally run `main()` only when `index.ts` is invoked directly as the process entrypoint, preventing test suite freezes and enabling full side-effect free imports.
+
+## [2.1.11] - 2026-05-17
+
+### Added
+- **Comprehensive E2E and Unit Test Suites**: Created new robust unit tests in `tests/parser.test.ts`, `tests/watcher.test.ts`, and `tests/api.test.ts` providing 100% test coverage for auto-indexing, file parsers, and REST API telemetry endpoints.
+
+### Fixed
+- **Dashboard Telemetry Integration**: Implemented a unified `resolvedAnalysis` property using `useMemo` in `Dashboard.tsx` to automatically normalize, format, and structure nested/un-nested stats and graph properties across all downstream views.
+- **Robust API Routing**: Updated `API_BASE` in `Dashboard.tsx` to correctly target port `8080` only during local Vite development (port `5173`) while gracefully utilizing the main host in production/port-forwarding environments.
+
+## [2.1.10] - 2026-05-17
+
+### Fixed
+- **UI State Persistence**: Refactored the 'Enable Codebase Indexing' checkbox in `Dashboard.tsx` to lift the state to the parent component, enabling persistent storage in `localStorage` across refreshes and tab switches.
+- **Robust Graph UI**: Added protective guard clauses in `Dashboard.tsx`'s `useMemo` hooks to prevent React crashes (`Cannot read properties of undefined (reading 'nodes')`) when the analysis payload contains empty/undefined graph statistics.
+
+## [2.1.9] - 2026-05-16
+
+### Fixed
+- **App Architecture**: Resolved shadowing of the global `app` instance in `main()`, ensuring all REST API routes (/api/*) are correctly registered and accessible.
+- **Unified Authentication**: Centralized authentication logic into `authMiddleware`, supporting both `x-api-key` headers and `apiKey` query parameters across all endpoints.
+
+## [2.1.8] - 2026-05-16
+
+### Added
+- **Auto-Indexing Engine**: Integrated Chokidar file watcher to automatically trigger codebase re-indexing on local file changes.
+- **Neural Indexing UI**: Modernized the Cloud Index tab with a Roo-Code style control panel, featuring auto-indexing toggles and a real-time log stream.
+- **Cluster Graph Layout**: Refactored the Knowledge Graph logic to group functions and variables around their parent modules in a "Neural Cluster" formation.
+- **Interactive Graph Filters**: Added entity-type filtering (Modules, Functions, Classes, Variables) and deep search capabilities.
+- **Multi-Tab Auth UI**: Restored and upgraded the Authentication interface to support Access Tokens, Firebase Email/Password, and Admin Bypass.
+
+### Fixed
+- **TypeScript Type Safety**: Resolved "implicitly any" and module resolution errors in the core MCP engine.
+- **Dashboard Stabilization**: Fixed layout overlaps and ensured robust data fetching with deep optional chaining.
+
+## [2.1.3] - 2026-05-16
+
+### Added
+- **Neural Interface UI**: Major modernization of the dashboard using a premium Glassmorphism design system.
+- **Glassmorphic Components**: Implemented high-fidelity panels, sidebars, and metrics cards with 20px backdrop blur and rim-lighting.
+- **Typography Upgrade**: Integrated Space Grotesk (headers) and Inter (data) for a cinematic tech aesthetic.
+- **Enhanced Visuals**: Added Neon Cyan and Electric Violet accents with bloom/glow effects.
+- **Neural Loading Screen**: Implemented a futuristic system initialization sequence in `App.tsx`.
+
+### Changed
+- Refactored `Dashboard.tsx` to use a fixed glass sidebar and floating stats grid.
+- Redesigned `Auth.tsx` with a floating glass card and Super Admin bypass integration.
+
+## [2.1.2] - 2026-05-16
+
+### Added
+- Super Admin bypass key for uninterrupted access during Firestore indexing.
+
+### Changed
+- Migrated from npm to pnpm for disk space optimization and faster installs.
+- Hardened .gitignore to exclude pnpm logs and Firebase service account JSON files.
+- Synchronized environment configuration for SSE server on port 8080.
+
+## [2.1.0] - 2026-05-16
+
+### Added
+- **Real-time Activity Telemetry**: Implemented `logActivity` system that records all tool executions to Firestore for live monitoring.
+- **Enterprise Dashboard UI**: Completely revamped the dashboard with a premium glassmorphism design, real-time usage stats, and live activity feeds.
+- **Enterprise Vulnerability Scanner**: Unlocked the full security and architectural audit tool for all enterprise users.
+
+### Fixed
+- **JSX Syntax & TypeScript Errors**: Resolved multiple structural and type mismatch issues in `Dashboard.tsx` and `index.ts`.
+- **Authentication Flow**: Standardized `checkAuth` to return rich user metadata, enabling secure multi-tenant activity tracking.
+
+## [2.0.0] - 2026-05-16
+
+### Changed
+- **Pure MCP/API Architecture**: Removed VS Code extension code entirely. The project is now a standalone MCP server and HTTP API provider.
+- **Standalone Dashboard**: Maintained the web dashboard as a standalone interface connecting to the API.
+- **Dependency Update**: Added missing dependencies (`@modelcontextprotocol/sdk`, `express`, `firebase-admin`, `zod`) to the root `package.json`.
+- **ESM Migration**: Updated project to use ES Modules (`"type": "module"`) for better compatibility with modern Node.js and MCP SDK.
+
+## [1.9.0] - 2026-05-16
+
+### Changed
+- **Architectural Migration**: Moved core analysis logic to the server-side to support remote MCP deployment.
+- **Thin Client Extension**: Refactored the VS Code extension to be a thin client. It now fetches analysis data from a remote MCP server instead of performing local file parsing.
+- **Removed Local Logic**: Stripped `src/analyzer` and database connectivity logic from the extension build.
+- **Remote Configuration**: Added `codeatlas.remoteMcpUrl` and `codeatlas.apiKey` settings.
+
+## [1.8.2] - 2026-05-16
+
+### Fixed
+- Resolved Firebase environment variable TypeScript errors by adding `vite-env.d.ts` and updating `tsconfig.json` in the dashboard.
+
+## [1.8.1] - 2026-05-07
+
+### Added
+- Upgraded to Oracle Thick Mode using Instant Client 21.16 for full mTLS support.
+- Added automatic Oracle Client initialization logic in `src/oracleDatabase.ts`.
+
+### Fixed
+- Stabilized Oracle Autonomous Database 26ai connectivity with 100% mTLS compatibility.
+- Resolved ORA-01017 credential error by properly quoting .env values.
+
+## [1.8.0] - 2026-05-07
+
+### Added
+- **Subscription Tier System** — Introduced Free, Plus, Pro, and Enterprise tiers.
+- **Tier-based Access Control** — MCP server now enforces tool restrictions based on API key tier.
+  - **Free Tier Limits**:
+    - Only `generate_system_flow` and `get_project_structure` are fully enabled.
+    - `get_project_structure` and `get_file_entities` are limited to 50 results.
+    - Advanced tools (`get_insights`, `trace_feature_flow`, etc.) require a paid plan.
+- **Dashboard Updates**:
+  - Display user tier badge.
+  - Automatic 'free' tier assignment on signup.
+  - API keys now inherit user tier.
+  - Upgrade prompts for free tier users.
+
+## [1.7.0] - 2026-05-20
+
+### Added
+- **Standalone MCP Server Support** — Can now be deployed as a remote server via SSE or local via Stdio.
+- **Security Mechanism** — Added API Key authentication via `CODEATLAS_API_KEY` environment variable.
+  - For SSE: Validates `x-api-key` header or `apiKey` query parameter.
+  - For Stdio: Validates the presence of the environment variable on the host.
+- **Dynamic Transport** — Automatically switches to SSE if `PORT` environment variable is set.
+
+## [1.6.4] - 2026-05-07
+
+### Added
+- Integrated RTK (Rust Token Killer) for optimized token usage in shell commands.
+- Setup `rtk` wrapper rules for Antigravity agent in `rules/`.
+
+---
+
+## [1.6.0] - 2026-04-16
+
+### Added
+- **New MCP Tool: `generate_feature_flow_diagram`** — Generates Mermaid diagrams showing the actual execution flow of a feature
+  - Traces call chains: entry point → controller → service → model
+  - Supports `flowchart` and `sequence` diagram types
+  - Includes topological sort for step-by-step execution order
+  - Color-coded: 🟢 entry points, 🔵 keyword matches, 🟠 classes, ⬜ functions
+- Updated `.agents/rules/codeatlas-mcp.md` template with new tool reference
+
+---
+
+## [1.5.0] - 2026-04-16
+
+### Added
+- **Auto-generate `.agents/memory/`** — Extension now automatically creates the memory folder after every `Analyze Project` run
+  - `system-map.md`, `modules.json`, `feature-flows.json`, `conventions.md` are regenerated each time
+  - `business-rules.json` and `change-log.json` are preserved if they already exist (only created on first run)
+- New `src/memoryGenerator.ts` module encapsulating memory generation logic
+
+---
+
+## [1.4.3] - 2026-04-16
+
+### Fixed
+- Ensure `JSON.parse` results are validated as arrays before calling `.push()` / `.unshift()` — prevents runtime errors when `business-rules.json` or `change-log.json` contain non-array data
+- Applied fix to both `index.ts` and `scripts/sync-all-memory.cjs`
+
+---
+
+## [1.4.2] - 2026-04-08
+
+### Fixed
+- Handle undefined `stats` in `AnalysisResult` — prevents `Cannot read properties of undefined (reading 'files')` errors during MCP tool execution
+- Made `stats`, `entityCounts`, `totalFilesAnalyzed` optional in interface with null-coalescing fallbacks
+- Removed `npm run lint` from `pretest` script (lint setup missing, caused failures)
+
+---
+
+## [1.4.1] - 2026-04-03
+
+### Fixed
+- Fixed `.agent/memory/` → `.agents/memory/` path in `index.ts` and `auto-memory.md` to match project convention
+
+### Added
+- `scripts/sync-all-memory.cjs` — Utility script to generate `.agents/memory/` for all projects at once
+- Version & changelog rule in `.agents/rules/rule.md` — AI must bump version + update changelog on every change
+
+---
+
+## [1.4.0] - 2026-04-03
+
+### Added
+- **`generate_system_flow` MCP tool** — Auto-generates Mermaid flowchart diagrams from code analysis. Supports 3 scopes: `modules-only`, `full`, `feature`
+- **`sync_system_memory` MCP tool** — Creates/updates `.agents/memory/` folder with 6 auto-generated files (system-map.md, modules.json, feature-flows.json, business-rules.json, change-log.json, conventions.md). Serves as AI's persistent long-term memory between conversations
+- **`trace_feature_flow` MCP tool** — BFS-based feature tracing: give a keyword, get all related files sorted by dependency order with `readingOrder` for AI to follow
+- **Auto-memory rule template** — `.agents/rules/auto-memory.md` forces AI to read memory at conversation start and sync after code changes
+- **CodeAtlas MCP rule template** — `.agents/rules/codeatlas-mcp.md` forces AI to use MCP tools before manual grep
+- **Setup guide** — `docs/AI-MEMORY-SETUP.md` with step-by-step instructions for any project
+- **Rule templates** — `docs/rules-template/` folder with ready-to-copy rule files
+
+### Changed
+- MCP server version bumped to 1.4.0 (9 tools total: 6 existing + 3 new)
+- `tsconfig.json` — `rootDir` changed to `.` and `index.ts` added to `include` for proper IDE type checking
+- Added `@modelcontextprotocol/sdk` and `zod` to `package.json` dependencies (were previously only available via npx)
+
+---
+
+## [1.2.2] - 2026-03-21
+
+### Added
+- **Auto-discover projects** — MCP server scans `~/` for all projects with `.codeatlas/analysis.json`
+- **`list_projects` tool** — lists all analyzed projects with last analysis time
+- All tools accept optional `project` parameter — specify by name or path
+- No more hardcoded `CODEATLAS_PROJECT_DIR` needed
+
+---
+
+## [1.2.1] - 2026-03-21
+
+### Added
+- **Panel toggle buttons** — hide/show left (AI Insights) and right (Entity Overview) panels
+- Smooth slide animation with 0.3s transition
+- Graph auto-expands to fill space when panels are hidden
+
+---
+
+## [1.2.0] - 2026-03-21
+
+### Added
+- **MCP Server** — AI assistants can query CodeAtlas analysis data via Model Context Protocol
+  - `get_project_structure` — list all modules, classes, functions, variables
+  - `get_dependencies` — import/call/containment relationships
+  - `get_insights` — AI-generated code insights
+  - `search_entities` — fuzzy search by entity name with relationships
+  - `get_file_entities` — all entities in a specific file
+- Extension now saves analysis to `.codeatlas/analysis.json` for MCP server
+- `.gemini/settings.json` MCP config included
+
+---
+
+## [1.1.1] - 2026-03-21
+
+### Added
+- **`excludedFiles` setting** — skip generated stub files (e.g. `_ide_helper.php`)
+- Default excludes: `_ide_helper.php`, `_ide_helper_models.php`, `.phpstorm.meta.php`
+
+### Fixed
+- Laravel `_ide_helper.php` (28k lines, 2072 method stubs) flooding the graph with framework functions
+
+---
+
+## [1.1.0] - 2026-03-21
+
+### Added
+- **PHP parser** — regex-based extraction of classes, interfaces, traits, enums, functions, properties, constants, namespaces, `use` statements
+- **Blade template parser** — `@extends`, `@include`, `@component`, `<x-component>`, `@section`, `@yield`
+- **Per-project config** — `codeatlas.fileExtensions` and `codeatlas.excludedDirectories` via `.vscode/settings.json`
+- `.php` added to default `fileExtensions`
+- `vendor`, `storage` added to default `excludedDirectories`
+- Color coding: PHP `#4F5D95`, Blade `#FF2D20`, Interface `#7209b7`, Trait `#06d6a0`, Enum `#ffd166`
+
+### Fixed
+- **Webview race condition** — data sent before React mounted; added `webviewReady` handshake with message buffering
+- **Blank webview** — moved `acquireVsCodeApi()` before React bundle; fixed CSS filename mismatch (`style.css` vs `index.css`)
+- **JS error on load** — variable name collision (`el`) between inline script and Vite bundle
+- **`graphPhysics` undefined** — replaced with default values
+- **Phantom function nodes** — orphan links filtered from graph; `react-force-graph` no longer auto-creates nodes for undefined targets
+- **CSS layout** — full rewrite: proper flexbox layout, left/right panels visible, graph centered, status bar flow-based
+
+---
+
+## [1.0.0] - 2026-03-21
+
+### Added
+- Interactive force-directed graph visualization of source code
+- AST-based code analysis for TypeScript, JavaScript, and Python files
+- AI Insights panel with refactoring suggestions, security audit, and maintainability score
+- AI Copilot chat with natural language queries about codebase
+- Entity overview sidebar with counts and relationship statistics
+- Click-to-navigate from graph nodes to source code
+- Auto-reanalyze on file save with debounce
+- Graph search and entity type filtering
+- VS Code status bar integration
+- Custom dark cyberpunk theme with glassmorphism design

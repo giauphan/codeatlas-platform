@@ -1,0 +1,136 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+:root {
+  /* Colors - Deep Space Palette */
+  --background: #0A0C10;
+  --surface-glass: rgba(16, 20, 29, 0.6);
+  --primary-neon: #00F0FF;
+  --secondary-neon: #9D00FF;
+  --text-main: #E2E2E8;
+  --text-muted: #B9CACB;
+  --border-glass: rgba(255, 255, 255, 0.1);
+  --error: #FFB4AB;
+  
+  /* Effects */
+  --blur-intense: 20px;
+  --glow-primary: 0 0 15px rgba(0, 240, 255, 0.3);
+  --glow-secondary: 0 0 15px rgba(157, 0, 255, 0.3);
+  --rim-light: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--background);
+  background-image: 
+    radial-gradient(circle at 10% 10%, rgba(0, 240, 255, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 90% 90%, rgba(157, 0, 255, 0.03) 0%, transparent 40%);
+  color: var(--text-main);
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+h1, h2, h3, .tech-font {
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Glassmorphism Components */
+.glass-panel {
+  background: var(--surface-glass);
+  backdrop-filter: blur(var(--blur-intense));
+  -webkit-backdrop-filter: blur(var(--blur-intense));
+  border: 1px solid var(--border-glass);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
+.rim-lit {
+  border-image: var(--rim-light) 1;
+}
+
+/* Custom Buttons */
+.btn-neon-cyan {
+  background: var(--primary-neon);
+  color: #000;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-family: 'Space Grotesk', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.3s ease;
+  box-shadow: var(--glow-primary);
+  border: none;
+  cursor: pointer;
+}
+
+.btn-neon-cyan:hover {
+  transform: scale(1.02);
+  filter: brightness(1.1);
+}
+
+.btn-neon-violet {
+  background: transparent;
+  color: var(--secondary-neon);
+  border: 1px solid var(--secondary-neon);
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-family: 'Space Grotesk', sans-serif;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.btn-neon-violet:hover {
+  background: rgba(157, 0, 255, 0.1);
+  box-shadow: var(--glow-secondary);
+}
+
+/* Input Fields */
+.glass-input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-glass);
+  color: var(--text-main);
+  padding: 1rem;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: var(--primary-neon);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+}
+
+/* Layout Utilities */
+.sidebar {
+  width: 280px;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+}
+
+.main-content {
+  margin-left: 280px;
+  height: 100vh;
+  position: relative;
+}
+
+/* Animations */
+@keyframes bloom {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; filter: brightness(1.2); }
+  100% { opacity: 0.8; }
+}
+
+.animate-bloom {
+  animation: bloom 3s infinite ease-in-out;
+}

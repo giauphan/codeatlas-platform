@@ -1,0 +1,52 @@
+node_modules/
+dist/
+out/
+.vscode-test/
+*.vsix
+mcp-server/
+# pnpm logs
+pnpm-debug.log*
+
+# IDE & AI config (may contain local paths or tokens)
+.gemini/
+.codeatlas/
+.agents/
+.cursor/
+.windsurfrules
+CLAUDE.md
+
+# Secrets
+.env
+.env.*
+
+# Oracle InstantClient (large binaries, not for public repo)
+instantclient/
+!.env.example
+.npmrc
+*.json
+!package.json
+!tsconfig.json
+!composer.json
+
+# Oracle Wallet
+wallet/
+.rooignore
+.clinerules
+atlas-intelligence-node-firebase-adminsdk-fbsvc-6c9d06254d.json
+
+# Oracle Instant Client (download separately)
+instantclient/
+
+# AI tool learning notes (auto-generated)
+.jules/
+pr_description.md
+.Jules/
+test.py
+test.sh
+submit.sh
+test_parse.js
+pr.md
+.jules/
+.Jules/
+.jules/
+.Jules/
