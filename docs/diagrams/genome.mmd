@@ -1,0 +1,38 @@
+flowchart TD
+    subgraph Create["Gene Creation"]
+        Bug["Bug/Failure Detected"]
+        Pattern["Pattern Match"]
+        Gene["Create Gene"]
+        Store["Store in Oracle"]
+    end
+
+    subgraph Search["Gene Search"]
+        Query["search_genome()"]
+        Match["Pattern/Name Match"]
+        Retrieve["Retrieve Gene"]
+    end
+
+    subgraph Evolution["Gene Evolution"]
+        Update["Update Gene"]
+        Version["Increment Version"]
+        Confidence["Update Confidence"]
+        Merge["Merge Genes"]
+    end
+
+    subgraph Immune["Immune System"]
+        Scan["scan_immune()"]
+        KnownFix["Known Fix"]
+        Prevention["Prevention Context"]
+    end
+
+    Bug --> Pattern
+    Pattern --> Gene
+    Gene --> Store
+    Query --> Match
+    Match --> Retrieve
+    Retrieve --> Update
+    Update --> Version
+    Version --> Confidence
+    Merge --> Evolution
+    Scan --> KnownFix
+    KnownFix --> Prevention

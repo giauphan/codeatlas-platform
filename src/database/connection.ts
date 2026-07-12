@@ -56,9 +56,10 @@ export async function initPool(): Promise<oracledb.Pool> {
 
       pool = await oracledb.createPool({
         ...getDbConfig(),
-        poolMin: 2,
-        poolMax: 10,
-        poolIncrement: 1
+        poolMin: 0,
+        poolMax: 3,
+        poolIncrement: 1,
+        queueTimeout: 300000,
       });
 
       logger.info("✅ Oracle 26ai DB Pool initialized successfully (Thick Mode)");

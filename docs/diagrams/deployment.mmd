@@ -1,0 +1,29 @@
+flowchart TB
+    subgraph Local["Local Machine"]
+        MCPSrv["codeatlas-mcp-server<br/>stdio/SSE"]
+        IDE["AI IDE (Claude/Cursor)"]
+    end
+
+    subgraph Cloud["Oracle Cloud (Singapore)"]
+        Platform["codeatlas-platform<br/>Express :8080"]
+        OracleDB["Oracle 26ai<br/>Autonomous DB"]
+        CF["Cloudflare Tunnel"]
+    end
+
+    subgraph External["External APIs"]
+        FireBase["Firebase Auth"]
+        NVIDIANIM["NVIDIA NIM API"]
+    end
+
+    IDE <-->|"MCP stdio"| MCPSrv
+    MCPSrv -->|"HTTP API<br/>CODEATLAS_API_URL"| CF
+    CF --> Platform
+    Platform --> OracleDB
+    Platform --> FireBase
+    Platform --> NVIDIANIM
+
+    subgraph PM2["PM2 Process Manager"]
+        P1["codeatlas-platform<br/>--max-old-space-size=4096"]
+    end
+    
+    Platform -.- PM2

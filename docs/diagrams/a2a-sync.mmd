@@ -1,0 +1,26 @@
+flowchart LR
+    subgraph Agents["A2A Agent Network"]
+        Hermes["Hermes Agent"]
+        Claude["Claude CLI"]
+        Colab["Google Colab"]
+    end
+
+    subgraph Hub["CodeAtlas Platform"]
+        A2ARegistry["A2A Registry<br/>(in-memory)"]
+        AgentCard["Agent Card<br/>/.well-known/agent-card.json"]
+        JSONRPC["JSON-RPC<br/>/a2a/jsonrpc"]
+    end
+
+    subgraph Sync["Dream Synchronization"]
+        SyncDreams["sync_dreams MCP tool"]
+        SyncCron["Cron: 6h sync"]
+        CloudAPI["Cloud REST API"]
+    end
+
+    Hermes --> JSONRPC
+    Claude --> JSONRPC
+    Colab --> JSONRPC
+    JSONRPC --> A2ARegistry
+    AgentCard --> Hermes
+    SyncDreams --> CloudAPI
+    SyncCron --> CloudAPI

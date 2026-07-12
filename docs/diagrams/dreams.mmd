@@ -1,0 +1,21 @@
+stateDiagram-v2
+    [*] --> Created: save_dream_memory()
+    Created --> Retrieved: query_dream_memories()
+    Retrieved --> Updated: save (same session_id)
+    Updated --> Resumed: resume_dream()
+    Resumed --> Completed: mark as complete
+    Completed --> Archived: archive_dream()
+    Archived --> [*]
+
+    state Created {
+        [*] --> OracleStore: INSERT INTO ai_dreaming_memory
+        OracleStore --> Embedded: NVIDIA embed()
+        Embedded --> [*]: VECTOR_DISTANCE index
+    }
+
+    state Retrieved {
+        [*] --> VectorSearch: VECTOR_DISTANCE query
+        VectorSearch --> GuestFallback: No auth → admin tenant
+        GuestFallback --> VPDFilter: Tenant isolation
+        VPDFilter --> Results: Paginated
+    }

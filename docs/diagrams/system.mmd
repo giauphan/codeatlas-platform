@@ -1,0 +1,51 @@
+flowchart TB
+    subgraph Clients["AI Clients"]
+        Hermes["Hermes Agent"]
+        Claude["Claude Desktop"]
+        Cursor["Cursor IDE"]
+        Continue["Continue.dev"]
+    end
+
+    subgraph MCPLayer["MCP Layer"]
+        MCPstdio["MCP stdio"]
+        MCPsse["MCP SSE :8080"]
+    end
+
+    subgraph Platform["codeatlas-platform"]
+        Express["Express Server"]
+        MCPTools["30+ MCP Tools"]
+        REST["REST API"]
+        A2A["A2A Protocol"]
+        
+        subgraph Services["Core Services"]
+            Dreams["Dream Memory<br/>Service"]
+            Genome["Genome Service"]
+            Consolidation["Consolidation<br/>Engine"]
+            SecondBrain["Second Brain<br/>Service"]
+            Embedding["Embedding<br/>Service (NVIDIA)"]
+            Auth["Auth Service<br/>(Firebase+APIKey)"]
+            Scanner["Security Scanner"]
+        end
+    end
+
+    subgraph DataLayer["Data Layer"]
+        Oracle["Oracle 26ai<br/>Autonomous DB"]
+        Firebase["Firebase<br/>Firestore"]
+        NVIDIA["NVIDIA NIM<br/>nv-embed-v1"]
+    end
+
+    subgraph Local["Local MCP Server"]
+        MCPServer["codeatlas-mcp-server"]
+        AST["AST Parser"]
+        DepGraph["Dependency Graphs"]
+        CodeSearch["Code Search"]
+    end
+
+    Clients --> MCPLayer
+    MCPLayer --> Platform
+    Platform --> Services
+    Services --> DataLayer
+    MCPServer --> AST
+    MCPServer --> DepGraph
+    MCPServer --> CodeSearch
+    MCPServer -.->|HTTP API| Platform

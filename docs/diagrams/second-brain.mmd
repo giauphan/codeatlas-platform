@@ -1,0 +1,50 @@
+flowchart LR
+    subgraph Input["Input"]
+        User["User Request"]
+        Intent["Intent Analysis"]
+    end
+
+    subgraph Gateway["AI Gateway"]
+        Router["Request Router"]
+        Complexity["Complexity Analysis"]
+        ModelRec["Model Recommendation"]
+    end
+
+    subgraph Retrieval["Knowledge Retrieval"]
+        Dreams["Dream Memories"]
+        DNA["Genome DNA"]
+        Skills["Skills Registry"]
+        ImmuneGenes["Immune Genes"]
+    end
+
+    subgraph Assembly["Context Assembly"]
+        Context["Assembled Context"]
+        LLM["LLM Processing"]
+        Response["Response"]
+    end
+
+    subgraph Learning["Continuous Learning"]
+        Eval["Knowledge Evaluation"]
+        Evolution["Genome Evolution"]
+        Sync["Cloud Sync"]
+        Consolidation["Consolidation Engine"]
+    end
+
+    User --> Intent
+    Intent --> Router
+    Router --> Complexity
+    Complexity --> ModelRec
+    ModelRec --> Dreams
+    ModelRec --> DNA
+    ModelRec --> Skills
+    ModelRec --> ImmuneGenes
+    Dreams --> Context
+    DNA --> Context
+    Skills --> Context
+    ImmuneGenes --> Context
+    Context --> LLM
+    LLM --> Response
+    Response --> Eval
+    Eval --> Evolution
+    Evolution --> Sync
+    Evolution --> Consolidation

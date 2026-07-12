@@ -771,13 +771,19 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
 // Serve static files from built dashboard
 const dashboardDistPath = path.join(process.cwd(), "dashboard", "dist");
 if (fs.existsSync(dashboardDistPath)) {
-  // Assets with hashed filenames (JS, CSS, fonts, images) can be cached forever
-  app.use(/^\/(assets|fonts|images)\/.+/, express.static(dashboardDistPath, {
-    maxAge: "1y",
-    immutable: true,
-    etag: false,
-    lastModified: false
-  }));
+  // Serve all static files with proper MIME types
+  app.use(/^\/(assets|fonts|images)\/.+/, async (req, res) => {
+    const filePath = path.join(dashboardDistPath, req.path);
+    try {
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        res.sendFile(filePath);
+      } else {
+        res.status(404).send("Not found");
+      }
+    } catch {
+      res.status(404).send("Not found");
+    }
+  });
   
   // index.html must NEVER be cached — always serve fresh so browser picks up new hashed assets
   app.use(express.static(dashboardDistPath, {
@@ -795,15 +801,14 @@ if (fs.existsSync(dashboardDistPath)) {
     }
   }));
   
-  // SPA support: redirect all non-API routes to index.html
+  // Catch-all: serve index.html for all non-API, non-SSE routes (SPA routing)
   app.get(/^\/(?!sse|messages|api).*/, (req, res) => {
     res.sendFile(path.join(dashboardDistPath, "index.html"), {
+      cacheControl: false,
       headers: {
         "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate",
         "Pragma": "no-cache",
         "Expires": "0",
-        "Surrogate-Control": "no-store",
-        "X-Accel-Expires": "0"
       }
     });
   });
