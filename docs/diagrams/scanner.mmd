@@ -1,0 +1,54 @@
+flowchart TB
+    subgraph Trigger["Trigger"]
+        User["User Request"]
+        Auto["Auto Cron<br/>6h interval"]
+    end
+
+    subgraph StaticScan["Static Analysis Layer"]
+        AST["AST Parser<br/>(TS/Python/PHP)"]
+        Graph["Dependency Graph"]
+        Pattern["Pattern Matching"]
+        Secrets["Hardcoded Secrets<br/>Detection"]
+        Unsafe["Unsafe Functions<br/>(eval, exec)"]
+        SQLInj["SQL Injection Risk"]
+    end
+
+    subgraph AIScan["AI Analysis Layer (DeepSeek V4 Pro)"]
+        FindingInput["Findings + Code Context"]
+        LLM["DeepSeek V4 Pro<br/>Analysis"]
+        LogicBugs["Logic Bugs"]
+        ArchIssues["Architectural Issues"]
+        BusinessLogic["Business Logic Flaws"]
+    end
+
+    subgraph Output["Results"]
+        Report["Security Report"]
+        Scoring["Security Scoring"]
+        Insights["Admin Insights"]
+        Immune["Immune Gene<br/>Auto-generation"]
+    end
+
+    User --> AST
+    Auto --> AST
+    AST --> Graph
+    Graph --> Pattern
+    Pattern --> Secrets
+    Pattern --> Unsafe
+    Pattern --> SQLInj
+    Secrets --> FindingInput
+    Unsafe --> FindingInput
+    SQLInj --> FindingInput
+    FindingInput --> LLM
+    LLM --> LogicBugs
+    LLM --> ArchIssues
+    LLM --> BusinessLogic
+    LogicBugs --> Report
+    ArchIssues --> Report
+    BusinessLogic --> Report
+    Secrets --> Report
+    Unsafe --> Report
+    SQLInj --> Report
+    Report --> Scoring
+    Scoring --> Insights
+    Insights --> Immune
+    Immune --> GenomeStore["Genome DNA<br/>Oracle Store"]

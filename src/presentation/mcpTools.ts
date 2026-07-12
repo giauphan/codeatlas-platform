@@ -1193,22 +1193,26 @@ export function registerTools(server: McpServer) {
 
           const vulnerabilities = SecurityScanner.scan(loaded.analysis);
           
+          // AI-powered deep scan (if configured — uses DeepSeek V4 Pro)
+          const aiVulnerabilities = await SecurityScanner.aiScan(vulnerabilities, loaded.analysis);
+          const allVulnerabilities = aiVulnerabilities.length > 0 ? aiVulnerabilities : vulnerabilities;
+          
           const stats = getStats(loaded.analysis as AnalysisResultLocal);
           const circularDeps = stats.circularDeps || 0;
           const deadCode = stats.deadCode || 0;
           
-          const riskLevel = vulnerabilities.length > 10 ? "CRITICAL" : (vulnerabilities.length > 0 ? "HIGH" : "LOW");
-          const securityScore = Math.max(0, 100 - (vulnerabilities.length * 5) - (circularDeps * 2));
+          const riskLevel = allVulnerabilities.length > 10 ? "CRITICAL" : (allVulnerabilities.length > 0 ? "HIGH" : "LOW");
+          const securityScore = Math.max(0, 100 - (allVulnerabilities.length * 5) - (circularDeps * 2));
 
           scanResults.push({
             project: p.name,
             riskLevel,
             securityScore: isEnterprise ? securityScore : "Upgrade to view",
-            vulnerabilities: vulnerabilities.length,
+            vulnerabilities: allVulnerabilities.length,
             circularDependencies: circularDeps,
             deadCode: deadCode,
             adminInsights: isEnterprise ? `Project health is ${securityScore > 80 ? 'EXCELLENT' : 'NEEDS ATTENTION'}. Priority: ${riskLevel}.` : null,
-            details: { vulnerabilities }
+            details: { vulnerabilities: allVulnerabilities }
           });
         } catch (err: unknown) {
           scanResults.push({ 
