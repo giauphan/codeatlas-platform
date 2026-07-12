@@ -1,6 +1,5 @@
 import { AnalysisResult, GraphNode } from "../../types/index.js";
 import * as path from "path";
-import { logger } from "../../utils/logger.js";
 
 export interface SecurityFinding {
   severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
@@ -234,69 +233,5 @@ export class SecurityScanner {
     });
 
     return findings;
-  }
-
-  /**
-   * AI-powered deep scan using DeepSeek V4 Pro (or configured LLM).
-   * Analyzes findings + code context for deeper issues.
-   * Configure via: CODEATLAS_SCAN_AI_URL, CODEATLAS_SCAN_AI_KEY, CODEATLAS_SCAN_AI_MODEL
-   */
-  static async aiScan(findings: SecurityFinding[], analysis: AnalysisResult): Promise<SecurityFinding[]> {
-    const aiUrl = process.env.CODEATLAS_SCAN_AI_URL || process.env.OPENCODE_BASE_URL || "";
-    const aiKey = process.env.CODEATLAS_SCAN_AI_KEY || process.env.OPENCODE_API_KEY || "";
-    const aiModel = process.env.CODEATLAS_SCAN_AI_MODEL || "deepseek-v4-pro";
-
-    if (!aiUrl || !aiKey) {
-      logger.info("[SecurityScanner] AI scan not configured — skipping LLM deep analysis");
-      return findings;
-    }
-
-    try {
-      // Prepare code context from the most critical findings
-      const criticalFindings = findings.filter(f => f.severity === "CRITICAL" || f.severity === "HIGH").slice(0, 5);
-      const codeContext = criticalFindings.map(f => {
-        const node = analysis.graph.nodes.find(n => n.filePath === f.filePath);
-        return `[${f.severity}] ${f.type}: ${f.message} (${f.filePath}:${f.line})`;
-      }).join("\n");
-
-      const response = await fetch(aiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${aiKey}`
-        },
-        body: JSON.stringify({
-          model: aiModel,
-          messages: [
-            {
-              role: "system",
-              content: "You are a security code analyzer. Analyze the following findings and provide deeper insights. Respond ONLY with valid JSON array of objects: [{\"severity\":\"...\",\"type\":\"...\",\"message\":\"...\",\"filePath\":\"...\",\"line\":0}]. Empty array if no additional issues."
-            },
-            {
-              role: "user",
-              content: `Static analysis found these issues:\n${codeContext}\n\nAnalyze the codebase context and identify any deeper issues not caught by static patterns. Focus on logic bugs, race conditions, and architectural smells.`
-            }
-          ],
-          temperature: 0.1,
-          max_tokens: 1024
-        })
-      });
-
-      if (!response.ok) {
-        logger.warn(`[SecurityScanner] AI scan API returned ${response.status}`);
-        return findings;
-      }
-
-      const data = await response.json() as any;
-      const aiFindings: SecurityFinding[] = data.choices?.[0]?.message?.content
-        ? JSON.parse(data.choices[0].message.content.replace(/```json|```/g, "").trim())
-        : [];
-
-      logger.info(`[SecurityScanner] AI scan found ${aiFindings.length} additional issues`);
-      return [...findings, ...aiFindings];
-    } catch (err) {
-      logger.warn("[SecurityScanner] AI scan failed:", err instanceof Error ? err.message : String(err));
-      return findings;
-    }
   }
 }
