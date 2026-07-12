@@ -140,10 +140,10 @@ const freqLabels: Record<string, string> = {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => copyToClipboard(key.key, key.id)} className="btn-ghost" style={{ padding: '0.5rem' }}>
+                        <button onClick={() => copyToClipboard(key.key, key.id)} className="btn-ghost" style={{ padding: '0.5rem' }} aria-label="Copy token" title="Copy token">
                           {copiedId === key.id ? <Check size={16} color="#00F0FF" /> : <Copy size={16} />}
                         </button>
-                        <button onClick={() => deleteKey(key.id)} className="btn-ghost" style={{ padding: '0.5rem', color: '#FF4B4B' }}>
+                        <button onClick={() => deleteKey(key.id)} className="btn-ghost" style={{ padding: '0.5rem', color: '#FF4B4B' }} aria-label="Delete token" title="Delete token">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -188,6 +188,9 @@ const freqLabels: Record<string, string> = {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Enabled</label>
                   <button onClick={() => setCronEnabled(!cronEnabled)}
+                    role="switch"
+                    aria-checked={cronEnabled}
+                    aria-label="Enable dream sync"
                     style={{
                       width: '44px', height: '24px', borderRadius: '12px', border: 'none', cursor: 'pointer',
                       background: cronEnabled ? 'var(--primary-neon)' : 'rgba(255,255,255,0.2)',
