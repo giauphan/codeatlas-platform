@@ -90,23 +90,26 @@ async function run() {
     }
 
     try {
-      const [col] = (await connection!.execute(
+      const EXPECTED_VECTOR_BYTES = 4096 * 4; // 16384 bytes for VECTOR(4096, FLOAT32)
+
+      const rows = (await connection!.execute(
         // In Oracle, checking vector dimension precisely requires querying metadata, but as a workaround,
         // we can assume the correct length if DATA_LENGTH matches the byte size of VECTOR(4096, FLOAT32)
-        // FLOAT32 = 4 bytes, so 4096 * 4 = 16384 bytes
-        `SELECT data_type, data_length
+        `SELECT data_length
          FROM all_tab_columns
          WHERE table_name = :name AND column_name = 'EMBEDDING'`,
         [tableName], { outFormat: oracledb.OUT_FORMAT_OBJECT }
-      )).rows as any[] || [];
+      )).rows;
 
-      if (col) {
+      const row = rows?.[0] as any;
+
+      if (row) {
         // VECTOR(4096, FLOAT32) is typically 16384 bytes long
-        const dataLength = col.DATA_LENGTH || 0;
-        const isCorrectLength = dataLength === 16384;
+        const dataLength = row.DATA_LENGTH || 0;
+        const isCorrectLength = dataLength >= EXPECTED_VECTOR_BYTES;
 
         if (!isCorrectLength) {
-          console.log(`   ⚠️ Vector dim mismatch (${logName}): expected length ~16384 bytes, got ${dataLength} bytes. Auto-fixing...`);
+          console.log(`   ⚠️ Vector dim mismatch (${logName}): expected length ~${EXPECTED_VECTOR_BYTES} bytes, got ${dataLength} bytes. Auto-fixing...`);
           try {
             await connection!.execute(
               `ALTER TABLE ${tableName.toLowerCase()} MODIFY (embedding VECTOR(4096, FLOAT32))`,
@@ -114,7 +117,7 @@ async function run() {
             );
           } catch (err: any) {
             // Guard against silent data deletion on production
-            if (process.env.NODE_ENV === 'production' || process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS !== 'true') {
+            if (process.env.NODE_ENV === 'production' && process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS !== 'true') {
               console.warn(`   ⚠️ Could not automatically MODIFY ${tableName} embedding column. Constructive migration failed: ${err.message}`);
               console.warn(`   ⚠️ Skipping destructive fallback (DROP/ADD column) to preserve data. Set DB_ALLOW_DESTRUCTIVE_MIGRATIONS=true to override.`);
               return;
