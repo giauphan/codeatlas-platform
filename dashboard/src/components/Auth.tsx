@@ -132,7 +132,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               id={tab.id}
               role="tab"
               aria-selected={mode === tab.id}
-              aria-controls={`${tab.id}-panel`}
+              aria-controls={mode === tab.id ? `${tab.id}-panel` : undefined}
               tabIndex={mode === tab.id ? 0 : -1}
               key={tab.id}
               disabled={loading}
