@@ -116,6 +116,7 @@ async function run() {
             if (process.env.NODE_ENV === 'production' || process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS !== 'true') {
               console.warn(`   ⚠️ Could not automatically MODIFY ${tableName} embedding column. Constructive migration failed: ${err.message}`);
               console.warn(`   ⚠️ Skipping destructive fallback (DROP/ADD column) to preserve data. Set DB_ALLOW_DESTRUCTIVE_MIGRATIONS=true to override.`);
+              return;
             } else {
               console.warn(`   ⚠️ Destructive migration enabled. Dropping and re-adding ${tableName} embedding column.`);
               await connection!.execute(
