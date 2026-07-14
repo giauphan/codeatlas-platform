@@ -147,8 +147,12 @@ export class AuthenticateUserUseCase {
     }
 
     // 1. Super Admin Bypass
-    if (superAdminKey && apiKey === superAdminKey) {
-      return { tier: 'enterprise', uid: 'admin', keyId: 'admin', expires: Infinity };
+    if (superAdminKey) {
+      const apiKeyBuffer = Buffer.from(apiKey);
+      const adminKeyBuffer = Buffer.from(superAdminKey);
+      if (apiKeyBuffer.length === adminKeyBuffer.length && crypto.timingSafeEqual(apiKeyBuffer, adminKeyBuffer)) {
+        return { tier: 'enterprise', uid: 'admin', keyId: 'admin', expires: Infinity };
+      }
     }
 
     // 2. Check Local RAM Cache
