@@ -110,7 +110,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}
           onKeyDown={(e) => {
             if (loading) return;
-            const idx = Math.max(0, AUTH_TABS.findIndex(t => t.id === mode));
+            const idx = AUTH_TABS.findIndex(t => t.id === mode);
             if (e.key === 'ArrowRight') {
               e.preventDefault();
               switchTab(AUTH_TABS[(idx + 1) % AUTH_TABS.length].id);
