@@ -123,6 +123,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   setMode(nextId);
                   setError(null);
                   setTimeout(() => document.getElementById(nextId)?.focus(), 0);
+                } else if (e.key === 'Home') {
+                  e.preventDefault();
+                  const nextId = AUTH_TABS[0].id;
+                  setMode(nextId);
+                  setError(null);
+                  setTimeout(() => document.getElementById(nextId)?.focus(), 0);
+                } else if (e.key === 'End') {
+                  e.preventDefault();
+                  const nextId = AUTH_TABS[AUTH_TABS.length - 1].id;
+                  setMode(nextId);
+                  setError(null);
+                  setTimeout(() => document.getElementById(nextId)?.focus(), 0);
                 }
               }}
               style={{
