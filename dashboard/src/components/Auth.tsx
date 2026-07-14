@@ -20,6 +20,11 @@ interface AuthProps {
   onLogin: (key: string) => void;
 }
 
+const AUTH_TABS = [
+  { id: 'token', label: 'TOKEN', icon: Key },
+  { id: 'signin', label: 'SIGN IN', icon: LogIn }
+] as const;
+
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [mode, setMode] = useState<'token' | 'signin'>('token');
   const [email, setEmail] = useState('');
@@ -94,23 +99,25 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         {/* Tab Switcher */}
         <div role="tablist" aria-label="Authentication Options" style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-          {[
-            { id: 'token', label: 'TOKEN', icon: Key },
-            { id: 'signin', label: 'SIGN IN', icon: LogIn },
-          ].map((tab) => (
+          {AUTH_TABS.map((tab) => (
             <button
               id={tab.id}
               role="tab"
               aria-selected={mode === tab.id}
               aria-controls={`${tab.id}-panel`}
+              tabIndex={mode === tab.id ? 0 : -1}
               key={tab.id}
               disabled={loading}
               onClick={() => { setMode(tab.id as any); setError(null); }}
               onKeyDown={(e) => {
-                const tabs = ['token', 'signin'];
-                const idx = tabs.indexOf(mode);
-                if (e.key === 'ArrowRight') setMode(tabs[(idx + 1) % tabs.length] as any);
-                if (e.key === 'ArrowLeft') setMode(tabs[(idx - 1 + tabs.length) % tabs.length] as any);
+                const idx = AUTH_TABS.findIndex(t => t.id === mode);
+                if (e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  setMode(AUTH_TABS[(idx + 1) % AUTH_TABS.length].id as any);
+                } else if (e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  setMode(AUTH_TABS[(idx - 1 + AUTH_TABS.length) % AUTH_TABS.length].id as any);
+                }
               }}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
