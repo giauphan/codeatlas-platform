@@ -570,8 +570,20 @@ export class GenomeService {
       binds.conf = newConfidence;
       binds.sr = newSuccessRate;
 
+
+      const ALLOWED_MUTATE_UPDATES = new Set([
+        "description = :desc",
+        "solution = :sol",
+        "confidence = :conf",
+        "version = version + 1",
+        "success_rate = :sr",
+        "evolution_score = evolution_score + 1",
+        "updated_at = CURRENT_TIMESTAMP"
+      ]);
+      const safeUpdates = updates.filter(u => ALLOWED_MUTATE_UPDATES.has(u));
+
       await connection.execute(
-        `UPDATE codeatlas_genome SET ${updates.join(", ")} WHERE id = :id`,
+        `UPDATE codeatlas_genome SET ${safeUpdates.join(", ")} WHERE id = :id`,
         binds as any,
         { autoCommit: true }
       );
@@ -1067,8 +1079,26 @@ Apply this knowledge when encountering similar problems.
         }
       }
 
-      if (sets.length === 1) return; // nothing to update
-      const sql = `UPDATE codeatlas_genome SET ${sets.join(", ")} WHERE id = :id`;
+
+      const ALLOWED_UPDATE_SETS = new Set([
+        "name = :name",
+        "description = :desc",
+        "problem = :problem",
+        "solution = :solution",
+        "architecture = :arch",
+        "category = :cat",
+        "dependencies = :deps",
+        "confidence = :conf",
+        "version = :ver",
+        "updated_at = CURRENT_TIMESTAMP",
+        "embedding = :emb"
+      ]);
+      const safeSets = sets.filter(s => ALLOWED_UPDATE_SETS.has(s));
+
+      if (safeSets.length === 1 && safeSets[0] === "updated_at = CURRENT_TIMESTAMP") return; // nothing to update
+
+      const sql = `UPDATE codeatlas_genome SET ${safeSets.join(", ")} WHERE id = :id`;
+
       await connection.execute(sql, binds as any, { autoCommit: true });
     } catch (err) {
       logger.error(`updateGene failed for ${geneId}`, err);
