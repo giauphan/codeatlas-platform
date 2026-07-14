@@ -106,6 +106,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         {/* Tab Switcher */}
         <div
           role="tablist"
+          aria-orientation="horizontal"
           aria-label="Authentication Options"
           style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}
           onKeyDown={(e) => {
