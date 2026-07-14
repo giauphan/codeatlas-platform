@@ -111,15 +111,22 @@ async function run() {
               `ALTER TABLE ${tableName.toLowerCase()} MODIFY (embedding VECTOR(4096, FLOAT32))`,
               {}, { autoCommit: true }
             );
-          } catch {
-            await connection!.execute(
-              `ALTER TABLE ${tableName.toLowerCase()} DROP COLUMN embedding`,
-              {}, { autoCommit: true }
-            );
-            await connection!.execute(
-              `ALTER TABLE ${tableName.toLowerCase()} ADD (embedding VECTOR(4096, FLOAT32))`,
-              {}, { autoCommit: true }
-            );
+          } catch (err: any) {
+            // Guard against silent data deletion on production
+            if (process.env.NODE_ENV === 'production' || process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS !== 'true') {
+              console.warn(`   ⚠️ Could not automatically MODIFY ${tableName} embedding column. Constructive migration failed: ${err.message}`);
+              console.warn(`   ⚠️ Skipping destructive fallback (DROP/ADD column) to preserve data. Set DB_ALLOW_DESTRUCTIVE_MIGRATIONS=true to override.`);
+            } else {
+              console.warn(`   ⚠️ Destructive migration enabled. Dropping and re-adding ${tableName} embedding column.`);
+              await connection!.execute(
+                `ALTER TABLE ${tableName.toLowerCase()} DROP COLUMN embedding`,
+                {}, { autoCommit: true }
+              );
+              await connection!.execute(
+                `ALTER TABLE ${tableName.toLowerCase()} ADD (embedding VECTOR(4096, FLOAT32))`,
+                {}, { autoCommit: true }
+              );
+            }
           }
           console.log(`   └─ ✅ Fixed ${logName} to VECTOR(4096, FLOAT32)`);
         } else {
