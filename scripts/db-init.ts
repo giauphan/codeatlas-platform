@@ -81,6 +81,45 @@ async function run() {
     }
   };
 
+
+  const checkAndFixVectorDim = async (tableName: string, logName: string) => {
+    try {
+      const [col] = (await connection!.execute(
+        `SELECT data_type, data_length
+         FROM all_tab_columns
+         WHERE table_name = :name AND column_name = 'EMBEDDING'`,
+        [tableName], { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      )).rows as any[] || [];
+
+      if (col) {
+        const dim = col.DATA_LENGTH || 0;
+        if (dim !== 4096) {
+          console.log(`   ⚠️ Vector dim mismatch (${logName}): ${dim}→4096. Auto-fixing...`);
+          try {
+            await connection!.execute(
+              `ALTER TABLE ${tableName.toLowerCase()} MODIFY (embedding VECTOR(4096, FLOAT32))`,
+              {}, { autoCommit: true }
+            );
+          } catch {
+            await connection!.execute(
+              `ALTER TABLE ${tableName.toLowerCase()} DROP COLUMN embedding`,
+              {}, { autoCommit: true }
+            );
+            await connection!.execute(
+              `ALTER TABLE ${tableName.toLowerCase()} ADD (embedding VECTOR(4096, FLOAT32))`,
+              {}, { autoCommit: true }
+            );
+          }
+          console.log(`   └─ ✅ Fixed ${logName} to VECTOR(4096, FLOAT32)`);
+        } else {
+          console.log(`   ✅ Vector dimension for ${logName} already 4096.`);
+        }
+      }
+    } catch (err: any) {
+      console.warn(`   ⚠️ Vector check skipped for ${logName}:`, err.message);
+    }
+  };
+
   try {
     console.log("\n📦 1. Initializing Tables & Indexes...");
 
@@ -158,75 +197,10 @@ async function run() {
           )
     `, "CREATE PROPERTY GRAPH ai_knowledge_graph");
 
-    // ── Auto-migration: Fix vector dimension if needed ──────
-    try {
-      const [col] = (await connection!.execute(
-        `SELECT data_type, data_length
-         FROM all_tab_columns
-         WHERE table_name = 'AI_SEMANTIC_MEMORY' AND column_name = 'EMBEDDING'`,
-        [], { outFormat: oracledb.OUT_FORMAT_OBJECT }
-      )).rows as any[] || [];
-      if (col) {
-        const dim = col.DATA_LENGTH || 0;
-        if (dim !== 4096) {
-          console.log(`   ⚠️ Vector dim mismatch: ${dim}→4096. Auto-fixing...`);
-          try {
-            await connection!.execute(
-              `ALTER TABLE ai_semantic_memory MODIFY (embedding VECTOR(4096, FLOAT32))`,
-              {}, { autoCommit: true }
-            );
-          } catch {
-            await connection!.execute(
-              `ALTER TABLE ai_semantic_memory DROP COLUMN embedding`,
-              {}, { autoCommit: true }
-            );
-            await connection!.execute(
-              `ALTER TABLE ai_semantic_memory ADD (embedding VECTOR(4096, FLOAT32))`,
-              {}, { autoCommit: true }
-            );
-          }
-          console.log("   └─ ✅ Fixed to VECTOR(4096, FLOAT32)");
-        } else {
-          console.log("   ✅ Vector dimension already 4096.");
-        }
-      }
-    } catch (err: any) {
-      console.warn("   ⚠️ Vector check skipped:", err.message);
-    }
 
-    // Auto-migration: Fix ai_dreaming_memory vector dimension
-    try {
-      const [dreamCol] = (await connection!.execute(
-        `SELECT data_type, data_length
-         FROM all_tab_columns
-         WHERE table_name = 'AI_DREAMING_MEMORY' AND column_name = 'EMBEDDING'`,
-        [], { outFormat: oracledb.OUT_FORMAT_OBJECT }
-      )).rows as any[] || [];
-      if (dreamCol) {
-        const dim = dreamCol.DATA_LENGTH || 0;
-        if (dim !== 4096) {
-          console.log(`   ⚠️ Vector dim mismatch (dreaming): ${dim}→4096. Auto-fixing...`);
-          try {
-            await connection!.execute(
-              `ALTER TABLE ai_dreaming_memory MODIFY (embedding VECTOR(4096, FLOAT32))`,
-              {}, { autoCommit: true }
-            );
-          } catch {
-            await connection!.execute(
-              `ALTER TABLE ai_dreaming_memory DROP COLUMN embedding`,
-              {}, { autoCommit: true }
-            );
-            await connection!.execute(
-              `ALTER TABLE ai_dreaming_memory ADD (embedding VECTOR(4096, FLOAT32))`,
-              {}, { autoCommit: true }
-            );
-          }
-          console.log("   └─ ✅ Dreaming vector fixed to VECTOR(4096, FLOAT32)");
-        }
-      }
-    } catch (err: any) {
-      console.warn("   ⚠️ Dreaming vector check skipped:", err.message);
-    }
+    // ── Auto-migration: Fix vector dimensions if needed ──────
+    await checkAndFixVectorDim('AI_SEMANTIC_MEMORY', 'semantic');
+    await checkAndFixVectorDim('AI_DREAMING_MEMORY', 'dreaming');
 
     console.log("\n🔒 2. Setting up Virtual Private Database (VPD) RLS Context...");
 
