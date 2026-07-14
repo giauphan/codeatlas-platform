@@ -106,6 +106,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               key={tab.id}
               disabled={loading}
               onClick={() => { setMode(tab.id as any); setError(null); }}
+              onKeyDown={(e) => {
+                const tabs = ['token', 'signin'];
+                const idx = tabs.indexOf(mode);
+                if (e.key === 'ArrowRight') setMode(tabs[(idx + 1) % tabs.length] as any);
+                if (e.key === 'ArrowLeft') setMode(tabs[(idx - 1 + tabs.length) % tabs.length] as any);
+              }}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
                 background: mode === tab.id ? 'rgba(255,255,255,0.1)' : 'transparent',
