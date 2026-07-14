@@ -12,6 +12,7 @@ import { A2AExecutor } from "./a2aExecutor.js";
 import type { JsonRpcRequest, JsonRpcResponse } from "../../types/a2a.js";
 import { randomUUID } from "node:crypto";
 import { logger } from "../../utils/logger.js";
+import { authMiddleware } from "../../middleware/auth.js";
 
 export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, baseUrl: string): void {
   // === Agent Discovery ===
@@ -27,7 +28,7 @@ export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, base
   });
 
   // === JSON-RPC 2.0 Endpoint ===
-  app.post("/a2a/jsonrpc", async (req, res) => {
+  app.post("/a2a/jsonrpc", authMiddleware, async (req, res) => {
     const body = req.body as JsonRpcRequest;
 
     // Validate JSON-RPC envelope
@@ -64,7 +65,7 @@ export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, base
   });
 
   // === REST Convenience Endpoint ===
-  app.post("/a2a/rest/message", async (req, res) => {
+  app.post("/a2a/rest/message", authMiddleware, async (req, res) => {
     const { message, taskId } = req.body || {};
 
     if (!message || !message.parts) {
