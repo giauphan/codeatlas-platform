@@ -69,7 +69,13 @@ function log(level: Level, ...args: unknown[]): void {
       msg: message,
     };
     if (meta) entry.meta = meta;
-    const output = JSON.stringify(entry);
+    let output: string;
+    try {
+      output = JSON.stringify(entry);
+    } catch {
+      entry.meta = String(meta);
+      output = JSON.stringify(entry);
+    }
     if (level === "error" || level === "warn") {
       process.stderr.write(output + "\n");
     } else {
@@ -79,7 +85,11 @@ function log(level: Level, ...args: unknown[]): void {
     const prefix = `[${ts}] [${level.toUpperCase()}]`;
     let output = `${prefix} ${message}`;
     if (meta) {
-      output += ` ${JSON.stringify(meta)}`;
+      try {
+        output += ` ${JSON.stringify(meta)}`;
+      } catch {
+        output += ` ${String(meta)}`;
+      }
     }
     if (level === "error") {
       process.stderr.write(output + "\n");
