@@ -113,10 +113,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 const idx = AUTH_TABS.findIndex(t => t.id === mode);
                 if (e.key === 'ArrowRight') {
                   e.preventDefault();
-                  setMode(AUTH_TABS[(idx + 1) % AUTH_TABS.length].id as any);
+                  const nextId = AUTH_TABS[(idx + 1) % AUTH_TABS.length].id;
+                  setMode(nextId as any);
+                  setTimeout(() => document.getElementById(nextId)?.focus(), 0);
                 } else if (e.key === 'ArrowLeft') {
                   e.preventDefault();
-                  setMode(AUTH_TABS[(idx - 1 + AUTH_TABS.length) % AUTH_TABS.length].id as any);
+                  const nextId = AUTH_TABS[(idx - 1 + AUTH_TABS.length) % AUTH_TABS.length].id;
+                  setMode(nextId as any);
+                  setTimeout(() => document.getElementById(nextId)?.focus(), 0);
                 }
               }}
               style={{
