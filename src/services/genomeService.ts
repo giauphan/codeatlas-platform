@@ -581,6 +581,8 @@ export class GenomeService {
         "updated_at = CURRENT_TIMESTAMP"
       ]);
       const safeUpdates = updates.filter(u => ALLOWED_MUTATE_UPDATES.has(u));
+      if (safeUpdates.length === 0) return geneId; // Return since the return type is Promise<string>
+
 
       await connection.execute(
         `UPDATE codeatlas_genome SET ${safeUpdates.join(", ")} WHERE id = :id`,
@@ -1094,6 +1096,7 @@ Apply this knowledge when encountering similar problems.
         "embedding = :emb"
       ]);
       const safeSets = sets.filter(s => ALLOWED_UPDATE_SETS.has(s));
+      if (safeSets.length === 0) return;
 
       if (safeSets.length === 1 && safeSets[0] === "updated_at = CURRENT_TIMESTAMP") return; // nothing to update
 
