@@ -114,7 +114,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               tabIndex={mode === tab.id ? 0 : -1}
               key={tab.id}
               disabled={loading}
-              onClick={() => { setMode(tab.id); setError(null); }}
+              onClick={() => { switchTab(tab.id); }}
               onKeyDown={(e) => {
                 const idx = Math.max(0, AUTH_TABS.findIndex(t => t.id === mode));
                 if (e.key === 'ArrowRight') {
