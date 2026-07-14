@@ -83,8 +83,17 @@ async function run() {
 
 
   const checkAndFixVectorDim = async (tableName: string, logName: string) => {
+    const allowedTables = ['AI_SEMANTIC_MEMORY', 'AI_DREAMING_MEMORY'];
+    if (!allowedTables.includes(tableName)) {
+      console.warn(`   ⚠️ Invalid table name for vector check: ${tableName}`);
+      return;
+    }
+
     try {
       const [col] = (await connection!.execute(
+        // In Oracle, checking vector dimension precisely requires querying metadata, but as a workaround,
+        // we can assume the correct length if DATA_LENGTH matches the byte size of VECTOR(4096, FLOAT32)
+        // FLOAT32 = 4 bytes, so 4096 * 4 = 16384 bytes
         `SELECT data_type, data_length
          FROM all_tab_columns
          WHERE table_name = :name AND column_name = 'EMBEDDING'`,
@@ -92,9 +101,11 @@ async function run() {
       )).rows as any[] || [];
 
       if (col) {
-        const dim = col.DATA_LENGTH || 0;
-        if (dim !== 4096) {
-          console.log(`   ⚠️ Vector dim mismatch (${logName}): ${dim}→4096. Auto-fixing...`);
+        // VECTOR(4096, FLOAT32) is typically 16384 bytes long
+        const isCorrectDim = col.DATA_LENGTH === 16384;
+
+        if (!isCorrectDim) {
+          console.log(`   ⚠️ Vector dim mismatch (${logName}): length ${col.DATA_LENGTH} bytes. Auto-fixing...`);
           try {
             await connection!.execute(
               `ALTER TABLE ${tableName.toLowerCase()} MODIFY (embedding VECTOR(4096, FLOAT32))`,
