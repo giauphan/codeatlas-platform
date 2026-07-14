@@ -108,18 +108,20 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               tabIndex={mode === tab.id ? 0 : -1}
               key={tab.id}
               disabled={loading}
-              onClick={() => { setMode(tab.id as any); setError(null); }}
+              onClick={() => { setMode(tab.id); setError(null); }}
               onKeyDown={(e) => {
                 const idx = AUTH_TABS.findIndex(t => t.id === mode);
                 if (e.key === 'ArrowRight') {
                   e.preventDefault();
                   const nextId = AUTH_TABS[(idx + 1) % AUTH_TABS.length].id;
-                  setMode(nextId as any);
+                  setMode(nextId);
+                  setError(null);
                   setTimeout(() => document.getElementById(nextId)?.focus(), 0);
                 } else if (e.key === 'ArrowLeft') {
                   e.preventDefault();
                   const nextId = AUTH_TABS[(idx - 1 + AUTH_TABS.length) % AUTH_TABS.length].id;
-                  setMode(nextId as any);
+                  setMode(nextId);
+                  setError(null);
                   setTimeout(() => document.getElementById(nextId)?.focus(), 0);
                 }
               }}
@@ -151,7 +153,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               </button>
             </motion.form>
           ) : (
-            <motion.form id="signin-panel" role="tabpanel" aria-labelledby="signin" key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleAuthSubmit}>
+            <motion.form id="signin-panel" role="tabpanel" aria-labelledby="signin" key="signin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleAuthSubmit}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
