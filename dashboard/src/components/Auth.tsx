@@ -121,7 +121,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
                   <Key size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                  <input type="password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required autoFocus autoComplete="off" />
+                  <input type="password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required autoFocus autoComplete="new-password" />
                 </div>
               </div>
               {error && <div style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
