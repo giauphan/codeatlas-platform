@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { auth } from '../lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  sendPasswordResetEmail 
+import {
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Shield, 
-  Key, 
-  Mail, 
-  Lock, 
-  LogIn, 
+import {
+  Shield,
+  Key,
+  Mail,
+  Lock,
+  LogIn,
   Loader2,
   ChevronRight,
   Info
@@ -51,7 +51,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     } catch (err: unknown) {
       console.error("Firebase auth error:", err);
       let friendlyMsg = (err as Error).message || 'Đăng nhập không thành công. Vui lòng thử lại.';
-      
+
       const errorCode = (err as any).code || '';
       if (errorCode === 'auth/invalid-credential' || (err as Error).message?.includes('auth/invalid-credential')) {
         friendlyMsg = 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
@@ -116,7 +116,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         <AnimatePresence mode="wait">
           {mode === 'token' ? (
-            <motion.form key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleTokenSubmit} autoComplete="off">
+            <motion.form key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleTokenSubmit}>
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
