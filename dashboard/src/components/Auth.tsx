@@ -99,6 +99,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             { id: 'signin', label: 'SIGN IN', icon: LogIn },
           ].map((tab) => (
             <button
+              id={tab.id}
               role="tab"
               aria-selected={mode === tab.id}
               aria-controls={`${tab.id}-panel`}
