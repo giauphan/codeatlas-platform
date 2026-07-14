@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { auth, db } from '../lib/firebase';
-import { 
-  collection, 
-  addDoc, 
-  deleteDoc, 
-  doc, 
-  onSnapshot, 
-  query, 
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
   orderBy,
-  serverTimestamp 
+  serverTimestamp
 } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  LogOut, 
-  Globe, 
-  Network, 
+import {
+  LogOut,
+  Globe,
+  Network,
   Brain,
-  ShieldCheck, 
+  ShieldCheck,
   LayoutDashboard,
   BookOpen,
   Lightbulb
@@ -32,8 +32,8 @@ import { SecondBrainView } from './SecondBrainView';
 import { DocumentationView } from './DocumentationView';
 
 // API Configuration
-const API_BASE = window.location.origin.includes('localhost:5173') 
-  ? 'http://localhost:8080' 
+const API_BASE = window.location.origin.includes('localhost:5173')
+  ? 'http://localhost:8080'
   : window.location.origin;
 
 interface ApiKey {
@@ -92,7 +92,7 @@ const safeSessionStorageSetItem = (key: string, value: string) => {
           }
         }
         keysToRemove.forEach(k => sessionStorage.removeItem(k));
-        
+
         sessionStorage.setItem(key, value);
       } catch (retryErr) {
         console.info(`[CodeAtlas] Project analysis size (${(value.length / 1024 / 1024).toFixed(2)} MB) exceeds browser sessionStorage quota limit. Operating in high-performance memory-only mode without local cache.`);
@@ -193,12 +193,12 @@ export const Dashboard: React.FC = () => {
 
   const handleToggleIndexingEnabled = useCallback(async (newValue: boolean) => {
     if (!selectedProjectDir || isUpdatingSettings) return;
-    
+
     const oldValue = isIndexingEnabled;
     setIsIndexingEnabled(newValue);
     safeSessionStorageSetItem(`codeatlas_indexing_enabled_${selectedProjectDir}`, JSON.stringify(newValue));
     setIsUpdatingSettings(true);
-    
+
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch(`${API_BASE}/api/projects/settings`, {
@@ -289,7 +289,7 @@ export const Dashboard: React.FC = () => {
     }
 
     try {
-      const url = projectDir 
+      const url = projectDir
         ? `${API_BASE}/api/analysis?projectDir=${encodeURIComponent(projectDir)}`
         : `${API_BASE}/api/analysis`;
       const headers = await getAuthHeaders();
@@ -504,7 +504,7 @@ export const Dashboard: React.FC = () => {
       clearAllCaches();
       return;
     }
-    
+
     fetchProjects();
 
     const unsubscribeStats = onSnapshot(doc(db, 'users', user.uid), (snap: any) => {
@@ -529,11 +529,7 @@ export const Dashboard: React.FC = () => {
     if (!user || !newKeyName.trim()) return;
     setLoading(true);
     try {
-      const randomBytes = new Uint8Array(32);
-      crypto.getRandomValues(randomBytes);
-      const secureHex = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-      const rawKey = 'ca_' + secureHex;
-
+      const rawKey = 'ca_' + crypto.randomUUID().replace(/-/g, '');
       const encoder = new TextEncoder();
       const data = encoder.encode(rawKey);
       const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -551,27 +547,27 @@ export const Dashboard: React.FC = () => {
       });
       setNewKeyName('');
       setCreatedKey(rawKey);
-    } catch (err) { 
-      console.error(err); 
-    } finally { 
-      setLoading(false); 
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   const resolvedAnalysis = useMemo(() => {
     if (!analysis) return null;
-    
+
     // Extract base analysis object if it's nested
     let base: AnalysisData = analysis;
     if (analysis.analysis) {
       base = analysis.analysis;
     }
-    
+
     // Normalize stats
     const rawStats = base.stats || {};
     const entityCounts = base.entityCounts || {};
     const totalFilesAnalyzed = base.totalFilesAnalyzed || rawStats.totalFiles || 0;
-    
+
     const normalizedStats = {
       totalFiles: totalFilesAnalyzed,
       totalModules: entityCounts.modules || rawStats.totalModules || 0,
@@ -580,7 +576,7 @@ export const Dashboard: React.FC = () => {
       totalVariables: entityCounts.variables || rawStats.totalVariables || 0,
       loc: rawStats.loc || 0
     };
-    
+
     return {
       ...base,
       stats: normalizedStats,
@@ -592,20 +588,20 @@ export const Dashboard: React.FC = () => {
     switch(activeTab) {
       case 'Control Center':
         return (
-          <ControlCenterView 
-            stats={stats} 
-            keys={keys} 
+          <ControlCenterView
+            stats={stats}
+            keys={keys}
             analysis={resolvedAnalysis}
-            createKey={createKey} 
-            deleteKey={(id: string) => deleteDoc(doc(db, 'users', user!.uid, 'keys', id))} 
-            copyToClipboard={(t: string, id: string) => { 
-              navigator.clipboard.writeText(t); 
-              setCopiedId(id); 
-              setTimeout(() => setCopiedId(null), 2000); 
+            createKey={createKey}
+            deleteKey={(id: string) => deleteDoc(doc(db, 'users', user!.uid, 'keys', id))}
+            copyToClipboard={(t: string, id: string) => {
+              navigator.clipboard.writeText(t);
+              setCopiedId(id);
+              setTimeout(() => setCopiedId(null), 2000);
             }}
-            copiedId={copiedId} 
-            newKeyName={newKeyName} 
-            setNewKeyName={setNewKeyName} 
+            copiedId={copiedId}
+            newKeyName={newKeyName}
+            setNewKeyName={setNewKeyName}
             loading={loading}
             createdKey={createdKey}
             clearCreatedKey={() => setCreatedKey(null)}
@@ -613,8 +609,8 @@ export const Dashboard: React.FC = () => {
         );
       case 'Knowledge Graph':
         return (
-          <KnowledgeGraphView 
-            analysis={resolvedAnalysis} 
+          <KnowledgeGraphView
+            analysis={resolvedAnalysis}
             projects={projects}
             selectedProjectDir={selectedProjectDir}
             onProjectChange={handleProjectChange}
@@ -623,12 +619,12 @@ export const Dashboard: React.FC = () => {
         );
       case 'Cloud Index':
         return (
-          <CloudIndexView 
-            analysis={resolvedAnalysis} 
-            isIndexing={isIndexing} 
-            onReindex={handleReindex} 
-            isIndexingEnabled={isIndexingEnabled} 
-            setIsIndexingEnabled={handleToggleIndexingEnabled} 
+          <CloudIndexView
+            analysis={resolvedAnalysis}
+            isIndexing={isIndexing}
+            onReindex={handleReindex}
+            isIndexingEnabled={isIndexingEnabled}
+            setIsIndexingEnabled={handleToggleIndexingEnabled}
             isUpdatingSettings={isUpdatingSettings}
           />
         );
@@ -645,9 +641,9 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--background)', color: '#fff', overflow: 'hidden' }}>
-      
+
       {/* SIDEBAR */}
-      <aside className="glass-panel" style={{ 
+      <aside className="glass-panel" style={{
         width: '300px', minWidth: '300px', padding: '2.5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '2.5rem',
         borderRight: '1px solid rgba(255,255,255,0.1)', height: '100vh', boxSizing: 'border-box'
       }}>
