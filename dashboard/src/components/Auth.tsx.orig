@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { auth } from '../lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  sendPasswordResetEmail 
+import {
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Shield, 
-  Key, 
-  Mail, 
-  Lock, 
-  LogIn, 
+import {
+  Shield,
+  Key,
+  Mail,
+  Lock,
+  LogIn,
   Loader2,
   ChevronRight,
   Info
@@ -51,7 +51,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     } catch (err: unknown) {
       console.error("Firebase auth error:", err);
       let friendlyMsg = (err as Error).message || 'Đăng nhập không thành công. Vui lòng thử lại.';
-      
+
       const errorCode = (err as any).code || '';
       if (errorCode === 'auth/invalid-credential' || (err as Error).message?.includes('auth/invalid-credential')) {
         friendlyMsg = 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
@@ -120,7 +120,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         <AnimatePresence mode="wait">
           {mode === 'token' ? (
-            <motion.form id="token-panel" role="tabpanel" aria-labelledby="token" key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleTokenSubmit} autoComplete="off" >
+            <div id="token-panel" role="tabpanel" aria-labelledby="token">
+            <motion.form key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleTokenSubmit} autoComplete="off" >
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
@@ -133,8 +134,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 {loading ? <Loader2 className="animate-spin" size={24} /> : 'INITIALIZE SESSION'}
               </button>
             </motion.form>
+            </div>
           ) : (
-            <motion.form id="signin-panel" role="tabpanel" aria-labelledby="signin" key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleAuthSubmit}>
+            <div id="signin-panel" role="tabpanel" aria-labelledby="signin">
+            <motion.form key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleAuthSubmit} autoComplete="off">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
@@ -156,6 +159,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 {loading ? <Loader2 className="animate-spin" size={24} /> : 'ENTER SYSTEM'}
               </button>
             </motion.form>
+            </div>
           )}
         </AnimatePresence>
 
