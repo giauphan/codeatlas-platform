@@ -104,7 +104,28 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </header>
 
         {/* Tab Switcher */}
-        <div role="tablist" aria-label="Authentication Options" style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <div
+          role="tablist"
+          aria-label="Authentication Options"
+          style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}
+          onKeyDown={(e) => {
+            if (loading) return;
+            const idx = Math.max(0, AUTH_TABS.findIndex(t => t.id === mode));
+            if (e.key === 'ArrowRight') {
+              e.preventDefault();
+              switchTab(AUTH_TABS[(idx + 1) % AUTH_TABS.length].id);
+            } else if (e.key === 'ArrowLeft') {
+              e.preventDefault();
+              switchTab(AUTH_TABS[(idx - 1 + AUTH_TABS.length) % AUTH_TABS.length].id);
+            } else if (e.key === 'Home') {
+              e.preventDefault();
+              switchTab(AUTH_TABS[0].id);
+            } else if (e.key === 'End') {
+              e.preventDefault();
+              switchTab(AUTH_TABS[AUTH_TABS.length - 1].id);
+            }
+          }}
+        >
           {AUTH_TABS.map((tab) => (
             <button
               id={tab.id}
@@ -115,22 +136,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               key={tab.id}
               disabled={loading}
               onClick={() => { switchTab(tab.id); }}
-              onKeyDown={(e) => {
-                const idx = Math.max(0, AUTH_TABS.findIndex(t => t.id === mode));
-                if (e.key === 'ArrowRight') {
-                  e.preventDefault();
-                  switchTab(AUTH_TABS[(idx + 1) % AUTH_TABS.length].id);
-                } else if (e.key === 'ArrowLeft') {
-                  e.preventDefault();
-                  switchTab(AUTH_TABS[(idx - 1 + AUTH_TABS.length) % AUTH_TABS.length].id);
-                } else if (e.key === 'Home') {
-                  e.preventDefault();
-                  switchTab(AUTH_TABS[0].id);
-                } else if (e.key === 'End') {
-                  e.preventDefault();
-                  switchTab(AUTH_TABS[AUTH_TABS.length - 1].id);
-                }
-              }}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
                 background: mode === tab.id ? 'rgba(255,255,255,0.1)' : 'transparent',
