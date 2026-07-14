@@ -383,6 +383,9 @@ app.get("/api/projects/memory", authMiddleware, async (req, res) => {
     }
 
     const cleanProjectName = path.basename(projectName.trim());
+    if (!cleanProjectName || cleanProjectName === "." || cleanProjectName === "..") {
+      return res.status(400).json({ error: "Invalid project name" });
+    }
 
     if (!process.env.ORACLE_CONN_STRING) {
       return res.json({
@@ -608,15 +611,19 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
     }
     
     const { projectName, analysis, businessRule, changeDescription } = req.body;
-    if (!projectName || !analysis) {
+    if (!projectName || typeof projectName !== "string" || !analysis) {
       return res.status(400).json({ error: "Missing projectName or analysis data" });
+    }
+
+    // Clean project name to avoid directory traversal
+    const cleanProjectName = path.basename(projectName);
+    if (!cleanProjectName || cleanProjectName === "." || cleanProjectName === "..") {
+      return res.status(400).json({ error: "Invalid project name" });
     }
 
     // Queue the heavy file write & database sync operations to prevent connection pool starvation/conflicts
     const result = await syncQueue.enqueue(async () => {
       const executeTask = async () => {
-        // Clean project name to avoid directory traversal
-        const cleanProjectName = path.basename(projectName);
         
         // Resolve project directory on the VPS
         let projectDir: string;
