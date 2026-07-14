@@ -531,7 +531,7 @@ export const Dashboard: React.FC = () => {
     try {
       const randomBytes = new Uint8Array(32);
       crypto.getRandomValues(randomBytes);
-      const secureHex = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      const secureHex = [...randomBytes].map(b => b.toString(16).padStart(2, '0')).join('');
       const rawKey = 'ca_' + secureHex;
 
       const encoder = new TextEncoder();
