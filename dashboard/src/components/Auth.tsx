@@ -80,6 +80,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
+  const switchTab = (nextId: 'token' | 'signin') => {
+    setMode(nextId);
+    setError(null);
+    setTimeout(() => document.getElementById(nextId)?.focus(), 0);
+  };
+
   return (
     <div style={{
       height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -113,28 +119,16 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 const idx = AUTH_TABS.findIndex(t => t.id === mode);
                 if (e.key === 'ArrowRight') {
                   e.preventDefault();
-                  const nextId = AUTH_TABS[(idx + 1) % AUTH_TABS.length].id;
-                  setMode(nextId);
-                  setError(null);
-                  setTimeout(() => document.getElementById(nextId)?.focus(), 0);
+                  switchTab(AUTH_TABS[(idx + 1) % AUTH_TABS.length].id);
                 } else if (e.key === 'ArrowLeft') {
                   e.preventDefault();
-                  const nextId = AUTH_TABS[(idx - 1 + AUTH_TABS.length) % AUTH_TABS.length].id;
-                  setMode(nextId);
-                  setError(null);
-                  setTimeout(() => document.getElementById(nextId)?.focus(), 0);
+                  switchTab(AUTH_TABS[(idx - 1 + AUTH_TABS.length) % AUTH_TABS.length].id);
                 } else if (e.key === 'Home') {
                   e.preventDefault();
-                  const nextId = AUTH_TABS[0].id;
-                  setMode(nextId);
-                  setError(null);
-                  setTimeout(() => document.getElementById(nextId)?.focus(), 0);
+                  switchTab(AUTH_TABS[0].id);
                 } else if (e.key === 'End') {
                   e.preventDefault();
-                  const nextId = AUTH_TABS[AUTH_TABS.length - 1].id;
-                  setMode(nextId);
-                  setError(null);
-                  setTimeout(() => document.getElementById(nextId)?.focus(), 0);
+                  switchTab(AUTH_TABS[AUTH_TABS.length - 1].id);
                 }
               }}
               style={{
