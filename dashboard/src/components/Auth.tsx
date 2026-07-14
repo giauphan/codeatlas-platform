@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { auth } from '../lib/firebase';
 import { 
   signInWithEmailAndPassword, 
@@ -32,6 +32,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focusTab, setFocusTab] = useState<string | null>(null);
+  const tokenTabRef = useRef<HTMLButtonElement>(null);
+  const signinTabRef = useRef<HTMLButtonElement>(null);
 
   const handleTokenSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,8 +86,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const switchTab = (nextId: 'token' | 'signin') => {
     setMode(nextId);
     setError(null);
-    setTimeout(() => document.getElementById(nextId)?.focus(), 0);
+    setFocusTab(nextId);
   };
+
+  useEffect(() => {
+    if (focusTab === 'token') {
+      tokenTabRef.current?.focus();
+    } else if (focusTab === 'signin') {
+      signinTabRef.current?.focus();
+    }
+    setFocusTab(null);
+  }, [focusTab, mode]);
 
   return (
     <div style={{
@@ -129,6 +141,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         >
           {AUTH_TABS.map((tab) => (
             <button
+              ref={tab.id === 'token' ? tokenTabRef : signinTabRef}
               id={tab.id}
               role="tab"
               aria-selected={mode === tab.id}
