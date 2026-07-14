@@ -685,27 +685,39 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
   }
 
   const seen = new Set<string>();
-  for (const dir of searchDirs) {
-    if (seen.has(dir)) continue;
+  const uniqueDirs = searchDirs.filter(dir => {
+    if (seen.has(dir) || isSystemIdeDirectory(dir)) return false;
     seen.add(dir);
-    if (isSystemIdeDirectory(dir)) continue;
+    return true;
+  });
 
-    if (await isProjectDirectoryAsync(dir)) {
-      try {
-        const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
-        let modifiedAt: Date;
-        if (await fileExists(analysisPath)) {
-          modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
-        } else {
-          modifiedAt = (await fs.promises.stat(dir)).mtime;
+  const chunkSize = 50; // Batch file system operations to prevent EMFILE
+  for (let i = 0; i < uniqueDirs.length; i += chunkSize) {
+    const chunk = uniqueDirs.slice(i, i + chunkSize);
+    const results = await Promise.all(
+      chunk.map(async (dir) => {
+        if (await isProjectDirectoryAsync(dir)) {
+          try {
+            const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
+            let modifiedAt: Date;
+            if (await fileExists(analysisPath)) {
+              modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
+            } else {
+              modifiedAt = (await fs.promises.stat(dir)).mtime;
+            }
+            return {
+              name: path.basename(dir),
+              dir,
+              analysisPath,
+              modifiedAt,
+            };
+          } catch { /* skip */ }
         }
-        projects.push({
-          name: path.basename(dir),
-          dir,
-          analysisPath,
-          modifiedAt,
-        });
-      } catch { /* skip */ }
+        return null;
+      })
+    );
+    for (const res of results) {
+      if (res) projects.push(res);
     }
   }
 
