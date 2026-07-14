@@ -105,7 +105,7 @@ async function run() {
         const isCorrectDim = col.DATA_LENGTH === 16384;
 
         if (!isCorrectDim) {
-          console.log(`   ⚠️ Vector dim mismatch (${logName}): length ${col.DATA_LENGTH} bytes. Auto-fixing...`);
+          console.log(`   ⚠️ Vector dim mismatch (${logName}): expected length ~16384 bytes, got ${col.DATA_LENGTH} bytes. Auto-fixing...`);
           try {
             await connection!.execute(
               `ALTER TABLE ${tableName.toLowerCase()} MODIFY (embedding VECTOR(4096, FLOAT32))`,
