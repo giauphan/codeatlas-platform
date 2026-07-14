@@ -136,14 +136,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
                   <div style={{ position: 'relative' }}>
                      <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                    <input type="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                    <input type="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" />
                   </div>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>PASSWORD</label>
                   <div style={{ position: 'relative' }}>
                     <Lock size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                    <input type="password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <input type="password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" />
                   </div>
                 </div>
               </div>
