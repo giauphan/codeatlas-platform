@@ -139,14 +139,15 @@ export class ConsolidationEngine {
         }
 
         // Batch delete duplicate concepts using executeMany for N+1 avoidance.
-        for (const id of toRemove) {
+        if (toRemove.length > 0) {
           try {
-            await connection.execute(
+            const binds = toRemove.map((id) => ({ id }));
+            await connection.executeMany(
               `DELETE FROM ai_dreaming_memory WHERE id = :id`,
-              { id } as any,
+              binds as any,
               { autoCommit: true }
             );
-            merged++;
+            merged += toRemove.length;
           } catch {
             // skip delete errors
           }
