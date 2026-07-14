@@ -163,7 +163,8 @@ async function run() {
       const [col] = (await connection!.execute(
         `SELECT data_type, data_length
          FROM all_tab_columns
-         WHERE table_name = 'AI_SEMANTIC_MEMORY' AND column_name = 'EMBEDDING'`
+         WHERE table_name = 'AI_SEMANTIC_MEMORY' AND column_name = 'EMBEDDING'`,
+        [], { outFormat: oracledb.OUT_FORMAT_OBJECT }
       )).rows as any[] || [];
       if (col) {
         const dim = col.DATA_LENGTH || 0;
@@ -198,7 +199,8 @@ async function run() {
       const [dreamCol] = (await connection!.execute(
         `SELECT data_type, data_length
          FROM all_tab_columns
-         WHERE table_name = 'AI_DREAMING_MEMORY' AND column_name = 'EMBEDDING'`
+         WHERE table_name = 'AI_DREAMING_MEMORY' AND column_name = 'EMBEDDING'`,
+        [], { outFormat: oracledb.OUT_FORMAT_OBJECT }
       )).rows as any[] || [];
       if (dreamCol) {
         const dim = dreamCol.DATA_LENGTH || 0;
