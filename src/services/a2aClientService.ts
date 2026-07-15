@@ -158,7 +158,8 @@ export class A2AClientService {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": process.env.CODEATLAS_API_KEY || "",
+          // Use scoped token via A2A_MCP_TOKEN if set, otherwise use key
+          ...(process.env.A2A_MCP_TOKEN ? { "Authorization": `Bearer ${process.env.A2A_MCP_TOKEN}` } : {}),
         },
         body,
         signal: controller.signal,
