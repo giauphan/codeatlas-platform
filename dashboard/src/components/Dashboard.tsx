@@ -529,7 +529,11 @@ export const Dashboard: React.FC = () => {
     if (!user || !newKeyName.trim()) return;
     setLoading(true);
     try {
-      const rawKey = 'ca_' + crypto.randomUUID().replace(/-/g, '');
+      const randomBytes = new Uint8Array(32);
+      crypto.getRandomValues(randomBytes);
+      const secureHex = [...randomBytes].map(b => b.toString(16).padStart(2, '0')).join('');
+      const rawKey = 'ca_' + secureHex;
+
       const encoder = new TextEncoder();
       const data = encoder.encode(rawKey);
       const hashBuffer = await crypto.subtle.digest('SHA-256', data);
