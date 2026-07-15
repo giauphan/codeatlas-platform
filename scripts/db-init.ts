@@ -111,6 +111,7 @@ async function run() {
 
         if (!isCorrectLength) {
           console.log(`   ⚠️ Vector dim mismatch (${label}): expected length ~${EXPECTED_VECTOR_BYTES} bytes, got ${dataLength} bytes. Auto-fixing...`);
+          let destructiveUsed = false;
           try {
             await connection!.execute(
               `ALTER TABLE ${tableName.toLowerCase()} MODIFY (embedding ${VECTOR_TYPE})`,
@@ -123,6 +124,7 @@ async function run() {
               console.warn(`   ⚠️ Skipping destructive fallback (DROP/ADD column) to preserve data. Set DB_ALLOW_DESTRUCTIVE_MIGRATIONS=true to override.`);
               return;
             }
+            destructiveUsed = true;
             console.warn(`   ⚠️ DATA LOSS WARNING: Destructive migration enabled. Dropping and re-adding ${tableName} embedding column.`);
               try {
                 await connection!.execute(
@@ -139,7 +141,11 @@ async function run() {
               }
             }
           }
-          console.log(`   └─ ✅ Fixed ${label} to ${VECTOR_TYPE}`);
+          if (destructiveUsed) {
+            console.log(`   └─ ✅ Fixed ${label} to ${VECTOR_TYPE} (destructive fallback used)`);
+          } else {
+            console.log(`   └─ ✅ Fixed ${label} to ${VECTOR_TYPE}`);
+          }
         } else {
           console.log(`   ✅ Vector byte length for ${label} already matches expected (${EXPECTED_VECTOR_BYTES}).`);
         }
