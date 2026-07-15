@@ -220,6 +220,8 @@ async function run() {
             );
           }
           console.log("   └─ ✅ Dreaming vector fixed to VECTOR(4096, FLOAT32)");
+        } else {
+          console.log("   ✅ Dreaming vector dimension already 4096.");
         }
       }
     } catch (err: any) {
