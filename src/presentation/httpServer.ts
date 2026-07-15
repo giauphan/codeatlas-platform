@@ -35,16 +35,25 @@ export const firebaseClient = {
 };
 
 // Custom local rate limiter without external dependencies
-const rateLimits = new Map<string, number[]>();
+const rateLimits = new Map<string, { timestamps: number[]; lastAccess: number }>();
 const limitRequests = 60; // Max 60 requests
 const limitWindowMs = 60000; // Per 1 minute
+const RATE_LIMITER_TTL_MS = 5 * 60 * 1000; // Evict idle entries after 5 minutes
 
 export const localRateLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const auth = authStorage.getStore();
   const tenantId = auth ? auth.uid : (req.ip || "anonymous");
   
   const now = Date.now();
-  const timestamps = rateLimits.get(tenantId) || [];
+  const entry = rateLimits.get(tenantId);
+  let timestamps: number[];
+  if (entry) {
+    timestamps = entry.timestamps;
+    entry.lastAccess = now;
+  } else {
+    timestamps = [];
+    rateLimits.set(tenantId, { timestamps, lastAccess: now });
+  }
   
   // Filter out timestamps outside the window
   const activeTimestamps = timestamps.filter(t => now - t < limitWindowMs);
@@ -55,7 +64,18 @@ export const localRateLimiter = (req: express.Request, res: express.Response, ne
   }
   
   activeTimestamps.push(now);
-  rateLimits.set(tenantId, activeTimestamps);
+  rateLimits.set(tenantId, { timestamps: activeTimestamps, lastAccess: now });
+  
+  // Periodic TTL-based eviction (run ~1% of requests)
+  if (Math.random() < 0.01) {
+    const cutoff = now - RATE_LIMITER_TTL_MS;
+    for (const [key, val] of rateLimits) {
+      if (val.lastAccess < cutoff) {
+        rateLimits.delete(key);
+      }
+    }
+  }
+
   next();
 };
 
