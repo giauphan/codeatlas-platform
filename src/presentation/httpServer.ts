@@ -84,12 +84,18 @@ class TaskQueue {
   private queue: (() => Promise<any>)[] = [];
   private activeCount = 0;
   private maxConcurrency = 1; // Process at most 1 heavy sync task concurrently to prevent connection pool exhaustion
+  private static readonly MAX_QUEUED = 10;
+  private static readonly TASK_TIMEOUT_MS = 5 * 60 * 1000;
 
   constructor(maxConcurrency: number = 1) {
     this.maxConcurrency = maxConcurrency;
   }
 
+  /** Enqueue a task. Rejects immediately if queue is full. */
   enqueue<T>(task: () => Promise<T>): Promise<T> {
+    if (this.queue.length >= TaskQueue.MAX_QUEUED) {
+      return Promise.reject(new Error("Sync queue full — try again later"));
+    }
     return new Promise((resolve, reject) => {
       this.queue.push(async () => {
         try {
@@ -111,7 +117,14 @@ class TaskQueue {
     const task = this.queue.shift();
     if (task) {
       this.activeCount++;
+      // Safety timeout: if task hangs for 5 min, unblock the queue
+      const timeoutId = setTimeout(() => {
+        logger.error("[TaskQueue] Task timed out — unblocking queue");
+        this.activeCount--;
+        this.next();
+      }, TaskQueue.TASK_TIMEOUT_MS);
       task().finally(() => {
+        clearTimeout(timeoutId);
         this.activeCount--;
         this.next();
       });
