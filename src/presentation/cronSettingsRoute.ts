@@ -2,6 +2,7 @@ import express from "express";
 import { logger } from "../utils/logger.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { authMiddleware } from "../middleware/auth.js";
 
 const SETTINGS_PATH = process.env.CRON_SETTINGS_PATH || join(process.env.HOME || "/home/ubuntu", ".hermes", "cron-settings.json");
 
@@ -39,12 +40,12 @@ function saveSettings(s: CronSettings): void {
 
 export function mountCronSettingsRoutes(app: express.Application): void {
   // GET /api/settings/cron — read current schedule
-  app.get("/api/settings/cron", (_req, res) => {
+  app.get("/api/settings/cron", authMiddleware, (_req, res) => {
     res.json(loadSettings());
   });
 
   // PUT /api/settings/cron — update schedule; validates 5-field cron expression
-  app.put("/api/settings/cron", (req, res) => {
+  app.put("/api/settings/cron", authMiddleware, (req, res) => {
     const { dreams_schedule, dreams_enabled } = req.body as {
       dreams_schedule?: string;
       dreams_enabled?: boolean;
