@@ -28,12 +28,12 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q libaio1t64 unzip || sudo apt-get install -y -q libaio1 unzip
-          mkdir -p /opt/oracle
+          sudo mkdir -p /opt/oracle
           curl -sL "https://download.oracle.com/otn_software/linux/instantclient/1919000/instantclient-basic-linux.x64-19.19.0.0.0dbru.zip" -o /tmp/ic.zip
-          unzip -q /tmp/ic.zip -d /opt/oracle/
+          sudo unzip -q /tmp/ic.zip -d /opt/oracle/
           echo "/opt/oracle/instantclient_19_19" | sudo tee /etc/ld.so.conf.d/oracle-instantclient.conf
           sudo ldconfig
-          rm /tmp/ic.zip
+          sudo rm /tmp/ic.zip
 
       - name: Enable pnpm via corepack
         run: corepack enable && corepack prepare pnpm@9 --activate
