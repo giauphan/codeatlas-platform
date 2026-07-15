@@ -85,12 +85,7 @@ export async function setSessionContext(connection: oracledb.Connection, overrid
     logger.info(`[Oracle RLS] Security Context set for tenant: ${tenantId}`);
   } catch (err: unknown) {
     logger.error("[Oracle RLS] Failed to set security context:", err instanceof Error ? err.message : String(err));
-    // Enforce RLS strictly. Allow bypass ONLY via explicit opt-in env var for local development, or in testing.
-    if (process.env.CODEATLAS_BYPASS_RLS === "true" || process.env.NODE_ENV === "test") {
-      logger.warn(`[Oracle RLS] Bypassing failed security context setup due to configuration.`);
-    } else {
-      throw err;
-    }
+    throw err;
   }
 }
 
