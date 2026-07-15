@@ -82,7 +82,7 @@ async function run() {
   };
 
 
-  const checkAndFixVectorDim = async (tableName: string, logName: string) => {
+  const checkAndFixVectorDim = async (tableName: string, label: string) => {
     const allowedTables = ['AI_SEMANTIC_MEMORY', 'AI_DREAMING_MEMORY'];
     if (!allowedTables.includes(tableName)) {
       console.warn(`   ⚠️ Invalid table name for vector check: ${tableName}`);
@@ -90,56 +90,61 @@ async function run() {
     }
 
     try {
-      const EXPECTED_VECTOR_BYTES = 4096 * 4; // 16384 bytes for VECTOR(4096, FLOAT32)
+      const VECTOR_TYPE = '${VECTOR_TYPE}';
+      const EXPECTED_VECTOR_BYTES = 4096 * 4; // 16384 bytes for ${VECTOR_TYPE}
 
       const rows = (await connection!.execute(
         // In Oracle, checking vector dimension precisely requires querying metadata, but as a workaround,
-        // we can assume the correct length if DATA_LENGTH matches the byte size of VECTOR(4096, FLOAT32)
+        // we can assume the correct length if DATA_LENGTH matches the byte size of ${VECTOR_TYPE}
         `SELECT data_length
          FROM all_tab_columns
-         WHERE table_name = :name AND column_name = 'EMBEDDING'`,
-        [tableName], { outFormat: oracledb.OUT_FORMAT_OBJECT }
+         WHERE table_name = :name AND column_name = 'EMBEDDING'`, { name: tableName }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
       )).rows;
 
       const row = rows?.[0] as any;
 
       if (row) {
-        // VECTOR(4096, FLOAT32) is typically 16384 bytes long
+        // ${VECTOR_TYPE} is typically 16384 bytes long
         const dataLength = row.DATA_LENGTH || 0;
-        const isCorrectLength = dataLength >= EXPECTED_VECTOR_BYTES;
+        const isCorrectLength = dataLength === EXPECTED_VECTOR_BYTES;
 
         if (!isCorrectLength) {
-          console.log(`   ⚠️ Vector dim mismatch (${logName}): expected length ~${EXPECTED_VECTOR_BYTES} bytes, got ${dataLength} bytes. Auto-fixing...`);
+          console.log(`   ⚠️ Vector dim mismatch (${label}): expected length ~${EXPECTED_VECTOR_BYTES} bytes, got ${dataLength} bytes. Auto-fixing...`);
           try {
             await connection!.execute(
-              `ALTER TABLE ${tableName.toLowerCase()} MODIFY (embedding VECTOR(4096, FLOAT32))`,
+              `ALTER TABLE ${tableName.toLowerCase()} MODIFY (embedding ${VECTOR_TYPE})`,
               {}, { autoCommit: true }
             );
-          } catch (err: any) {
+          } catch (modifyErr: any) {
+            console.warn(`   ⚠️ MODIFY failed for ${tableName}: ${modifyErr.message}`);
             // Guard against silent data deletion on production
             if (process.env.NODE_ENV === 'production' && process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS !== 'true') {
-              console.warn(`   ⚠️ Could not automatically MODIFY ${tableName} embedding column. Constructive migration failed: ${err.message}`);
               console.warn(`   ⚠️ Skipping destructive fallback (DROP/ADD column) to preserve data. Set DB_ALLOW_DESTRUCTIVE_MIGRATIONS=true to override.`);
               return;
             } else {
-              console.warn(`   ⚠️ Destructive migration enabled. Dropping and re-adding ${tableName} embedding column.`);
-              await connection!.execute(
-                `ALTER TABLE ${tableName.toLowerCase()} DROP COLUMN embedding`,
-                {}, { autoCommit: true }
-              );
-              await connection!.execute(
-                `ALTER TABLE ${tableName.toLowerCase()} ADD (embedding VECTOR(4096, FLOAT32))`,
-                {}, { autoCommit: true }
-              );
+              console.warn(`   ⚠️ DATA LOSS WARNING: Destructive migration enabled. Dropping and re-adding ${tableName} embedding column.`);
+              try {
+                await connection!.execute(
+                  `ALTER TABLE ${tableName.toLowerCase()} DROP COLUMN embedding`,
+                  {}, { autoCommit: true }
+                );
+                await connection!.execute(
+                  `ALTER TABLE ${tableName.toLowerCase()} ADD (embedding ${VECTOR_TYPE})`,
+                  {}, { autoCommit: true }
+                );
+              } catch (fallbackErr: any) {
+                console.error(`   🚨 CRITICAL ERROR: Destructive fallback failed for ${tableName} (${fallbackErr.message}). The embedding column may be missing!`);
+                throw fallbackErr;
+              }
             }
           }
-          console.log(`   └─ ✅ Fixed ${logName} to VECTOR(4096, FLOAT32)`);
+          console.log(`   └─ ✅ Fixed ${label} to ${VECTOR_TYPE}`);
         } else {
-          console.log(`   ✅ Vector dimension for ${logName} already 4096.`);
+          console.log(`   ✅ Vector dimension for ${label} already 4096.`);
         }
       }
     } catch (err: any) {
-      console.warn(`   ⚠️ Vector check skipped for ${logName}:`, err.message);
+      console.warn(`   ⚠️ Vector check skipped for ${label}:`, err.message);
     }
   };
 
@@ -169,7 +174,7 @@ async function run() {
           entity_name VARCHAR2(255),
           file_path VARCHAR2(1000),
           content CLOB,
-          embedding VECTOR(4096, FLOAT32),
+          embedding ${VECTOR_TYPE},
           tenant_id VARCHAR2(255) DEFAULT 'admin' NOT NULL
       )
     `, "CREATE TABLE ai_semantic_memory");
@@ -198,7 +203,7 @@ async function run() {
           project VARCHAR2(255),
           memory_type VARCHAR2(50),
           content CLOB,
-          embedding VECTOR(4096, FLOAT32),
+          embedding ${VECTOR_TYPE},
           importance NUMBER(1),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           tenant_id VARCHAR2(255)
