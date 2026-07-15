@@ -83,6 +83,7 @@ async function run() {
 
 
   const VECTOR_TYPE = 'VECTOR(4096, FLOAT32)';
+  const EXPECTED_VECTOR_BYTES = 4096 * 4; // 16384 bytes for VECTOR(4096, FLOAT32)
 
   const checkAndFixVectorDim = async (tableName: string, label: string) => {
     const allowedTables = ['AI_SEMANTIC_MEMORY', 'AI_DREAMING_MEMORY'];
@@ -92,7 +93,7 @@ async function run() {
     }
 
     try {
-      const EXPECTED_VECTOR_BYTES = 4096 * 4; // 16384 bytes for VECTOR(4096, FLOAT32)
+
 
       const rows = (await connection!.execute(
         // In Oracle, checking vector dimension precisely requires querying metadata, but as a workaround,
@@ -119,8 +120,8 @@ async function run() {
             );
           } catch (modifyErr: any) {
             console.warn(`   ⚠️ MODIFY failed for ${tableName}: ${modifyErr.message}`);
-            // Guard against silent data deletion on production
-            if (process.env.NODE_ENV === 'production' && process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS?.toLowerCase() !== 'true') {
+            // Guard against silent data deletion
+            if (process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS?.toLowerCase() !== 'true') {
               console.warn(`   ⚠️ Skipping destructive fallback (DROP/ADD column) to preserve data. Set DB_ALLOW_DESTRUCTIVE_MIGRATIONS=true to override.`);
               return;
             }
