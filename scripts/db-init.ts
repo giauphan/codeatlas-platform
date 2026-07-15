@@ -82,6 +82,8 @@ async function run() {
   };
 
 
+  const VECTOR_TYPE = 'VECTOR(4096, FLOAT32)';
+
   const checkAndFixVectorDim = async (tableName: string, label: string) => {
     const allowedTables = ['AI_SEMANTIC_MEMORY', 'AI_DREAMING_MEMORY'];
     if (!allowedTables.includes(tableName)) {
@@ -90,7 +92,6 @@ async function run() {
     }
 
     try {
-      const VECTOR_TYPE = 'VECTOR(4096, FLOAT32)';
       const EXPECTED_VECTOR_BYTES = 4096 * 4; // 16384 bytes for ${VECTOR_TYPE}
 
       const rows = (await connection!.execute(
