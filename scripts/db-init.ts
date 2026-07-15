@@ -90,7 +90,7 @@ async function run() {
     }
 
     try {
-      const VECTOR_TYPE = '${VECTOR_TYPE}';
+      const VECTOR_TYPE = 'VECTOR(4096, FLOAT32)';
       const EXPECTED_VECTOR_BYTES = 4096 * 4; // 16384 bytes for ${VECTOR_TYPE}
 
       const rows = (await connection!.execute(
@@ -140,7 +140,7 @@ async function run() {
           }
           console.log(`   └─ ✅ Fixed ${label} to ${VECTOR_TYPE}`);
         } else {
-          console.log(`   ✅ Vector dimension for ${label} already 4096.`);
+          console.log(`   ✅ Vector byte length for ${label} already matches expected (${EXPECTED_VECTOR_BYTES}).`);
         }
       }
     } catch (err: any) {
