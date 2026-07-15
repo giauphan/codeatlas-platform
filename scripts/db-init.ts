@@ -92,7 +92,7 @@ async function run() {
     }
 
     try {
-      const EXPECTED_VECTOR_BYTES = 4096 * 4; // 16384 bytes for ${VECTOR_TYPE}
+      const EXPECTED_VECTOR_BYTES = 4096 * 4; // 16384 bytes for VECTOR(4096, FLOAT32)
 
       const rows = (await connection!.execute(
         // In Oracle, checking vector dimension precisely requires querying metadata, but as a workaround,
@@ -105,7 +105,7 @@ async function run() {
       const row = rows?.[0] as any;
 
       if (row) {
-        // ${VECTOR_TYPE} is typically 16384 bytes long
+        // VECTOR(4096, FLOAT32) is typically 16384 bytes long
         const dataLength = row.DATA_LENGTH || 0;
         const isCorrectLength = dataLength === EXPECTED_VECTOR_BYTES;
 
@@ -122,8 +122,8 @@ async function run() {
             if (process.env.NODE_ENV === 'production' && process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS !== 'true') {
               console.warn(`   ⚠️ Skipping destructive fallback (DROP/ADD column) to preserve data. Set DB_ALLOW_DESTRUCTIVE_MIGRATIONS=true to override.`);
               return;
-            } else {
-              console.warn(`   ⚠️ DATA LOSS WARNING: Destructive migration enabled. Dropping and re-adding ${tableName} embedding column.`);
+            }
+            console.warn(`   ⚠️ DATA LOSS WARNING: Destructive migration enabled. Dropping and re-adding ${tableName} embedding column.`);
               try {
                 await connection!.execute(
                   `ALTER TABLE ${tableName.toLowerCase()} DROP COLUMN embedding`,
