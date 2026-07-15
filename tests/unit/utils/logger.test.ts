@@ -229,6 +229,30 @@ describe('Logger', () => {
     // It does not try/catch here! It only try/catches inside `stringify(val)`.
     // Wait... if I pass circularObj as the *last* arg, it becomes `meta`.
     // And JSON.stringify(meta) WILL throw.
-    // Let's modify logger.ts slightly to fix that bug while adding tests.
+    logger.info('circular as meta', circularObj);
+    assert.strictEqual(stdoutSpy.mock.callCount(), 2);
+    const output2 = stdoutSpy.mock.calls[1].arguments[0];
+    assert.ok(output2.includes('circular as meta [object Object]'));
+  });
+
+  test('should fallback to String() for circular objects in JSON mode', async () => {
+    process.env.LOG_LEVEL = 'debug';
+    process.env.LOG_FORMAT = 'json';
+    const logger = await getLogger();
+    stdoutSpy.mock.resetCalls();
+    stderrSpy.mock.resetCalls();
+
+    const circularObj: any = {};
+    circularObj.self = circularObj;
+
+    logger.info('circular as meta in JSON', circularObj);
+
+    assert.strictEqual(stdoutSpy.mock.callCount(), 1);
+    const output = stdoutSpy.mock.calls[0].arguments[0];
+    const parsed = JSON.parse(output);
+
+    assert.strictEqual(parsed.level, 'info');
+    assert.strictEqual(parsed.msg, 'circular as meta in JSON');
+    assert.strictEqual(parsed.meta, '[object Object]');
   });
 });
