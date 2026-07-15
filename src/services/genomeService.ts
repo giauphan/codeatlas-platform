@@ -222,12 +222,14 @@ export class GenomeService {
       }));
 
       // Increment usage count for returned genes
-      for (const g of genes) {
+      // ⚡ Bolt Optimization: Replaced N+1 loop with a single executeMany batch update to reduce DB roundtrips.
+      if (genes.length > 0) {
         try {
-          await connection.execute(
+          const binds = genes.map(g => ({ id: g.id }));
+          await connection.executeMany(
             `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
              updated_at = CURRENT_TIMESTAMP WHERE id = :id`,
-            { id: g.id } as any,
+            binds as any,
             { autoCommit: true }
           );
         } catch { /* skip */ }
@@ -407,18 +409,25 @@ export class GenomeService {
       });
 
       // Mark source genes as merged
-      for (const g of genes) {
-        const gid = String(g[0]);
-        await connection.execute(
+      // ⚡ Bolt Optimization: Batch updates and inserts instead of querying inside loop (avoids N+1 DB roundtrips)
+      if (genes.length > 0) {
+        const updateBinds = genes.map(g => ({ id: String(g[0]) }));
+        await connection.executeMany(
           `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE id = :id`,
-          { id: gid } as any,
+          updateBinds as any,
           { autoCommit: true }
         );
+
         // Record relationship
-        await connection.execute(
+        const insertBinds = genes.map(g => ({
+          id: `rel-${randomUUID().slice(0, 8)}`,
+          src: String(g[0]),
+          tgt: geneId
+        }));
+        await connection.executeMany(
           `INSERT INTO gene_relationships (id, source_id, target_id, relationship, weight)
            VALUES (:id, :src, :tgt, 'merged_into', 1.0)`,
-          { id: `rel-${randomUUID().slice(0, 8)}`, src: gid, tgt: geneId } as any,
+          insertBinds as any,
           { autoCommit: true }
         );
       }
@@ -592,14 +601,16 @@ export class GenomeService {
       await setSessionContext(connection);
 
       let count = 0;
-      for (const id of geneIds) {
-        const result = await connection.execute(
+      // ⚡ Bolt Optimization: Batch retirement update using executeMany instead of executing queries in a loop.
+      if (geneIds.length > 0) {
+        const binds = geneIds.map(id => ({ id }));
+        const result = await connection.executeMany(
           `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
            WHERE id = :id AND status != 'retired'`,
-          { id } as any,
+          binds as any,
           { autoCommit: true }
         );
-        count += result.rowsAffected || 0;
+        count = result.rowsAffected || 0;
       }
 
       logger.info(`[Genome] Retired ${count} genes`);

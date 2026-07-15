@@ -16,6 +16,7 @@ const srcDir = path.resolve(import.meta.dirname, '../../src');
 
 const mockConnection = {
   execute: mock.fn(),
+  executeMany: mock.fn(),
   close: mock.fn(),
 };
 
@@ -163,7 +164,7 @@ describe('GenomeService', () => {
       await GenomeService.searchGenes('test', { limit: 5 });
 
       // Should have at least one UPDATE usage_count call
-      const updateCalls = mockConnection.execute.mock.calls.filter(
+      const updateCalls = mockConnection.executeMany.mock.calls.filter(
         (c: any) => typeof c.arguments[0] === 'string' && c.arguments[0].includes('usage_count = usage_count + 1')
       );
       assert.ok(updateCalls.length > 0);
@@ -173,9 +174,11 @@ describe('GenomeService', () => {
   // ── mergeGenes ─────────────────────────────────────────────────────
   describe('mergeGenes()', () => {
     test('combines 2 genes into one and marks sources as merged', async () => {
-      mockConnection.execute.mock.mockImplementation(async (sql: string) => {
+      mockConnection.executeMany.mock.mockImplementation(async (sql: string) => {
         if (sql.includes('UPDATE codeatlas_genome SET status')) return { rowsAffected: 1 };
         if (sql.includes('INSERT INTO gene_relationships')) return { rowsAffected: 1 };
+      });
+      mockConnection.execute.mock.mockImplementation(async (sql: string) => {
         if (sql.includes('SELECT id, version FROM codeatlas_genome')) return { rows: [] };
         return { rows: [mockGeneRow('gene-1', 'Source A'), mockGeneRow('gene-2', 'Source B')] };
       });
@@ -263,7 +266,7 @@ describe('GenomeService', () => {
   // ── retireGenes ────────────────────────────────────────────────────
   describe('retireGenes()', () => {
     test('retires genes and returns count', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => ({ rowsAffected: 1 }));
+      mockConnection.executeMany.mock.mockImplementation(async () => ({ rowsAffected: 2 }));
 
       const count = await GenomeService.retireGenes(['gene-1', 'gene-2']);
       assert.equal(count, 2);
