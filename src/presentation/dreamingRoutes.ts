@@ -119,7 +119,7 @@ export function registerDreamingRoutes(app: express.Application): void {
       await logActivity(auth, "query_dream_memories", { query: queryText, project: projectName, limit });
 
       const rows = await authStorage.run(
-        auth.tier === "guest" ? { ...auth, uid: "admin" } : auth,
+        auth.tier === "guest" ? { ...auth, uid: "guest" } : auth,
         () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset)
       );
 
