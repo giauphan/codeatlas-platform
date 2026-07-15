@@ -136,15 +136,22 @@ export function DreamMemoryView() {
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         {['KNOWLEDGE', 'PREFERENCE', 'MISTAKE', 'PATTERN'].map(type => (
-          <div key={type} onClick={() => toggleType(type)}
+          <button
+            key={type}
+            type="button"
+            onClick={() => toggleType(type)}
+            aria-pressed={selectedTypes.includes(type)}
             style={{
               padding: '0.4rem 1rem', borderRadius: '100px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
               background: selectedTypes.includes(type) ? `${typeColors[type]}22` : 'rgba(255,255,255,0.05)',
               border: `1px solid ${selectedTypes.includes(type) ? typeColors[type] : 'rgba(255,255,255,0.1)'}`,
-              color: selectedTypes.includes(type) ? typeColors[type] : 'var(--text-muted)'
-            }}>
+              color: selectedTypes.includes(type) ? typeColors[type] : 'var(--text-muted)',
+              outline: 'none'
+            }}
+            className="focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-50"
+          >
             {type}
-          </div>
+          </button>
         ))}
       </div>
 
