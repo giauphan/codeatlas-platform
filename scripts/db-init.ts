@@ -86,7 +86,7 @@ async function run() {
 
   const checkAndFixVectorDim = async (tableName: string, label: string) => {
     const allowedTables = ['AI_SEMANTIC_MEMORY', 'AI_DREAMING_MEMORY'];
-    if (!allowedTables.includes(tableName)) {
+    if (!allowedTables.includes(tableName.toUpperCase())) {
       console.warn(`   ⚠️ Invalid table name for vector check: ${tableName}`);
       return;
     }
@@ -120,7 +120,7 @@ async function run() {
           } catch (modifyErr: any) {
             console.warn(`   ⚠️ MODIFY failed for ${tableName}: ${modifyErr.message}`);
             // Guard against silent data deletion on production
-            if (process.env.NODE_ENV === 'production' && process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS !== 'true') {
+            if (process.env.NODE_ENV === 'production' && process.env.DB_ALLOW_DESTRUCTIVE_MIGRATIONS?.toLowerCase() !== 'true') {
               console.warn(`   ⚠️ Skipping destructive fallback (DROP/ADD column) to preserve data. Set DB_ALLOW_DESTRUCTIVE_MIGRATIONS=true to override.`);
               return;
             }
