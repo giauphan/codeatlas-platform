@@ -18,7 +18,7 @@ const R_IDX = Object.freeze({
   ARCHITECTURE: 5, CATEGORY: 6, PROJECT: 7, CONFIDENCE: 8,
   VERSION: 9, EVOLUTION_SCORE: 10, USAGE_COUNT: 11, SUCCESS_RATE: 12,
   EMBEDDING: 13, STATUS: 14, SOURCE_TYPE: 15, SOURCE_ID: 16,
-  DEPENDENCIES: 17, CREATED_AT: 18, UPDATED_AT: 19,
+  DEPENDENCIES: 17, CREATED_AT: 18, UPDATED_AT: 19, DISTANCE: 20,
 });
 
 // ─── Types ──────────────────────────────────────────────────
@@ -218,7 +218,7 @@ export class GenomeService {
         dependencies: JSON.parse(String(r[R_IDX.DEPENDENCIES] || "[]")),
         createdAt: String(r[R_IDX.CREATED_AT]),
         updatedAt: String(r[R_IDX.UPDATED_AT]),
-        score: 1 - Number(r[0] ? 0 : 0), // dummy score (real from VECTOR_DISTANCE)
+        score: 1 - Number(r[R_IDX.DISTANCE] ?? 0), // dummy score (real from VECTOR_DISTANCE)
       }));
 
       // Increment usage count for returned genes
@@ -784,7 +784,7 @@ export class GenomeService {
         dependencies: JSON.parse(String(r[R_IDX.DEPENDENCIES] || "[]")),
         createdAt: String(r[R_IDX.CREATED_AT]),
         updatedAt: String(r[R_IDX.UPDATED_AT]),
-        score: 1 - Number(r[0] ? 0 : 0),
+        score: 1 - Number(r[R_IDX.DISTANCE] ?? 0),
       }));
       return genes;
     } finally {
@@ -907,7 +907,7 @@ Apply this knowledge when encountering similar problems.
         dependencies: JSON.parse(String(r[R_IDX.DEPENDENCIES] || "[]")),
         createdAt: String(r[R_IDX.CREATED_AT]),
         updatedAt: String(r[R_IDX.UPDATED_AT]),
-        score: 1 - Number(r[0] ? 0 : 0),
+        score: 1 - Number(r[R_IDX.DISTANCE] ?? 0),
       }));
 
       // Upsert each inherited gene into the new project
