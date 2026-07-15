@@ -96,7 +96,7 @@ async function run() {
 
       const rows = (await connection!.execute(
         // In Oracle, checking vector dimension precisely requires querying metadata, but as a workaround,
-        // we can assume the correct length if DATA_LENGTH matches the byte size of ${VECTOR_TYPE}
+        // we can assume the correct length if DATA_LENGTH matches the byte size of VECTOR(4096, FLOAT32)
         `SELECT data_length
          FROM all_tab_columns
          WHERE table_name = :name AND column_name = 'EMBEDDING'`, { name: tableName }, { outFormat: oracledb.OUT_FORMAT_OBJECT }
