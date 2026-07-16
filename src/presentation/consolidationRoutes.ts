@@ -76,13 +76,14 @@ export function mountConsolidationRoutes(app: express.Application): void {
 
         res.json({ concepts });
 
-        // Track access count for retrieved concepts
-        for (const c of concepts) {
+        // Batch update access counts - reduces N roundtrips to 1
+        if (concepts.length > 0) {
           try {
-            await connection.execute(
+            const binds = concepts.map(c => ({ id: c.id }));
+            await connection.executeMany(
               `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id`,
-              { id: c.id } as any,
-              { autoCommit: true }
+              binds,
+              { autoCommit: true, batchErrors: true }
             );
           } catch { /* skip */ }
         }
