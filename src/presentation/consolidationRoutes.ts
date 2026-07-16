@@ -76,14 +76,14 @@ export function mountConsolidationRoutes(app: express.Application): void {
 
         res.json({ concepts });
 
-        // ⚡ Bolt Optimization: Batch access_count update using executeMany to avoid N+1 DB roundtrips.
+        // Batch update access counts - reduces N roundtrips to 1
         if (concepts.length > 0) {
           try {
             const binds = concepts.map(c => ({ id: c.id }));
             await connection.executeMany(
               `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id`,
-              binds as any,
-              { autoCommit: true }
+              binds,
+              { autoCommit: true, batchErrors: true }
             );
           } catch { /* skip */ }
         }
