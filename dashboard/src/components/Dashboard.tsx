@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { auth, db } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { 
   collection, 
   addDoc, 
@@ -241,7 +241,18 @@ export const Dashboard: React.FC = () => {
     }
     return [];
   });
-  const user = auth.currentUser;
+  // Restore user from session
+  const [user, setUser] = useState<any>(() => {
+    const savedApiKey = sessionStorage.getItem('ca_api_key');
+    const email = sessionStorage.getItem('ca_user_email');
+    if (savedApiKey) {
+      return {
+        uid: email || 'api-key-session',
+        email: email || 'user@codeatlas.local'
+      };
+    }
+    return null;
+  });
 
   const clearAllCaches = () => {
     setProjects([]);
@@ -259,26 +270,16 @@ export const Dashboard: React.FC = () => {
   };
 
   const getAuthHeaders = async () => {
-    // Check for active token key session first
     const savedApiKey = sessionStorage.getItem('ca_api_key');
-    if (savedApiKey) {
-      return {
-        'x-api-key': savedApiKey,
-        'Content-Type': 'application/json'
-      };
+    if (!savedApiKey) {
+      return { 'Content-Type': 'application/json' };
     }
-
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-      const token = await currentUser.getIdToken();
-      return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
+    // API keys start with 'ca_' — send as x-api-key
+    // Firebase ID tokens from email/password login — send as Bearer
+    if (savedApiKey.startsWith('ca_')) {
+      return { 'x-api-key': savedApiKey, 'Content-Type': 'application/json' };
     }
-    return {
-      'Content-Type': 'application/json'
-    };
+    return { 'Authorization': `Bearer ${savedApiKey}`, 'Content-Type': 'application/json' };
   };
 
   const fetchAnalysis = async (projectDir?: string, forceRefresh = false) => {
@@ -504,17 +505,17 @@ export const Dashboard: React.FC = () => {
       clearAllCaches();
       return;
     }
-    
+
     fetchProjects();
 
-    const unsubscribeStats = onSnapshot(doc(db, 'users', user.uid), (snap: any) => {
-      if (snap.exists() && snap.data().stats) setStats(snap.data().stats);
-    });
+    const unsubscribeStats = db ? onSnapshot(doc(db, 'users', user.uid), (snap: any) => {
+      if (db && snap.exists() && snap.data().stats) setStats(snap.data().stats);
+    }) : undefined;
 
     const q = query(collection(db, 'users', user.uid, 'keys'), orderBy('createdAt', 'desc'));
-    const unsubscribeKeys = onSnapshot(q, (snap: any) => {
+    const unsubscribeKeys = db ? onSnapshot(q, (snap: any) => {
       setKeys(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ApiKey[]);
-    });
+    }) : undefined;
 
     return () => {
       unsubscribeStats();
@@ -688,7 +689,7 @@ export const Dashboard: React.FC = () => {
         <div style={{ marginTop: 'auto', padding: '1.25rem', background: 'rgba(0,0,0,0.25)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 700 }}>ENTERPRISE NODE</div>
           <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#fff', wordBreak: 'break-all' }}>{user?.email}</div>
-          <button onClick={() => { sessionStorage.removeItem('ca_api_key'); auth.signOut(); window.location.reload(); }} style={{ marginTop: '1.5rem', width: '100%', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4b4b', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700 }}>
+          <button onClick={() => { sessionStorage.removeItem('ca_api_key'); sessionStorage.removeItem('ca_user_email'); window.location.reload(); }} style={{ marginTop: '1.5rem', width: '100%', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4b4b', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700 }}>
             <LogOut size={18} /> SIGN OUT
           </button>
         </div>
