@@ -39,7 +39,7 @@ function a2a(name: string, description: string, params: string[]) {
   });
 }
 
-import { injectAuthContext } from './authContext.js';
+import { injectAuthContext } from '../utils/authContext.js';
 
 export function registerTools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }) {
   injectAuthContext(server, sessionAuth);

@@ -131,6 +131,8 @@ export const Dashboard: React.FC = () => {
     return true;
   });
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
+  const [isIndexing, setIsIndexing] = useState(false);
+  const [stats, setStats] = useState({ totalRequests: 0 });
 
   const fetchIndexingSettings = async (projectDir: string) => {
     try {
@@ -198,8 +200,6 @@ export const Dashboard: React.FC = () => {
     }
   }, [selectedProjectDir, isIndexingEnabled, isUpdatingSettings]);
 
-  const [isIndexing, setIsIndexing] = useState(false);
-  const [stats, setStats] = useState({ totalRequests: 0 });
   const [projects, setProjects] = useState<{ name: string; dir: string }[]>(() => {
     // Restore project list from session cache on mount
     try {
@@ -230,11 +230,15 @@ export const Dashboard: React.FC = () => {
     memoryAnalysisCache.clear();
     safeSessionStorageRemoveItem('ca_selected_project_dir');
     safeSessionStorageRemoveItem('ca_analysis_cache');
-    Object.keys(sessionStorage).forEach(k => {
-      if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
-        safeSessionStorageRemoveItem(k);
-      }
-    });
+    try {
+      Object.keys(sessionStorage).forEach(k => {
+        if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
+          safeSessionStorageRemoveItem(k);
+        }
+      });
+    } catch {
+      // sessionStorage not available — skip
+    }
     safeSessionStorageRemoveItem('ca_projects_cache');
   };
 
@@ -284,6 +288,9 @@ export const Dashboard: React.FC = () => {
     } catch (err) {
       console.error("Failed to fetch analysis:", err);
       setAnalysis(null);
+      memoryAnalysisCache.delete(cacheKey);
+      safeSessionStorageRemoveItem(`ca_analysis_cache_${projectDir}`);
+      safeSessionStorageRemoveItem('ca_analysis_cache');
     }
   };
 
@@ -366,6 +373,28 @@ export const Dashboard: React.FC = () => {
     fetchAnalysis(dir);
   };
 
+  const handleReindex = async () => {
+    if (!selectedProjectDir) return;
+    setIsIndexing(true);
+    try {
+      const headers = await getAuthHeaders();
+      const resp = await fetch(`${API_BASE}/api/reindex`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ projectDir: selectedProjectDir })
+      });
+      if (!resp.ok) {
+        throw new Error("Reindex failed");
+      }
+      await fetchAnalysis(selectedProjectDir, true);
+    } catch (err) {
+      console.error("Reindex error:", err);
+      alert(`Reindex failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsIndexing(false);
+    }
+  };
+
   const handleCreateApiKey = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setKeysLoading(true);
@@ -446,14 +475,16 @@ export const Dashboard: React.FC = () => {
           projects={projects}
           selectedProjectDir={selectedProjectDir}
           onProjectChange={handleProjectChange}
-          onDeleteProject={undefined}
+          onDeleteProject={async () => {
+            alert("Project deletion not implemented in this PR");
+          }}
           analysis={analysis}
         />;
       case 'Cloud Index':
         return <CloudIndexView 
           analysis={analysis}
           isIndexing={isIndexing}
-          onReindex={() => fetchAnalysis(selectedProjectDir, true)}
+          onReindex={handleReindex}
           isIndexingEnabled={isIndexingEnabled}
           setIsIndexingEnabled={(v: boolean) => handleToggleIndexingEnabled(v)}
           isUpdatingSettings={isUpdatingSettings}
