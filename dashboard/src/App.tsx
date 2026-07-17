@@ -98,6 +98,8 @@ function App() {
       safeSessionStorageRemoveItem('ca_api_key'); // Clear potentially bad key
       safeSessionStorageRemoveItem('ca_user_email'); // Clear associated email
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 

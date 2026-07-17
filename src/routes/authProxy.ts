@@ -60,6 +60,8 @@ async function getAccessToken(): Promise<string> {
  * using the service account's OAuth2 token (no Web API Key needed).
  */
 router.post("/api/auth/signin", async (req, res) => {
+  // TODO(security): This endpoint receives plaintext passwords. The backend should NOT log these.
+  // TODO(security): Implement rate limiting for this endpoint to prevent brute-force attacks.
   const { email, password } = req.body || {};
 
   if (!email || !password) {

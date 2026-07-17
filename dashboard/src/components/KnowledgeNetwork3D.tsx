@@ -122,7 +122,9 @@ function ForceGraph3DCanvas({ ForceGraph3D, data }: { ForceGraph3D: any; data: G
     container.innerHTML = '';
 
     try {
-      const graph = ForceGraph3D()(container)
+      const graph = ForceGraph3D()(containerRef.current);
+
+      graph
         .graphData(data)
         .width(container.clientWidth)
         .height(400)
@@ -130,9 +132,9 @@ function ForceGraph3DCanvas({ ForceGraph3D, data }: { ForceGraph3D: any; data: G
         .nodeColor(() => '#00F0FF')
         .linkColor(() => 'rgba(0, 240, 255, 0.2)')
         .backgroundColor('#0a0a0a');
-
+      
       return () => {
-        container.innerHTML = '';
+        graph.destroy();
       };
     } catch (err) {
       console.warn('[3D] Render failed:', err);

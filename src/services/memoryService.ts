@@ -78,12 +78,15 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await setSessionContext(connection);
 
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+
       let sql = `
         SELECT id, event_type, event_data, created_at
         FROM ai_episodic_memory
-        WHERE project_name = :project
+        WHERE project_name = :project AND tenant_id = :tenantId
       `;
-      const binds: Record<string, unknown> = { project };
+      const binds: Record<string, unknown> = { project, tenantId };
 
       if (eventType) {
         sql += ` AND event_type = :eventType`;
@@ -230,15 +233,18 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await setSessionContext(connection);
 
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+
       const sql = `
           SELECT entity_name, entity_type, file_path, content
           FROM ai_semantic_memory
-          WHERE project_name = :project
+          WHERE project_name = :project AND tenant_id = :tenantId
           ${queryVector ? 'ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)' : ''}
           FETCH FIRST :limit ROWS ONLY
         `;
 
-      const binds: Record<string, unknown> = { project, limit };
+      const binds: Record<string, unknown> = { project, limit, tenantId };
       if (queryVector) {
         binds.queryVector = new Float32Array(queryVector);
       }
@@ -271,6 +277,9 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await setSessionContext(connection);
 
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+
       const smells: ArchSmells = {
         circularDependencies: [],
         godObjects: [],
@@ -282,11 +291,11 @@ export class OracleMemoryService {
           SELECT DISTINCT entity_name, file_path
           FROM GRAPH_TABLE ( ai_knowledge_graph
             MATCH (a)-[e IS ai_relational_memory]->{1,5}(a)
-            WHERE a.project_name = :project
+            WHERE a.project_name = :project AND a.tenant_id = :tenantId
             COLUMNS (a.entity_name, a.file_path)
           )
         `;
-      const circularRes = await OracleMemoryService.executeAsync(connection, circularSql, { project });
+      const circularRes = await OracleMemoryService.executeAsync(connection, circularSql, { project, tenantId });
       smells.circularDependencies = (circularRes.rows ?? []) as unknown[];
 
       // 2. Detect God Objects (Entities with excessively high incoming relationships / high in-degree)
@@ -295,22 +304,22 @@ export class OracleMemoryService {
           FROM (
             SELECT target_id, count(*) as in_degree
             FROM ai_relational_memory
-            WHERE project_name = :project
+            WHERE project_name = :project AND tenant_id = :tenantId
             GROUP BY target_id
           ) r
-          JOIN ai_semantic_memory s ON r.target_id = s.id
+          JOIN ai_semantic_memory s ON r.target_id = s.id AND r.tenant_id = s.tenant_id
           WHERE in_degree > 15
           ORDER BY in_degree DESC
           FETCH FIRST 10 ROWS ONLY
         `;
-      const godRes = await OracleMemoryService.executeAsync(connection, godSql, { project });
+      const godRes = await OracleMemoryService.executeAsync(connection, godSql, { project, tenantId });
       smells.godObjects = (godRes.rows ?? []) as unknown[];
 
       // 3. Detect Dead Code (Entities with zero incoming relationships, and not main entry points)
       const deadSql = `
           SELECT entity_name, file_path
           FROM ai_semantic_memory s
-          WHERE project_name = :project
+          WHERE project_name = :project AND tenant_id = :tenantId
             AND entity_type IN ('function', 'class')
             AND NOT EXISTS (
               SELECT 1 FROM ai_relational_memory r 
@@ -318,7 +327,7 @@ export class OracleMemoryService {
             )
           FETCH FIRST 20 ROWS ONLY
         `;
-      const deadRes = await OracleMemoryService.executeAsync(connection, deadSql, { project });
+      const deadRes = await OracleMemoryService.executeAsync(connection, deadSql, { project, tenantId });
       smells.deadCode = (deadRes.rows ?? []) as unknown[];
 
       return smells;

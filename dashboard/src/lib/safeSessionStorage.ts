@@ -1,5 +1,3 @@
-const memoryAnalysisCache = new Map<string, any>();
-
 export const safeSessionStorageSetItem = (key: string, value: string) => {
     try {
       sessionStorage.setItem(key, value);

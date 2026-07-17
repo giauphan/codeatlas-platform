@@ -30,12 +30,12 @@ import { CloudIndexView } from './CloudIndexView';
 import { DreamMemoryView } from './DreamMemoryView';
 import { SecondBrainView } from './SecondBrainView';
 import { DocumentationView } from './DocumentationView';
-import { safeSessionStorageGetItem, safeSessionStorageRemoveItem, safeSessionStorageSetItem } from '../lib/safeSessionStorage';
-
+import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
+import { getAuthHeaders } from '../lib/auth';
 
 // API Configuration
-const API_BASE = window.location.origin.includes('localhost:5173') 
-  ? 'http://localhost:8080' 
+const API_BASE = window.location.origin.includes('localhost:5173')
+  ? 'http://localhost:8080'
   : window.location.origin;
 
 interface ApiKey {
@@ -238,19 +238,6 @@ export const Dashboard: React.FC = () => {
       }
     });
     safeSessionStorageRemoveItem('ca_projects_cache');
-  };
-
-  const getAuthHeaders = async () => {
-    const savedApiKey = safeSessionStorageGetItem('ca_api_key');
-    if (!savedApiKey) {
-      return { 'Content-Type': 'application/json' };
-    }
-    // API keys start with 'ca_' — send as x-api-key
-    // Firebase ID tokens from email/password login — send as Bearer
-    if (savedApiKey.startsWith('ca_')) {
-      return { 'x-api-key': savedApiKey, 'Content-Type': 'application/json' };
-    }
-    return { 'Authorization': `Bearer ${savedApiKey}`, 'Content-Type': 'application/json' };
   };
 
   const fetchAnalysis = async (projectDir?: string, forceRefresh = false) => {

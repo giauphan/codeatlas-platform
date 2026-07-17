@@ -826,20 +826,6 @@ if (fs.existsSync(dashboardDistPath)) {
     }
   }));
   
-  // Handle missing static files with proper MIME types (fallback for express.static misses)
-  app.use(/^\/(assets|fonts|images)\/.+/, async (req, res) => {
-    const filePath = path.join(dashboardDistPath, req.path);
-    try {
-      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-        res.sendFile(filePath);
-      } else {
-        res.status(404).send("Not found");
-      }
-    } catch {
-      res.status(404).send("Not found");
-    }
-  });
-  
   // Catch-all: serve index.html for all non-API, non-SSE routes (SPA routing)
   app.get(/^\/(?!sse|messages|api).*/, (req, res) => {
     res.sendFile(path.join(dashboardDistPath, "index.html"), {
