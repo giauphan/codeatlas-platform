@@ -332,9 +332,34 @@ export const Dashboard: React.FC = () => {
     }
   }, [selectedProjectDir]);
 
+  const fetchApiKeys = useCallback(async () => {
+    setLoading(true);
+    try {
+      const headers = await getAuthHeaders();
+      const resp = await fetch(`${API_BASE}/api/keys`, { headers });
+      if (!resp.ok) {
+        let errMsg = "Server error";
+        try {
+          const data = await resp.json();
+          errMsg = data.error || errMsg;
+        } catch {
+          // ignore
+        }
+        throw new Error(errMsg);
+      }
+      const data = await resp.json();
+      setKeys(data);
+    } catch (err) {
+      console.error("Failed to fetch API keys:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchProjects();
-  }, [fetchProjects]);
+    fetchApiKeys();
+  }, [fetchProjects, fetchApiKeys]);
 
   const handleProjectChange = (dir: string) => {
     setSelectedProjectDir(dir);
@@ -370,30 +395,6 @@ export const Dashboard: React.FC = () => {
       setLoading(false);
     }
   };
-
-  const fetchApiKeys = useCallback(async () => {
-    setLoading(true);
-    try {
-      const headers = await getAuthHeaders();
-      const resp = await fetch(`${API_BASE}/api/keys`, { headers });
-      if (!resp.ok) {
-        let errMsg = "Server error";
-        try {
-          const data = await resp.json();
-          errMsg = data.error || errMsg;
-        } catch {
-          // ignore
-        }
-        throw new Error(errMsg);
-      }
-      const data = await resp.json();
-      setKeys(data);
-    } catch (err) {
-      console.error("Failed to fetch API keys:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const handleDeleteApiKey = async (keyId: string) => {
     if (!window.confirm('Are you sure you want to delete this API Key?')) {
