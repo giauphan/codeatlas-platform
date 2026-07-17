@@ -74,9 +74,6 @@ interface AnalysisData {
 
 const memoryAnalysisCache = new Map<string, AnalysisData>();
 
-/** Generation counter to discard stale fetch responses (fixes race condition) */
-let fetchGeneration = 0;
-
 const getDefaultProjectWithDir = (data: { name: string; dir: string }[], savedDir: string) => {
   // Prefer saved directory from session, fallback to first project
   if (savedDir && data.some(p => p.dir === savedDir)) return savedDir;
@@ -85,8 +82,9 @@ const getDefaultProjectWithDir = (data: { name: string; dir: string }[], savedDi
 
 export const Dashboard: React.FC = () => {
   const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [newKeyName, setNewKeyName] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [keysLoading, setKeysLoading] = useState(true);
+  const loading = projectsLoading || keysLoading;
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Control Center');
   const [analysis, setAnalysis] = useState<AnalysisData | null>(() => {
@@ -290,6 +288,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const fetchProjects = useCallback(async () => {
+    setProjectsLoading(true);
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch(`${API_BASE}/api/projects`, { headers });
@@ -328,12 +327,12 @@ export const Dashboard: React.FC = () => {
       setProjects([]);
       setAnalysis(null);
     } finally {
-      setLoading(false);
+      setProjectsLoading(false);
     }
   }, [selectedProjectDir]);
 
   const fetchApiKeys = useCallback(async () => {
-    setLoading(true);
+    setKeysLoading(true);
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch(`${API_BASE}/api/keys`, { headers });
@@ -352,7 +351,7 @@ export const Dashboard: React.FC = () => {
     } catch (err) {
       console.error("Failed to fetch API keys:", err);
     } finally {
-      setLoading(false);
+      setKeysLoading(false);
     }
   }, []);
 
@@ -367,8 +366,9 @@ export const Dashboard: React.FC = () => {
     fetchAnalysis(dir);
   };
 
-  const handleCreateApiKey = async () => {
-    setLoading(true);
+  const handleCreateApiKey = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setKeysLoading(true);
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch(`${API_BASE}/api/keys`, {
@@ -386,13 +386,12 @@ export const Dashboard: React.FC = () => {
         throw new Error(errMsg);
       }
       const newKey = await resp.json();
-      setNewKeyName(newKey.key);
       alert(`New API Key created: ${newKey.key}. Please save it in a safe place!`);
     } catch (err) {
       console.error("Failed to create API key:", err);
       alert(`Failed to create API key: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setLoading(false);
+      setKeysLoading(false);
     }
   };
 
@@ -440,8 +439,6 @@ export const Dashboard: React.FC = () => {
           deleteKey={handleDeleteApiKey}
           copyToClipboard={handleCopyClick}
           copiedId={copiedId}
-          newKeyName={newKeyName}
-          setNewKeyName={setNewKeyName}
           loading={loading}
         />;
       case 'Knowledge Graph':
@@ -449,6 +446,7 @@ export const Dashboard: React.FC = () => {
           projects={projects}
           selectedProjectDir={selectedProjectDir}
           onProjectChange={handleProjectChange}
+          onDeleteProject={undefined}
           analysis={analysis}
         />;
       case 'Cloud Index':
@@ -475,8 +473,6 @@ export const Dashboard: React.FC = () => {
           deleteKey={handleDeleteApiKey}
           copyToClipboard={handleCopyClick}
           copiedId={copiedId}
-          newKeyName={newKeyName}
-          setNewKeyName={setNewKeyName}
           loading={loading}
         />;
     }

@@ -134,7 +134,9 @@ function ForceGraph3DCanvas({ ForceGraph3D, data }: { ForceGraph3D: any; data: G
         .backgroundColor('#0a0a0a');
       
       return () => {
-        graph.destroy();
+        if (graph && typeof graph.destroy === 'function') {
+          graph.destroy();
+        }
       };
     } catch (err) {
       console.warn('[3D] Render failed:', err);

@@ -39,24 +39,10 @@ function a2a(name: string, description: string, params: string[]) {
   });
 }
 
-export function registerTools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }) {
-  // Save original tool method
-  const originalTool = server.tool.bind(server);
+import { injectAuthContext } from './authContext.js';
 
-  // Override tool method to inject authStorage context wrapping
-  server.tool = function(name: string, ...args: any[]) {
-    // The callback is always the last argument
-    const originalCallback = args[args.length - 1];
-    if (typeof originalCallback === "function") {
-      args[args.length - 1] = async function(callbackArgs: any, ...extra: any[]) {
-        const auth = sessionAuth || await checkAuth();
-        return authStorage.run(auth, async () => {
-          return (originalCallback as any)(callbackArgs, ...extra);
-        });
-      };
-    }
-    return (originalTool as any)(name, ...args);
-  } as any;
+export function registerTools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }) {
+  injectAuthContext(server, sessionAuth);
 
   // Tool -1: Analyze a project
   server.tool(
