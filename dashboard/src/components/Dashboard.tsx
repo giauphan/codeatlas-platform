@@ -130,6 +130,9 @@ export const Dashboard: React.FC = () => {
     }
     return true;
   });
+  const selectedProjectDirRef = useRef(selectedProjectDir);
+  selectedProjectDirRef.current = selectedProjectDir;
+
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const [stats, setStats] = useState({ totalRequests: 0 });
@@ -305,16 +308,15 @@ export const Dashboard: React.FC = () => {
         safeSessionStorageSetItem('ca_projects_cache', JSON.stringify(data));
 
         if (data.length > 0) {
-          const hasSelected = selectedProjectDir && data.some((p: { name: string; dir: string }) => p.dir === selectedProjectDir);
+          const currentDir = selectedProjectDirRef.current;
+          const hasSelected = currentDir && data.some((p: { name: string; dir: string }) => p.dir === currentDir);
           if (!hasSelected) {
-            // No project selected or selected project no longer exists — pick default and fetch fresh data
             const defaultDir = data[0].dir;
             setSelectedProjectDir(defaultDir);
             safeSessionStorageSetItem('ca_selected_project_dir', defaultDir);
             fetchAnalysis(defaultDir);
           } else {
-            // Selected project exists, fetch its analysis
-            fetchAnalysis(selectedProjectDir);
+            fetchAnalysis(currentDir);
           }
         } else {
           // No projects found, clear selection and analysis
@@ -336,7 +338,7 @@ export const Dashboard: React.FC = () => {
     } finally {
       setProjectsLoading(false);
     }
-  }, [selectedProjectDir]);
+  }, []);
 
   const fetchApiKeys = useCallback(async () => {
     setKeysLoading(true);
@@ -373,6 +375,23 @@ export const Dashboard: React.FC = () => {
     fetchAnalysis(dir);
   };
 
+  const handleDeleteProject = async (dir: string) => {
+    if (!window.confirm('Are you sure you want to delete this project? This cannot be undone.')) return;
+    try {
+      const headers = await getAuthHeaders();
+      const resp = await fetch(`${API_BASE}/api/projects`, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ projectDir: dir })
+      });
+      if (!resp.ok) throw new Error('Failed to delete project');
+      fetchProjects(); // Refresh the list
+    } catch (err) {
+      console.error('Delete project error:', err);
+      alert(`Failed to delete project: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   const handleReindex = async () => {
     if (!selectedProjectDir) return;
     setIsIndexing(true);
@@ -383,9 +402,7 @@ export const Dashboard: React.FC = () => {
         headers,
         body: JSON.stringify({ projectDir: selectedProjectDir })
       });
-      if (!resp.ok) {
-        throw new Error("Reindex failed");
-      }
+      if (!resp.ok) throw new Error("Reindex failed");
       await fetchAnalysis(selectedProjectDir, true);
     } catch (err) {
       console.error("Reindex error:", err);
@@ -475,9 +492,7 @@ export const Dashboard: React.FC = () => {
           projects={projects}
           selectedProjectDir={selectedProjectDir}
           onProjectChange={handleProjectChange}
-          onDeleteProject={async () => {
-            alert("Project deletion not implemented in this PR");
-          }}
+          onDeleteProject={() => handleDeleteProject(selectedProjectDir)}
           analysis={analysis}
         />;
       case 'Cloud Index':

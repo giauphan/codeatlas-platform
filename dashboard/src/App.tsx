@@ -88,10 +88,11 @@ function App() {
       }
 
       safeSessionStorageSetItem('ca_api_key', key.trim());
+      const isApiKey = key.trim().startsWith('ca_');
       setUser({
         uid: 'session',
         email: safeSessionStorageGetItem('ca_user_email') || 'user@codeatlas.local',
-        isApiKeySession: true
+        isApiKeySession: isApiKey
       });
     } catch (err: unknown) {
       console.error("Token validation failed:", err);
