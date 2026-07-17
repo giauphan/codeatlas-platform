@@ -11,9 +11,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.1
         version: 1.29.0(zod@3.25.76)
-      '@types/jsonwebtoken':
-        specifier: ^9.0.10
-        version: 9.0.10
       '@typescript-eslint/typescript-estree':
         specifier: ^8.0.0
         version: 8.59.3(typescript@5.9.3)
