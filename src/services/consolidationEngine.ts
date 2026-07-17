@@ -125,10 +125,7 @@ export class ConsolidationEngine {
             if (!embI || !embJ) continue;
 
             // ⚡ Bolt Optimization: Removed Array.from() inside O(N^2) loop to avoid huge GC overhead.
-            const similarity = this.cosineSimilarity(
-              embI instanceof Float32Array ? embI : [],
-              embJ instanceof Float32Array ? embJ : []
-            );
+            const similarity = this.cosineSimilarity(embI, embJ);
 
             if (similarity > 0.85) {
               // Merge: keep the one with higher importance
@@ -346,8 +343,8 @@ export class ConsolidationEngine {
   /**
    * Cosine similarity between two float vectors.
    */
-  private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
-    if (a.length !== b.length || a.length === 0) return 0;
+  private cosineSimilarity(a: Float32Array, b: Float32Array): number {
+    if (!a || !b || a.length !== b.length || a.length === 0) return 0;
     let dot = 0, normA = 0, normB = 0;
     const len = a.length;
     for (let i = 0; i < len; i++) {
