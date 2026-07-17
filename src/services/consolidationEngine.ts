@@ -124,9 +124,10 @@ export class ConsolidationEngine {
             const embJ = group[j][R_IDX.EMBEDDING];
             if (!embI || !embJ) continue;
 
+            // ⚡ Bolt Optimization: Removed Array.from() inside O(N^2) loop to avoid huge GC overhead.
             const similarity = this.cosineSimilarity(
-              embI instanceof Float32Array ? Array.from(embI) : [],
-              embJ instanceof Float32Array ? Array.from(embJ) : []
+              embI instanceof Float32Array ? embI : [],
+              embJ instanceof Float32Array ? embJ : []
             );
 
             if (similarity > 0.85) {
@@ -345,10 +346,11 @@ export class ConsolidationEngine {
   /**
    * Cosine similarity between two float vectors.
    */
-  private cosineSimilarity(a: number[], b: number[]): number {
+  private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
     if (a.length !== b.length || a.length === 0) return 0;
     let dot = 0, normA = 0, normB = 0;
-    for (let i = 0; i < a.length; i++) {
+    const len = a.length;
+    for (let i = 0; i < len; i++) {
       dot += a[i] * b[i];
       normA += a[i] * a[i];
       normB += b[i] * b[i];
