@@ -11,6 +11,7 @@ import {
   Clock,
   Save
 } from 'lucide-react';
+import { getAuthHeaders } from '../lib/auth';
 
 interface ControlCenterProps {
   stats: { totalRequests: number };
@@ -49,15 +50,19 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
 
   // Fetch current cron schedule on mount
   useEffect(() => {
-    fetch('/api/settings/cron')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.dreams_schedule) {
-          setCronSchedule(data.dreams_schedule);
-          setCronEnabled(data.dreams_enabled !== false);
-        }
-      })
-      .catch(() => {});
+    const fetchCronSettings = async () => {
+      const headers = await getAuthHeaders();
+      fetch('/api/settings/cron', { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.dreams_schedule) {
+            setCronSchedule(data.dreams_schedule);
+            setCronEnabled(data.dreams_enabled !== false);
+          }
+        })
+        .catch(() => {});
+    };
+    fetchCronSettings();
   }, []);
 
   const saveCron = async () => {
@@ -65,9 +70,10 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
     setCronError('');
     setCronSaved(false);
     try {
+      const headers = await getAuthHeaders();
       const resp = await fetch('/api/settings/cron', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ dreams_schedule: cronSchedule, dreams_enabled: cronEnabled }),
       });
       if (!resp.ok) {

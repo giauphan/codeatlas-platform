@@ -25,6 +25,7 @@ import { mountGenomeRoutes } from "./genomeRoutes.js";
 import { mountA2ARoutes } from "./a2a/a2aRoutes.js";
 import { mountHeartbeatRoutes } from "./a2a/heartbeatRoutes.js";
 import { mountCronSettingsRoutes } from "./cronSettingsRoute.js";
+import { authProxyRouter } from "../routes/authProxy.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { logger } from "../utils/logger.js";
 
@@ -167,6 +168,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Auth Proxy (Firebase sign-in without Web SDK)
+app.use(authProxyRouter);
+
 // REST API Dreaming (dream memories)
 registerDreamingRoutes(app);
 
@@ -178,7 +182,8 @@ app.get("/api/projects", authMiddleware, async (req, res) => {
     const projects = await discoverProjectsAsync(tenantId);
     res.json(projects.map(p => {
       // Sanitize absolute paths by making them relative to current working directory
-      const relativeDir = path.relative(process.cwd(), p.dir);
+      let relativeDir = path.relative(process.cwd(), p.dir);
+      if (!relativeDir) relativeDir = ".";
       return { name: p.name, dir: relativeDir, modifiedAt: p.modifiedAt };
     }));
   } catch (err: unknown) {
@@ -804,20 +809,6 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
 // Serve static files from built dashboard
 const dashboardDistPath = path.join(process.cwd(), "dashboard", "dist");
 if (fs.existsSync(dashboardDistPath)) {
-  // Serve all static files with proper MIME types
-  app.use(/^\/(assets|fonts|images)\/.+/, async (req, res) => {
-    const filePath = path.join(dashboardDistPath, req.path);
-    try {
-      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-        res.sendFile(filePath);
-      } else {
-        res.status(404).send("Not found");
-      }
-    } catch {
-      res.status(404).send("Not found");
-    }
-  });
-  
   // index.html must NEVER be cached — always serve fresh so browser picks up new hashed assets
   app.use(express.static(dashboardDistPath, {
     maxAge: 0,
@@ -833,6 +824,20 @@ if (fs.existsSync(dashboardDistPath)) {
       }
     }
   }));
+  
+  // Handle missing static files with proper MIME types (fallback for express.static misses)
+  app.use(/^\/(assets|fonts|images)\/.+/, async (req, res) => {
+    const filePath = path.join(dashboardDistPath, req.path);
+    try {
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        res.sendFile(filePath);
+      } else {
+        res.status(404).send("Not found");
+      }
+    } catch {
+      res.status(404).send("Not found");
+    }
+  });
   
   // Catch-all: serve index.html for all non-API, non-SSE routes (SPA routing)
   app.get(/^\/(?!sse|messages|api).*/, (req, res) => {

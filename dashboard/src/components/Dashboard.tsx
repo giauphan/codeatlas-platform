@@ -30,6 +30,8 @@ import { CloudIndexView } from './CloudIndexView';
 import { DreamMemoryView } from './DreamMemoryView';
 import { SecondBrainView } from './SecondBrainView';
 import { DocumentationView } from './DocumentationView';
+import { safeSessionStorageGetItem, safeSessionStorageRemoveItem, safeSessionStorageSetItem } from '../lib/safeSessionStorage';
+
 
 // API Configuration
 const API_BASE = window.location.origin.includes('localhost:5173') 
@@ -72,37 +74,6 @@ interface AnalysisData {
 
 const memoryAnalysisCache = new Map<string, AnalysisData>();
 
-const safeSessionStorageSetItem = (key: string, value: string) => {
-  try {
-    sessionStorage.setItem(key, value);
-  } catch (err: any) {
-    const isQuotaError = err && (
-      err.name === 'QuotaExceededError' ||
-      err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-      err.code === 22 ||
-      err.code === 1014
-    );
-    if (isQuotaError) {
-      try {
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const k = sessionStorage.key(i);
-          if (k && k.startsWith('ca_analysis_cache_') && k !== key) {
-            keysToRemove.push(k);
-          }
-        }
-        keysToRemove.forEach(k => sessionStorage.removeItem(k));
-        
-        sessionStorage.setItem(key, value);
-      } catch (retryErr) {
-        console.info(`[CodeAtlas] Project analysis size (${(value.length / 1024 / 1024).toFixed(2)} MB) exceeds browser sessionStorage quota limit. Operating in high-performance memory-only mode without local cache.`);
-      }
-    } else {
-      console.info("Failed to write to sessionStorage:", err);
-    }
-  }
-};
-
 /** Generation counter to discard stale fetch responses (fixes race condition) */
 let fetchGeneration = 0;
 
@@ -119,38 +90,38 @@ export const Dashboard: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Control Center');
   const [analysis, setAnalysis] = useState<AnalysisData | null>(() => {
-    const savedProjDir = sessionStorage.getItem('ca_selected_project_dir');
+    const savedProjDir = safeSessionStorageGetItem('ca_selected_project_dir');
     if (savedProjDir) {
-      const cachedProject = sessionStorage.getItem(`ca_analysis_cache_${savedProjDir}`);
+      const cachedProject = safeSessionStorageGetItem(`ca_analysis_cache_${savedProjDir}`);
       if (cachedProject) {
         try {
           const parsed = JSON.parse(cachedProject);
           memoryAnalysisCache.set(savedProjDir, parsed);
           return parsed;
         } catch (e) {
-          sessionStorage.removeItem(`ca_analysis_cache_${savedProjDir}`);
+          safeSessionStorageRemoveItem(`ca_analysis_cache_${savedProjDir}`);
         }
       }
     }
-    const cached = sessionStorage.getItem('ca_analysis_cache');
+    const cached = safeSessionStorageGetItem('ca_analysis_cache');
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
         memoryAnalysisCache.set('', parsed);
         return parsed;
       } catch (e) {
-        sessionStorage.removeItem('ca_analysis_cache');
+        safeSessionStorageRemoveItem('ca_analysis_cache');
       }
     }
     return null;
   });
   const [selectedProjectDir, setSelectedProjectDir] = useState<string>(() => {
-    return sessionStorage.getItem('ca_selected_project_dir') || '';
+    return safeSessionStorageGetItem('ca_selected_project_dir') || '';
   });
   const [isIndexingEnabled, setIsIndexingEnabled] = useState<boolean>(() => {
-    const savedProjDir = sessionStorage.getItem('ca_selected_project_dir');
+    const savedProjDir = safeSessionStorageGetItem('ca_selected_project_dir');
     if (savedProjDir) {
-      const cached = sessionStorage.getItem(`codeatlas_indexing_enabled_${savedProjDir}`);
+      const cached = safeSessionStorageGetItem(`codeatlas_indexing_enabled_${savedProjDir}`);
       if (cached !== null) {
         try {
           return JSON.parse(cached);
@@ -179,7 +150,7 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (selectedProjectDir) {
-      const cached = sessionStorage.getItem(`codeatlas_indexing_enabled_${selectedProjectDir}`);
+      const cached = safeSessionStorageGetItem(`codeatlas_indexing_enabled_${selectedProjectDir}`);
       if (cached !== null) {
         try {
           setIsIndexingEnabled(JSON.parse(cached));
@@ -234,17 +205,17 @@ export const Dashboard: React.FC = () => {
   const [projects, setProjects] = useState<{ name: string; dir: string }[]>(() => {
     // Restore project list from session cache on mount
     try {
-      const cached = sessionStorage.getItem('ca_projects_cache');
+      const cached = safeSessionStorageGetItem('ca_projects_cache');
       if (cached) return JSON.parse(cached);
     } catch {
-      sessionStorage.removeItem('ca_projects_cache');
+      safeSessionStorageRemoveItem('ca_projects_cache');
     }
     return [];
   });
   // Restore user from session
   const [user, setUser] = useState<any>(() => {
-    const savedApiKey = sessionStorage.getItem('ca_api_key');
-    const email = sessionStorage.getItem('ca_user_email');
+    const savedApiKey = safeSessionStorageGetItem('ca_api_key');
+    const email = safeSessionStorageGetItem('ca_user_email');
     if (savedApiKey) {
       return {
         uid: email || 'api-key-session',
@@ -259,18 +230,18 @@ export const Dashboard: React.FC = () => {
     setSelectedProjectDir('');
     setAnalysis(null);
     memoryAnalysisCache.clear();
-    sessionStorage.removeItem('ca_selected_project_dir');
-    sessionStorage.removeItem('ca_analysis_cache');
+    safeSessionStorageRemoveItem('ca_selected_project_dir');
+    safeSessionStorageRemoveItem('ca_analysis_cache');
     Object.keys(sessionStorage).forEach(k => {
       if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
-        sessionStorage.removeItem(k);
+        safeSessionStorageRemoveItem(k);
       }
     });
-    sessionStorage.removeItem('ca_projects_cache');
+    safeSessionStorageRemoveItem('ca_projects_cache');
   };
 
   const getAuthHeaders = async () => {
-    const savedApiKey = sessionStorage.getItem('ca_api_key');
+    const savedApiKey = safeSessionStorageGetItem('ca_api_key');
     if (!savedApiKey) {
       return { 'Content-Type': 'application/json' };
     }
@@ -297,107 +268,86 @@ export const Dashboard: React.FC = () => {
       const resp = await fetch(url, { headers });
       if (resp.ok) {
         const data = await resp.json();
-        setAnalysis(data);
-        memoryAnalysisCache.set(cacheKey, data);
-        if (projectDir) {
-          safeSessionStorageSetItem(`ca_analysis_cache_${projectDir}`, JSON.stringify(data));
+        if (data.error) {
+          console.warn(`[Dashboard] Analysis API returned error: ${data.error}`);
+          setAnalysis(null);
+          memoryAnalysisCache.set(cacheKey, null);
         } else {
-          safeSessionStorageSetItem('ca_analysis_cache', JSON.stringify(data));
+          setAnalysis(data);
+          memoryAnalysisCache.set(cacheKey, data);
+          if (projectDir) {
+            safeSessionStorageSetItem(`ca_analysis_cache_${projectDir}`, JSON.stringify(data));
+          } else {
+            safeSessionStorageSetItem('ca_analysis_cache', JSON.stringify(data));
+          }
         }
       } else {
         // Clear cached stale data if backend rejects access (404/403 boundary violation)
         setAnalysis(null);
         memoryAnalysisCache.delete(cacheKey);
         if (projectDir) {
-          sessionStorage.removeItem(`ca_analysis_cache_${projectDir}`);
+          safeSessionStorageRemoveItem(`ca_analysis_cache_${projectDir}`);
         }
-        sessionStorage.removeItem('ca_analysis_cache');
+        safeSessionStorageRemoveItem('ca_analysis_cache');
 
-        // Gracefully handle 404/failure responses by explicitly resetting project selection to trigger re-discovery
+        // Gracefully handle 404/failure: clear state, don't retry (prevents infinite loop)
         if (resp.status === 404 && projectDir) {
           setSelectedProjectDir('');
-          sessionStorage.removeItem('ca_selected_project_dir');
-          fetchProjects();
+          safeSessionStorageRemoveItem('ca_selected_project_dir');
         }
       }
     } catch (err) {
       console.error("Failed to fetch analysis:", err);
       setAnalysis(null);
-      memoryAnalysisCache.delete(cacheKey);
-      if (projectDir) {
-        sessionStorage.removeItem(`ca_analysis_cache_${projectDir}`);
-      }
-      sessionStorage.removeItem('ca_analysis_cache');
     }
   };
 
-  const fetchProjects = async (forceRefresh = false) => {
-    const generation = ++fetchGeneration;
-    let cacheApplied = false;
-
-    // Step 1: Cache-first — show stale data immediately while network refreshes
-    if (!forceRefresh) {
-      try {
-        const cached = sessionStorage.getItem('ca_projects_cache');
-        if (cached) {
-          const data = JSON.parse(cached) as { name: string; dir: string }[];
-          setProjects(data);
-          cacheApplied = true;
-          if (data.length > 0) {
-            // Use saved session selection if still valid, otherwise default to first
-            const savedDir = sessionStorage.getItem('ca_selected_project_dir');
-            const dir = getDefaultProjectWithDir(data, savedDir);
-            setSelectedProjectDir(dir);
-            safeSessionStorageSetItem('ca_selected_project_dir', dir);
-            fetchAnalysis(dir);
-          }
-        }
-      } catch {
-        sessionStorage.removeItem('ca_projects_cache');
-      }
-    }
-
-    // Step 2: Network refresh (stale-while-revalidate)
+  const fetchProjects = useCallback(async () => {
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch(`${API_BASE}/api/projects`, { headers });
-
-      // Race condition guard: discard response if a newer fetch started
-      if (generation !== fetchGeneration) return;
-
       if (resp.ok) {
         const data = await resp.json();
         setProjects(data);
         safeSessionStorageSetItem('ca_projects_cache', JSON.stringify(data));
 
         if (data.length > 0) {
-          const hasSelected = data.some((p: { name: string; dir: string }) => p.dir === selectedProjectDir);
-          if (hasSelected && selectedProjectDir) {
-            // Skip fetchAnalysis if cache already handled it (avoids double call)
-            if (!cacheApplied) {
-              fetchAnalysis(selectedProjectDir);
-            }
-          } else {
-            // Selected project changed — pick default and fetch fresh data
+          const hasSelected = selectedProjectDir && data.some((p: { name: string; dir: string }) => p.dir === selectedProjectDir);
+          if (!hasSelected) {
+            // No project selected or selected project no longer exists — pick default and fetch fresh data
             const defaultDir = data[0].dir;
             setSelectedProjectDir(defaultDir);
             safeSessionStorageSetItem('ca_selected_project_dir', defaultDir);
             fetchAnalysis(defaultDir);
+          } else {
+            // Selected project exists, fetch its analysis
+            fetchAnalysis(selectedProjectDir);
           }
         } else {
-          clearAllCaches();
+          // No projects found, clear selection and analysis
+          setSelectedProjectDir('');
+          safeSessionStorageRemoveItem('ca_selected_project_dir');
+          setAnalysis(null);
         }
       } else {
-        // Only clear caches if cache didn't already restore data
-        if (!cacheApplied) {
-          clearAllCaches();
-        }
+        setProjects([]);
+        safeSessionStorageRemoveItem('ca_projects_cache');
+        setSelectedProjectDir('');
+        safeSessionStorageRemoveItem('ca_selected_project_dir');
+        setAnalysis(null);
       }
     } catch (err) {
       console.error("Failed to fetch projects:", err);
-      // Preserve cached data on network error (graceful degradation)
+      setProjects([]);
+      setAnalysis(null);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [selectedProjectDir]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
 
   const handleProjectChange = (dir: string) => {
     setSelectedProjectDir(dir);
@@ -405,314 +355,253 @@ export const Dashboard: React.FC = () => {
     fetchAnalysis(dir);
   };
 
-  const handleReindex = async () => {
-    setIsIndexing(true);
-    if (selectedProjectDir) {
-      memoryAnalysisCache.delete(selectedProjectDir);
-      sessionStorage.removeItem(`ca_analysis_cache_${selectedProjectDir}`);
-      sessionStorage.removeItem('ca_analysis_cache');
-    }
+  const handleCreateApiKey = async () => {
+    setLoading(true);
     try {
       const headers = await getAuthHeaders();
-      const resp = await fetch(`${API_BASE}/api/reindex`, {
+      const resp = await fetch(`${API_BASE}/api/keys`, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ projectDir: selectedProjectDir })
+        headers
       });
-      if (resp.ok) await fetchAnalysis(selectedProjectDir, true);
+      if (!resp.ok) {
+        let errMsg = "Server error";
+        try {
+          const data = await resp.json();
+          errMsg = data.error || errMsg;
+        } catch {
+          // ignore
+        }
+        throw new Error(errMsg);
+      }
+      const newKey = await resp.json();
+      setNewKeyName(newKey.key);
+      alert(`New API Key created: ${newKey.key}. Please save it in a safe place!`);
     } catch (err) {
-      console.error("Re-index failed:", err);
+      console.error("Failed to create API key:", err);
+      alert(`Failed to create API key: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setIsIndexing(false);
+      setLoading(false);
     }
   };
 
-  const handleDeleteProject = async () => {
-    if (!selectedProjectDir) return;
+  const fetchApiKeys = useCallback(async () => {
+    setLoading(true);
     try {
       const headers = await getAuthHeaders();
-      const resp = await fetch(`${API_BASE}/api/projects?projectDir=${encodeURIComponent(selectedProjectDir)}`, {
+      const resp = await fetch(`${API_BASE}/api/keys`, { headers });
+      if (!resp.ok) {
+        let errMsg = "Server error";
+        try {
+          const data = await resp.json();
+          errMsg = data.error || errMsg;
+        } catch {
+          // ignore
+        }
+        throw new Error(errMsg);
+      }
+      const data = await resp.json();
+      setKeys(data);
+    } catch (err) {
+      console.error("Failed to fetch API keys:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleDeleteApiKey = async (keyId: string) => {
+    if (!window.confirm('Are you sure you want to delete this API Key?')) {
+      return;
+    }
+    try {
+      const headers = await getAuthHeaders();
+      const resp = await fetch(`${API_BASE}/api/keys/${keyId}`, {
         method: 'DELETE',
         headers
       });
-      if (resp.ok) {
-        alert("Project successfully removed!");
-        setAnalysis(null);
-        setSelectedProjectDir('');
-        memoryAnalysisCache.delete(selectedProjectDir);
-        sessionStorage.removeItem(`ca_analysis_cache_${selectedProjectDir}`);
-        sessionStorage.removeItem(`codeatlas_indexing_enabled_${selectedProjectDir}`);
-        sessionStorage.removeItem('ca_analysis_cache');
-        sessionStorage.removeItem('ca_selected_project_dir');
-        await fetchProjects();
-      } else {
-        let errorMessage = 'Unknown error';
+      if (!resp.ok) {
+        let errMsg = "Server error";
         try {
           const data = await resp.json();
-          errorMessage = data.error || errorMessage;
+          errMsg = data.error || errMsg;
         } catch {
-          errorMessage = `Server returned status code ${resp.status}`;
+          // ignore
         }
-
-        if (errorMessage.includes("Remote cleanup failure")) {
-          const forceConfirm = confirm(`Remote DB cleanup failed: ${errorMessage}\
-\nDo you want to force local deletion and unregister the project anyway?`);
-          if (forceConfirm) {
-            try {
-              const forceResp = await fetch(`${API_BASE}/api/projects?projectDir=${encodeURIComponent(selectedProjectDir)}&force=true`, {
-                method: 'DELETE',
-                headers
-              });
-              if (forceResp.ok) {
-                alert("Project successfully removed locally!");
-                setAnalysis(null);
-                setSelectedProjectDir('');
-                memoryAnalysisCache.delete(selectedProjectDir);
-                sessionStorage.removeItem(`ca_analysis_cache_${selectedProjectDir}`);
-                sessionStorage.removeItem(`codeatlas_indexing_enabled_${selectedProjectDir}`);
-                sessionStorage.removeItem('ca_analysis_cache');
-                sessionStorage.removeItem('ca_selected_project_dir');
-                await fetchProjects();
-                return;
-              } else {
-                let forceErrorMessage = 'Unknown error';
-                try {
-                  const forceData = await forceResp.json();
-                  forceErrorMessage = forceData.error || forceErrorMessage;
-                } catch {
-                  forceErrorMessage = `Server returned status code ${forceResp.status}`;
-                }
-                alert(`Failed to force delete project: ${forceErrorMessage}`);
-              }
-            } catch (forceErr) {
-              console.error("Force delete project failed:", forceErr);
-              alert(`Failed to force delete project: ${forceErr instanceof Error ? forceErr.message : String(forceErr)}`);
-            }
-          }
-        } else {
-          alert(`Failed to delete project: ${errorMessage}`);
-        }
+        throw new Error(errMsg);
       }
+      fetchApiKeys(); // Refresh the list
     } catch (err) {
-      console.error("Delete project failed:", err);
-      alert(`Failed to delete project: ${err instanceof Error ? err.message : String(err)}`);
+      console.error("Failed to delete API key:", err);
+      alert(`Failed to delete API key: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
-  useEffect(() => {
-    if (!user) {
-      // Clear user states on logout immediately
-      clearAllCaches();
-      return;
-    }
-
-    fetchProjects();
-
-    const unsubscribeStats = db ? onSnapshot(doc(db, 'users', user.uid), (snap: any) => {
-      if (db && snap.exists() && snap.data().stats) setStats(snap.data().stats);
-    }) : undefined;
-
-    const q = query(collection(db, 'users', user.uid, 'keys'), orderBy('createdAt', 'desc'));
-    const unsubscribeKeys = db ? onSnapshot(q, (snap: any) => {
-      setKeys(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ApiKey[]);
-    }) : undefined;
-
-    return () => {
-      unsubscribeStats();
-      unsubscribeKeys();
-    };
-  }, [user]);
-
-  const [createdKey, setCreatedKey] = useState<string | null>(null);
-
-  const createKey = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !newKeyName.trim()) return;
-    setLoading(true);
-    try {
-      const randomBytes = new Uint8Array(32);
-      crypto.getRandomValues(randomBytes);
-      const secureHex = [...randomBytes].map(b => b.toString(16).padStart(2, '0')).join('');
-      const rawKey = 'ca_' + secureHex;
-
-      const encoder = new TextEncoder();
-      const data = encoder.encode(rawKey);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-      const keyPreview = rawKey.substring(0, 6) + '...' + rawKey.substring(rawKey.length - 4);
-
-      await addDoc(collection(db, 'users', user.uid, 'keys'), {
-        name: newKeyName,
-        keyHash,
-        keyPreview,
-        tier: 'enterprise',
-        createdAt: serverTimestamp()
-      });
-      setNewKeyName('');
-      setCreatedKey(rawKey);
-    } catch (err) { 
-      console.error(err); 
-    } finally { 
-      setLoading(false); 
-    }
+  const handleCopyClick = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(text);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const resolvedAnalysis = useMemo(() => {
-    if (!analysis) return null;
-    
-    // Extract base analysis object if it's nested
-    let base: AnalysisData = analysis;
-    if (analysis.analysis) {
-      base = analysis.analysis;
-    }
-    
-    // Normalize stats
-    const rawStats = base.stats || {};
-    const entityCounts = base.entityCounts || {};
-    const totalFilesAnalyzed = base.totalFilesAnalyzed || rawStats.totalFiles || 0;
-    
-    const normalizedStats = {
-      totalFiles: totalFilesAnalyzed,
-      totalModules: entityCounts.modules || rawStats.totalModules || 0,
-      totalClasses: entityCounts.classes || rawStats.totalClasses || 0,
-      totalFunctions: entityCounts.functions || rawStats.totalFunctions || 0,
-      totalVariables: entityCounts.variables || rawStats.totalVariables || 0,
-      loc: rawStats.loc || 0
-    };
-    
-    return {
-      ...base,
-      stats: normalizedStats,
-      totalFilesAnalyzed
-    };
-  }, [analysis]);
-
-  const renderContent = () => {
-    switch(activeTab) {
+  const renderCurrentView = () => {
+    switch (activeTab) {
       case 'Control Center':
-        return (
-          <ControlCenterView 
-            stats={stats} 
-            keys={keys} 
-            analysis={resolvedAnalysis}
-            createKey={createKey} 
-            deleteKey={(id: string) => deleteDoc(doc(db, 'users', user!.uid, 'keys', id))} 
-            copyToClipboard={(t: string, id: string) => { 
-              navigator.clipboard.writeText(t); 
-              setCopiedId(id); 
-              setTimeout(() => setCopiedId(null), 2000); 
-            }}
-            copiedId={copiedId} 
-            newKeyName={newKeyName} 
-            setNewKeyName={setNewKeyName} 
-            loading={loading}
-            createdKey={createdKey}
-            clearCreatedKey={() => setCreatedKey(null)}
-          />
-        );
+        return <ControlCenterView
+          stats={stats}
+          keys={keys}
+          analysis={analysis}
+          createKey={handleCreateApiKey}
+          deleteKey={handleDeleteApiKey}
+          copyToClipboard={handleCopyClick}
+          copiedId={copiedId}
+          newKeyName={newKeyName}
+          setNewKeyName={setNewKeyName}
+          loading={loading}
+        />;
       case 'Knowledge Graph':
-        return (
-          <KnowledgeGraphView 
-            analysis={resolvedAnalysis} 
-            projects={projects}
-            selectedProjectDir={selectedProjectDir}
-            onProjectChange={handleProjectChange}
-            onDeleteProject={handleDeleteProject}
-          />
-        );
+        return <KnowledgeGraphView
+          projects={projects}
+          selectedProjectDir={selectedProjectDir}
+          onProjectChange={handleProjectChange}
+          analysis={analysis}
+        />;
       case 'Cloud Index':
-        return (
-          <CloudIndexView 
-            analysis={resolvedAnalysis} 
-            isIndexing={isIndexing} 
-            onReindex={handleReindex} 
-            isIndexingEnabled={isIndexingEnabled} 
-            setIsIndexingEnabled={handleToggleIndexingEnabled} 
-            isUpdatingSettings={isUpdatingSettings}
-          />
-        );
-      case 'Documentation':
-        return <DocumentationView />;
-      case 'Dream Memory':
+        return <CloudIndexView 
+          analysis={analysis}
+          isIndexing={isIndexing}
+          onReindex={() => fetchAnalysis(selectedProjectDir, true)}
+          isIndexingEnabled={isIndexingEnabled}
+          setIsIndexingEnabled={(v: boolean) => handleToggleIndexingEnabled(v)}
+          isUpdatingSettings={isUpdatingSettings}
+        />;
+      case 'Dream Memories':
         return <DreamMemoryView />;
       case 'Second Brain':
         return <SecondBrainView />;
+      case 'Documentation':
+        return <DocumentationView />;
       default:
-        return null;
+        return <ControlCenterView
+          stats={stats}
+          keys={keys}
+          analysis={analysis}
+          createKey={handleCreateApiKey}
+          deleteKey={handleDeleteApiKey}
+          copyToClipboard={handleCopyClick}
+          copiedId={copiedId}
+          newKeyName={newKeyName}
+          setNewKeyName={setNewKeyName}
+          loading={loading}
+        />;
     }
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--background)', color: '#fff', overflow: 'hidden' }}>
-      
-      {/* SIDEBAR */}
-      <aside className="glass-panel" style={{ 
-        width: '300px', minWidth: '300px', padding: '2.5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '2.5rem',
-        borderRight: '1px solid rgba(255,255,255,0.1)', height: '100vh', boxSizing: 'border-box'
+    <div style={{
+      display: 'flex', minHeight: '100vh', background: 'var(--background-dark)', color: '#fff',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif'
+    }}>
+      {/* Sidebar Navigation */}
+      <nav style={{
+        width: '240px', background: 'var(--background-light)', padding: '2rem 1.5rem',
+        display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-color)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 0.5rem' }}>
-          <div style={{ width: '45px', height: '45px', background: 'var(--primary-neon)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--glow-primary)' }}>
-            <ShieldCheck size={28} color="#000" />
-          </div>
-          <span className="tech-font" style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '0.05em' }}>CODEATLAS</span>
+        <div style={{ flexGrow: 1 }}>
+          <h1 className="tech-font" style={{
+            fontSize: '1.5rem', letterSpacing: '0.1em', marginBottom: '3rem',
+            display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-neon)'
+          }}>
+            CODEATLAS <ShieldCheck size={20} />
+          </h1>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {['Control Center', 'Knowledge Graph', 'Cloud Index', 'Dream Memories', 'Second Brain', 'Documentation'].map(tab => (
+              <li key={tab} style={{ marginBottom: '1rem' }}>
+                <button
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    width: '100%', padding: '0.75rem 1rem', borderRadius: '8px',
+                    background: activeTab === tab ? 'var(--button-active-background)' : 'transparent',
+                    color: activeTab === tab ? 'var(--primary-neon)' : 'var(--text-muted)',
+                    border: 'none', textAlign: 'left', cursor: 'pointer',
+                    fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
+                    transition: 'all 0.3s ease',
+                    boxShadow: activeTab === tab ? '0 0 15px rgba(0, 240, 255, 0.2)' : 'none'
+                  }}
+                >
+                  {tab === 'Control Center' && <LayoutDashboard size={18} />}
+                  {tab === 'Knowledge Graph' && <Network size={18} />}
+                  {tab === 'Cloud Index' && <Globe size={18} />}
+                  {tab === 'Dream Memories' && <Brain size={18} />}
+                  {tab === 'Second Brain' && <Lightbulb size={18} />}
+                  {tab === 'Documentation' && <BookOpen size={18} />}
+                  {tab}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-          {[
-            { icon: LayoutDashboard, label: 'Control Center' },
-            { icon: Network, label: 'Knowledge Graph' },
-            { icon: Globe, label: 'Cloud Index' },
-            { icon: Brain, label: 'Dream Memory' },
-            { icon: Lightbulb, label: 'Second Brain' },
-            { icon: BookOpen, label: 'Documentation' },
-          ].map((item) => (
-            <motion.div
-              key={item.label}
-              whileHover={{ x: 5 }}
-              onClick={() => setActiveTab(item.label)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '1.25rem', padding: '1rem', borderRadius: '14px', cursor: 'pointer',
-                background: activeTab === item.label ? 'rgba(0, 240, 255, 0.12)' : 'transparent',
-                color: activeTab === item.label ? 'var(--primary-neon)' : 'var(--text-muted)',
-                border: activeTab === item.label ? '1px solid rgba(0, 240, 255, 0.25)' : '1px solid transparent',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <item.icon size={22} />
-              <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>{item.label}</span>
-            </motion.div>
-          ))}
-        </nav>
-
-        <div style={{ marginTop: 'auto', padding: '1.25rem', background: 'rgba(0,0,0,0.25)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 700 }}>ENTERPRISE NODE</div>
-          <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#fff', wordBreak: 'break-all' }}>{user?.email}</div>
-          <button onClick={() => { sessionStorage.removeItem('ca_api_key'); sessionStorage.removeItem('ca_user_email'); window.location.reload(); }} style={{ marginTop: '1.5rem', width: '100%', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff4b4b', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700 }}>
-            <LogOut size={18} /> SIGN OUT
+        {/* User / Logout */}
+        <div style={{ marginTop: '3rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color-light)' }}>
+          {user && (
+            <div style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontWeight: 600, color: '#fff' }}>{user.email || 'API User'}</span>
+            </div>
+          )}
+          <button
+            onClick={clearAllCaches}
+            style={{
+              width: '100%', padding: '0.75rem 1rem', borderRadius: '8px',
+              background: 'transparent', color: 'var(--text-muted)',
+              border: 'none', textAlign: 'left', cursor: 'pointer',
+              fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            <LogOut size={18} /> Logout
           </button>
         </div>
-      </aside>
+      </nav>
 
-      {/* MAIN AREA */}
-      <main style={{ flex: 1, height: '100vh', overflowY: 'auto', padding: '3rem 4rem', boxSizing: 'border-box' }}>
-        <AnimatePresence mode="wait">
-          <motion.div key={activeTab} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.3 }}>
-            {renderContent()}
-          </motion.div>
-        </AnimatePresence>
+      {/* Main Content Area */}
+      <main style={{ flexGrow: 1, padding: '2rem', overflowY: 'auto' }}>
+        {renderCurrentView()}
       </main>
 
       <style>{`
-        .glass-panel { background: rgba(13, 17, 23, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-        .tech-font { font-family: 'Inter', system-ui, -apple-system, sans-serif; letter-spacing: -0.02em; }
-        .glass-input { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.875rem 1rem; border-radius: 12px; width: 100%; transition: all 0.3s; }
-        .glass-input:focus { outline: none; border-color: var(--primary-neon); box-shadow: 0 0 15px rgba(0, 240, 255, 0.1); }
-        .animate-spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .filter-chip { padding: 0.5rem 1rem; border-radius: 10px; background: rgba(255,255,255,0.05); cursor: pointer; border: 1px solid transparent; font-size: 0.8rem; font-weight: 700; transition: all 0.3s; color: var(--text-muted); display: flex; alignItems: center; gap: 0.5rem; }
-        .filter-chip.active { background: rgba(0, 240, 255, 0.1); border-color: var(--primary-neon); color: var(--primary-neon); }
+        :root {
+          --primary-neon: #00F0FF;
+          --secondary-neon: #9D00FF;
+          --background: #050505;
+          --background-dark: #000;
+          --background-light: #0A0A0A;
+          --border-color: rgba(255,255,255,0.08);
+          --border-color-light: rgba(255,255,255,0.15);
+          --text-muted: #888;
+          --button-active-background: rgba(0, 240, 255, 0.1);
+        }
+        .tech-font { font-family: 'Inter', system-ui, sans-serif; }
+        .btn-neon-cyan {
+          background: linear-gradient(45deg, #00BFFF, #00FFFF);
+          color: #000;
+          border: none;
+          border-radius: 12px;
+          padding: 1rem 2rem;
+          font-size: 1.1rem;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .btn-neon-cyan:hover:not(:disabled) {
+          box-shadow: 0 0 30px rgba(0, 240, 255, 0.6);
+          transform: translateY(-2px);
+        }
+        .btn-neon-cyan:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
       `}</style>
     </div>
   );

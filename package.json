@@ -45,12 +45,15 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
+    "@types/jsonwebtoken": "^9.0.10",
     "@typescript-eslint/typescript-estree": "^8.0.0",
     "chokidar": "^3.6.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "firebase-admin": "^13.10.0",
     "glob": "^10.3.10",
+    "google-auth-library": "^10.9.0",
+    "jsonwebtoken": "^9.0.3",
     "oracledb": "^6.10.0",
     "py-ast": "^1.9.0",
     "zod": "^3.22.4"

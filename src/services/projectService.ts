@@ -769,14 +769,17 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
       onProjectLoadedCallback(target.dir);
     }
     if (!await fileExists(target.analysisPath)) {
-      logger.error(`[Auto-Scan] ❌ Dynamic async scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
-      return null;
+      logger.error(`[Auto-Scan] ❌ Dynamic async scanning is not supported on the server repo. Returning empty analysis for: ${target.dir}`);
+      return { analysis: { graph: { nodes: [], links: [] }, insights: [], entityCounts: { modules: 0, functions: 0, classes: 0, dependencies: 0, circularDeps: 0 }, totalFilesAnalyzed: 0, totalFilesSkipped: 0 }, projectName: target.name, projectDir: target.dir };
     }
 
     const data = await fs.promises.readFile(target.analysisPath, "utf-8");
-    return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
+    logger.debug(`[Auto-Scan] Read analysis data from ${target.analysisPath}`);
+    const parsedData = JSON.parse(data);
+    logger.debug("[Auto-Scan] Successfully parsed analysis data.");
+    return { analysis: parsedData, projectName: target.name, projectDir: target.dir };
   } catch (err) {
-    logger.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
+    logger.error(`[Auto-Scan] ❌ Loading analysis failed for ${target?.analysisPath || 'unknown path'}: ${err}`);
     return null;
   }
 }

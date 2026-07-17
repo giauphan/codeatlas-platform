@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
-import { auth } from './lib/firebase';
-import { onAuthStateChanged, User, signInWithEmailAndPassword } from 'firebase/auth';
 import Auth from './components/Auth';
 import { Dashboard } from './components/Dashboard';
 import { Loader2, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from './lib/safeSessionStorage';
 
 function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // ── Version cache buster: hard reload when server deploys a new version ──
+  // ── Version cache buster ──
   useEffect(() => {
     const API_BASE = window.location.origin.includes('localhost:5173')
       ? 'http://localhost:8080'
@@ -33,13 +32,8 @@ function App() {
         .catch(() => {});
     };
     
-    // Check on mount
     checkVersion();
-    
-    // Check every 5 minutes — catches users who leave tab open for months
     const interval = setInterval(checkVersion, 5 * 60 * 1000);
-    
-    // Check on tab focus (user returns after hours/days)
     const onFocus = () => { checkVersion(); };
     window.addEventListener('focus', onFocus);
     
@@ -50,20 +44,18 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Check for an active API Key session in secure session storage
-    const savedApiKey = sessionStorage.getItem('ca_api_key');
+    // Check for existing session (API key or Firebase ID token)
+    const savedApiKey = safeSessionStorageGetItem('ca_api_key');
+    const email = safeSessionStorageGetItem('ca_user_email');
     if (savedApiKey) {
-      setUser({ uid: 'api-key-session', email: 'api-key-user@codeatlas.local', isApiKeySession: true });
-      setLoading(false);
-      return;
+      setUser({ 
+        uid: email || 'api-key-session', 
+        email: email || 'user@codeatlas.local', 
+        isApiKeySession: true,
+        idToken: savedApiKey
+      });
     }
-
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    setLoading(false);
   }, []);
 
   const handleBypassLogin = async (key: string) => {
@@ -74,11 +66,15 @@ function App() {
       : window.location.origin;
 
     try {
+      // If it's a Firebase ID token (from email/password login), validate via projects endpoint
+      // If it's an API key, validate the same way
       const resp = await fetch(`${API_BASE}/api/projects`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': key.trim()
+          ...(key.startsWith('ca_') 
+            ? { 'x-api-key': key.trim() } 
+            : { 'Authorization': `Bearer ${key.trim()}` })
         }
       });
 
@@ -91,10 +87,16 @@ function App() {
         throw new Error(errMsg);
       }
 
-      sessionStorage.setItem('ca_api_key', key.trim());
-      setUser({ uid: 'api-key-session', email: 'api-key-user@codeatlas.local', isApiKeySession: true });
+      safeSessionStorageSetItem('ca_api_key', key.trim());
+      setUser({
+        uid: 'session',
+        email: safeSessionStorageGetItem('ca_user_email') || 'user@codeatlas.local',
+        isApiKeySession: true
+      });
     } catch (err: unknown) {
       console.error("Token validation failed:", err);
+      safeSessionStorageRemoveItem('ca_api_key'); // Clear potentially bad key
+      safeSessionStorageRemoveItem('ca_user_email'); // Clear associated email
       throw err;
     }
   };

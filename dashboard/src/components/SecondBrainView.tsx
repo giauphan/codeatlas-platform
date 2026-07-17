@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { auth } from '../lib/firebase';
+
 
 interface Concept {
   id: string;
@@ -27,15 +27,13 @@ export function SecondBrainView() {
     : window.location.origin;
 
   const getAuthHeaders = async () => {
-    const apiKey = sessionStorage.getItem('ca_api_key');
+    const savedKey = sessionStorage.getItem('ca_api_key');
     const headers: Record<string, string> = {};
-    if (apiKey) {
-      headers['x-api-key'] = apiKey;
-    } else {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const token = await currentUser.getIdToken();
-        headers['Authorization'] = `Bearer ${token}`;
+    if (savedKey) {
+      if (savedKey.startsWith('ca_')) {
+        headers['x-api-key'] = savedKey;
+      } else {
+        headers['Authorization'] = `Bearer ${savedKey}`;
       }
     }
     return headers;

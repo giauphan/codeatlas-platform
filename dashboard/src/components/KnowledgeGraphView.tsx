@@ -5,6 +5,7 @@ import {
   Maximize2, Minimize2, Trash2
 } from 'lucide-react';
 import { SphericalKnowledgeGraph } from './KnowledgeNetwork3D';
+import { getAuthHeaders } from '../lib/auth';
 
 interface AnalysisData {
   analysis?: AnalysisData;
@@ -31,11 +32,6 @@ interface KnowledgeGraphViewProps {
 const API_BASE = window.location.origin.includes('localhost:5173')
   ? 'http://localhost:8080'
   : window.location.origin;
-
-const getAuthHeaders = async () => {
-  const apiKey = sessionStorage.getItem('ca_api_key');
-  return apiKey ? { 'x-api-key': apiKey } : {};
-};
 
 export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ 
   analysis, projects, selectedProjectDir,
@@ -123,15 +119,27 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         </div>
 
         {/* 3D Sphere */}
-        <SphericalKnowledgeGraph
-          analysis={analysis}
-          concepts={concepts}
-          dreams={dreams}
-          searchQuery={searchQuery}
-          activeFilters={activeFilters}
-          onNodeHover={(n) => setHoveredNode(n)}
-          onNodeClick={(n) => setSelectedNode(n)}
-        />
+        {analysis && (
+          <SphericalKnowledgeGraph
+            analysis={analysis}
+            concepts={concepts}
+            dreams={dreams}
+            searchQuery={searchQuery}
+            activeFilters={activeFilters}
+            onNodeHover={(n) => setHoveredNode(n)}
+            onNodeClick={(n) => setSelectedNode(n)}
+          />
+        )}
+        {!analysis && (
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            color: 'var(--text-muted)', fontSize: '1.2rem', textAlign: 'center'
+          }}>
+            No analysis data available for the selected project.
+            <br />
+            Select a project with analysis or sync one from the desktop client.
+          </div>
+        )}
       </div>
 
       {/* Sidebar */}
@@ -141,24 +149,26 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto', height: 'fit-content'
       }}>
         {/* Stats */}
-        <div>
-          <h3 style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Network Stats
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            {entityCounts && Object.entries(entityCounts).map(([key, val]) => (
-              <div key={key} style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: '10px' }}>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{key.replace(/([A-Z])/g, ' $1')}</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff' }}>{String(val)}</div>
-              </div>
-            ))}
-          </div>
-          {totalFilesAnalyzed !== undefined && (
-            <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Files analyzed: {totalFilesAnalyzed}
+        {analysis && (
+          <div>
+            <h3 style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Network Stats
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              {entityCounts && Object.entries(entityCounts).map(([key, val]) => (
+                <div key={key} style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{key.replace(/([A-Z])/g, ' $1')}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff' }}>{String(val)}</div>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+            {totalFilesAnalyzed !== undefined && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                Files analyzed: {totalFilesAnalyzed}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Selected node detail */}
         {selectedNode && (

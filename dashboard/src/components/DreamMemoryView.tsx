@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { auth } from '../lib/firebase';
+
 
 interface DreamMemory {
   id: string;
@@ -20,18 +20,16 @@ export function DreamMemoryView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<string[]>(['KNOWLEDGE', 'PREFERENCE', 'MISTAKE', 'PATTERN']);
   const [showAll, setShowAll] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  // user removed — auth handled via sessionStorage tokens
   const [firebaseReady, setFirebaseReady] = useState(false);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 10;
 
-  // Track Firebase auth state (async init from IndexedDB)
+  // Session token from sessionStorage (set by API key or Firebase sign-in)
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged((u) => {
-      setUser(u);
+    if (sessionStorage.getItem('ca_api_key')) {
       setFirebaseReady(true);
-    });
-    return unsub;
+    }
   }, []);
 
   const fetchMemories = useCallback(async (query?: string, pageNum?: number) => {
@@ -41,12 +39,13 @@ export function DreamMemoryView() {
     const p = pageNum ?? page;
     try {
       let headers: Record<string, string> = {};
-      const apiKey = sessionStorage.getItem('ca_api_key');
-      if (apiKey) {
-        headers['x-api-key'] = apiKey;
-      } else if (user) {
-        const token = await user.getIdToken();
-        headers['Authorization'] = `Bearer ${token}`;
+      const savedKey = sessionStorage.getItem('ca_api_key');
+      if (savedKey) {
+        if (savedKey.startsWith('ca_')) {
+          headers['x-api-key'] = savedKey;
+        } else {
+          headers['Authorization'] = `Bearer ${savedKey}`;
+        }
       } else {
         setError('Please log in to view Dream Memories');
         setLoading(false);
@@ -67,7 +66,7 @@ export function DreamMemoryView() {
     } finally {
       setLoading(false);
     }
-  }, [showAll, user, firebaseReady, page]);
+  }, [showAll, firebaseReady, page]);
 
   useEffect(() => {
     if (firebaseReady) fetchMemories(searchQuery, 0);
