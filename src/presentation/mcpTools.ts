@@ -22,6 +22,7 @@ import { ConsolidationEngine } from "../services/consolidationEngine.js";
 import { logger } from "../utils/logger.js";
 import { registerTool } from "./a2a/agentCard.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
+import { authStorage } from "../utils/context.js";
 
 /** Auto-register tool metadata for A2A Agent Card AND register handler on executor */
 function a2a(name: string, description: string, params: string[]) {
@@ -38,7 +39,25 @@ function a2a(name: string, description: string, params: string[]) {
   });
 }
 
-export function registerTools(server: McpServer) {
+export function registerTools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }) {
+  // Save original tool method
+  const originalTool = server.tool.bind(server);
+
+  // Override tool method to inject authStorage context wrapping
+  server.tool = function(name: string, ...args: any[]) {
+    // The callback is always the last argument
+    const originalCallback = args[args.length - 1];
+    if (typeof originalCallback === "function") {
+      args[args.length - 1] = async function(callbackArgs: any, ...extra: any[]) {
+        const auth = sessionAuth || await checkAuth();
+        return authStorage.run(auth, async () => {
+          return (originalCallback as any)(callbackArgs, ...extra);
+        });
+      };
+    }
+    return (originalTool as any)(name, ...args);
+  } as any;
+
   // Tool -1: Analyze a project
   server.tool(
     "analyze",

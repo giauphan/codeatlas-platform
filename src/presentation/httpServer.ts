@@ -18,6 +18,7 @@ import {
 } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { registerTools } from "./mcpTools.js";
+import { registerA2ATools } from "./a2a/a2aTools.js";
 import { registerDreamingRoutes } from "./dreamingRoutes.js";
 import { mountSecondBrainRoutes } from "./secondBrainRoutes.js";
 import { mountConsolidationRoutes } from "./consolidationRoutes.js";
@@ -906,10 +907,11 @@ app.get("/sse", async (req, res) => {
     }
 
     // Dynamically create a session-specific server to isolate state and support concurrent clients
+    const auth = req.auth;
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.14.1",
+        version: "2.14.4",
       },
       {
         capabilities: {
@@ -919,7 +921,8 @@ app.get("/sse", async (req, res) => {
         },
       }
     );
-    registerTools(sessionServer);
+    registerTools(sessionServer, auth);
+    registerA2ATools(sessionServer, auth);
 
     const currentGen = (sessionGenerations.get(sessionId) || 0) + 1;
     sessionGenerations.set(sessionId, currentGen);
@@ -927,7 +930,6 @@ app.get("/sse", async (req, res) => {
     transports.set(sessionId, transport);
     sessionServers.set(sessionId, sessionServer);
     
-    const auth = req.auth;
     if (auth && auth.uid) {
       sessionOwnership.set(sessionId, auth.uid);
     }

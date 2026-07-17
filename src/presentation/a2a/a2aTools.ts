@@ -13,8 +13,28 @@ import { logger } from "../../utils/logger.js";
 import { registerTool } from "./agentCard.js";
 import { a2aExecutor } from "./a2aExecutor.js";
 import { a2aRegistry } from "../../services/a2aRegistry.js";
+import { authStorage } from "../../utils/context.js";
 
-export function registerA2ATools(server: McpServer): void {
+
+export function registerA2ATools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }): void {
+  // Save original tool method
+  const originalTool = server.tool.bind(server);
+
+  // Override tool method to inject authStorage context wrapping
+  server.tool = function(name: string, ...args: any[]) {
+    // The callback is always the last argument
+    const originalCallback = args[args.length - 1];
+    if (typeof originalCallback === "function") {
+      args[args.length - 1] = async function(callbackArgs: any, ...extra: any[]) {
+        const auth = sessionAuth || await checkAuth();
+        return authStorage.run(auth, async () => {
+          return (originalCallback as any)(callbackArgs, ...extra);
+        });
+      };
+    }
+    return (originalTool as any)(name, ...args);
+  } as any;
+
 
   // Tool 1: Discover A2A agents by capability
   server.tool(

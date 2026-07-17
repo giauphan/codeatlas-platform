@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.14.4] - 2026-07-17
+
+### Fixed
+- **Multi-Tenant MCP Isolation**: Wrapped all MCP and A2A tool handlers in the session's active authentication context using `authStorage.run(...)`, ensuring that Second Brain, Dreaming Memory, and Project Discovery execute under the correct tenant isolation policy instead of falling back to the admin context.
+
 ## [2.14.3] - 2026-07-17
 
 ### Fixed
