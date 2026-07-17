@@ -2,7 +2,7 @@
   "name": "codeatlas-ai",
   "displayName": "CodeAtlas AI",
   "description": "AI-powered codebase intelligence platform — MCP Server, AST analysis, semantic memory and architectural insights for any codebase.",
-  "version": "2.14.1",
+  "version": "2.14.3",
   "license": "MIT",
   "type": "module",
   "bin": {

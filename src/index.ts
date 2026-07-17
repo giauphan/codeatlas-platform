@@ -1,14 +1,8 @@
 #!/usr/bin/env node
 
-import * as dotenv from "dotenv";
-import { fileURLToPath } from "url";
+import "./env.js";
 import * as path from "path";
-// Load .env from project root regardless of cwd
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// dist/src/ → project root (/home/ubuntu/codeatlas-platform/.env)
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-// Also try loading from cwd (tsx dev mode)
-dotenv.config();
+
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as fs from "fs";

@@ -44,16 +44,20 @@ export function mountConsolidationRoutes(app: express.Application): void {
         return;
       }
 
+      const { authStorage } = await import("../utils/context.js");
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+
       let connection;
       try {
         const pool = await initPool();
         connection = await pool.getConnection();
-        await setSessionContext(connection);
+        await setSessionContext(connection, tenantId);
 
-        const whereClause = project
-          ? "WHERE project = :project AND status = 'active'"
-          : "WHERE status = 'active'";
-        const binds: Record<string, unknown> = { limit, queryVector: new Float32Array(embedding) };
+        const projectFilter = project ? "AND project = :project" : "";
+        const whereClause = `WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter}`;
+        
+        const binds: Record<string, unknown> = { tenantId, limit, queryVector: new Float32Array(embedding) };
         if (project) binds.project = project;
 
         const result = await connection.execute<any[]>(
@@ -79,9 +83,9 @@ export function mountConsolidationRoutes(app: express.Application): void {
         // Batch update access counts - reduces N roundtrips to 1
         if (concepts.length > 0) {
           try {
-            const binds = concepts.map(c => ({ id: c.id }));
+            const binds = concepts.map(c => ({ id: c.id, tenantId }));
             await connection.executeMany(
-              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id`,
+              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
               binds,
               { autoCommit: true, batchErrors: true }
             );

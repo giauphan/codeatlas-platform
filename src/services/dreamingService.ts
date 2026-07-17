@@ -275,21 +275,21 @@ export class OracleDreamingService {
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
-      // Guest queries must see all dreams regardless of which auth method created them.
-      // Oracle VPD filters rows by tenant_id; forcing 'admin' tenant on every query
-      // avoids this isolation so dreams saved via API key, MCP tool, or Firebase are all visible.
-      await setSessionContext(connection, 'admin');
+      
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       const projectFilter = project ? 'AND project = :project' : '';
       const sql = `
         SELECT id, session_id, project, memory_type, content, importance, created_at
         FROM ai_dreaming_memory
-        WHERE 1=1 ${projectFilter}
+        WHERE tenant_id = :tenantId ${projectFilter}
         ${queryVector ? 'ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)' : 'ORDER BY created_at DESC'}
         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
       `;
 
-      const binds: Record<string, unknown> = { limit, offset };
+      const binds: Record<string, unknown> = { tenantId, limit, offset };
       if (project) binds.project = project;
       if (queryVector) {
         binds.queryVector = new Float32Array(queryVector);
@@ -319,14 +319,17 @@ export class OracleDreamingService {
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
-      await setSessionContext(connection);
+      
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       const sql = `
         DELETE FROM ai_dreaming_memory
-        WHERE id = :id
+        WHERE id = :id AND tenant_id = :tenantId
       `;
 
-      const result = await connection.execute(sql, { id }, { autoCommit: true });
+      const result = await connection.execute(sql, { id, tenantId }, { autoCommit: true });
 
       // result.rowsAffected is a number if the driver reports it
       const deletedCount = result.rowsAffected ?? 0;

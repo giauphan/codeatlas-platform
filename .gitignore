@@ -20,7 +20,7 @@ CLAUDE.md
 .env.*
 
 # Oracle InstantClient (large binaries, not for public repo)
-instantclient/
+instantclient
 !.env.example
 .npmrc
 *.json
@@ -29,7 +29,7 @@ instantclient/
 !composer.json
 
 # Oracle Wallet
-wallet/
+wallet
 .rooignore
 .clinerules
 atlas-intelligence-node-firebase-adminsdk-fbsvc-6c9d06254d.json

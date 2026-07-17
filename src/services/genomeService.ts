@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
+import { authStorage } from "../utils/context.js";
 
 // ─── Row Index Constants ───────────────────────────────────
 const R_IDX = Object.freeze({
@@ -77,7 +78,9 @@ export class GenomeService {
   static async upsertGene(input: GeneInput): Promise<string> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       // Generate embedding from problem + solution combined
       const combinedText = `${input.problem}\n\n${input.solution}`;
@@ -86,8 +89,8 @@ export class GenomeService {
       // Gene with the same name + project pair means the same failure pattern.
     // We increment version rather than overwrite, preserving history.
       const existing = await connection.execute<any[]>(
-        `SELECT id, version FROM codeatlas_genome WHERE name = :name AND project = :project`,
-        { name: input.name, project: input.project } as any
+        `SELECT id, version FROM codeatlas_genome WHERE name = :name AND project = :project AND tenant_id = :tenantId`,
+        { name: input.name, project: input.project, tenantId } as any
       );
 
       let geneId: string;
@@ -121,12 +124,13 @@ export class GenomeService {
            architecture = :arch, category = :cat, confidence = :conf,
            version = :ver, evolution_score = evolution_score + 1,
            embedding = :emb, status = 'active', updated_at = CURRENT_TIMESTAMP
-           WHERE id = :id`,
+           WHERE id = :id AND tenant_id = :tenantId`,
           {
             id: geneId, desc: input.description, problem: input.problem,
             solution: input.solution, arch: input.architecture || "",
             cat: input.category, conf: input.confidence || 0.50,
             ver: newVersion, emb: embedding ? new Float32Array(embedding) : null,
+            tenantId
           } as any,
           { autoCommit: true }
         );
@@ -143,7 +147,7 @@ export class GenomeService {
            ) VALUES (
              :id, :name, :desc, :problem, :solution, :arch,
              :cat, :project, :conf, 1, 1, 0, 0.50, :emb, 'active',
-             :srcType, :srcId, :deps, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'default'
+             :srcType, :srcId, :deps, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :tenantId
            )`,
           {
             id: geneId, name: input.name, desc: input.description,
@@ -153,6 +157,7 @@ export class GenomeService {
             emb: embedding ? new Float32Array(embedding) : null,
             srcType: input.sourceType, srcId: input.sourceId || "",
             deps: JSON.stringify(input.dependencies || []),
+            tenantId
           } as any,
           { autoCommit: true }
         );
@@ -174,7 +179,9 @@ export class GenomeService {
   ): Promise<GeneSearchResult[]> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
       const { project, category, limit = 20 } = options;
 
       const embedding = await generateEmbedding(query, "query");
@@ -182,7 +189,7 @@ export class GenomeService {
 
       const projectFilter = project ? "AND project = :project" : "";
       const catFilter = category ? "AND category = :category" : "";
-      const binds: Record<string, any> = { limit, queryVector: new Float32Array(embedding) };
+      const binds: Record<string, any> = { tenantId, limit, queryVector: new Float32Array(embedding) };
       if (project) binds.project = project;
       if (category) binds.category = category;
 
@@ -192,7 +199,7 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE status = 'active' ${projectFilter} ${catFilter}
+         WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter} ${catFilter}
          ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
          FETCH FIRST :limit ROWS ONLY`,
         binds as any
@@ -222,13 +229,12 @@ export class GenomeService {
       }));
 
       // Increment usage count for returned genes
-      // ⚡ Bolt Optimization: Replaced N+1 loop with a single executeMany batch update to reduce DB roundtrips.
       if (genes.length > 0) {
         try {
-          const binds = genes.map(g => ({ id: g.id }));
+          const binds = genes.map(g => ({ id: g.id, tenantId }));
           await connection.executeMany(
             `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
-             updated_at = CURRENT_TIMESTAMP WHERE id = :id`,
+             updated_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
             binds as any,
             { autoCommit: true }
           );
@@ -247,15 +253,17 @@ export class GenomeService {
   static async getGene(id: string): Promise<GeneRecord | null> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
-         FROM codeatlas_genome WHERE id = :id`,
-        { id } as any
+         FROM codeatlas_genome WHERE id = :id AND tenant_id = :tenantId`,
+        { id, tenantId } as any
       );
 
       if (!result.rows || result.rows.length === 0) return null;
@@ -293,15 +301,17 @@ export class GenomeService {
   static async extractGene(req: ExtractRequest): Promise<string> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       let content: string;
       let memoryType = "lesson";
 
       if (req.sourceType === "dream") {
         const dreams = await connection.execute<any[]>(
-          `SELECT id, content, memory_type, project FROM ai_dreaming_memory WHERE id = :id`,
-          { id: req.sourceId } as any
+          `SELECT id, content, memory_type, project FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
+          { id: req.sourceId, tenantId } as any
         );
         if (!dreams.rows || dreams.rows.length === 0) throw new Error("Dream not found");
         const d = dreams.rows[0];
@@ -310,8 +320,8 @@ export class GenomeService {
         req.project = req.project || String(d[3]);
       } else if (req.sourceType === "concept") {
         const concepts = await connection.execute<any[]>(
-          `SELECT id, label, description, project FROM codeatlas_concepts WHERE id = :id`,
-          { id: req.sourceId } as any
+          `SELECT id, label, description, project FROM codeatlas_concepts WHERE id = :id AND tenant_id = :tenantId`,
+          { id: req.sourceId, tenantId } as any
         );
         if (!concepts.rows || concepts.rows.length === 0) throw new Error("Concept not found");
         const c = concepts.rows[0];
@@ -375,14 +385,16 @@ export class GenomeService {
 
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       // Fetch all genes
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, confidence, version, embedding
-         FROM codeatlas_genome WHERE id IN (${geneIds.map(() => '?').join(',')})`,
-        geneIds as any
+         FROM codeatlas_genome WHERE tenant_id = :tenantId AND id IN (${geneIds.map((_, i) => `:id${i}`).join(',')})`,
+        { tenantId, ...geneIds.reduce((acc, id, i) => ({ ...acc, [`id${i}`]: id }), {}) } as any
       );
 
       const genes = result.rows || [];
@@ -411,9 +423,9 @@ export class GenomeService {
       // Mark source genes as merged
       // ⚡ Bolt Optimization: Batch updates and inserts instead of querying inside loop (avoids N+1 DB roundtrips)
       if (genes.length > 0) {
-        const updateBinds = genes.map(g => ({ id: String(g[0]) }));
+        const updateBinds = genes.map(g => ({ id: String(g[0]), tenantId }));
         await connection.executeMany(
-          `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE id = :id`,
+          `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
           updateBinds as any,
           { autoCommit: true }
         );
@@ -452,12 +464,14 @@ export class GenomeService {
 
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture, category, confidence
-         FROM codeatlas_genome WHERE id = :id`,
-        { id: sourceGeneId } as any
+         FROM codeatlas_genome WHERE id = :id AND tenant_id = :tenantId`,
+        { id: sourceGeneId, tenantId } as any
       );
 
       if (!result.rows || result.rows.length === 0) throw new Error("Source gene not found");
@@ -494,8 +508,8 @@ export class GenomeService {
 
       // Mark source as retired
       await connection.execute(
-        `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP WHERE id = :id`,
-        { id: sourceGeneId } as any,
+        `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
+        { id: sourceGeneId, tenantId } as any,
         { autoCommit: true }
       );
 
@@ -517,12 +531,14 @@ export class GenomeService {
   ): Promise<string> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, problem, solution, confidence, version, success_rate, usage_count
-         FROM codeatlas_genome WHERE id = :id`,
-        { id: geneId } as any
+         FROM codeatlas_genome WHERE id = :id AND tenant_id = :tenantId`,
+        { id: geneId, tenantId } as any
       );
 
       if (!result.rows || result.rows.length === 0) throw new Error("Gene not found");
@@ -563,7 +579,7 @@ export class GenomeService {
 
       // Update gene
       const updates: string[] = [];
-      const binds: Record<string, any> = { id: geneId };
+      const binds: Record<string, any> = { id: geneId, tenantId };
 
       if (improvements.description) {
         updates.push("description = :desc");
@@ -580,7 +596,7 @@ export class GenomeService {
       binds.sr = newSuccessRate;
 
       await connection.execute(
-        `UPDATE codeatlas_genome SET ${updates.join(", ")} WHERE id = :id`,
+        `UPDATE codeatlas_genome SET ${updates.join(", ")} WHERE id = :id AND tenant_id = :tenantId`,
         binds as any,
         { autoCommit: true }
       );
@@ -598,15 +614,17 @@ export class GenomeService {
   static async retireGenes(geneIds: string[]): Promise<number> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       let count = 0;
       // ⚡ Bolt Optimization: Batch retirement update using executeMany instead of executing queries in a loop.
       if (geneIds.length > 0) {
-        const binds = geneIds.map(id => ({ id }));
+        const binds = geneIds.map(id => ({ id, tenantId }));
         const result = await connection.executeMany(
           `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
-           WHERE id = :id AND status != 'retired'`,
+           WHERE id = :id AND status != 'retired' AND tenant_id = :tenantId`,
           binds as any,
           { autoCommit: true }
         );
@@ -631,13 +649,15 @@ export class GenomeService {
   static async scanImmuneGenes(problem: string, project?: string): Promise<GeneRecord[]> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       const embedding = await generateEmbedding(problem, "query");
       if (!embedding) return [];
 
       const projectFilter = project ? "AND project = :project" : "";
-      const binds: Record<string, any> = { limit: 5, queryVector: new Float32Array(embedding) };
+      const binds: Record<string, any> = { tenantId, limit: 5, queryVector: new Float32Array(embedding) };
       if (project) binds.project = project;
 
       const result = await connection.execute<any[]>(
@@ -646,7 +666,7 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE category = 'immune' AND status = 'active' ${projectFilter}
+         WHERE tenant_id = :tenantId AND category = 'immune' AND status = 'active' ${projectFilter}
            AND confidence > 0.3
          ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
          FETCH FIRST :limit ROWS ONLY`,
@@ -738,11 +758,13 @@ export class GenomeService {
   ): Promise<GeneSearchResult[]> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
       const embedding = await generateEmbedding(context, "query");
       if (!embedding) return [];
 
-      const binds: Record<string, any> = { limit, queryVector: new Float32Array(embedding) };
+      const binds: Record<string, any> = { tenantId, limit, queryVector: new Float32Array(embedding) };
       let projectFilter = "";
       let confFilter = "1=1";
       if (project) {
@@ -758,7 +780,7 @@ export class GenomeService {
                 usage_count, success_rate,embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE status = 'active' ${projectFilter} AND ${confFilter}
+         WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter} AND ${confFilter}
          ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
          FETCH FIRST :limit ROWS ONLY`,
         binds as any
@@ -828,9 +850,12 @@ Apply this knowledge when encountering similar problems.
     // Increment usage count
     try {
       const conn = await (await initPool()).getConnection();
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(conn, tenantId);
       await conn.execute(
-        `UPDATE codeatlas_genome SET usage_count = usage_count + 1 WHERE id = :id`,
-        { id: geneId } as any,
+        `UPDATE codeatlas_genome SET usage_count = usage_count + 1 WHERE id = :id AND tenant_id = :tenantId`,
+        { id: geneId, tenantId } as any,
         { autoCommit: true }
       );
       await conn.close();
@@ -853,12 +878,14 @@ Apply this knowledge when encountering similar problems.
   ): Promise<{ inherited: number; genes: GeneSearchResult[] }> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
       const embedding = await generateEmbedding(context, "query");
       if (!embedding) return { inherited: 0, genes: [] };
 
       let sql: string;
-      const binds: Record<string, any> = { limit: Math.min(limit, 50) };
+      const binds: Record<string, any> = { tenantId, limit: Math.min(limit, 50) };
 
       if (sourceProjects && sourceProjects.length > 0) {
         sql = `SELECT id, name, description, problem, solution, architecture,
@@ -866,7 +893,7 @@ Apply this knowledge when encountering similar problems.
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE status = 'active' AND project IN (${sourceProjects.map((_, i) => `:src${i}`).join(",")})
+         WHERE tenant_id = :tenantId AND status = 'active' AND project IN (${sourceProjects.map((_, i) => `:src${i}`).join(",")})
          ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
          FETCH FIRST :limit ROWS ONLY`;
         sourceProjects.forEach((p, i) => (binds[`src${i}`] = p));
@@ -876,7 +903,7 @@ Apply this knowledge when encountering similar problems.
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE status = 'active' AND project != :excludeProject
+         WHERE tenant_id = :tenantId AND status = 'active' AND project != :excludeProject
          ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
          FETCH FIRST :limit ROWS ONLY`;
         binds.excludeProject = newProject;
@@ -956,22 +983,24 @@ Apply this knowledge when encountering similar problems.
   ): Promise<GeneSearchResult | null> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE name = :name AND category = :cat AND status = 'active'
+         WHERE tenant_id = :tenantId AND name = :name AND category = :cat AND status = 'active'
          FETCH FIRST 1 ROWS ONLY`,
-        { name, cat: category } as any
+        { tenantId, name, cat: category } as any
       );
       const row = result.rows?.[0];
       if (!row) return null;
       return {
         id: String(row[R_IDX.ID]),
-        name: String(row[R_IDX.NAME]),
+        name: String(row[row.length - 1] === undefined ? row[R_IDX.NAME] : row[R_IDX.NAME]), // safe index check
         description: String(row[R_IDX.DESCRIPTION] || ""),
         problem: String(row[R_IDX.PROBLEM] || ""),
         solution: String(row[R_IDX.SOLUTION] || ""),
@@ -1051,9 +1080,11 @@ Apply this knowledge when encountering similar problems.
   ): Promise<void> {
     const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
       const sets: string[] = [];
-      const binds: Record<string, any> = { id: geneId };
+      const binds: Record<string, any> = { id: geneId, tenantId };
       if (fields.name !== undefined) { sets.push("name = :name"); binds.name = fields.name; }
       if (fields.description !== undefined) { sets.push("description = :desc"); binds.desc = fields.description; }
       if (fields.problem !== undefined) { sets.push("problem = :problem"); binds.problem = fields.problem; }
@@ -1079,7 +1110,7 @@ Apply this knowledge when encountering similar problems.
       }
 
       if (sets.length === 1) return; // nothing to update
-      const sql = `UPDATE codeatlas_genome SET ${sets.join(", ")} WHERE id = :id`;
+      const sql = `UPDATE codeatlas_genome SET ${sets.join(", ")} WHERE id = :id AND tenant_id = :tenantId`;
       await connection.execute(sql, binds as any, { autoCommit: true });
     } catch (err) {
       logger.error(`updateGene failed for ${geneId}`, err);
