@@ -5,13 +5,13 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import * as fs from "fs";
 import * as path from "path";
 import { getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { checkAuth, logActivity } from "../services/authService.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { 
-  discoverProjectsAsync, 
-  loadAnalysisAsync, 
-  getStats, 
+import {
+  discoverProjectsAsync,
+  loadAnalysisAsync,
+  getStats,
   fileExists,
   resolveProjectDir,
   unregisterProject
@@ -29,6 +29,7 @@ import { mountCronSettingsRoutes } from "./cronSettingsRoute.js";
 import { authProxyRouter } from "../routes/authProxy.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { logger } from "../utils/logger.js";
+import * as crypto from "crypto";
 
 // Wrapper object to allow clean mocking of Firebase services in testing environments
 export const firebaseClient = {
@@ -619,6 +620,65 @@ app.get("/api/version", (_req, res) => {
   res.json({ version, buildTime: Date.now() });
 });
 
+// REST API: Manage API Keys (backend-proxied)
+app.get("/api/keys", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    if (!auth) return res.status(401).json({ error: "Unauthorized" });
+
+    const db = firebaseClient.getFirestore();
+    const keysSnapshot = await db.collection('users').doc(auth.uid).collection('keys').get();
+    const keys = keysSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(keys);
+  } catch (err: unknown) {
+    logger.error("[API Keys] Failed to fetch keys:", err);
+    res.status(500).json({ error: "Failed to fetch API keys" });
+  }
+});
+
+app.post("/api/keys", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    if (!auth) return res.status(401).json({ error: "Unauthorized" });
+
+    const newKey = `ca_${crypto.randomBytes(16).toString('hex')}`; // Prefix with 'ca_' for CodeAtlas API Key
+    const newKeyHash = crypto.createHash('sha256').update(newKey).digest('hex');
+
+    const db = firebaseClient.getFirestore();
+    const keyRef = db.collection('users').doc(auth.uid).collection('keys').doc();
+    await keyRef.set({
+      keyHash: newKeyHash,
+      createdAt: FieldValue.serverTimestamp(),
+      lastUsed: FieldValue.serverTimestamp(),
+      tier: auth.tier,
+      uid: auth.uid,
+      name: `API Key ${new Date().toLocaleString()}`, // Default name
+    });
+
+    res.json({ success: true, key: newKey, id: keyRef.id });
+  } catch (err: unknown) {
+    logger.error("[API Keys] Failed to create key:", err);
+    res.status(500).json({ error: "Failed to create API key" });
+  }
+});
+
+app.delete("/api/keys/:id", authMiddleware, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    if (!auth) return res.status(401).json({ error: "Unauthorized" });
+
+    const keyId = req.params.id;
+    const db = firebaseClient.getFirestore();
+    const keyRef = db.collection('users').doc(auth.uid).collection('keys').doc(keyId);
+    await keyRef.delete();
+
+    res.json({ success: true, id: keyId });
+  } catch (err: unknown) {
+    logger.error("[API Keys] Failed to delete key:", err);
+    res.status(500).json({ error: "Failed to delete API key" });
+  }
+});
+
 // REST API: Get analysis data
 app.get("/api/analysis", authMiddleware, async (req, res) => {
   try {
@@ -838,7 +898,7 @@ if (fs.existsSync(dashboardDistPath)) {
   }));
   
   // Catch-all: serve index.html for all non-API, non-SSE, non-well-known routes (SPA routing)
-  app.get(/^\/(?!sse|messages|api|\.well-known).*/, (req, res) => {
+  app.get(/^\/(?!sse|messages|api|\.well-known|a2a).*/, (req, res) => {
     res.sendFile(path.join(dashboardDistPath, "index.html"), {
       cacheControl: false,
       headers: {
