@@ -480,6 +480,7 @@ export class GenomeService {
       const sourceConfidence = Number(g[R_IDX.CONFIDENCE]);
 
       const childIds: string[] = [];
+      const relBinds: Record<string, any>[] = [];
       for (let i = 0; i < childNames.length; i++) {
         const childId = await this.upsertGene({
           name: childNames[i],
@@ -498,12 +499,20 @@ export class GenomeService {
         });
         childIds.push(childId);
 
-        await connection.execute(
+        relBinds.push({ id: `rel-${randomUUID().slice(0, 8)}`, src: sourceGeneId, tgt: childId });
+      }
+
+      if (relBinds.length > 0) {
+        // ⚡ Bolt Optimization: Batch relationship insertions
+        const result = await connection.executeMany(
           `INSERT INTO gene_relationships (id, source_id, target_id, relationship, weight)
            VALUES (:id, :src, :tgt, 'split_from', 0.8)`,
-          { id: `rel-${randomUUID().slice(0, 8)}`, src: sourceGeneId, tgt: childId } as any,
-          { autoCommit: true }
+          relBinds as any,
+          { autoCommit: true, batchErrors: true }
         );
+        if (result.batchErrors && result.batchErrors.length > 0) {
+          logger.error(`[Genome] Failed to insert relationships during splitGene: ${result.batchErrors.map(e => e.message).join(', ')}`);
+        }
       }
 
       // Mark source as retired

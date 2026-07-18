@@ -203,6 +203,9 @@ describe('GenomeService', () => {
   describe('splitGene()', () => {
     test('splits gene into children and retires source', async () => {
       let callNum = 0;
+      mockConnection.executeMany.mock.mockImplementation(async (sql: string) => {
+        if (sql.includes('INSERT INTO gene_relationships')) return { rowsAffected: 2 };
+      });
       mockConnection.execute.mock.mockImplementation(async (sql: string) => {
         callNum++;
         // Call 1: source gene lookup by splitGene
