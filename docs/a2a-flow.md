@@ -203,3 +203,95 @@ sequenceDiagram
         MCP-->>Claude: artifact
     end
 ```
+
+---
+
+## 9. A2A Orchestration Flow (Leader-Developer Workflow)
+
+### Task State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> created: Leader creates task
+    created --> assigned: Leader assigns task
+    assigned --> implemented: Developer implements task
+    implemented --> reviewed: Leader reviews implementation
+    reviewed --> fixes_needed: Leader requests fixes (with feedback)
+    reviewed --> approved: Leader approves task
+    fixes_needed --> implemented: Developer submits fixes
+    approved --> [*]
+```
+
+### Orchestration Sequence Flow
+
+```mermaid
+sequenceDiagram
+    participant Leader as Leader Agent
+    participant Orch as A2AOrchestrationService
+    participant Dev as Developer Agent
+    participant Task as Task State
+    participant Repo as Code Repository
+
+    Leader->>Orch: a2a_create_orchestration_task(desc, dev_id)
+    Orch->>Task: created (or assigned if dev_id)
+    Orch-->>Leader: orchestration_task_id
+
+    Leader->>Orch: a2a_assign_orchestration_task(id, dev_id)
+    Orch->>Task: assigned
+    Orch-->>Leader: updated state
+
+    Note over Dev: Developer picks up assigned task
+
+    Dev->>Orch: a2a_implement_orchestration_task(id, artifacts)
+    Orch->>Task: implemented
+    Orch-->>Dev: updated state
+
+    Dev->>Repo: Open PR / commit changes
+
+    Leader->>Orch: a2a_review_orchestration_task(id, approved=false, feedback)
+    Orch->>Task: fixes_needed
+    Orch-->>Leader: updated state + feedback
+
+    Note over Dev: Developer reads feedback
+
+    Dev->>Orch: a2a_submit_fixes_orchestration_task(id, new_artifacts)
+    Orch->>Task: implemented (ready for re-review)
+    Orch-->>Dev: updated state
+
+    Leader->>Orch: a2a_review_orchestration_task(id, approved=true)
+    Orch->>Task: approved
+    Orch-->>Leader: final state
+
+    Leader->>Repo: Merge PR
+```
+
+### Orchestration Tools Summary
+
+| Tool | Role | Description |
+|------|------|-------------|
+| `a2a_create_orchestration_task` | Leader | Create task (`created` or `assigned`) |
+| `a2a_assign_orchestration_task` | Leader | Assign task to developer (`assigned`) |
+| `a2a_implement_orchestration_task` | Developer | Report implementation (`implemented`) |
+| `a2a_review_orchestration_task` | Leader | Review or approve (`reviewed` → `approved` or `fixes_needed`) |
+| `a2a_submit_fixes_orchestration_task` | Developer | Submit fixes (`fixes_needed` → `implemented`) |
+| `a2a_get_orchestration_task` | Generic | Get task status and details |
+
+### Orchestration Data Model
+
+```typescript
+A2AOrchestrationTask {
+  orchestrationTaskId: string
+  tenantId: string          // tenant isolation
+  leaderAgentId: string
+  developerAgentId?: string
+  state: OrchestrationState // created | assigned | implemented | reviewed | fixes_needed | approved
+  description: string
+  toolName?: string         // MCP tool for developer
+  toolParams?: Record<string, unknown>
+  artifacts?: Artifact[]    // implementation outputs
+  feedback?: string         // leader review feedback
+  prUrl?: string
+  reviewBotFindings?: string
+  stateHistory: { state, timestamp, note }[]  // audit trail
+}
+```

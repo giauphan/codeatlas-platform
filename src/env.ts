@@ -7,3 +7,5 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config();
+// tsx watch restart test 1784358355
+// tsx watch retry test 1784358505
