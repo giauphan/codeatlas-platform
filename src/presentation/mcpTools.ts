@@ -22,6 +22,7 @@ import { ConsolidationEngine } from "../services/consolidationEngine.js";
 import { logger } from "../utils/logger.js";
 import { registerTool } from "./a2a/agentCard.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
+import { authStorage } from "../utils/context.js";
 
 /** Auto-register tool metadata for A2A Agent Card AND register handler on executor */
 function a2a(name: string, description: string, params: string[]) {
@@ -38,7 +39,11 @@ function a2a(name: string, description: string, params: string[]) {
   });
 }
 
-export function registerTools(server: McpServer) {
+import { injectAuthContext } from '../utils/authContext.js';
+
+export function registerTools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }) {
+  injectAuthContext(server, sessionAuth);
+
   // Tool -1: Analyze a project
   server.tool(
     "analyze",

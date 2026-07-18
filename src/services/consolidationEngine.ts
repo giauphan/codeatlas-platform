@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
+import { authStorage } from "../utils/context.js";
 
 // Row index helpers for Oracle queries
 const R_IDX = Object.freeze({
@@ -81,10 +82,16 @@ export class ConsolidationEngine {
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
-      await setSessionContext(connection);
+      
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
-      const whereClause = project ? "WHERE project = :project" : "";
-      const binds = project ? { project } : {};
+      const whereClause = project 
+        ? "WHERE tenant_id = :tenantId AND project = :project" 
+        : "WHERE tenant_id = :tenantId";
+      const binds: Record<string, any> = { tenantId };
+      if (project) binds.project = project;
 
       // Get all non-consolidated dreams sorted by importance DESC
       const dreams = await connection.execute<any[]>(
@@ -141,9 +148,9 @@ export class ConsolidationEngine {
         // Batch delete duplicate concepts using executeMany for N+1 avoidance.
         if (toRemove.length > 0) {
           try {
-            const binds = toRemove.map((id) => ({ id }));
+            const binds = toRemove.map((id) => ({ id, tenantId }));
             await connection.executeMany(
-              `DELETE FROM ai_dreaming_memory WHERE id = :id`,
+              `DELETE FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
               binds as any,
               { autoCommit: true }
             );
@@ -174,10 +181,16 @@ export class ConsolidationEngine {
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
-      await setSessionContext(connection);
+      
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
-      const whereClause = project ? "WHERE project = :project" : "";
-      const binds = project ? { project } : {};
+      const whereClause = project 
+        ? "WHERE tenant_id = :tenantId AND project = :project" 
+        : "WHERE tenant_id = :tenantId";
+      const binds: Record<string, any> = { tenantId };
+      if (project) binds.project = project;
 
       const dreams = await connection.execute<any[]>(
         `SELECT id, content, memory_type, project, importance
@@ -217,10 +230,10 @@ export class ConsolidationEngine {
           continue;
         }
 
-        // Lookup: same label + project → update; otherwise insert new row.
+        // Lookup: same label + project + tenant → update; otherwise insert new row.
         const existing = await connection.execute<any[]>(
-          `SELECT id FROM codeatlas_concepts WHERE label = :label AND project = :proj`,
-          { label: conceptLabel, proj } as any
+          `SELECT id FROM codeatlas_concepts WHERE label = :label AND project = :proj AND tenant_id = :tenantId`,
+          { label: conceptLabel, proj, tenantId } as any
         );
 
         if (existing.rows && existing.rows.length > 0) {
@@ -230,16 +243,16 @@ export class ConsolidationEngine {
              SET description = :desc,
                  evidence_count = evidence_count + 1,
                  updated_at = CURRENT_TIMESTAMP
-             WHERE label = :label AND project = :proj`,
-            { label: conceptLabel, proj, desc: conceptDescription } as any,
+             WHERE label = :label AND project = :proj AND tenant_id = :tenantId`,
+            { label: conceptLabel, proj, desc: conceptDescription, tenantId } as any,
             { autoCommit: true }
           );
         } else {
           // Insert new concept
           const conceptId = `concept-${randomUUID().slice(0, 8)}`;
           await connection.execute(
-            `INSERT INTO codeatlas_concepts (id, label, description, category, embedding, project, confidence, source_ids, evidence_count, status)
-             VALUES (:id, :label, :desc, 'lesson', :embedding, :proj, 0.50, :sources, 1, 'active')`,
+            `INSERT INTO codeatlas_concepts (id, label, description, category, embedding, project, confidence, source_ids, evidence_count, status, tenant_id)
+             VALUES (:id, :label, :desc, 'lesson', :embedding, :proj, 0.50, :sources, 1, 'active', :tenantId)`,
             {
               id: conceptId,
               label: conceptLabel,
@@ -247,6 +260,7 @@ export class ConsolidationEngine {
               embedding: new Float32Array(conceptEmbedding),
               proj,
               sources: JSON.stringify(topDreams.map((d) => d[R_IDX.ID])),
+              tenantId,
             } as any,
             { autoCommit: true }
           );
@@ -277,7 +291,10 @@ export class ConsolidationEngine {
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
-      await setSessionContext(connection);
+      
+      const auth = authStorage.getStore();
+      const tenantId = auth ? auth.uid : "admin";
+      await setSessionContext(connection, tenantId);
 
       // Ensure access_count column exists (migration-safe)
       try {
@@ -291,8 +308,8 @@ export class ConsolidationEngine {
            WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_accessed_at)))
            ELSE POWER(0.997, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - created_at)))
          END
-         WHERE status = 'active'`,
-        [],
+         WHERE status = 'active' AND tenant_id = :tenantId`,
+        { tenantId },
         { autoCommit: true }
       );
 
@@ -304,8 +321,8 @@ export class ConsolidationEngine {
          SET confidence = LEAST(0.99, GREATEST(0.05,
            confidence + 0.05 * LOG(2, evidence_count + 1)
          ))
-         WHERE status = 'active' AND evidence_count > 1`,
-        [],
+         WHERE status = 'active' AND evidence_count > 1 AND tenant_id = :tenantId`,
+        { tenantId },
         { autoCommit: true }
       );
 
@@ -316,8 +333,8 @@ export class ConsolidationEngine {
          SET confidence = LEAST(0.99, GREATEST(0.05,
            confidence + 0.02 * LOG(2, access_count + 1)
          ))
-         WHERE status = 'active' AND access_count > 0`,
-        [],
+         WHERE status = 'active' AND access_count > 0 AND tenant_id = :tenantId`,
+        { tenantId },
         { autoCommit: true }
       );
 
@@ -325,13 +342,13 @@ export class ConsolidationEngine {
       const archiveResult = await connection.execute(
         `UPDATE codeatlas_concepts
          SET status = 'archived'
-         WHERE confidence < 0.10 AND status = 'active'`,
-        [],
+         WHERE confidence < 0.10 AND status = 'active' AND tenant_id = :tenantId`,
+        { tenantId },
         { autoCommit: true }
       );
 
       logger.info(
-        `[Consolidation] Score: decay applied, \${archiveResult.rowsAffected || 0} archived`
+        `[Consolidation] Score: decay applied, ${(archiveResult.rowsAffected || 0)} archived`
       );
     } finally {
       if (connection) {

@@ -52,6 +52,7 @@ jobs:
           cd dashboard
           pnpm run build
 
+
       - name: Run analyzer tests
         working-directory: ./
         run: pnpm test

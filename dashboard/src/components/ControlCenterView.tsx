@@ -11,17 +11,16 @@ import {
   Clock,
   Save
 } from 'lucide-react';
+import { getAuthHeaders } from '../lib/auth';
 
 interface ControlCenterProps {
   stats: { totalRequests: number };
   keys: any[];
   analysis: any;
-  createKey: (e: React.FormEvent) => Promise<void>;
+  createKey: (e?: React.FormEvent) => Promise<void>;
   deleteKey: (id: string) => Promise<void>;
   copyToClipboard: (text: string, id: string) => void;
   copiedId: string | null;
-  newKeyName: string;
-  setNewKeyName: (name: string) => void;
   loading: boolean;
   createdKey?: string | null;
   clearCreatedKey?: () => void;
@@ -35,8 +34,6 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
   deleteKey,
   copyToClipboard,
   copiedId,
-  newKeyName,
-  setNewKeyName,
   loading,
   createdKey,
   clearCreatedKey,
@@ -49,15 +46,19 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
 
   // Fetch current cron schedule on mount
   useEffect(() => {
-    fetch('/api/settings/cron')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.dreams_schedule) {
-          setCronSchedule(data.dreams_schedule);
-          setCronEnabled(data.dreams_enabled !== false);
-        }
-      })
-      .catch(() => {});
+    const fetchCronSettings = async () => {
+      const headers = await getAuthHeaders();
+      fetch('/api/settings/cron', { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.dreams_schedule) {
+            setCronSchedule(data.dreams_schedule);
+            setCronEnabled(data.dreams_enabled !== false);
+          }
+        })
+        .catch(() => {});
+    };
+    fetchCronSettings();
   }, []);
 
   const saveCron = async () => {
@@ -65,9 +66,10 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
     setCronError('');
     setCronSaved(false);
     try {
+      const headers = await getAuthHeaders();
       const resp = await fetch('/api/settings/cron', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ dreams_schedule: cronSchedule, dreams_enabled: cronEnabled }),
       });
       if (!resp.ok) {
@@ -231,7 +233,6 @@ const freqLabels: Record<string, string> = {
           <div className="glass-panel" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.05)', alignSelf: 'start' }}>
             <h3 className="tech-font" style={{ fontSize: '1.25rem', marginBottom: '1.5rem', fontWeight: 800 }}>GENERATE TOKEN</h3>
             <form onSubmit={createKey} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <input type="text" className="glass-input" placeholder="Identifier (e.g. CI/CD Pipeline)" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} required />
               <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontSize: '1rem', fontWeight: 800 }} disabled={loading}>
                 {loading ? <RefreshCw className="animate-spin" size={20} /> : 'CREATE ACCESS TOKEN'}
               </button>

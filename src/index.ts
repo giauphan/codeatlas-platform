@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import * as dotenv from "dotenv";
-dotenv.config();
+import "./env.js";
+import * as path from "path";
+
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as fs from "fs";
-import * as path from "path";
 import * as url from "url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 

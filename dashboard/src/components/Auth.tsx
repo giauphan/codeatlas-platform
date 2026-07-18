@@ -1,23 +1,26 @@
+/**
+ * Auth component — handles both TOKEN and EMAIL/PASSWORD login modes.
+ *
+ * TOKEN mode: user pastes API key directly → sent as x-api-key header
+ * EMAIL/PASSWORD mode: calls backend POST /api/auth/signin → gets Firebase ID token
+ *
+ * No Firebase Web SDK needed — sign-in is proxied through backend.
+ */
 import React, { useState } from 'react';
-import { auth } from '../lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  sendPasswordResetEmail 
-} from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Shield, 
-  Key, 
-  Mail, 
-  Lock, 
-  LogIn, 
-  Loader2,
-  ChevronRight,
-  Info
+import {
+  Shield, Key, Mail, Lock, LogIn, Loader2
 } from 'lucide-react';
+import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
 
 interface AuthProps {
   onLogin: (key: string) => void;
+}
+
+function getApiBase(): string {
+  return window.location.origin.includes('localhost:5173')
+    ? 'http://localhost:8080'
+    : window.location.origin;
 }
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
@@ -42,34 +45,40 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err: unknown) {
-      console.error("Firebase auth error:", err);
-      let friendlyMsg = (err as Error).message || 'Đăng nhập không thành công. Vui lòng thử lại.';
-      
-      const errorCode = (err as any).code || '';
-      if (errorCode === 'auth/invalid-credential' || (err as Error).message?.includes('auth/invalid-credential')) {
-        friendlyMsg = 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
-      } else if (errorCode === 'auth/user-not-found' || (err as Error).message?.includes('auth/user-not-found')) {
-        friendlyMsg = 'Tài khoản không tồn tại trong hệ thống. Vui lòng đăng ký hoặc liên hệ admin.';
-      } else if (errorCode === 'auth/wrong-password' || (err as Error).message?.includes('auth/wrong-password')) {
-        friendlyMsg = 'Mật khẩu nhập vào không chính xác. Vui lòng kiểm tra lại.';
-      } else if (errorCode === 'auth/invalid-email' || (err as Error).message?.includes('auth/invalid-email')) {
-        friendlyMsg = 'Định dạng địa chỉ email không hợp lệ.';
-      } else if (errorCode === 'auth/user-disabled' || (err as Error).message?.includes('auth/user-disabled')) {
-        friendlyMsg = 'Tài khoản của bạn đã bị tạm khóa hoặc vô hiệu hóa.';
-      } else if (errorCode === 'auth/too-many-requests' || (err as Error).message?.includes('auth/too-many-requests')) {
-        friendlyMsg = 'Tài khoản đã bị tạm khóa do nhập sai nhiều lần. Vui lòng thử lại sau ít phút.';
-      } else {
-        friendlyMsg = ((err as Error).message || "").replace('Firebase: ', '');
+      const resp = await fetch(`${getApiBase()}/api/auth/signin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        let friendlyMsg = data.error || 'Sign in failed';
+        const code = data.error || '';
+        if (code.includes('INVALID_PASSWORD') || code.includes('EMAIL_NOT_FOUND') || code.includes('invalid-credential')) {
+          friendlyMsg = 'Invalid email or password. Please check and try again.';
+        } else if (code.includes('TOO_MANY_ATTEMPTS')) {
+          friendlyMsg = 'Account temporarily locked due to too many failed attempts. Please try again later.';
+        } else if (code.includes('USER_DISABLED')) {
+          friendlyMsg = 'Account has been disabled.';
+        } else if (data.hint) {
+          friendlyMsg = data.hint;
+        }
+        throw new Error(friendlyMsg);
       }
 
-      setError(friendlyMsg);
+      // Store the Firebase ID token as session — subsequent API calls use it as Bearer token
+      safeSessionStorageSetItem('ca_api_key', data.idToken);
+      safeSessionStorageSetItem('ca_user_email', data.email);
+      onLogin(data.idToken);
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Sign in failed');
     } finally {
       setLoading(false);
     }
@@ -80,7 +89,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'var(--background)', position: 'relative', overflow: 'hidden', color: '#fff'
     }}>
-      {/* Dynamic Background */}
       <div style={{ position: 'absolute', top: '10%', left: '10%', width: '500px', height: '500px', background: 'rgba(0, 240, 255, 0.05)', filter: 'blur(120px)', borderRadius: '50%' }} />
       <div style={{ position: 'absolute', bottom: '10%', right: '10%', width: '500px', height: '500px', background: 'rgba(157, 0, 255, 0.05)', filter: 'blur(120px)', borderRadius: '50%' }} />
 
@@ -101,7 +109,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             <button
               key={tab.id}
               disabled={loading}
-              onClick={() => { setMode(tab.id as any); setError(null); }}
+              onClick={() => { setMode(tab.id as 'token' | 'signin'); setError(null); }}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
                 background: mode === tab.id ? 'rgba(255,255,255,0.1)' : 'transparent',
@@ -130,12 +138,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               </button>
             </motion.form>
           ) : (
-            <motion.form key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleAuthSubmit}>
+            <motion.form key="signin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleEmailSubmit}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
                   <div style={{ position: 'relative' }}>
-                     <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
+                    <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
                     <input type="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required />
                   </div>
                 </div>
@@ -154,7 +162,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             </motion.form>
           )}
         </AnimatePresence>
-
       </div>
 
       <style>{`

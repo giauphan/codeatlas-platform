@@ -18,6 +18,7 @@ import {
 } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { registerTools } from "./mcpTools.js";
+import { registerA2ATools } from "./a2a/a2aTools.js";
 import { registerDreamingRoutes } from "./dreamingRoutes.js";
 import { mountSecondBrainRoutes } from "./secondBrainRoutes.js";
 import { mountConsolidationRoutes } from "./consolidationRoutes.js";
@@ -25,6 +26,7 @@ import { mountGenomeRoutes } from "./genomeRoutes.js";
 import { mountA2ARoutes } from "./a2a/a2aRoutes.js";
 import { mountHeartbeatRoutes } from "./a2a/heartbeatRoutes.js";
 import { mountCronSettingsRoutes } from "./cronSettingsRoute.js";
+import { authProxyRouter } from "../routes/authProxy.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { logger } from "../utils/logger.js";
 
@@ -167,6 +169,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Auth Proxy (Firebase sign-in without Web SDK)
+app.use(authProxyRouter);
+
 // REST API Dreaming (dream memories)
 registerDreamingRoutes(app);
 
@@ -178,7 +183,8 @@ app.get("/api/projects", authMiddleware, async (req, res) => {
     const projects = await discoverProjectsAsync(tenantId);
     res.json(projects.map(p => {
       // Sanitize absolute paths by making them relative to current working directory
-      const relativeDir = path.relative(process.cwd(), p.dir);
+      let relativeDir = path.relative(process.cwd(), p.dir);
+      if (!relativeDir) relativeDir = ".";
       return { name: p.name, dir: relativeDir, modifiedAt: p.modifiedAt };
     }));
   } catch (err: unknown) {
@@ -804,20 +810,6 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
 // Serve static files from built dashboard
 const dashboardDistPath = path.join(process.cwd(), "dashboard", "dist");
 if (fs.existsSync(dashboardDistPath)) {
-  // Serve all static files with proper MIME types
-  app.use(/^\/(assets|fonts|images)\/.+/, async (req, res) => {
-    const filePath = path.join(dashboardDistPath, req.path);
-    try {
-      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-        res.sendFile(filePath);
-      } else {
-        res.status(404).send("Not found");
-      }
-    } catch {
-      res.status(404).send("Not found");
-    }
-  });
-  
   // index.html must NEVER be cached — always serve fresh so browser picks up new hashed assets
   app.use(express.static(dashboardDistPath, {
     maxAge: 0,
@@ -901,10 +893,11 @@ app.get("/sse", async (req, res) => {
     }
 
     // Dynamically create a session-specific server to isolate state and support concurrent clients
+    const auth = req.auth;
     const sessionServer = new McpServer(
       {
         name: "CodeAtlas",
-        version: "2.14.1",
+        version: "2.14.4",
       },
       {
         capabilities: {
@@ -914,7 +907,8 @@ app.get("/sse", async (req, res) => {
         },
       }
     );
-    registerTools(sessionServer);
+    registerTools(sessionServer, auth);
+    registerA2ATools(sessionServer, auth);
 
     const currentGen = (sessionGenerations.get(sessionId) || 0) + 1;
     sessionGenerations.set(sessionId, currentGen);
@@ -922,7 +916,6 @@ app.get("/sse", async (req, res) => {
     transports.set(sessionId, transport);
     sessionServers.set(sessionId, sessionServer);
     
-    const auth = req.auth;
     if (auth && auth.uid) {
       sessionOwnership.set(sessionId, auth.uid);
     }

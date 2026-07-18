@@ -13,8 +13,14 @@ import { logger } from "../../utils/logger.js";
 import { registerTool } from "./agentCard.js";
 import { a2aExecutor } from "./a2aExecutor.js";
 import { a2aRegistry } from "../../services/a2aRegistry.js";
+import { authStorage } from "../../utils/context.js";
 
-export function registerA2ATools(server: McpServer): void {
+
+import { injectAuthContext } from "../../utils/authContext.js";
+
+export function registerA2ATools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }): void {
+  injectAuthContext(server, sessionAuth);
+
 
   // Tool 1: Discover A2A agents by capability
   server.tool(

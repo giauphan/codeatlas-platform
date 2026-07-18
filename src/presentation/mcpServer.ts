@@ -6,7 +6,7 @@ import { registerA2ATools } from "./a2a/a2aTools.js";
 export const server = new McpServer(
   {
     name: "CodeAtlas",
-    version: "2.14.1",
+    version: "2.14.4",
   },
   {
     capabilities: {

@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.14.4] - 2026-07-17
+
+### Fixed
+- **Multi-Tenant MCP Isolation**: Wrapped all MCP and A2A tool handlers in the session's active authentication context using `authStorage.run(...)`, ensuring that Second Brain, Dreaming Memory, and Project Discovery execute under the correct tenant isolation policy instead of falling back to the admin context.
+
+## [2.14.3] - 2026-07-17
+
+### Fixed
+- **Multi-Tenant Genome Isolation**: Enforced strict multi-tenant isolation across all GenomeService evolution/immune system operations including mergeGenes, splitGene, mutateGene, retireGenes, scanImmuneGenes, recommendGenes, and updateGene by extracting active tenant_id from auth context and applying query/bind filtering.
+
+## [2.14.2] - 2026-07-17
+
+### Fixed
+- **Oracle Database ACL Integration**: Whitelisted local/server subnet IP range (`171.243.49.0/24`) in Oracle Autonomous Database 26ai to resolve `ORA-12506: TNS:listener rejected connection` errors for the developer server.
+- **ESM Hoisting Race Condition**: Created `src/env.ts` and loaded it at the absolute top of `src/index.ts` to ensure environment variables are configured before ESM modules evaluate. This enables Oracle DB connection pool parameters to initialize correctly on startup.
+
 ## [2.14.1] - 2026-06-13
 
 ### Fixed
