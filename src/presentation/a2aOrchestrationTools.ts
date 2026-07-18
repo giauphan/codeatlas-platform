@@ -129,7 +129,7 @@ export function registerA2AOrchestrationTools(server: McpServer): void {
       const updatedTask = await a2aOrchestrationService.updateTaskState(
         orchestration_task_id,
         'implemented', // Back to implemented for re-review
-        { artifacts: new_artifacts as Artifact[], feedback: undefined } // Clear feedback
+        { artifacts: new_artifacts as Artifact[], feedback: null } // Clear feedback (null = explicit clear)
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(updatedTask, null, 2) }] };
     }

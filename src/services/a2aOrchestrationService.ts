@@ -112,9 +112,15 @@ export class A2AOrchestrationService {
 
     if (updates) {
       if (updates.artifacts !== undefined) task.artifacts = updates.artifacts;
-      if (updates.feedback !== undefined) task.feedback = updates.feedback;
-      if (updates.prUrl !== undefined) task.prUrl = updates.prUrl;
-      if (updates.reviewBotFindings !== undefined) task.reviewBotFindings = updates.reviewBotFindings;
+      if (updates.feedback !== undefined) {
+         task.feedback = updates.feedback === null ? undefined : updates.feedback;
+      }
+      if (updates.prUrl !== undefined) {
+         task.prUrl = updates.prUrl === null ? undefined : updates.prUrl;
+      }
+      if (updates.reviewBotFindings !== undefined) {
+         task.reviewBotFindings = updates.reviewBotFindings === null ? undefined : updates.reviewBotFindings;
+      }
     }
 
     orchestrationTaskStore.set(orchestrationTaskId, task);
