@@ -38,11 +38,13 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
     }
   }
 
-  if (process.env.CODEATLAS_MULTI_TENANT === "true" && !apiKey) {
-    throw new Error("Authentication API key is required");
+  if (process.env.CODEATLAS_MULTI_TENANT === "true" && !apiKey && !bearerToken) {
+    throw new Error("Authentication required");
   }
-  const keyToVerify = apiKey || process.env.CODEATLAS_API_KEY || "";
-  const result = await authenticateUseCase.execute(keyToVerify, process.env.CODEATLAS_API_KEY);
+
+  // Pass API key explicitly to authentication use case. If it's a super-admin key,
+  // the use case will handle it.
+  const result = await authenticateUseCase.execute(apiKey || "", process.env.CODEATLAS_API_KEY);
   return {
     tier: result.tier,
     uid: result.uid,

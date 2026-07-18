@@ -124,8 +124,7 @@ router.post("/api/auth/signin", async (req, res) => {
   } catch (err) {
     logger.error("[Auth] Sign-in proxy failed:", err);
     return res.status(500).json({
-      error: "Authentication service unavailable.",
-      detail: err instanceof Error ? err.message : String(err),
+      error: "Authentication service unavailable."
     });
   }
 });

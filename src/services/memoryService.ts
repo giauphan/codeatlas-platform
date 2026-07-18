@@ -349,40 +349,43 @@ export class OracleMemoryService {
   /**
    * Deletes all episodic, semantic, and relational memory records associated with a project.
    */
-  static async deleteProjectMemory(project: string, tenantId?: string) {
+  static async deleteProjectMemory(project: string) {
     let connection;
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
 
       const auth = authStorage.getStore();
-      const resolvedTenantId = tenantId || (auth ? auth.uid : "admin");
+      if (!auth || !auth.uid) {
+        throw new Error("Authentication context missing for memory deletion.");
+      }
+      const tenantId = auth.uid;
 
-      await setSessionContext(connection, resolvedTenantId);
+      await setSessionContext(connection, tenantId);
 
       // 1. Delete episodic memory
       const deleteEpisodic = `
-        DELETE FROM ai_episodic_memory 
-        WHERE project_name = :project AND tenant_id = :resolvedTenantId
+        DELETE FROM ai_episodic_memory
+        WHERE project_name = :project AND tenant_id = :tenantId
       `;
-      await connection.execute(deleteEpisodic, { project, resolvedTenantId }, { autoCommit: false });
+      await connection.execute(deleteEpisodic, { project, tenantId }, { autoCommit: false });
 
       // 2. Delete semantic memory
       const deleteSemantic = `
-        DELETE FROM ai_semantic_memory 
-        WHERE project_name = :project AND tenant_id = :resolvedTenantId
+        DELETE FROM ai_semantic_memory
+        WHERE project_name = :project AND tenant_id = :tenantId
       `;
-      await connection.execute(deleteSemantic, { project, resolvedTenantId }, { autoCommit: false });
+      await connection.execute(deleteSemantic, { project, tenantId }, { autoCommit: false });
 
       // 3. Delete relational memory
       const deleteRelational = `
-        DELETE FROM ai_relational_memory 
-        WHERE project_name = :project AND tenant_id = :resolvedTenantId
+        DELETE FROM ai_relational_memory
+        WHERE project_name = :project AND tenant_id = :tenantId
       `;
-      await connection.execute(deleteRelational, { project, resolvedTenantId }, { autoCommit: false });
+      await connection.execute(deleteRelational, { project, tenantId }, { autoCommit: false });
 
       await connection.commit();
-      logger.info(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${resolvedTenantId}`);
+      logger.info(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${tenantId}`);
     } catch (err) {
       logger.error("Error deleting project memory from Oracle DB:", err instanceof Error ? err.message : String(err));
       if (connection) {

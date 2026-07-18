@@ -10,10 +10,13 @@ export function injectAuthContext(server: McpServer, sessionAuth?: Auth) {
     const originalCallback = args[args.length - 1];
     if (typeof originalCallback === "function") {
       args[args.length - 1] = async function (callbackArgs: any, ...extra: any[]) {
-        // Lazy import to avoid circular deps
-        const { checkAuth } = await import("../services/authService.js");
-        const auth = sessionAuth || await checkAuth();
-        return authStorage.run(auth, async () => {
+        if (!sessionAuth) {
+          return {
+            content: [{ type: "text" as const, text: "Error: MCP session authentication is required. Connect with valid credentials." }],
+            isError: true as const,
+          };
+        }
+        return authStorage.run(sessionAuth, async () => {
           return (originalCallback as any)(callbackArgs, ...extra);
         });
       };

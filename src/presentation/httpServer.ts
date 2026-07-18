@@ -317,7 +317,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
     try {
       if (process.env.ORACLE_CONN_STRING) {
         const { OracleMemoryService } = await import("../services/memoryService.js");
-        await OracleMemoryService.deleteProjectMemory(cleanProjectName, ownerTenantId);
+        await OracleMemoryService.deleteProjectMemory(cleanProjectName);
       }
     } catch (oracleErr: unknown) {
       logger.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
