@@ -611,10 +611,10 @@ app.get("/api/health", (_req, res) => {
 });
 
 // ── Version endpoint — returns current deployed version for cache busting ──
-app.get("/api/version", (_req, res) => {
+app.get("/api/version", async (_req, res) => {
   let version = "unknown";
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf-8"));
+    const pkg = JSON.parse(await fs.promises.readFile(path.join(process.cwd(), "package.json"), "utf-8"));
     version = pkg.version || "unknown";
   } catch {}
   res.json({ version, buildTime: Date.now() });
