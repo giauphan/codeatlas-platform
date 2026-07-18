@@ -345,7 +345,7 @@ export class ConsolidationEngine {
   }
 
   /**
-   * Cosine similarity between two float vectors.
+   * Cosine similarity between two vectors (either standard arrays or Float32Array).
    */
   private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
     if (a.length !== b.length || a.length === 0) return 0;
