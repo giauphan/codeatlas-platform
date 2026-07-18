@@ -49,6 +49,7 @@
     "chokidar": "^3.6.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.6.0",
     "firebase-admin": "^13.10.0",
     "glob": "^10.3.10",
     "google-auth-library": "^10.9.0",
