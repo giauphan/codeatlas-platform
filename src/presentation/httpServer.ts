@@ -1,5 +1,5 @@
 import express from "express";
-import { IncomingMessage } from "http";
+import { IncomingMessage, Server } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import * as fs from "fs";
