@@ -71,8 +71,7 @@ async function runConcurrencyBenchmark() {
   // What really matters is Event Loop Delay
   console.log("\nMeasuring Event Loop Delay...");
 
-  let maxDelaySync = 0;
-  const startDelaySync = performance.now();
+  let maxDelaySync = -Infinity;
   let delayTimerSync = setInterval(() => {
     const delay = performance.now() - lastTickSync - 10;
     if (delay > maxDelaySync) maxDelaySync = delay;
@@ -93,8 +92,7 @@ async function runConcurrencyBenchmark() {
   clearInterval(delayTimerSync);
 
 
-  let maxDelayAsync = 0;
-  const startDelayAsync = performance.now();
+  let maxDelayAsync = -Infinity;
   let delayTimerAsync = setInterval(() => {
     const delay = performance.now() - lastTickAsync - 10;
     if (delay > maxDelayAsync) maxDelayAsync = delay;
@@ -114,8 +112,8 @@ async function runConcurrencyBenchmark() {
   await Promise.all(delayAsyncPromises);
   clearInterval(delayTimerAsync);
 
-  console.log(`Max Event Loop Delay (Sync): ${maxDelaySync.toFixed(2)} ms`);
-  console.log(`Max Event Loop Delay (Async): ${maxDelayAsync.toFixed(2)} ms`);
+  console.log(`Max Event Loop Delay (Sync): ${(maxDelaySync === -Infinity ? 0 : maxDelaySync).toFixed(2)} ms`);
+  console.log(`Max Event Loop Delay (Async): ${(maxDelayAsync === -Infinity ? 0 : maxDelayAsync).toFixed(2)} ms`);
 }
 
 runConcurrencyBenchmark().catch(console.error);
