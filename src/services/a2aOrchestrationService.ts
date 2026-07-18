@@ -92,9 +92,9 @@ export class A2AOrchestrationService {
     newState: OrchestrationState,
     updates?: {
       artifacts?: Artifact[];
-      feedback?: string;
-      prUrl?: string;
-      reviewBotFindings?: string;
+      feedback?: string | null;
+      prUrl?: string | null;
+      reviewBotFindings?: string | null;
     }
   ): Promise<A2AOrchestrationTask> {
     const task = await this.getTask(orchestrationTaskId);
