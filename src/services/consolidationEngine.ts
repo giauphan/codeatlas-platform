@@ -124,8 +124,8 @@ export class ConsolidationEngine {
             const embJ = group[j][R_IDX.EMBEDDING];
             if (!embI || !embJ) continue;
 
-            // ⚡ Bolt Optimization: Pass Float32Array directly instead of Array.from to avoid massive GC overhead inside nested loop
-            // Note: If embedding is not a Float32Array, we pass the original value which might be a number array.
+            // Note: Pass Float32Array directly instead of Array.from to avoid GC overhead in nested loops.
+            // If embedding is not a Float32Array, pass original value to preserve behavior.
             const similarity = this.cosineSimilarity(
               embI instanceof Float32Array ? embI : (Array.isArray(embI) ? embI : []),
               embJ instanceof Float32Array ? embJ : (Array.isArray(embJ) ? embJ : [])
