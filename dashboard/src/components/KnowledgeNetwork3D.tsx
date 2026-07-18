@@ -146,11 +146,6 @@ function ForceGraph3DCanvas({ ForceGraph3D, data }: { ForceGraph3D: any; data: G
       }
     };
   }, [ForceGraph3D, data]);
-    } catch (err) {
-      console.warn('[3D] Render failed:', err);
-      container.innerHTML = '<div style="height:400px;display:flex;align-items:center;justify-content:center;color:#666">3D render failed</div>';
-    }
-  }, [ForceGraph3D, data]);
 
   return <div ref={containerRef} style={{ width: '100%', height: '400px' }} />;
 }
