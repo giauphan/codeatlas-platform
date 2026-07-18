@@ -267,7 +267,8 @@ export class OracleDreamingService {
     project: string = '',
     queryText: string,
     limit: number = 10,
-    offset: number = 0
+    offset: number = 0,
+    memoryType?: string
   ) {
     const queryVector = await generateEmbedding(queryText, 'query');
 
@@ -281,16 +282,31 @@ export class OracleDreamingService {
       await setSessionContext(connection, tenantId);
 
       const projectFilter = project ? 'AND project = :project' : '';
+
+      // Build type filter for memory_type IN clause
+      let typeFilter = '';
+      const binds: Record<string, unknown> = { tenantId, limit, offset };
+      if (project) binds.project = project;
+      if (queryVector) {
+        binds.queryVector = new Float32Array(queryVector);
+      }
+
+      if (memoryType) {
+        const types = memoryType.split(',').map(t => t.trim().toUpperCase()).filter(t => t);
+        if (types.length > 0) {
+          const typeBinds = types.map((_, i) => `:type${i}`).join(', ');
+          typeFilter = `AND memory_type IN (${typeBinds})`;
+          types.forEach((type, i) => { binds[`type${i}`] = type; });
+        }
+      }
+
       const sql = `
         SELECT id, session_id, project, memory_type, content, importance, created_at
         FROM ai_dreaming_memory
-        WHERE tenant_id = :tenantId ${projectFilter}
+        WHERE tenant_id = :tenantId ${projectFilter} ${typeFilter}
         ${queryVector ? 'ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)' : 'ORDER BY created_at DESC'}
         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
       `;
-
-      const binds: Record<string, unknown> = { tenantId, limit, offset };
-      if (project) binds.project = project;
       if (queryVector) {
         binds.queryVector = new Float32Array(queryVector);
       }

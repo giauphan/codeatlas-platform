@@ -97,6 +97,7 @@ export function registerDreamingRoutes(app: express.Application): void {
       const project = req.query.project as string | undefined;
       const limitRaw = req.query.limit as string | undefined;
       const offsetRaw = req.query.offset as string | undefined;
+      const memoryType = req.query.memory_type as string | undefined;
 
       const limit = limitRaw ? parseInt(limitRaw, 10) : 10;
       if (isNaN(limit) || limit < 1 || limit > 100) {
@@ -112,7 +113,7 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       const rows = await authStorage.run(
         auth,
-        () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset)
+        () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset, memoryType)
       );
 
       const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;

@@ -54,6 +54,9 @@ export function DreamMemoryView() {
       const params = new URLSearchParams();
       if (query && query.trim()) params.set('query', query.trim());
       if (!showAll) params.set('project', 'GolikeTool');
+      if (selectedTypes.length < 4) {
+        params.set('memory_type', selectedTypes.join(','));
+      }
       params.set('limit', String(PAGE_SIZE));
       params.set('offset', String(p * PAGE_SIZE));
 
@@ -66,7 +69,7 @@ export function DreamMemoryView() {
     } finally {
       setLoading(false);
     }
-  }, [showAll, firebaseReady, page]);
+  }, [showAll, firebaseReady, page, selectedTypes]);
 
   useEffect(() => {
     if (firebaseReady) fetchMemories(searchQuery, 0);
@@ -93,7 +96,8 @@ export function DreamMemoryView() {
   const hasPrev = page > 0;
   const hasNext = memories.length >= PAGE_SIZE;
 
-  const filteredMemories = memories.filter(m => selectedTypes.includes(m.memory_type));
+  // No client-side filtering needed, as it's now handled by the API
+  // const filteredMemories = memories.filter(m => selectedTypes.includes(m.memory_type));
 
   const typeColors: Record<string, string> = {
     KNOWLEDGE: '#00F0FF',
@@ -174,7 +178,7 @@ export function DreamMemoryView() {
           </div>
         )}
 
-        {!loading && !error && filteredMemories.length === 0 && firebaseReady && (
+        {!loading && !error && memories.length === 0 && firebaseReady && (
           <div className="glass-panel" style={{ padding: '3rem', borderRadius: '20px', textAlign: 'center' }}>
             <Brain size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem', opacity: 0.3 }} />
             <div style={{ color: 'var(--text-muted)', fontSize: '1.1rem', fontWeight: 600 }}>No memories found</div>
@@ -184,7 +188,7 @@ export function DreamMemoryView() {
           </div>
         )}
 
-        {!loading && filteredMemories.map((mem) => (
+        {!loading && memories.map((mem) => (
           <motion.div
             key={mem.id} layout
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
