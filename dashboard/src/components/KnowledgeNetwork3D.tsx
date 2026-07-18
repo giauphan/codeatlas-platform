@@ -119,9 +119,10 @@ function ForceGraph3DCanvas({ ForceGraph3D, data }: { ForceGraph3D: any; data: G
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
+    let graph: any = null;
 
     try {
-      const graph = ForceGraph3D()(container);
+      graph = ForceGraph3D()(container);
 
       graph
         .graphData(data)
@@ -131,17 +132,20 @@ function ForceGraph3DCanvas({ ForceGraph3D, data }: { ForceGraph3D: any; data: G
         .nodeColor(() => '#00F0FF')
         .linkColor(() => 'rgba(0, 240, 255, 0.2)')
         .backgroundColor('#0a0a0a');
+    } catch (err) {
+      console.warn('[3D] Render failed:', err);
+      container.innerHTML = '<div style="height:400px;display:flex;align-items:center;justify-content:center;color:#666">3D render failed</div>';
+    }
 
-      return () => {
-        if (graph && typeof graph.destroy === 'function') {
-          graph.destroy();
-        }
-        // Only clear markup if container still in DOM
-        if (container && document.body.contains(container)) {
-          container.innerHTML = '';
-        }
-      };
-      };
+    return () => {
+      if (graph && typeof graph.destroy === 'function') {
+        graph.destroy();
+      }
+      if (container && document.body.contains(container)) {
+        container.innerHTML = '';
+      }
+    };
+  }, [ForceGraph3D, data]);
     } catch (err) {
       console.warn('[3D] Render failed:', err);
       container.innerHTML = '<div style="height:400px;display:flex;align-items:center;justify-content:center;color:#666">3D render failed</div>';
