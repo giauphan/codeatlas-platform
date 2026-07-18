@@ -131,9 +131,11 @@ export class ConsolidationEngine {
             const embJ = group[j][R_IDX.EMBEDDING];
             if (!embI || !embJ) continue;
 
+            // Note: Pass Float32Array directly instead of Array.from to avoid GC overhead in nested loops.
+            // If embedding is not a Float32Array, pass original value to preserve behavior.
             const similarity = this.cosineSimilarity(
-              embI instanceof Float32Array ? Array.from(embI) : [],
-              embJ instanceof Float32Array ? Array.from(embJ) : []
+              embI instanceof Float32Array ? embI : (Array.isArray(embI) ? embI : []),
+              embJ instanceof Float32Array ? embJ : (Array.isArray(embJ) ? embJ : [])
             );
 
             if (similarity > 0.85) {
@@ -360,9 +362,9 @@ export class ConsolidationEngine {
   }
 
   /**
-   * Cosine similarity between two float vectors.
+   * Cosine similarity between two vectors (either standard arrays or Float32Array).
    */
-  private cosineSimilarity(a: number[], b: number[]): number {
+  private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
     if (a.length !== b.length || a.length === 0) return 0;
     let dot = 0, normA = 0, normB = 0;
     for (let i = 0; i < a.length; i++) {
