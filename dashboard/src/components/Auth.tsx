@@ -62,11 +62,11 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         let friendlyMsg = data.error || 'Sign in failed';
         const code = data.error || '';
         if (code.includes('INVALID_PASSWORD') || code.includes('EMAIL_NOT_FOUND') || code.includes('invalid-credential')) {
-          friendlyMsg = 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
+          friendlyMsg = 'Invalid email or password. Please check and try again.';
         } else if (code.includes('TOO_MANY_ATTEMPTS')) {
-          friendlyMsg = 'Tài khoản bị tạm khóa do nhập sai nhiều lần. Vui lòng thử lại sau.';
+          friendlyMsg = 'Account temporarily locked due to too many failed attempts. Please try again later.';
         } else if (code.includes('USER_DISABLED')) {
-          friendlyMsg = 'Tài khoản đã bị vô hiệu hóa.';
+          friendlyMsg = 'Account has been disabled.';
         } else if (data.hint) {
           friendlyMsg = data.hint;
         }
