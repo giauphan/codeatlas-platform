@@ -16,9 +16,19 @@
  *   → frontend stores token, sends as x-api-key or Authorization header
  */
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { logger } from "../utils/logger.js";
 
 const router = express.Router();
+
+// Rate limiter for authentication endpoint to prevent brute-force attacks
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 sign-in requests per `window` (here, per 15 minutes)
+  message: { error: "Too many sign-in attempts from this IP, please try again after 15 minutes" },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
 
 // Use the same service account as Firebase Admin for Google Cloud APIs
 // Load from dotenv if not already set — dist/index.js loads .env but the module may read before dotenv
@@ -59,9 +69,7 @@ async function getAccessToken(): Promise<string> {
  * Proxies email/password sign-in through Google Identity Toolkit API
  * using the service account's OAuth2 token (no Web API Key needed).
  */
-router.post("/api/auth/signin", async (req, res) => {
-  // TODO(security): This endpoint receives plaintext passwords. The backend should NOT log these.
-  // TODO(security): Implement rate limiting for this endpoint to prevent brute-force attacks.
+router.post("/api/auth/signin", authRateLimiter, async (req, res) => {
   const { email, password } = req.body || {};
 
   if (!email || !password) {
