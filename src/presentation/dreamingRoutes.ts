@@ -4,6 +4,7 @@ import { OracleDreamingService } from "../services/dreamingService.js";
 import { loadAnalysisAsync } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
+import { authMiddleware } from "../middleware/auth.js";
 
 const VALID_MEMORY_TYPES = ["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN"] as const;
 
@@ -88,19 +89,10 @@ export function registerDreamingRoutes(app: express.Application): void {
     }
   });
 
-  // GET /api/dreams/query — read-only. Auth is optional (guest fallback).
-  // Guest queries use 'admin' tenant to bypass VPD isolation, showing all dreams.
-  // Without this override, dreams saved via different auth methods would be invisible
-  // due to Oracle Row-Level Security filtering by tenant_id.
-  app.get("/api/dreams/query", async (req, res) => {
+  // GET /api/dreams/query — authenticated, tenant-isolated
+  app.get("/api/dreams/query", authMiddleware, async (req, res) => {
     try {
-      let auth;
-      try {
-        const { apiKey, bearerToken } = extractAuth(req);
-        auth = await checkAuth(apiKey, bearerToken);
-      } catch {
-        auth = { tier: "guest", uid: "anonymous", keyId: "anonymous" };
-      }
+      const auth = authStorage.getStore()!;
       const queryText = (req.query.query as string)?.trim() || "";
       const project = req.query.project as string | undefined;
       const limitRaw = req.query.limit as string | undefined;
@@ -119,7 +111,7 @@ export function registerDreamingRoutes(app: express.Application): void {
       await logActivity(auth, "query_dream_memories", { query: queryText, project: projectName, limit });
 
       const rows = await authStorage.run(
-        auth.tier === "guest" ? { ...auth, uid: "guest" } : auth,
+        auth,
         () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset)
       );
 

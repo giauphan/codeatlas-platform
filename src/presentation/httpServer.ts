@@ -576,6 +576,12 @@ app.post("/api/projects/settings", authMiddleware, async (req, res) => {
     }
     
     const settingsPath = path.join(codeatlasDir, "settings.json");
+    // Defense-in-depth: Ensure settingsPath is a child of fullProjectDir
+    const relativeSettingsPath = path.relative(fullProjectDir, settingsPath);
+    if (relativeSettingsPath.startsWith('..') || path.isAbsolute(relativeSettingsPath)) {
+      logger.error(`[Settings API] Path traversal attempt detected: ${settingsPath}`);
+      return res.status(400).json({ error: "Invalid settings path." });
+    }
     await fs.promises.writeFile(settingsPath, JSON.stringify({ indexingEnabled }, null, 2));
     
     // Save to Firestore
@@ -831,8 +837,8 @@ if (fs.existsSync(dashboardDistPath)) {
     }
   }));
   
-  // Catch-all: serve index.html for all non-API, non-SSE routes (SPA routing)
-  app.get(/^\/(?!sse|messages|api).*/, (req, res) => {
+  // Catch-all: serve index.html for all non-API, non-SSE, non-well-known routes (SPA routing)
+  app.get(/^\/(?!sse|messages|api|\.well-known).*/, (req, res) => {
     res.sendFile(path.join(dashboardDistPath, "index.html"), {
       cacheControl: false,
       headers: {
