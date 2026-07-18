@@ -163,7 +163,6 @@ export class A2AClientService {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
 
-    const auth = authStorage.getStore();
     // Build auth headers for remote A2A calls — prefer scoped token then API key
     let headers: Record<string, string> = { "Content-Type": "application/json" };
     if (process.env.A2A_MCP_TOKEN) {

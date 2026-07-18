@@ -58,13 +58,14 @@ export class A2ARegistry {
   async register(record: A2AAgentRecord): Promise<string> {
     const agentId = record.agentId || this.slugify(record.agentName);
 
-    const auth = authStorage.getStore(); // Get tenantId from context
-    const tenantId = auth ? auth.uid : "admin"; // Default to 'admin' if no auth
-    record.tenantId = tenantId; // Assign tenantId to record
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : "admin";
+    // Clone to avoid mutating the caller's object
+    const safeRecord = { ...record, tenantId };
 
     if (this.useOracle) {
       try {
-        await this.oracleUpsert(agentId, record);
+        await this.oracleUpsert(agentId, safeRecord);
       } catch (err) {
         logger.error(`[A2A Registry] Oracle upsert failed, falling back to memory: ${err}`);
       }
@@ -73,11 +74,10 @@ export class A2ARegistry {
     // Always update in-memory cache
     const existing = memoryStore.get(agentId);
     memoryStore.set(agentId, {
-      ...record,
+      ...safeRecord,
       agentId,
       lastHeartbeat: new Date(),
       registeredAt: existing?.registeredAt || new Date(),
-      tenantId, // Ensure tenantId is stored in memoryStore
     });
 
     return agentId;
