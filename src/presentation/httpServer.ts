@@ -628,7 +628,12 @@ app.get("/api/keys", authMiddleware, async (req, res) => {
 
     const db = firebaseClient.getFirestore();
     const keysSnapshot = await db.collection('users').doc(auth.uid).collection('keys').get();
-    const keys = keysSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const keys = keysSnapshot.docs.map(doc => {
+      const data = doc.data();
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { keyHash, ...safeData } = data; // Omit keyHash
+      return { id: doc.id, ...safeData };
+    });
     res.json(keys);
   } catch (err: unknown) {
     logger.error("[API Keys] Failed to fetch keys:", err);
@@ -641,7 +646,7 @@ app.post("/api/keys", authMiddleware, async (req, res) => {
     const auth = authStorage.getStore();
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
 
-    const newKey = `ca_${crypto.randomBytes(16).toString('hex')}`; // Prefix with 'ca_' for CodeAtlas API Key
+    const newKey = `ca_${crypto.randomBytes(16).toString('hex')}`;
     const newKeyHash = crypto.createHash('sha256').update(newKey).digest('hex');
 
     const db = firebaseClient.getFirestore();
@@ -649,10 +654,9 @@ app.post("/api/keys", authMiddleware, async (req, res) => {
     await keyRef.set({
       keyHash: newKeyHash,
       createdAt: FieldValue.serverTimestamp(),
-      lastUsed: FieldValue.serverTimestamp(),
       tier: auth.tier,
       uid: auth.uid,
-      name: `API Key ${new Date().toLocaleString()}`, // Default name
+      name: `API Key ${new Date().toISOString()}`,
     });
 
     res.json({ success: true, key: newKey, id: keyRef.id });
@@ -668,6 +672,10 @@ app.delete("/api/keys/:id", authMiddleware, async (req, res) => {
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
 
     const keyId = req.params.id;
+    if (!keyId || typeof keyId !== 'string' || keyId.trim() === '') {
+        return res.status(400).json({ error: "Invalid API Key ID" });
+    }
+
     const db = firebaseClient.getFirestore();
     const keyRef = db.collection('users').doc(auth.uid).collection('keys').doc(keyId);
     await keyRef.delete();
