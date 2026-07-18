@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { OracleDreamingService, type DreamMemoryType } from "./dreamingService.js";
 import { logger } from "../utils/logger.js";
+import { authStorage } from "../utils/context.js";
 
 export interface A2AAgentInfo {
   agentId: string;
@@ -24,18 +25,27 @@ export interface A2ADiscoverFilter {
 }
 
 export class A2AClientService {
-  /** In-memory cache of discovered agents (URL → AgentCard) */
-  private agentCache = new Map<string, unknown>();
+  /** In-memory cache of discovered agents (tenantId → URL → AgentCard) */
+  private agentCache = new Map<string, Map<string, unknown>>();
+
+  private getTenantCache(): Map<string, unknown> {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : "admin";
+    if (!this.agentCache.has(tenantId)) {
+      this.agentCache.set(tenantId, new Map<string, unknown>());
+    }
+    return this.agentCache.get(tenantId)!;
+  }
 
   /**
    * Discover A2A agents. In Phase 2, reads from in-memory cache.
    * Phase 3 adds Oracle agent_registry query.
    */
   async discover(filter: A2ADiscoverFilter): Promise<A2AAgentInfo[]> {
-    // Phase 2: return cached agents matching filter
+    const tenantCache = this.getTenantCache();
     const agents: A2AAgentInfo[] = [];
 
-    for (const [url, card] of this.agentCache) {
+    for (const [url, card] of tenantCache) {
       const ac = card as any;
       if (filter.status && ac.status !== filter.status) continue;
       if (filter.capability) {
@@ -90,7 +100,7 @@ export class A2AClientService {
     if (response && typeof response === "object") {
       const r = response as any;
       if (r.result?.agentCard) {
-        this.agentCache.set(agentUrl, r.result.agentCard);
+        this.getTenantCache().set(agentUrl, r.result.agentCard); // Use tenant-specific cache
       }
     }
 
@@ -134,7 +144,7 @@ export class A2AClientService {
    * Register a discovered agent in the local cache.
    */
   registerAgent(url: string, agentCard: unknown): void {
-    this.agentCache.set(url, agentCard);
+    this.getTenantCache().set(url, agentCard); // Use tenant-specific cache
     logger.info(`[A2A] Registered agent: ${url}`);
   }
 
@@ -153,14 +163,18 @@ export class A2AClientService {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
 
+    // Build auth headers for remote A2A calls — prefer scoped token then API key
+    let headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (process.env.A2A_MCP_TOKEN) {
+      headers["Authorization"] = `Bearer ${process.env.A2A_MCP_TOKEN}`;
+    } else if (process.env.CODEATLAS_API_KEY) {
+      headers["x-api-key"] = process.env.CODEATLAS_API_KEY;
+    }
+
     try {
       const response = await fetch(jsonRpcUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // Use scoped token via A2A_MCP_TOKEN if set, otherwise use key
-          ...(process.env.A2A_MCP_TOKEN ? { "Authorization": `Bearer ${process.env.A2A_MCP_TOKEN}` } : {}),
-        },
+        headers,
         body,
         signal: controller.signal,
       });

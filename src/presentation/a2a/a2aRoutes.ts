@@ -16,13 +16,13 @@ import { authMiddleware } from "../../middleware/auth.js";
 
 export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, baseUrl: string): void {
   // === Agent Discovery ===
-  app.get("/.well-known/agent-card.json", (_req, res) => {
+  app.get("/.well-known/agent-card.json", authMiddleware, (_req, res) => {
     const card = buildAgentCard(baseUrl);
     res.json(card);
   });
 
   // Also serve at alternate path for compatibility
-  app.get("/a2a/agent-card", (_req, res) => {
+  app.get("/a2a/agent-card", authMiddleware, (_req, res) => {
     const card = buildAgentCard(baseUrl);
     res.json(card);
   });

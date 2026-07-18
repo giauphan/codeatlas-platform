@@ -134,3 +134,39 @@ export interface MCPToolMeta {
   /** Zod schema keys (for input mode detection) */
   params: string[];
 }
+
+/**
+ * A2A Orchestration Task State Machine
+ * Flow: created → assigned → implemented → fixes_needed → approved
+ *
+ * created:      Leader created task, not yet assigned
+ * assigned:     Leader assigned task to a Developer Agent
+ * implemented:  Developer Agent completed implementation, ready for review
+ * fixes_needed: Leader requested fixes with feedback, back to Developer
+ * approved:     Leader approved final implementation
+ */
+export type OrchestrationState =
+  | 'created'
+  | 'assigned'
+  | 'implemented'
+  | 'fixes_needed'
+  | 'approved';
+
+/** A2A Orchestration Task — managed by Leader/Developer workflow */
+export interface A2AOrchestrationTask {
+  orchestrationTaskId: string;
+  tenantId: string;
+  leaderAgentId: string;
+  developerAgentId?: string;
+  state: OrchestrationState;
+  description: string;
+  toolName?: string;
+  toolParams?: Record<string, unknown>;
+  artifacts?: Artifact[];
+  feedback?: string;
+  prUrl?: string;
+  reviewBotFindings?: string;
+  createdAt: string;
+  updatedAt: string;
+  stateHistory: { state: OrchestrationState; timestamp: string; note?: string }[];
+}

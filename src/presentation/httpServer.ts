@@ -1,5 +1,5 @@
 import express from "express";
-import { IncomingMessage } from "http";
+import { IncomingMessage, Server } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import * as fs from "fs";
@@ -19,6 +19,7 @@ import {
 import { authStorage } from "../utils/context.js";
 import { registerTools } from "./mcpTools.js";
 import { registerA2ATools } from "./a2a/a2aTools.js";
+import { registerA2AOrchestrationTools } from "./a2aOrchestrationTools.js";
 import { registerDreamingRoutes } from "./dreamingRoutes.js";
 import { mountSecondBrainRoutes } from "./secondBrainRoutes.js";
 import { mountConsolidationRoutes } from "./consolidationRoutes.js";
@@ -988,6 +989,7 @@ app.get("/sse", async (req, res) => {
     );
     registerTools(sessionServer, auth);
     registerA2ATools(sessionServer, auth);
+    registerA2AOrchestrationTools(sessionServer);
 
     const currentGen = (sessionGenerations.get(sessionId) || 0) + 1;
     sessionGenerations.set(sessionId, currentGen);
@@ -1098,9 +1100,9 @@ app.get("/api/docs/memory-setup", authMiddleware, (req, res) => {
 });
 
 /**
- * Start the HTTP/SSE Express server on a specified port
+ * Start the HTTP/SSE Express server on a specified port with retry on EADDRINUSE
  */
-export function startHttpServer(port: number): Promise<void> {
+export function startHttpServer(port: number, retries = 5): Promise<void> {
   registerDreamingRoutes(app);
   mountSecondBrainRoutes(app);
   mountConsolidationRoutes(app);
@@ -1109,43 +1111,73 @@ export function startHttpServer(port: number): Promise<void> {
   mountHeartbeatRoutes(app);
   mountCronSettingsRoutes(app);
 
-  return new Promise((resolve) => {
-    app.listen(port, () => {
-      logger.info(`CodeAtlas MCP SSE server running on port ${port}`);
-      logger.info(`- SSE endpoint: http://localhost:${port}/sse`);
-      logger.info(`- Message endpoint: http://localhost:${port}/messages`);
-      logger.info(`- A2A Agent Card: http://localhost:${port}/.well-known/agent-card.json`);
-      logger.info(`- A2A JSON-RPC: http://localhost:${port}/a2a/jsonrpc`);
-      if (process.env.CODEATLAS_API_KEY) {
-        logger.info(`- Security: API Key enabled`);
-      } else {
-        logger.info(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
+  // Start a keep-alive database ping every 12 hours to prevent Oracle Free Tier auto-stop
+  // Jitter ±15 minutes to prevent thundering herd if multiple instances restart simultaneously
+  const DB_PING_INTERVAL_MS = 12 * 60 * 60 * 1000;
+  const JITTER_MS = 15 * 60 * 1000;
+  const scheduleNextPing = () => {
+    const jitter = Math.floor(Math.random() * JITTER_MS * 2 - JITTER_MS);
+    setTimeout(async () => {
+      try {
+        const { ping } = await import("../database/connection.js");
+        if (process.env.ORACLE_CONN_STRING) {
+          logger.info("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
+          await ping();
+        }
+      } catch (err) {
+        logger.error("[Keep-Alive] Failed to ping Oracle DB:", err);
       }
+      scheduleNextPing();
+    }, DB_PING_INTERVAL_MS + jitter);
+  };
+  const initialDelay = Math.floor(Math.random() * JITTER_MS * 2);
+  setTimeout(scheduleNextPing, initialDelay);
 
-      // Start a keep-alive database ping every 12 hours to prevent Oracle Free Tier auto-stop
-      // Jitter ±15 minutes to prevent thundering herd if multiple instances restart simultaneously
-      const DB_PING_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
-      const JITTER_MS = 15 * 60 * 1000; // 15 minutes
-      const scheduleNextPing = () => {
-        const jitter = Math.floor(Math.random() * JITTER_MS * 2 - JITTER_MS);
-        setTimeout(async () => {
-          try {
-            const { ping } = await import("../database/connection.js");
-            if (process.env.ORACLE_CONN_STRING) {
-              logger.info("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
-              await ping();
-            }
-          } catch (err) {
-            logger.error("[Keep-Alive] Failed to ping Oracle DB:", err);
+  return new Promise((resolve, reject) => {
+    function attempt(remaining: number) {
+      const serverInstance = app.listen(port)
+        .on('listening', () => {
+          logger.info(`CodeAtlas MCP SSE server running on port ${port}`);
+          logger.info(`- SSE endpoint: http://localhost:${port}/sse`);
+          logger.info(`- Message endpoint: http://localhost:${port}/messages`);
+          logger.info(`- A2A Agent Card: http://localhost:${port}/.well-known/agent-card.json`);
+          logger.info(`- A2A JSON-RPC: http://localhost:${port}/a2a/jsonrpc`);
+          if (process.env.CODEATLAS_API_KEY) {
+            logger.info(`- Security: API Key enabled`);
+          } else {
+            logger.info(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
           }
-          scheduleNextPing(); // Schedule the next ping after this one completes
-        }, DB_PING_INTERVAL_MS + jitter);
-      };
-      // Fire the first ping with random initial delay (0-30min) to stagger across instances
-      const initialDelay = Math.floor(Math.random() * JITTER_MS * 2);
-      setTimeout(scheduleNextPing, initialDelay);
 
-      resolve();
-    });
+          // Define shutdown handler
+          const shutdown = (signal: string, server: Server) => {
+            logger.info(`${signal} received: Closing HTTP server...`);
+            server.close(() => {
+              logger.info('HTTP server closed');
+              process.exit(0);
+            });
+          };
+
+          // Register handlers once
+          process.once('SIGINT', () => shutdown('SIGINT', serverInstance));
+          process.once('SIGTERM', () => shutdown('SIGTERM', serverInstance));
+          process.once('SIGUSR2', () => { // For nodemon restarts
+            logger.info('SIGUSR2 received: Closing HTTP server for reload...');
+            serverInstance.close(() => {
+              process.kill(process.pid, 'SIGUSR2');
+            });
+          });
+
+          resolve();
+        })
+        .on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE' && remaining > 0) {
+            logger.warn(`Port ${port} in use, retrying in 1s... (${remaining} left)`);
+            setTimeout(() => attempt(remaining - 1), 1000);
+          } else {
+            reject(err);
+          }
+        });
+    }
+    attempt(retries);
   });
 }

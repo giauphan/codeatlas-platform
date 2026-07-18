@@ -13,6 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import { logger } from "../utils/logger.js";
+import { authStorage } from "../utils/context.js";
 
 export interface A2AAgentRecord {
   agentId: string;
@@ -24,6 +25,7 @@ export interface A2AAgentRecord {
   registeredAt: Date;
   agentCardJson?: string;
   metadata?: Record<string, unknown>;
+  tenantId?: string; // Add tenantId
 }
 
 export interface A2ADiscoverQuery {
@@ -56,9 +58,14 @@ export class A2ARegistry {
   async register(record: A2AAgentRecord): Promise<string> {
     const agentId = record.agentId || this.slugify(record.agentName);
 
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : "admin";
+    // Clone to avoid mutating the caller's object
+    const safeRecord = { ...record, tenantId };
+
     if (this.useOracle) {
       try {
-        await this.oracleUpsert(agentId, record);
+        await this.oracleUpsert(agentId, safeRecord);
       } catch (err) {
         logger.error(`[A2A Registry] Oracle upsert failed, falling back to memory: ${err}`);
       }
@@ -67,7 +74,7 @@ export class A2ARegistry {
     // Always update in-memory cache
     const existing = memoryStore.get(agentId);
     memoryStore.set(agentId, {
-      ...record,
+      ...safeRecord,
       agentId,
       lastHeartbeat: new Date(),
       registeredAt: existing?.registeredAt || new Date(),
@@ -108,12 +115,19 @@ export class A2ARegistry {
   async query(query: A2ADiscoverQuery = {}): Promise<A2AAgentRecord[]> {
     this.markStale();
 
+    const auth = authStorage.getStore(); // Get tenantId from context
+    const requestorTenantId = auth ? auth.uid : "admin";
+
     const results: A2AAgentRecord[] = [];
     const capability = query.capability?.toLowerCase();
     const status = query.status || "online";
     const limit = query.limit || 50;
 
     for (const [, record] of memoryStore) {
+      // NOTE: Records without tenantId (pre-migration) will be filtered out.
+      // This is expected as they will be re-registered on restart.
+      if (record.tenantId !== requestorTenantId) continue;
+
       if (status !== "all" && record.status !== status) continue;
 
       if (capability) {
@@ -134,7 +148,11 @@ export class A2ARegistry {
    */
   async listAll(): Promise<A2AAgentRecord[]> {
     this.markStale();
-    return Array.from(memoryStore.values()).map(r => ({ ...r }));
+    const auth = authStorage.getStore(); // Get tenantId from context
+    const requestorTenantId = auth ? auth.uid : "admin";
+    return Array.from(memoryStore.values())
+      .filter(r => r.tenantId === requestorTenantId) // Filter by tenantId
+      .map(r => ({ ...r }));
   }
 
   /**
@@ -154,9 +172,12 @@ export class A2ARegistry {
    */
   private async oracleUpsert(agentId: string, record: A2AAgentRecord): Promise<void> {
     // Oracle integration — uses same connection pool as other services
-    // MERGE INTO agent_registry ...
-    logger.debug(`[A2A Registry] Oracle upsert: ${agentId}`);
+    // MERGE INTO agent_registry (agentId, tenantId, agentUrl, agentName, capabilities, status, lastHeartbeat, registeredAt, agentCardJson, metadata)
+    // VALUES (:agentId, :tenantId, :agentUrl, :agentName, :capabilities_json, :status, :lastHeartbeat, :registeredAt, :agentCardJson, :metadata_json)
+    logger.debug(`[A2A Registry] Oracle upsert: ${agentId}, Tenant: ${record.tenantId}`);
+    // Actual Oracle upsert logic would go here, ensuring tenantId is stored.
   }
+
 
   /**
    * Create a URL-safe slug from a name.
