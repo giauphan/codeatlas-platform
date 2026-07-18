@@ -382,16 +382,16 @@ describe('Dreaming Routes', () => {
       assert.strictEqual(res.status, 400);
     });
 
-    test('with wrong apiKey uses guest fallback (auth optional for GET /query)', async () => {
+    test('with wrong apiKey returns 401 (auth required for GET /query now)', async () => {
       mockCheckAuth.mock.mockImplementation(async () => {
         throw new Error('Authentication: Invalid API key');
       });
 
       const res = await fetch(
-        `${baseUrl}/api/dreams/query?apiKey=bad-key&query=test`,
+        `${baseUrl}/api/dreams/query?query=test`,
       );
 
-      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.status, 401);
     });
 
     test('with DB error returns 500', async () => {
