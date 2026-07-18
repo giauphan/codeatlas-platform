@@ -151,13 +151,34 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin) {
     const allowedList = allowedOrigins.split(',').map(s => s.trim());
-    if (allowedList.includes(origin)) {
-      // Origin is allowed — echo back the specific origin for proper credential support
-      res.header('Access-Control-Allow-Origin', origin);
-      res.header('Vary', 'Origin');
+
+    // Explicitly reject null origin to prevent sandboxed iframe bypasses
+    if (origin !== 'null' && origin !== '*') {
+      try {
+        // Ensure origin is a valid HTTP/HTTPS URL
+        const parsedOrigin = new URL(origin);
+        if (parsedOrigin.protocol === 'http:' || parsedOrigin.protocol === 'https:') {
+          if (allowedList.includes(origin)) {
+            // Origin is allowed — echo back the specific origin for proper credential support
+            res.header('Access-Control-Allow-Origin', origin);
+            res.header('Vary', 'Origin');
+          } else if (allowedList.includes('*')) {
+             // If a wildcard is allowed, it should return * (which securely fails if credentials are required), not echo the origin dynamically.
+            res.header('Access-Control-Allow-Origin', '*');
+            res.header('Vary', 'Origin');
+          } else {
+            res.header('Vary', 'Origin');
+          }
+        } else {
+          res.header('Vary', 'Origin');
+        }
+      } catch (err) {
+        // Invalid URL format for origin
+        res.header('Vary', 'Origin');
+      }
     } else {
-      // Origin is NOT in the allowed list — omit the Access-Control-Allow-Origin header
-      // so the browser properly rejects the cross-origin request
+      // Origin is NOT in the allowed list, is null, or is * (which isn't valid for credentials)
+      // Omit the Access-Control-Allow-Origin header so the browser properly rejects the request
       res.header('Vary', 'Origin');
     }
   }
