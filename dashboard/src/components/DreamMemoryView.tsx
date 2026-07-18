@@ -1,12 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Brain, Search, Trash2, AlertCircle, Loader2, Database } from 'lucide-react';
+import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+interface DreamConfig {
+  dreams_schedule: string;
+  dreams_enabled: boolean;
+  dreams_provider: string;
+  updated_at: string;
+}
 
 interface DreamMemory {
   id: string;
   session_id: string;
   project: string;
+  provider?: string;
   memory_type: string;
   content: string;
   importance: number;
@@ -25,12 +32,103 @@ export function DreamMemoryView() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 10;
 
+  // Dream config (daily cron schedule, provider)
+  const [dreamConfig, setDreamConfig] = useState<DreamConfig | null>(null);
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [tempSchedule, setTempSchedule] = useState('');
+  const [tempProvider, setTempProvider] = useState('');
+  const [tempEnabled, setTempEnabled] = useState(true);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+
+  const fetchDreamConfig = useCallback(async () => {
+    setConfigLoading(true);
+    setConfigError(null);
+    try {
+      const headers: Record<string, string> = {};
+      const savedKey = sessionStorage.getItem('ca_api_key');
+      if (savedKey) {
+        if (savedKey.startsWith('ca_')) headers['x-api-key'] = savedKey;
+        else headers['Authorization'] = `Bearer ${savedKey}`;
+      }
+      const resp = await fetch('/api/settings/cron', { headers });
+      if (!resp.ok) throw new Error('Failed to load dream config');
+      const data = await resp.json() as DreamConfig;
+      setDreamConfig(data);
+      setTempSchedule(data.dreams_schedule);
+      setTempProvider(data.dreams_provider || '');
+      setTempEnabled(data.dreams_enabled);
+    } catch (err: any) {
+      setConfigError(err.message);
+    } finally {
+      setConfigLoading(false);
+    }
+  }, []);
+
+  const saveDreamConfig = useCallback(async () => {
+    setSavingConfig(true);
+    setConfigError(null);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const savedKey = sessionStorage.getItem('ca_api_key');
+      if (savedKey) {
+        if (savedKey.startsWith('ca_')) headers['x-api-key'] = savedKey;
+        else headers['Authorization'] = `Bearer ${savedKey}`;
+      }
+      const resp = await fetch('/api/settings/cron', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          dreams_schedule: tempSchedule,
+          dreams_enabled: tempEnabled,
+          dreams_provider: tempProvider,
+        }),
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `Failed to save (HTTP ${resp.status})`);
+      }
+      const result = await resp.json();
+      setDreamConfig(result.settings);
+      setDreamConfig(result.settings);
+    } catch (err: any) {
+      setConfigError(err.message);
+    } finally {
+      setSavingConfig(false);
+    }
+  }, [tempSchedule, tempEnabled, tempProvider]);
+
+  const runDailyDreamsNow = useCallback(async () => {
+    setSavingConfig(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const savedKey = sessionStorage.getItem('ca_api_key');
+      if (savedKey) {
+        if (savedKey.startsWith('ca_')) headers['x-api-key'] = savedKey;
+        else headers['Authorization'] = `Bearer ${savedKey}`;
+      }
+      const resp = await fetch('/api/dreams/generate-daily-dreams', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ provider: tempProvider }),
+      });
+      if (!resp.ok) throw new Error(`Run failed (HTTP ${resp.status})`);
+      alert('Daily dream generation triggered successfully.');
+    } catch (err: any) {
+      alert(`Failed to run daily dreams: ${err.message}`);
+    } finally {
+      setSavingConfig(false);
+    }
+  }, [tempProvider]);
+
   // Session token from sessionStorage (set by API key or Firebase sign-in)
   useEffect(() => {
     if (sessionStorage.getItem('ca_api_key')) {
       setFirebaseReady(true);
+      fetchDreamConfig();
     }
-  }, []);
+  }, [fetchDreamConfig]);
 
   const fetchMemories = useCallback(async (query?: string, pageNum?: number) => {
     if (!firebaseReady) return;
@@ -56,6 +154,9 @@ export function DreamMemoryView() {
       if (!showAll) params.set('project', 'GolikeTool');
       if (selectedTypes.length < 4) {
         params.set('memory_type', selectedTypes.join(','));
+      }
+      if (dreamConfig && dreamConfig.dreams_provider) {
+        params.set('provider', dreamConfig.dreams_provider);
       }
       params.set('limit', String(PAGE_SIZE));
       params.set('offset', String(p * PAGE_SIZE));
@@ -91,7 +192,14 @@ export function DreamMemoryView() {
     setSelectedTypes(prev =>
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
+    setPage(0);
   };
+
+  // Re-fetch when filter types change (reset to page 0)
+  useEffect(() => {
+    if (firebaseReady) fetchMemories(searchQuery, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseReady, selectedTypes]);
 
   const hasPrev = page > 0;
   const hasNext = memories.length >= PAGE_SIZE;
@@ -128,6 +236,13 @@ export function DreamMemoryView() {
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           />
         </form>
+        <button onClick={() => setShowConfig(!showConfig)}
+          style={{
+            padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
+          }}>
+          <Settings size={18} style={{ marginRight: '0.5rem' }} /> Config
+        </button>
         <button onClick={() => { setShowAll(!showAll); fetchMemories(searchQuery); }}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: showAll ? '1px solid var(--primary-neon)' : '1px solid rgba(255,255,255,0.1)',
@@ -136,6 +251,29 @@ export function DreamMemoryView() {
           {showAll ? 'All Projects' : 'GolikeTool'}
         </button>
       </div>
+
+      {showConfig && (
+        <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '16px', marginBottom: '1.5rem' }}>
+          <h3 style={{ marginTop: 0 }}>Dream Configuration</h3>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <label>
+              Enabled: <input type="checkbox" checked={tempEnabled} onChange={e => setTempEnabled(e.target.checked)} />
+            </label>
+            <label>
+              Schedule (cron): <input type="text" value={tempSchedule} onChange={e => setTempSchedule(e.target.value)} style={{ padding: '0.5rem' }} />
+            </label>
+            <label>
+              Provider: <input type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} style={{ padding: '0.5rem' }} />
+            </label>
+            <button onClick={saveDreamConfig} disabled={savingConfig} style={{ padding: '0.5rem 1rem' }}>
+              {savingConfig ? 'Saving...' : 'Save Config'}
+            </button>
+            <button onClick={runDailyDreamsNow} disabled={savingConfig} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
+              Run Now
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         {['KNOWLEDGE', 'PREFERENCE', 'MISTAKE', 'PATTERN'].map(type => (
@@ -205,6 +343,15 @@ export function DreamMemoryView() {
                 }}>
                   {mem.memory_type}
                 </span>
+                {mem.provider && (
+                  <span style={{
+                    padding: '0.2rem 0.6rem', borderRadius: '100px', fontSize: '0.7rem', fontWeight: 800,
+                    background: `#8A2BE222`, color: `#8A2BE2`,
+                    border: `1px solid #8A2BE244`
+                  }}>
+                    {mem.provider}
+                  </span>
+                )}
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   {new Date(mem.created_at).toLocaleString()}
                 </span>
