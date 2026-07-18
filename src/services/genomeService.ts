@@ -937,27 +937,120 @@ Apply this knowledge when encountering similar problems.
         score: 1 - Number(r[R_IDX.DISTANCE] ?? 0),
       }));
 
-      // Upsert each inherited gene into the new project
       let inherited = 0;
-      for (const gene of genes) {
-        try {
-          await this.upsertGene({
-            name: gene.name,
-            description: gene.description,
-            problem: gene.problem,
-            solution: gene.solution,
-            architecture: gene.architecture,
-            category: gene.category,
-            project: newProject,
-            sourceType: "inherited",
-            sourceId: gene.id,
-            dependencies: gene.dependencies,
-            confidence: gene.confidence * 0.9,
-          });
-          inherited++;
-        } catch {
-          // Skip duplicates
+      if (genes.length > 0) {
+        // ⚡ Bolt Optimization: Batch updates and inserts instead of querying inside loop (avoids N+1 DB roundtrips)
+        const nameList = genes.map(g => g.name);
+        let existingRows: any[] = [];
+
+        // Oracle limits IN clause to 1000 items, batch it
+        const chunkSize = 900;
+        for (let i = 0; i < nameList.length; i += chunkSize) {
+          const chunk = nameList.slice(i, i + chunkSize);
+          const nameBinds: Record<string, string> = { newProject, tenantId };
+          const inClause = chunk.map((_, idx) => `:n${idx}`).join(",");
+          chunk.forEach((n, idx) => (nameBinds[`n${idx}`] = n));
+
+          const existingQuery = await connection.execute<any[]>(
+            `SELECT id, name, version FROM codeatlas_genome WHERE name IN (${inClause}) AND project = :newProject AND tenant_id = :tenantId`,
+            nameBinds as any
+          );
+          if (existingQuery.rows) {
+            existingRows.push(...existingQuery.rows);
+          }
         }
+        const existingMap = new Map(existingRows.map(r => [String(r[1]), { id: String(r[0]), version: Number(r[2]) }]));
+
+        const toInsert: any[] = [];
+        const toUpdate: any[] = [];
+        const mutations: any[] = [];
+
+        for (let i = 0; i < genes.length; i++) {
+          const gene = genes[i];
+          const rawEmbedding = rows[i][R_IDX.EMBEDDING];
+          const existing = existingMap.get(gene.name);
+
+          if (existing) {
+            const newVersion = existing.version + 1;
+            mutations.push({
+              id: `mut-${randomUUID().slice(0, 8)}`,
+              geneId: existing.id,
+              oldVer: existing.version,
+              newVer: newVersion,
+              changes: JSON.stringify({ description: gene.description, solution: gene.solution }),
+            });
+            toUpdate.push({
+              id: existing.id,
+              desc: gene.description,
+              problem: gene.problem,
+              solution: gene.solution,
+              arch: gene.architecture || "",
+              cat: gene.category,
+              conf: gene.confidence * 0.9,
+              ver: newVersion,
+              emb: rawEmbedding,
+              tenantId
+            });
+          } else {
+            toInsert.push({
+              id: `gene-${randomUUID().slice(0, 8)}`,
+              name: gene.name,
+              desc: gene.description,
+              problem: gene.problem,
+              solution: gene.solution,
+              arch: gene.architecture || "",
+              cat: gene.category,
+              project: newProject,
+              conf: gene.confidence * 0.9,
+              emb: rawEmbedding,
+              srcType: "inherited",
+              srcId: gene.id,
+              deps: JSON.stringify(gene.dependencies || []),
+              tenantId
+            });
+          }
+        }
+
+        if (mutations.length > 0) {
+          await connection.executeMany(
+            `INSERT INTO gene_mutations (id, gene_id, old_version, new_version, changes, created_at)
+             VALUES (:id, :geneId, :oldVer, :newVer, :changes, CURRENT_TIMESTAMP)`,
+            mutations as any,
+            { autoCommit: false, batchErrors: true }
+          );
+        }
+
+        if (toUpdate.length > 0) {
+          await connection.executeMany(
+            `UPDATE codeatlas_genome SET
+             description = :desc, problem = :problem, solution = :solution,
+             architecture = :arch, category = :cat, confidence = :conf,
+             version = :ver, evolution_score = evolution_score + 1,
+             embedding = :emb, status = 'active', updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id AND tenant_id = :tenantId`,
+            toUpdate as any,
+            { autoCommit: false, batchErrors: true }
+          );
+        }
+
+        if (toInsert.length > 0) {
+          await connection.executeMany(
+            `INSERT INTO codeatlas_genome (
+               id, name, description, problem, solution, architecture,
+               category, project, confidence, version, evolution_score,
+               usage_count, success_rate, embedding, status, source_type,
+               source_id, dependencies, created_at, updated_at, tenant_id
+             ) VALUES (
+               :id, :name, :desc, :problem, :solution, :arch,
+               :cat, :project, :conf, 1, 1, 0, 0.50, :emb, 'active',
+               :srcType, :srcId, :deps, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :tenantId
+             )`,
+            toInsert as any,
+            { autoCommit: false, batchErrors: true }
+          );
+        }
+
+        inherited = toUpdate.length + toInsert.length;
       }
 
       return { inherited, genes };
