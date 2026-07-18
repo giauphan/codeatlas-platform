@@ -598,6 +598,11 @@ app.post("/api/projects/settings", authMiddleware, async (req, res) => {
   }
 });
 
+// ── Health endpoint — quick liveness check, no auth required ──
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", uptime: process.uptime() });
+});
+
 // ── Version endpoint — returns current deployed version for cache busting ──
 app.get("/api/version", (_req, res) => {
   let version = "unknown";
