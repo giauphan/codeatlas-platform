@@ -124,7 +124,8 @@ export class A2ARegistry {
     const limit = query.limit || 50;
 
     for (const [, record] of memoryStore) {
-      // Filter by tenantId
+      // NOTE: Records without tenantId (pre-migration) will be filtered out.
+      // This is expected as they will be re-registered on restart.
       if (record.tenantId !== requestorTenantId) continue;
 
       if (status !== "all" && record.status !== status) continue;

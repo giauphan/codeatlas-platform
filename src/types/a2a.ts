@@ -137,12 +137,11 @@ export interface MCPToolMeta {
 
 /**
  * A2A Orchestration Task State Machine
- * Flow: created → assigned → implemented → reviewed → fixes_needed → approved
+ * Flow: created → assigned → implemented → fixes_needed → approved
  *
  * created:      Leader created task, not yet assigned
  * assigned:     Leader assigned task to a Developer Agent
  * implemented:  Developer Agent completed implementation, ready for review
- * reviewed:     Leader reviewed implementation (transient — leads to approved or fixes_needed)
  * fixes_needed: Leader requested fixes with feedback, back to Developer
  * approved:     Leader approved final implementation
  */
@@ -150,7 +149,6 @@ export type OrchestrationState =
   | 'created'
   | 'assigned'
   | 'implemented'
-  | 'reviewed'
   | 'fixes_needed'
   | 'approved';
 

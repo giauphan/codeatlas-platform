@@ -101,8 +101,11 @@ export class A2AOrchestrationService {
     if (!task) throw new Error(`Task ${orchestrationTaskId} not found.`);
     if (task.tenantId !== this.getTenantId()) throw new Error("Unauthorized access to task.");
 
-    // State transition validation (simplified for now)
-    // Add more granular validation if needed: e.g., only 'implemented' -> 'reviewed'
+    // State transition validation
+    if (!A2AOrchestrationService.validateTransition(task.state, newState)) {
+      throw new Error(`Invalid state transition from ${task.state} to ${newState}`);
+    }
+
     task.state = newState;
     task.updatedAt = new Date().toISOString();
     task.stateHistory.push({ state: newState, timestamp: task.updatedAt });
@@ -138,6 +141,24 @@ export class A2AOrchestrationService {
   async listTasks(): Promise<A2AOrchestrationTask[]> {
     const tenantId = this.getTenantId();
     return Array.from(orchestrationTaskStore.values()).filter(task => task.tenantId === tenantId);
+  }
+
+  // Define valid state transitions
+  private static validateTransition(currentState: OrchestrationState, nextState: OrchestrationState): boolean {
+    switch (currentState) {
+      case 'created':
+        return nextState === 'assigned';
+      case 'assigned':
+        return nextState === 'implemented';
+      case 'implemented':
+        return nextState === 'fixes_needed' || nextState === 'approved';
+      case 'fixes_needed':
+        return nextState === 'implemented';
+      case 'approved':
+        return false; // Terminal state
+      default:
+        return false;
+    }
   }
 }
 

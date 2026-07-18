@@ -164,41 +164,18 @@ export class A2AClientService {
     const timeout = setTimeout(() => controller.abort(), 30000);
 
     const auth = authStorage.getStore();
-    let authHeader = {};
-
-    if (auth) {
-      if (auth.keyId === "firebase-session") {
-        // NOTE: A2A remote delegation using Firebase token requires token minting or
-        // a way to pass ID tokens to remote agents. Here we assume the remote agent
-        // accepts an API key or the A2A token. If A2A_MCP_TOKEN is set, use it.
-        logger.debug("[A2A] Firebase session token for delegation (fallback to configured token):");
-        if (process.env.A2A_MCP_TOKEN) {
-          authHeader = { "Authorization": `Bearer ${process.env.A2A_MCP_TOKEN}` };
-        } else if (process.env.CODEATLAS_API_KEY) {
-          authHeader = { "x-api-key": process.env.CODEATLAS_API_KEY };
-        }
-      } else {
-        if (process.env.CODEATLAS_API_KEY) {
-          authHeader = { "x-api-key": process.env.CODEATLAS_API_KEY };
-        } else if (process.env.A2A_MCP_TOKEN) {
-          authHeader = { "Authorization": `Bearer ${process.env.A2A_MCP_TOKEN}` };
-        }
-      }
-    } else {
-      if (process.env.A2A_MCP_TOKEN) {
-        authHeader = { "Authorization": `Bearer ${process.env.A2A_MCP_TOKEN}` };
-      } else if (process.env.CODEATLAS_API_KEY) {
-        authHeader = { "x-api-key": process.env.CODEATLAS_API_KEY };
-      }
+    // Build auth headers for remote A2A calls — prefer scoped token then API key
+    let headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (process.env.A2A_MCP_TOKEN) {
+      headers["Authorization"] = `Bearer ${process.env.A2A_MCP_TOKEN}`;
+    } else if (process.env.CODEATLAS_API_KEY) {
+      headers["x-api-key"] = process.env.CODEATLAS_API_KEY;
     }
 
     try {
       const response = await fetch(jsonRpcUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...authHeader,
-        },
+        headers,
         body,
         signal: controller.signal,
       });

@@ -1148,23 +1148,23 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
             logger.info(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
           }
 
-          // Handle graceful shutdown signals
-          const shutdown = (signal: string) => {
+          // Define shutdown handler
+          const shutdown = (signal: string, server: Server) => {
             logger.info(`${signal} received: Closing HTTP server...`);
-            serverInstance.close(() => {
+            server.close(() => {
               logger.info('HTTP server closed');
               process.exit(0);
             });
           };
-          process.on('SIGINT', () => shutdown('SIGINT'));
-          process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-          // Handle nodemon restart signal
-          process.once('SIGUSR2', () => {
-              logger.info('SIGUSR2 received: Closing HTTP server for reload...');
-              serverInstance.close(() => {
-                  process.kill(process.pid, 'SIGUSR2');
-              });
+          // Register handlers once
+          process.once('SIGINT', () => shutdown('SIGINT', serverInstance));
+          process.once('SIGTERM', () => shutdown('SIGTERM', serverInstance));
+          process.once('SIGUSR2', () => { // For nodemon restarts
+            logger.info('SIGUSR2 received: Closing HTTP server for reload...');
+            serverInstance.close(() => {
+              process.kill(process.pid, 'SIGUSR2');
+            });
           });
 
           resolve();

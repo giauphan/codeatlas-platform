@@ -215,9 +215,8 @@ stateDiagram-v2
     [*] --> created: Leader creates task
     created --> assigned: Leader assigns task
     assigned --> implemented: Developer implements task
-    implemented --> reviewed: Leader reviews implementation
-    reviewed --> fixes_needed: Leader requests fixes (with feedback)
-    reviewed --> approved: Leader approves task
+    implemented --> fixes_needed: Leader requests fixes (with feedback)
+    implemented --> approved: Leader approves task
     fixes_needed --> implemented: Developer submits fixes
     approved --> [*]
 ```
@@ -272,7 +271,7 @@ sequenceDiagram
 | `a2a_create_orchestration_task` | Leader | Create task (`created` or `assigned`) |
 | `a2a_assign_orchestration_task` | Leader | Assign task to developer (`assigned`) |
 | `a2a_implement_orchestration_task` | Developer | Report implementation (`implemented`) |
-| `a2a_review_orchestration_task` | Leader | Review or approve (`reviewed` → `approved` or `fixes_needed`) |
+| `a2a_review_orchestration_task` | Leader | Review or approve (`implemented` → `approved` or `fixes_needed`) |
 | `a2a_submit_fixes_orchestration_task` | Developer | Submit fixes (`fixes_needed` → `implemented`) |
 | `a2a_get_orchestration_task` | Generic | Get task status and details |
 
@@ -284,7 +283,7 @@ A2AOrchestrationTask {
   tenantId: string          // tenant isolation
   leaderAgentId: string
   developerAgentId?: string
-  state: OrchestrationState // created | assigned | implemented | reviewed | fixes_needed | approved
+  state: OrchestrationState // created | assigned | implemented | fixes_needed | approved
   description: string
   toolName?: string         // MCP tool for developer
   toolParams?: Record<string, unknown>
