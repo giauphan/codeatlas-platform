@@ -1,4 +1,4 @@
-## 2026-07-14 - Insecure Security Context Bypass in Database Connection
-**Vulnerability:** A conditional statement in the database connection initialization code allowed bypassing Row-Level Security (RLS) based on environment variables (`CODEATLAS_BYPASS_RLS` or `NODE_ENV === 'test'`).
-**Learning:** Hardcoding security bypasses, even for testing or local development, within the core production code path is extremely dangerous. It creates a critical vulnerability if those environment variables are accidentally set or misconfigured in a production environment.
-**Prevention:** Do not put bypass mechanisms in production code. The best prevention is to just remove the bypass entirely, as done here, rather than trying to engineer around it. It is simpler, uses less code, and leaves no configuration surface to misconfigure. Environments that previously relied on the bypass (like dev or CI testing) will need to adjust by either ensuring a working RLS setup or using appropriate mocking.
+## 2026-07-19 - Added Defense-in-Depth Security Headers
+**Vulnerability:** The application was missing critical security headers like X-Content-Type-Options, X-Frame-Options, Strict-Transport-Security, and X-XSS-Protection.
+**Learning:** This is a crucial defense-in-depth measure missing from the base Express server setup. Instead of importing `helmet`, I implemented a custom middleware to satisfy the boundary constraint "Ask first: Adding new security dependencies".
+**Prevention:** Always verify if basic HTTP security headers are set natively or via minimal dependencies when setting up an Express server to reduce attack surface for MIME-sniffing, clickjacking, and XSS.
