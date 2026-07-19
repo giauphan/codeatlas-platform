@@ -88,6 +88,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search sphere…"
+              aria-label="Search knowledge graph sphere"
               style={{
                 width: '100%', padding: '0.6rem 1rem 0.6rem 2.8rem', borderRadius: '12px',
                 border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.7)',
