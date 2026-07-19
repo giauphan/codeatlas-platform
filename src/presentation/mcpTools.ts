@@ -14,15 +14,17 @@ import {
   registerProject
 } from "../services/projectService.js";
 import { OracleMemoryService } from "../services/memoryService.js";
-import { OracleDreamingService } from "../services/dreamingService.js";
+import { OracleDreamingService, DreamMemoryType } from "../services/dreamingService.js";
 import { SecurityScanner } from "../services/scanner/securityScanner.js";
 import { GenomeService } from "../services/genomeService.js";
 import { SecondBrainService } from "../services/secondBrainService.js";
-import { ConsolidationEngine } from "../services/consolidationEngine.js";
+import { ConsolidationEngine, consolidationEngine } from "../services/consolidationEngine.js";
+import { summarizeConversationForDreams } from "../services/llmService.js";
 import { logger } from "../utils/logger.js";
 import { registerTool } from "./a2a/agentCard.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { authStorage } from "../utils/context.js";
+import { randomUUID } from "node:crypto";
 
 /** Auto-register tool metadata for A2A Agent Card AND register handler on executor */
 function a2a(name: string, description: string, params: string[]) {
@@ -615,14 +617,15 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       importance: z.number().optional().default(5).describe("Importance level 1-10 (higher = more influential)"),
       session_id: z.string().optional().describe("Session identifier from which this dream was extracted"),
       project: z.string().optional().describe("Project name or path"),
+      provider: z.string().optional().describe("AI provider (e.g., 'Claude', 'Hermes') for this dream"),
     },
-    async ({ memory_type, content, importance, session_id, project }: { memory_type: 'MISTAKE' | 'PREFERENCE' | 'KNOWLEDGE' | 'PATTERN'; content: string; importance?: number; session_id?: string; project?: string }) => {
+    async ({ memory_type, content, importance, session_id, project, provider }: { memory_type: 'MISTAKE' | 'PREFERENCE' | 'KNOWLEDGE' | 'PATTERN'; content: string; importance?: number; session_id?: string; project?: string; provider?: string }) => {
       const auth = await checkAuth();
-      await logActivity(auth, "save_dream_memory", { memory_type, content, importance, session_id, project });
+      await logActivity(auth, "save_dream_memory", { memory_type, content, importance, session_id, project, provider });
       try {
         const loaded = project ? await loadAnalysisAsync(project) : null;
         const projectName = loaded ? loaded.projectName : (project || "global");
-        const memId = await OracleDreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, Math.min(9, Math.max(1, importance ?? 5)));
+        const memId = await OracleDreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, Math.min(9, Math.max(1, importance ?? 5)), provider);
         return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, id: memId, memory_type }, null, 2) }] };
       } catch (err: unknown) {
         return { content: [{ type: "text" as const, text: `Failed to save dream memory: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
@@ -638,18 +641,20 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       query: z.string().describe("The search query (user message or question) to find relevant dream memories"),
       project: z.string().optional().describe("Project name or path"),
       limit: z.number().optional().default(10).describe("Maximum number of results to return"),
+      provider: z.string().optional().describe("AI provider (e.g., 'Claude', 'Hermes') to filter dreams by"),
     },
-    async ({ query, project, limit }: { query: string; project?: string; limit?: number }) => {
+    async ({ query, project, limit, provider }: { query: string; project?: string; limit?: number; provider?: string }) => {
       const auth = await checkAuth();
-      await logActivity(auth, "query_dream_memories", { query, project, limit });
+      await logActivity(auth, "query_dream_memories", { query, project, limit, provider });
       try {
         const loaded = project ? await loadAnalysisAsync(project) : null;
         const projectName = loaded ? loaded.projectName : (project || "global");
-        const rows = await OracleDreamingService.queryDreamMemories(projectName, query, limit ?? 10);
+        const rows = await OracleDreamingService.queryDreamMemories(projectName, query, limit ?? 10, 0, undefined, provider);
         const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
         const memories = rawMemories.map((r: Record<string, unknown>) => ({
           id: r.ID,
           session_id: r.SESSION_ID,
+          provider: r.PROVIDER,
           memory_type: r.MEMORY_TYPE,
           content: r.CONTENT,
           importance: r.IMPORTANCE,
@@ -660,6 +665,78 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         return { content: [{ type: "text" as const, text: `Failed to query dream memories: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
       }
     }
+  );
+
+  // Tool 7.8: Ingest Session Transcript
+  server.tool(
+    "ingest_session_transcript",
+    "Process a conversation transcript to extract and save dream memories (learnings, mistakes, patterns) for a specific AI provider.",
+    {
+      transcript: z.string().describe("The full conversation transcript to analyze"),
+      session_id: z.string().optional().describe("Identifier for the session (defaults to a new UUID)"),
+      project: z.string().optional().describe("Project name or path"),
+      provider: z.string().describe("AI provider (e.g., 'Claude', 'Hermes') that generated/used this session"),
+    },
+    mcpHandler(async ({ transcript, session_id, project, provider }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "ingest_session_transcript", { session_id, project, provider });
+      try {
+        if (!provider) {
+          return { content: [{ type: "text" as const, text: "Provider is required for ingesting session transcripts." }], isError: true };
+        }
+        const sessId = session_id || `session_${randomUUID()}`;
+        const loaded = project ? await loadAnalysisAsync(project) : null;
+        const projectName = loaded ? loaded.projectName : (project || "global");
+
+        const dreams = await summarizeConversationForDreams(transcript, provider, projectName, sessId);
+        if (!dreams || dreams.length === 0) {
+          return { content: [{ type: "text" as const, text: `No dreams extracted from session ${sessId} for provider ${provider}.` }] };
+        }
+
+        const savedDreams: Array<{ id: string; memory_type: string; content: string }> = [];
+        for (const dream of dreams) {
+          const memId = await authStorage.run(auth, () =>
+            OracleDreamingService.saveDreamMemory(
+              projectName, sessId, dream.memoryType as DreamMemoryType, dream.content, dream.importance, provider
+            )
+          );
+          savedDreams.push({ id: memId, memory_type: dream.memoryType, content: dream.content });
+        }
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id: sessId, project: projectName, provider, dreamsExtracted: savedDreams.length, dreams: savedDreams }, null, 2) }] };
+      } catch (err: unknown) {
+        return { content: [{ type: "text" as const, text: `Failed to ingest session transcript: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    })
+  );
+
+  // Tool 7.9: Generate Daily Dreams
+  server.tool(
+    "generate_daily_dreams",
+    "Trigger the daily dream generation and consolidation process, optionally filtering by project and AI provider.",
+    {
+      project: z.string().optional().describe("Project name to run daily dream generation for"),
+      provider: z.string().optional().describe("AI provider to filter dreams by (e.g., 'Claude', 'Hermes')"),
+    },
+    mcpHandler(async ({ project, provider }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "generate_daily_dreams", { project, provider });
+      try {
+        const loaded = project ? await loadAnalysisAsync(project) : null;
+        const projectName = loaded ? loaded.projectName : (project || "global");
+
+        // Run consolidation if enabled
+        const engine = new ConsolidationEngine();
+        const consolidationReport = await engine.run({
+          project: projectName || undefined,
+          operations: ["dedup", "extract_concepts", "score"],
+          provider: provider || undefined,
+        });
+
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, project: projectName, provider, consolidationReport }, null, 2) }] };
+      } catch (err: unknown) {
+        return { content: [{ type: "text" as const, text: `Failed to generate daily dreams: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    })
   );
 
   // Tool 8: Trace Feature Flow
@@ -1253,8 +1330,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   a2a("generate_system_flow", "Auto-generate a Mermaid flowchart diagram showing module dependency architecture.", ["project", "scope", "feature", "maxNodes"]);
   a2a("sync_system_memory", "Create or update the .agents/memory/ folder with auto-generated documentation and rules.", ["project", "businessRule", "changeDescription", "enableEnterpriseSync"]);
   a2a("get_system_memory", "Retrieve auto-generated system documentation and episodic memories for a project.", ["project", "eventType"]);
-  a2a("save_dream_memory", "Save a dreaming memory entry (mistake, preference, knowledge, pattern) with vector embedding.", ["memory_type", "content", "importance", "session_id", "project"]);
-  a2a("query_dream_memories", "Query dreaming memories by semantic similarity using Oracle 26ai vector search.", ["query", "project", "limit"]);
+  a2a("save_dream_memory", "Save a dreaming memory entry (mistake, preference, knowledge, pattern) with vector embedding.", ["memory_type", "content", "importance", "session_id", "project", "provider"]);
+  a2a("query_dream_memories", "Query dreaming memories by semantic similarity using Oracle 26ai vector search.", ["query", "project", "limit", "provider"]);
+  a2a("ingest_session_transcript", "Ingest conversation transcript, extract dreams per provider.", ["transcript", "session_id", "project", "provider"]);
+  a2a("generate_daily_dreams", "Trigger daily dream generation and consolidation.", ["project", "provider"]);
   a2a("trace_feature_flow", "Trace the complete execution flow of a feature through the codebase.", ["project", "keyword", "depth"]);
   a2a("generate_feature_flow_diagram", "Generate a Mermaid diagram showing the execution flow of a feature (call chains).", ["project", "keyword", "diagramType", "depth", "maxNodes"]);
   a2a("detect_architectural_smells", "Knowledge Graph Reasoning: Use Oracle 26ai to detect circular dependencies, god objects, and dead code.", ["project"]);

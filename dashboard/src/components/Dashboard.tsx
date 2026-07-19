@@ -30,6 +30,7 @@ import { CloudIndexView } from './CloudIndexView';
 import { DreamMemoryView } from './DreamMemoryView';
 import { SecondBrainView } from './SecondBrainView';
 import { DocumentationView } from './DocumentationView';
+import { OrchestrationTasksView } from './OrchestrationTasksView';
 import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
 import { getAuthHeaders } from '../lib/auth';
 
@@ -508,6 +509,8 @@ export const Dashboard: React.FC = () => {
         return <DreamMemoryView />;
       case 'Second Brain':
         return <SecondBrainView />;
+      case 'Orchestration Tasks':
+        return <OrchestrationTasksView />;
       case 'Documentation':
         return <DocumentationView />;
       default:
@@ -542,7 +545,7 @@ export const Dashboard: React.FC = () => {
             CODEATLAS <ShieldCheck size={20} />
           </h1>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {['Control Center', 'Knowledge Graph', 'Cloud Index', 'Dream Memories', 'Second Brain', 'Documentation'].map(tab => (
+            {['Control Center', 'Knowledge Graph', 'Cloud Index', 'Dream Memories', 'Second Brain', 'Orchestration Tasks', 'Documentation'].map(tab => (
               <li key={tab} style={{ marginBottom: '1rem' }}>
                 <button
                   onClick={() => setActiveTab(tab)}
@@ -561,6 +564,7 @@ export const Dashboard: React.FC = () => {
                   {tab === 'Cloud Index' && <Globe size={18} />}
                   {tab === 'Dream Memories' && <Brain size={18} />}
                   {tab === 'Second Brain' && <Lightbulb size={18} />}
+                  {tab === 'Orchestration Tasks' && <Network size={18} />}
                   {tab === 'Documentation' && <BookOpen size={18} />}
                   {tab}
                 </button>

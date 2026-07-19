@@ -23,6 +23,7 @@ const R_IDX = Object.freeze({
 
 export interface ConsolidationJob {
   project?: string;
+  provider?: string;
   operations: ("dedup" | "extract_concepts" | "score")[];
 }
 
@@ -53,10 +54,10 @@ export class ConsolidationEngine {
       try {
         switch (op) {
           case "dedup":
-            await this.dedupDreams(job.project, report);
+            await this.dedupDreams(job.project, job.provider, report);
             break;
           case "extract_concepts":
-            await this.extractConcepts(job.project, report);
+            await this.extractConcepts(job.project, job.provider, report);
             break;
           case "score":
             await this.scoreRelevance(report);
@@ -77,21 +78,21 @@ export class ConsolidationEngine {
    * Find and merge duplicate dreams (cosine similarity > 0.85).
    * Keeps the dream with higher importance, merges metadata.
    */
-  private async dedupDreams(project?: string, report?: ConsolidationReport): Promise<void> {
+  private async dedupDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
     let connection;
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
-      
+
       const auth = authStorage.getStore();
       const tenantId = auth ? auth.uid : "admin";
       await setSessionContext(connection, tenantId);
 
-      const whereClause = project 
-        ? "WHERE tenant_id = :tenantId AND project = :project" 
-        : "WHERE tenant_id = :tenantId";
+      const conditions = ["tenant_id = :tenantId"];
       const binds: Record<string, any> = { tenantId };
-      if (project) binds.project = project;
+      if (project) { conditions.push("project = :project"); binds.project = project; }
+      if (provider) { conditions.push("provider = :provider"); binds.provider = provider; }
+      const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
       // Get all non-consolidated dreams sorted by importance DESC
       const dreams = await connection.execute<any[]>(
@@ -178,21 +179,21 @@ export class ConsolidationEngine {
    * Extract abstract concepts from dream clusters.
    * For each project, groups related dreams and generates concept entries.
    */
-  private async extractConcepts(project?: string, report?: ConsolidationReport): Promise<void> {
+  private async extractConcepts(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
     let connection;
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
-      
+
       const auth = authStorage.getStore();
       const tenantId = auth ? auth.uid : "admin";
       await setSessionContext(connection, tenantId);
 
-      const whereClause = project 
-        ? "WHERE tenant_id = :tenantId AND project = :project" 
-        : "WHERE tenant_id = :tenantId";
+      const conditions = ["tenant_id = :tenantId"];
       const binds: Record<string, any> = { tenantId };
-      if (project) binds.project = project;
+      if (project) { conditions.push("project = :project"); binds.project = project; }
+      if (provider) { conditions.push("provider = :provider"); binds.provider = provider; }
+      const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
       const dreams = await connection.execute<any[]>(
         `SELECT id, content, memory_type, project, importance

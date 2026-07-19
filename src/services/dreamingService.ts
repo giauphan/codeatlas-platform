@@ -14,6 +14,7 @@ export interface DreamMemory {
   id: string;
   sessionId: string;
   project: string;
+  provider?: string;
   memoryType: DreamMemoryType;
   content: string;
   importance: number;
@@ -61,6 +62,7 @@ export class OracleDreamingService {
             id          VARCHAR2(255) PRIMARY KEY,
             session_id  VARCHAR2(255),
             project     VARCHAR2(255),
+            provider    VARCHAR2(255) DEFAULT NULL,
             memory_type VARCHAR2(50),
             content     CLOB,
             embedding   VECTOR,
@@ -81,6 +83,23 @@ export class OracleDreamingService {
 
       await connection.execute(createTableSql);
       logger.info("[Oracle Dreaming] Table ai_dreaming_memory initialized successfully");
+
+      // Migration: add provider column if missing (v2.15.0)
+      try {
+        await connection.execute(`
+          BEGIN
+            EXECUTE IMMEDIATE 'ALTER TABLE ai_dreaming_memory ADD (provider VARCHAR2(255) DEFAULT NULL)';
+          EXCEPTION
+            WHEN OTHERS THEN
+              IF SQLCODE = -1430 THEN NULL;  -- ORA-01430: column already exists
+              ELSE RAISE;
+              END IF;
+          END;
+        `);
+        logger.info("[Oracle Dreaming] Provider column migration checked/added");
+      } catch (migrateErr) {
+        logger.warn("[Oracle Dreaming] Provider column migration skipped:", migrateErr instanceof Error ? migrateErr.message : String(migrateErr));
+      }
 
       // Second Brain and Genome tables are lazily initialized on first server start.
       // This avoids forcing users to run a separate migration step.
@@ -209,7 +228,8 @@ export class OracleDreamingService {
     sessionId: string,
     memoryType: DreamMemoryType,
     content: string,
-    importance: number
+    importance: number,
+    aiModel?: string
   ): Promise<string> {
     // Generate embedding BEFORE acquiring a database connection
     const embeddingVector = await generateEmbedding(content, 'passage');
@@ -227,14 +247,15 @@ export class OracleDreamingService {
       const id = `${project}_${memoryType}_${sessionId}_${Date.now()}`;
 
       const sql = `
-        INSERT INTO ai_dreaming_memory (id, session_id, project, memory_type, content, embedding, importance, tenant_id)
-        VALUES (:id, :sessionId, :project, :memoryType, :content, :embedding, :importance, :tenantId)
+        INSERT INTO ai_dreaming_memory (id, session_id, project, provider, memory_type, content, embedding, importance, tenant_id)
+        VALUES (:id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :tenantId)
       `;
 
       await connection.execute(sql, {
         id,
         sessionId,
         project,
+        provider: aiModel ?? null,
         memoryType,
         content,
         embedding: embeddingVector ? new Float32Array(embeddingVector) : null,
@@ -268,7 +289,8 @@ export class OracleDreamingService {
     queryText: string,
     limit: number = 10,
     offset: number = 0,
-    memoryType?: string
+    memoryType?: string,
+    provider?: string
   ) {
     const queryVector = await generateEmbedding(queryText, 'query');
 
@@ -276,17 +298,21 @@ export class OracleDreamingService {
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
-      
+
       const auth = authStorage.getStore();
       const tenantId = auth ? auth.uid : "admin";
       await setSessionContext(connection, tenantId);
 
       const projectFilter = project ? 'AND project = :project' : '';
 
+      // Build provider filter
+      const providerFilter = provider ? 'AND provider = :provider' : '';
+
       // Build type filter for memory_type IN clause
       let typeFilter = '';
       const binds: Record<string, unknown> = { tenantId, limit, offset };
       if (project) binds.project = project;
+      if (provider) binds.provider = provider;
       if (queryVector) {
         binds.queryVector = new Float32Array(queryVector);
       }
@@ -301,9 +327,9 @@ export class OracleDreamingService {
       }
 
       const sql = `
-        SELECT id, session_id, project, memory_type, content, importance, created_at
+        SELECT id, session_id, project, provider, memory_type, content, importance, created_at
         FROM ai_dreaming_memory
-        WHERE tenant_id = :tenantId ${projectFilter} ${typeFilter}
+        WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter}
         ${queryVector ? 'ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)' : 'ORDER BY created_at DESC'}
         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
       `;
