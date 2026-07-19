@@ -341,14 +341,16 @@ describe('OracleDreamingService', () => {
 
       await OracleDreamingService.initialize();
 
-      // Should have executed 4 PL/SQL blocks (dreams + concepts + genome + mutations + relationships)
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 5);
-      const sql = mockConnection.execute.mock.calls[0].arguments[0] as string;
-      const sql2 = mockConnection.execute.mock.calls[1].arguments[0] as string;
-      const sql3 = mockConnection.execute.mock.calls[2].arguments[0] as string;
-      const sql4 = mockConnection.execute.mock.calls[3].arguments[0] as string;
-      const sql5 = mockConnection.execute.mock.calls[4].arguments[0] as string;
-      assert.ok(sql.includes('CREATE TABLE ai_dreaming_memory'));
+      // Should have executed 6 PL/SQL blocks (dreams + ALTER + concepts + genome + mutations + relationships)
+      assert.strictEqual(mockConnection.execute.mock.calls.length, 6);
+      const sql0 = mockConnection.execute.mock.calls[0].arguments[0] as string;
+      const sql1 = mockConnection.execute.mock.calls[1].arguments[0] as string;
+      const sql2 = mockConnection.execute.mock.calls[2].arguments[0] as string;
+      const sql3 = mockConnection.execute.mock.calls[3].arguments[0] as string;
+      const sql4 = mockConnection.execute.mock.calls[4].arguments[0] as string;
+      const sql5 = mockConnection.execute.mock.calls[5].arguments[0] as string;
+      assert.ok(sql0.includes('CREATE TABLE ai_dreaming_memory'));
+      assert.ok(sql1.includes('ALTER TABLE ai_dreaming_memory ADD (provider'));
       assert.ok(sql2.includes('codeatlas_concepts'));
       assert.ok(sql3.includes('codeatlas_genome'));
       assert.ok(sql4.includes('gene_mutations'));
@@ -362,8 +364,8 @@ describe('OracleDreamingService', () => {
 
       await OracleDreamingService.initialize();
 
-      // Should succeed without throwing (5 PL/SQL blocks)
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 5);
+      // Should succeed without throwing (6 PL/SQL blocks incl. provider migration)
+      assert.strictEqual(mockConnection.execute.mock.calls.length, 6);
     });
 
     test('throws on initPool failure', async () => {

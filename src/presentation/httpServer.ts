@@ -29,8 +29,11 @@ import { mountHeartbeatRoutes } from "./a2a/heartbeatRoutes.js";
 import { mountCronSettingsRoutes } from "./cronSettingsRoute.js";
 import { authProxyRouter } from "../routes/authProxy.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
+import { a2aOrchestrationService } from "../services/a2aOrchestrationService.js";
 import { logger } from "../utils/logger.js";
 import * as crypto from "crypto";
+import { matchesCron } from "../utils/cron.js";
+import { loadSettings } from "./cronSettingsRoute.js";
 
 // Wrapper object to allow clean mocking of Firebase services in testing environments
 export const firebaseClient = {
@@ -732,9 +735,19 @@ app.get("/api/analysis", authMiddleware, async (req, res) => {
 
 // REST API: Trigger re-index
 app.post("/api/reindex", authMiddleware, async (req, res) => {
-  res.status(400).json({ 
-    error: "Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-enterprise client to synchronize AST data." 
+  res.status(400).json({
+    error: "Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-enterprise client to synchronize AST data."
   });
+});
+
+// REST API: List A2A orchestration tasks (tenant-scoped)
+app.get("/api/orchestration/tasks", authMiddleware, async (req, res) => {
+  try {
+    const tasks = await a2aOrchestrationService.listTasks();
+    res.json({ success: true, tasks });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
+  }
 });
 
 // REST API: Securely sync local AST analysis from Local-First gateway and sync telemetry
@@ -1153,6 +1166,46 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
   };
   const initialDelay = Math.floor(Math.random() * JITTER_MS * 2);
   setTimeout(scheduleNextPing, initialDelay);
+
+  // --- Daily Dream Generation Scheduler ---
+  let lastDreamRunDate: string | null = null;
+  const CRON_CHECK_INTERVAL_MS = 60 * 1000;
+
+  setInterval(async () => {
+    const now = new Date();
+    const settings = await loadSettings();
+
+    if (settings.dreams_enabled && matchesCron(settings.dreams_schedule, now)) {
+      const today = now.toISOString().split('T')[0];
+      if (lastDreamRunDate === today) {
+        return;
+      }
+
+      logger.info(`[DreamCron] Triggering daily dream generation for provider: ${settings.dreams_provider || 'all'}`);
+      try {
+        const internalApiKey = process.env.CODEATLAS_API_KEY;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (internalApiKey) {
+          headers['x-api-key'] = internalApiKey;
+        }
+        const response = await fetch(`http://localhost:${port}/api/dreams/generate-daily-dreams`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ provider: settings.dreams_provider }),
+        });
+
+        if (response.ok) {
+          logger.info(`[DreamCron] Daily dream generation successful for ${today}.`);
+          lastDreamRunDate = today;
+        } else {
+          const errorText = await response.text();
+          logger.error(`[DreamCron] Daily dream generation failed: ${response.status} - ${errorText}`);
+        }
+      } catch (err) {
+        logger.error("[DreamCron] Error during daily dream generation:", err);
+      }
+    }
+  }, CRON_CHECK_INTERVAL_MS);
 
   return new Promise((resolve, reject) => {
     function attempt(remaining: number) {
