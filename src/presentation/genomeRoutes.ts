@@ -200,7 +200,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       const skillsDir = path.join(process.env.HOME || "/home/ubuntu", ".hermes", "skills");
       let synced = 0, failed = 0;
       if (!fs.existsSync(skillsDir)) return res.json({ synced: 0, failed: 0 });
-      for (const dir of fs.readdirSync(skillsDir)) {
+      for (const dir of await fs.promises.readdir(skillsDir)) {
         const sp = path.join(skillsDir, dir, "SKILL.md");
         if (!fs.existsSync(sp)) continue;
         try {
