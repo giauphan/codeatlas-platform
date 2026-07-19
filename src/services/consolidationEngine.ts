@@ -215,6 +215,8 @@ export class ConsolidationEngine {
 
       let conceptsCreated = 0;
 
+      // Phase 1: Compute embeddings and prepare concept data
+      const conceptsData: any[] = [];
       for (const [proj, group] of byProject) {
         // Take top 10 highest-importance dreams per project for concept extraction
         const topDreams = group.slice(0, 10);
@@ -223,7 +225,6 @@ export class ConsolidationEngine {
           .join("\n\n");
 
         // Generate a concept label and description from the content
-        // In production, this would use an LLM call. For MVP, use content-based heuristics.
         const conceptLabel = this.extractLabel(topDreams);
         const conceptDescription = combinedContent.slice(0, 1000);
         const conceptEmbedding = await generateEmbedding(conceptDescription, "passage");
@@ -233,43 +234,91 @@ export class ConsolidationEngine {
           continue;
         }
 
-        // Lookup: same label + project + tenant → update; otherwise insert new row.
-        const existing = await connection.execute<any[]>(
-          `SELECT id FROM codeatlas_concepts WHERE label = :label AND project = :proj AND tenant_id = :tenantId`,
-          { label: conceptLabel, proj, tenantId } as any
-        );
+        conceptsData.push({
+          proj,
+          conceptLabel,
+          conceptDescription,
+          conceptEmbedding,
+          sources: JSON.stringify(topDreams.map((d) => d[R_IDX.ID]))
+        });
+      }
 
-        if (existing.rows && existing.rows.length > 0) {
-          // Concept exists → increment version, update description, reset error count.
-          await connection.execute(
+      if (conceptsData.length > 0) {
+        // Phase 2: Batch lookup existing concepts to avoid N+1 queries
+        const existingConcepts = new Set<string>();
+        const BATCH_SIZE = 50;
+        for (let i = 0; i < conceptsData.length; i += BATCH_SIZE) {
+          const chunk = conceptsData.slice(i, i + BATCH_SIZE);
+          const orConditions: string[] = [];
+          const bindsForSelect: Record<string, any> = { tenantId };
+
+          chunk.forEach((c, idx) => {
+            bindsForSelect[`l${idx}`] = c.conceptLabel;
+            bindsForSelect[`p${idx}`] = c.proj;
+            orConditions.push(`(label = :l${idx} AND project = :p${idx})`);
+          });
+
+          const query = `SELECT label, project FROM codeatlas_concepts WHERE tenant_id = :tenantId AND (${orConditions.join(' OR ')})`;
+          const existing = await connection.execute<any[]>(query, bindsForSelect);
+
+          if (existing.rows) {
+            for (const row of existing.rows) {
+              existingConcepts.add(`${row[0]}::${row[1]}`); // label::project
+            }
+          }
+        }
+
+        // Phase 3: Split into updates and inserts
+        const toUpdate: any[] = [];
+        const toInsert: any[] = [];
+
+        for (const data of conceptsData) {
+          const key = `${data.conceptLabel}::${data.proj}`;
+          if (existingConcepts.has(key)) {
+            toUpdate.push({
+              label: data.conceptLabel,
+              proj: data.proj,
+              desc: data.conceptDescription,
+              tenantId
+            });
+          } else {
+            toInsert.push({
+              id: `concept-${randomUUID().slice(0, 8)}`,
+              label: data.conceptLabel,
+              desc: data.conceptDescription,
+              embedding: new Float32Array(data.conceptEmbedding),
+              proj: data.proj,
+              sources: data.sources,
+              tenantId
+            });
+            conceptsCreated++;
+          }
+        }
+
+        // Phase 4: Batch execute updates and inserts
+        if (toUpdate.length > 0) {
+          await connection.executeMany(
             `UPDATE codeatlas_concepts
              SET description = :desc,
                  evidence_count = evidence_count + 1,
                  updated_at = CURRENT_TIMESTAMP
              WHERE label = :label AND project = :proj AND tenant_id = :tenantId`,
-            { label: conceptLabel, proj, desc: conceptDescription, tenantId } as any,
+            toUpdate,
             { autoCommit: true }
           );
-        } else {
-          // Insert new concept
-          const conceptId = `concept-${randomUUID().slice(0, 8)}`;
-          await connection.execute(
+        }
+
+        if (toInsert.length > 0) {
+          await connection.executeMany(
             `INSERT INTO codeatlas_concepts (id, label, description, category, embedding, project, confidence, source_ids, evidence_count, status, tenant_id)
              VALUES (:id, :label, :desc, 'lesson', :embedding, :proj, 0.50, :sources, 1, 'active', :tenantId)`,
-            {
-              id: conceptId,
-              label: conceptLabel,
-              desc: conceptDescription,
-              embedding: new Float32Array(conceptEmbedding),
-              proj,
-              sources: JSON.stringify(topDreams.map((d) => d[R_IDX.ID])),
-              tenantId,
-            } as any,
+            toInsert,
             { autoCommit: true }
           );
-          conceptsCreated++;
         }
+
       }
+
 
       report!.conceptsCreated = conceptsCreated;
       logger.info(`[Consolidation] Extracted ${conceptsCreated} concepts`);
