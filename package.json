@@ -54,6 +54,7 @@
     "firebase-admin": "^13.10.0",
     "glob": "^10.3.10",
     "google-auth-library": "^10.9.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "oracledb": "^6.10.0",
     "py-ast": "^1.9.0",

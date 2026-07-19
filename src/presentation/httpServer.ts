@@ -1,4 +1,5 @@
 import express from "express";
+import helmet from "helmet";
 import { IncomingMessage, Server } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -144,6 +145,10 @@ export const syncQueue = new TaskQueue(1);
 
 // Setup Express app to serve as both MCP SSE and REST API
 export const app = express();
+// Use helmet for standard security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin to match CORS logic below
+}));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
