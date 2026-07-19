@@ -72,6 +72,10 @@ async function getAccessToken(): Promise<string> {
 router.post("/api/auth/signin", authRateLimiter, async (req, res) => {
   const { email, password } = req.body || {};
 
+  if (req.body && req.body.password) {
+    req.body.password = "[REDACTED]";
+  }
+
   if (!email || !password) {
     return res.status(400).json({ error: "Email and password are required" });
   }
