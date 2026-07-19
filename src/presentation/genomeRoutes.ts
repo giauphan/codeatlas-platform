@@ -200,11 +200,12 @@ export function mountGenomeRoutes(app: express.Application): void {
       const skillsDir = path.join(process.env.HOME || "/home/ubuntu", ".hermes", "skills");
       let synced = 0, failed = 0;
       if (!fs.existsSync(skillsDir)) return res.json({ synced: 0, failed: 0 });
-      for (const dir of fs.readdirSync(skillsDir)) {
+      const dirs = await fs.promises.readdir(skillsDir);
+      for (const dir of dirs) {
         const sp = path.join(skillsDir, dir, "SKILL.md");
         if (!fs.existsSync(sp)) continue;
         try {
-          const c = fs.readFileSync(sp, "utf-8");
+          const c = await fs.promises.readFile(sp, "utf-8");
           const desc = c.match(/^description: "(.+)"$/m)?.[1] || "";
           const cat = c.match(/^category: (.+)$/m)?.[1] || "workflow";
           await GenomeService.upsertGene({ name: dir, description: desc, problem: "Need " + dir, solution: desc || dir, category: cat, project: "codeatlas-genome", sourceType: "skill", confidence: 0.70 });
