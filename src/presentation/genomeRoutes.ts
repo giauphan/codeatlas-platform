@@ -193,7 +193,7 @@ export function mountGenomeRoutes(app: express.Application): void {
 
 
   // ── Auto-Sync: Hermes Skills -> Genome ───────────────────────
-  app.post("/api/genome/sync-skills", authMiddleware, async (req: any, res: any) => {
+  app.post("/api/genome/sync-skills", authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const fs = await import("node:fs");
       const path = await import("node:path");
