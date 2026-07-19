@@ -573,7 +573,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       if (await fileExists(userDir)) {
         try {
           const userProjects = await fs.promises.readdir(userDir);
-          for (const p of userProjects) {
+          await Promise.all(userProjects.map(async (p) => {
             const fullPath = path.join(userDir, p);
             try {
               const stat = await fs.promises.stat(fullPath);
@@ -581,7 +581,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
                 searchDirs.push(fullPath);
               }
             } catch { /* skip */ }
-          }
+          }));
         } catch { /* skip */ }
       }
     }
@@ -606,7 +606,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
               const tStat = await fs.promises.stat(tDir);
               if (tStat.isDirectory()) {
                 const tProjects = await fs.promises.readdir(tDir);
-                for (const p of tProjects) {
+                await Promise.all(tProjects.map(async (p) => {
                   const fullPath = path.join(tDir, p);
                   try {
                     const stat = await fs.promises.stat(fullPath);
@@ -614,7 +614,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
                       searchDirs.push(fullPath);
                     }
                   } catch { /* skip */ }
-                }
+                }));
               }
             } catch { /* skip */ }
           }
@@ -643,7 +643,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     if (await fileExists(projectsDir)) {
       try {
         const subDirs = await fs.promises.readdir(projectsDir);
-        for (const p of subDirs) {
+        await Promise.all(subDirs.map(async (p) => {
           const fullPath = path.join(projectsDir, p);
           try {
             const stat = await fs.promises.stat(fullPath);
@@ -651,7 +651,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
               searchDirs.push(fullPath);
             }
           } catch { /* skip */ }
-        }
+        }));
       } catch { /* skip */ }
     }
 
