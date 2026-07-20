@@ -1,85 +1,10 @@
 import { logger } from "../utils/logger.js";
 
-// --- Type Definitions ---
-interface AnthropicMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
-interface AnthropicResponse {
-  id: string;
-  type: "message";
-  role: "assistant";
-  model: string;
-  stop_reason: string;
-  stop_sequence: null;
-  usage: {
-    input_tokens: number;
-    output_tokens: number;
-  };
-  content: Array<{
-    type: "text";
-    text: string;
-  }>;
-}
-
 /**
- * Generates text using Anthropic Messages API (or compatible local LLM).
- */
-export async function generateText(
-  prompt: string,
-  system?: string,
-  model: string = "claude-3-opus-20240229", // Default to a capable Claude model
-  temperature: number = 0.7,
-  maxTokens: number = 1024
-): Promise<string | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  const apiUrl = process.env.ANTHROPIC_API_URL || "https://api.anthropic.com/v1/messages";
-
-  if (!apiKey) {
-    logger.warn("[LLM Service] ANTHROPIC_API_KEY is not set. Skipping text generation.");
-    return null;
-  }
-
-  const messages: AnthropicMessage[] = [{ role: "user", content: prompt }];
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "x-api-key": apiKey,
-    "anthropic-version": "2023-06-01",
-  };
-
-  try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify({
-        model: model,
-        max_tokens: maxTokens,
-        temperature: temperature,
-        system: system,
-        messages: messages,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      logger.error(`[LLM Service] API returned error ${response.status}: ${errText}`);
-      return null;
-    }
-
-    const data: AnthropicResponse = await response.json();
-    if (data?.content?.[0]?.text) {
-      return data.content[0].text;
-    }
-    return null;
-  } catch (error) {
-    logger.error("[LLM Service] Connection error to LLM API:", error);
-    return null;
-  }
-}
-
-/**
- * Summarizes conversation transcripts to extract key learnings/dreams.
+ * Local keyword-based dream extraction from conversation transcripts.
+ * No external API needed — uses pattern matching and sentence analysis.
+ * Each message segment (USER/ASSISTANT) is classified independently,
+ * then deduplicated across the session.
  */
 export async function summarizeConversationForDreams(
   transcript: string,
@@ -87,37 +12,82 @@ export async function summarizeConversationForDreams(
   project: string,
   sessionId: string
 ): Promise<Array<{ memoryType: string; content: string; importance: number }> | null> {
-  const systemPrompt = `You are an expert AI assistant tasked with identifying key learnings, mistakes, preferences, and patterns from conversation transcripts. Your goal is to extract concise "dream memories" that can guide future AI interactions.
+  const segments = transcript.split(/\n\n---\n\n/);
+  const dreams: Array<{ memoryType: string; content: string; importance: number }> = [];
+  const seen = new Set<string>();
 
-Output format: A JSON array of objects, each with 'memoryType' (MISTAKE, PREFERENCE, KNOWLEDGE, PATTERN), 'content' (the extracted dream), and 'importance' (1-9).`;
+  for (const segment of segments) {
+    const roleMatch = segment.match(/^\[(USER|ASSISTANT)\]/);
+    if (!roleMatch) continue;
+    const role = roleMatch[1];
+    const text = segment.replace(/^\[(USER|ASSISTANT)\]\n/, "").trim();
+    if (!text || text.length < 30) continue;
 
-  const userPrompt = `Analyze the following conversation transcript from session "${sessionId}" for project "${project}" (AI provider: ${provider}). Extract up to 5 distinct dream memories. Each memory should be a single, concise sentence.
+    // Classify based on keyword patterns
+    const lower = text.toLowerCase();
 
-Transcript:
-"""
-${transcript}
-"""
+    // Split into sentences for finer-grained extraction
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 30);
 
-Example output:
-[
-  { "memoryType": "KNOWLEDGE", "content": "User prefers concise responses.", "importance": 7 },
-  { "memoryType": "MISTAKE", "content": "Previous interaction failed due to misinterpreting context.", "importance": 8 }
-]`;
+    for (const sentence of sentences) {
+      const sl = sentence.toLowerCase().trim();
+      // Dedup: skip if content too similar to already extracted
+      const key = sl.slice(0, 60);
+      if (seen.has(key)) continue;
 
-  const response = await generateText(userPrompt, systemPrompt);
-  if (!response) {
-    return null;
-  }
+      let memoryType: string | null = null;
+      let importance = 5;
 
-  try {
-    const dreams = JSON.parse(response);
-    if (Array.isArray(dreams) && dreams.every(d => d.memoryType && d.content && d.importance)) {
-      return dreams;
+      // MISTAKE: error/fail/bug/wrong patterns
+      if (/\b(mistake|error|fail|bug|wrong|broken|crash|exception|regression|incorrect)\b/i.test(sl)) {
+        memoryType = "MISTAKE";
+        importance = /\b(critical|security|crash|data.loss|vulnerability)\b/i.test(sl) ? 8 : 6;
+      }
+      // PREFERENCE: user preferences and style
+      else if (/\b(prefer|like|want|would rather|style|convention|standard|best practice)\b/i.test(sl)) {
+        memoryType = "PREFERENCE";
+        importance = 6;
+      }
+      // PATTERN: recurring structures and approaches
+      else if (/\b(pattern|always|often|typically|recurring|whenever|common|standard way)\b/i.test(sl)) {
+        memoryType = "PATTERN";
+        importance = 6;
+      }
+      // FIX: fix/refactor/improve patterns
+      else if (/\b(fix|refactor|optimize|improve|migrate|replace|upgrade)\b/i.test(sl)) {
+        memoryType = "KNOWLEDGE";
+        importance = 5;
+      }
+      // KNOWLEDGE: general learnings (only from assistant, not user)
+      else if (role === "ASSISTANT" && sl.length > 80) {
+        memoryType = "KNOWLEDGE";
+        importance = 4;
+      }
+
+      if (memoryType) {
+        seen.add(key);
+        dreams.push({
+          memoryType,
+          content: sentence.trim().slice(0, 300),
+          importance,
+        });
+      }
     }
-    logger.error("[LLM Service] Invalid dream format from LLM:", response);
-    return null;
-  } catch (e) {
-    logger.error("[LLM Service] Failed to parse LLM response for dreams:", e);
-    return null;
   }
+
+  // Limit to top 10 by importance
+  dreams.sort((a, b) => b.importance - a.importance);
+  const top = dreams.slice(0, 10);
+
+  // Dedup near-duplicates (same memoryType + similar content start)
+  const final: typeof dreams = [];
+  const finalSeen = new Set<string>();
+  for (const d of top) {
+    const dk = `${d.memoryType}:${d.content.slice(0, 40)}`;
+    if (finalSeen.has(dk)) continue;
+    finalSeen.add(dk);
+    final.push(d);
+  }
+
+  return final.length > 0 ? final : null;
 }
