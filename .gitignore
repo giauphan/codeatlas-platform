@@ -52,3 +52,6 @@ pr.md
 .Jules/
 .codegraph/
 *.log
+# Test scripts with hardcoded API keys
+tests/*.sh
+*.sh
