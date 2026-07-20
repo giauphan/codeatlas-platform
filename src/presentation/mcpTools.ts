@@ -5,14 +5,13 @@ import * as path from "path";
 import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { checkAuth, logActivity } from "../services/authService.js";
-import { 
-  discoverProjectsAsync, 
-  loadAnalysisAsync, 
-  getStats, 
+import {
+  discoverProjectsAsync,
   fileExists,
-  AnalysisResultLocal,
-  registerProject
+  getStats,
+  registerProject,
 } from "../services/projectService.js";
+import { loadAnalysisAsync, AnalysisResultLocal } from "../services/projectService.js";
 import { OracleMemoryService } from "../services/memoryService.js";
 import { OracleDreamingService, DreamMemoryType } from "../services/dreamingService.js";
 import { SecurityScanner } from "../services/scanner/securityScanner.js";
@@ -23,15 +22,14 @@ import { summarizeConversationForDreams } from "../services/llmService.js";
 import { logger } from "../utils/logger.js";
 import { registerTool } from "./a2a/agentCard.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
+import { indexingService } from "../services/indexingService.js";
 import { authStorage } from "../utils/context.js";
 import { randomUUID } from "node:crypto";
 
-/** Auto-register tool metadata for A2A Agent Card AND register handler on executor */
+/** Auto-register tool metadata for A2A Agent Card AND register handler on executor (Stub) */
 function a2a(name: string, description: string, params: string[]) {
   registerTool({ name, description, params });
   a2aExecutor.registerToolHandler(name, async (p: Record<string, unknown>) => {
-    // Forward call to MCP server — this stub returns the tool is available.
-    // Full dispatch is handled by the MCP stdio client.
     return {
       tool: name,
       params: p,
@@ -41,58 +39,69 @@ function a2a(name: string, description: string, params: string[]) {
   });
 }
 
+/** Register tool with REAL handler for A2A executor */
+function a2aReal(name: string, description: string, params: string[], handler: (params: Record<string, unknown>) => Promise<unknown>) {
+  registerTool({ name, description, params });
+  a2aExecutor.registerToolHandler(name, handler);
+}
+
 import { injectAuthContext } from '../utils/authContext.js';
 
 export function registerTools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }) {
   injectAuthContext(server, sessionAuth);
 
-  // Tool -1: Analyze a project
+  // Tool -1: Analyze a project (now calls embedded indexing service)
+  const analyzeHandler = async (params: Record<string, unknown>) => {
+    const projectDir = params.projectDir as string;
+    const auth = await checkAuth();
+    await logActivity(auth, "analyze", { projectDir });
+    const success = await indexingService.indexProject(projectDir);
+    if (success) {
+      const loaded = await loadAnalysisAsync(projectDir);
+      return { content: [{ type: "text" as const, text: JSON.stringify(loaded, null, 2) }] };
+    } else {
+      throw new Error(`Failed to index project: ${projectDir}`);
+    }
+  };
   server.tool(
     "analyze",
     "Perform deep code analysis on a local project directory. Generates .codeatlas/analysis.json.",
     {
-      path: z.string().describe("Absolute path to the project directory to analyze"),
-      maxFiles: z.number().optional().describe("Maximum files to analyze (default: 5000)"),
+      projectDir: z.string().describe("The absolute path to the project directory to analyze."),
     },
-    async ({ path: projectPath, maxFiles }: { path: string; maxFiles?: number }) => {
-      const auth = await checkAuth();
-      await logActivity(auth, "analyze", { path: projectPath, maxFiles });
-      
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-enterprise client to synchronize AST data.`
-        }],
-        isError: true
-      };
-    }
+    analyzeHandler
   );
+  // Sử dụng a2aReal để đăng ký analyze tool handler thật trên a2aExecutor
+  a2aReal("analyze", "Perform deep code analysis on a local project directory. Generates .codeatlas/analysis.json.", ["projectDir"], analyzeHandler);
 
   // Tool 0: List all discovered projects
+  const listProjectsHandler = async () => {
+    const auth = await checkAuth();
+    await logActivity(auth, "list_projects", {});
+    const projects = await discoverProjectsAsync(auth.uid);
+    if (projects.length === 0) {
+      return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
+    }
+
+    const result = {
+      projectCount: projects.length,
+      projects: projects.map((p) => ({
+        name: p.name,
+        path: p.dir,
+        lastAnalyzed: p.modifiedAt.toISOString(),
+      })),
+    };
+
+    return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+  };
   server.tool(
     "list_projects",
     "List all projects that have been analyzed by CodeAtlas. Returns project names, paths, and last analysis time.",
     {},
-    async () => {
-      const auth = await checkAuth();
-      await logActivity(auth, "list_projects", {});
-      const projects = await discoverProjectsAsync(auth.uid);
-      if (projects.length === 0) {
-        return { content: [{ type: "text" as const, text: "No analyzed projects found. Run 'analyze' tool first." }] };
-      }
-
-      const result = {
-        projectCount: projects.length,
-        projects: projects.map((p) => ({
-          name: p.name,
-          path: p.dir,
-          lastAnalyzed: p.modifiedAt.toISOString(),
-        })),
-      };
-
-      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-    }
+    listProjectsHandler
   );
+  // Sử dụng a2aReal để đăng ký list_projects tool handler thật trên a2aExecutor
+  a2aReal("list_projects", "List all projects that have been analyzed by CodeAtlas.", [], listProjectsHandler);
 
   // Tool 1: Get project structure
   server.tool(
@@ -1265,6 +1274,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         error?: string;
       }
       const scanResults: ProjectScanSummary[] = [];
+
       const limit = maxProjects || (isEnterprise ? projects.length : 3);
       const projectsToScan = projects.slice(0, limit);
 
@@ -1320,8 +1330,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
   // === A2A Agent Card auto-registration ===
   // Each tool maps to an A2A Skill in /.well-known/agent-card.json
-  a2a("analyze", "Perform deep code analysis on a local project directory. Generates .codeatlas/analysis.json.", ["path", "maxFiles"]);
-  a2a("list_projects", "List all projects that have been analyzed by CodeAtlas. Returns project names, paths, and last analysis time.", []);
+  a2aReal("analyze", "Perform deep code analysis on a local project directory. Generates .codeatlas/analysis.json.", ["path", "maxFiles"], analyzeHandler);
+  a2aReal("list_projects", "List all projects that have been analyzed by CodeAtlas.", [], listProjectsHandler);
   a2a("get_project_structure", "Get all modules, classes, functions, and variables in the analyzed project directory.", ["project", "type", "limit"]);
   a2a("get_dependencies", "Get import/call/containment/implements relationships between code entities.", ["project", "source", "target", "relationship", "limit"]);
   a2a("get_insights", "Get AI-generated code insights including refactoring suggestions and quality metrics.", []);

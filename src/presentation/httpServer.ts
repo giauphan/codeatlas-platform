@@ -31,6 +31,7 @@ import { mountCronSettingsRoutes } from "./cronSettingsRoute.js";
 import { authProxyRouter } from "../routes/authProxy.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { a2aOrchestrationService } from "../services/a2aOrchestrationService.js";
+import { indexingService } from "../services/indexingService.js";
 import { logger } from "../utils/logger.js";
 import * as crypto from "crypto";
 import { matchesCron } from "../utils/cron.js";
