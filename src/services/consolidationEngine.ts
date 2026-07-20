@@ -10,7 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
-import { generateEmbedding } from "./embeddingService.js";
+import { generateEmbedding, generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 
@@ -217,6 +217,9 @@ export class ConsolidationEngine {
 
       // Phase 1: Compute embeddings and prepare concept data
       const conceptsData: any[] = [];
+      const intermediateConcepts: any[] = [];
+      const descriptionsToEmbed: string[] = [];
+
       for (const [proj, group] of byProject) {
         // Take top 10 highest-importance dreams per project for concept extraction
         const topDreams = group.slice(0, 10);
@@ -227,20 +230,35 @@ export class ConsolidationEngine {
         // Generate a concept label and description from the content
         const conceptLabel = this.extractLabel(topDreams);
         const conceptDescription = combinedContent.slice(0, 1000);
-        const conceptEmbedding = await generateEmbedding(conceptDescription, "passage");
 
-        if (!conceptEmbedding || conceptEmbedding.length === 0) {
-          logger.warn(`[Consolidation] No embedding for concept "${conceptLabel}", skipping`);
-          continue;
-        }
+        if (conceptDescription.trim().length === 0) continue;
 
-        conceptsData.push({
+        intermediateConcepts.push({
           proj,
           conceptLabel,
           conceptDescription,
-          conceptEmbedding,
           sources: JSON.stringify(topDreams.map((d) => d[R_IDX.ID]))
         });
+        descriptionsToEmbed.push(conceptDescription);
+      }
+
+      if (descriptionsToEmbed.length > 0) {
+        const embeddings = await generateEmbeddingsBatch(descriptionsToEmbed, "passage");
+        if (embeddings && embeddings.length === descriptionsToEmbed.length) {
+          for (let i = 0; i < intermediateConcepts.length; i++) {
+            const emb = embeddings[i];
+            if (!emb || emb.length === 0) {
+              logger.warn(`[Consolidation] No embedding for concept "${intermediateConcepts[i].conceptLabel}", skipping`);
+              continue;
+            }
+            conceptsData.push({
+              ...intermediateConcepts[i],
+              conceptEmbedding: emb
+            });
+          }
+        } else {
+           logger.error(`[Consolidation] Failed to generate batch embeddings for ${descriptionsToEmbed.length} concepts`);
+        }
       }
 
       if (conceptsData.length > 0) {
