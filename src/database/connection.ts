@@ -1,4 +1,5 @@
 import oracledb from "oracledb";
+import * as path from "node:path";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 
@@ -27,17 +28,22 @@ export function getPool(): oracledb.Pool | null {
 export async function initPool(): Promise<oracledb.Pool> {
   if (!pool) {
     try {
-      // Activate Thick Mode by pointing to the Oracle Instant Client directory
-      if (process.env.ORACLE_LIB_DIR) {
+      // Activate Thick Mode — needed for TCPS (mTLS) wallet connections.
+      // Triggered by either ORACLE_LIB_DIR (explicit lib path) or ORACLE_WALLET_DIR (wallet config).
+      const walletDir = process.env.ORACLE_WALLET_DIR;
+      const libDir = process.env.ORACLE_LIB_DIR;
+      if (libDir || walletDir) {
         logger.info("🚀 Initializing Oracle Client in Thick Mode...");
         try {
-          const initOptions: oracledb.InitialiseOptions = {
-            configDir: process.env.ORACLE_WALLET_DIR
-          };
-          // On Linux, passing libDir is not supported in initOracleClient() and causes DPI-1047 or crash.
-          // Systems libraries must be configured via LD_LIBRARY_PATH or ldconfig on Linux.
-          if (process.platform !== "linux") {
-            initOptions.libDir = process.env.ORACLE_LIB_DIR;
+          const initOptions: oracledb.InitialiseOptions = {};
+          if (walletDir) {
+            // Resolve relative to project root
+            initOptions.configDir = path.resolve(walletDir);
+          }
+          // On Linux, cannot pass libDir to initOracleClient (causes DPI-1047).
+          // Must use LD_LIBRARY_PATH or ldconfig instead.
+          if (process.platform !== "linux" && libDir) {
+            initOptions.libDir = libDir;
           }
           oracledb.initOracleClient(initOptions);
         } catch (initErr: unknown) {
