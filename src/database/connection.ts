@@ -38,7 +38,10 @@ export async function initPool(): Promise<oracledb.Pool> {
           const initOptions: oracledb.InitialiseOptions = {};
           if (walletDir) {
             // Resolve relative to project root
-            initOptions.configDir = path.resolve(walletDir);
+            const absWalletDir = path.resolve(walletDir);
+            initOptions.configDir = absWalletDir;
+            // Also set TNS_ADMIN so sqlnet.ora and wallet files are found
+            process.env.TNS_ADMIN = absWalletDir;
           }
           // On Linux, cannot pass libDir to initOracleClient (causes DPI-1047).
           // Must use LD_LIBRARY_PATH or ldconfig instead.
