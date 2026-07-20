@@ -35,6 +35,12 @@ export async function initPool(): Promise<oracledb.Pool> {
       if (libDir || walletDir) {
         logger.info("🚀 Initializing Oracle Client in Thick Mode...");
         try {
+          // Set TNS_ADMIN so sqlnet.ora and wallet files are found
+          if (walletDir) {
+            const absWalletDir = path.resolve(walletDir);
+            process.env.TNS_ADMIN = absWalletDir;
+            logger.info(`[Oracle] TNS_ADMIN set to ${absWalletDir}`);
+          }
           const initOptions: oracledb.InitialiseOptions = {};
           if (walletDir) {
             // Resolve relative to project root
