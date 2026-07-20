@@ -72,12 +72,34 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   const entityCounts = analysis?.entityCounts;
   const totalFilesAnalyzed = analysis?.totalFilesAnalyzed;
 
+  // Handle ESC key to exit fullscreen
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
   return (
-    <div style={{ display: 'flex', height: '100%', gap: '1.5rem' }}>
+    <div style={{
+      display: 'flex', height: isFullscreen ? '100vh' : '100%',
+      gap: isFullscreen ? 0 : '1.5rem',
+      position: isFullscreen ? 'fixed' : 'relative',
+      top: isFullscreen ? 0 : undefined,
+      left: isFullscreen ? 0 : undefined,
+      right: isFullscreen ? 0 : undefined,
+      bottom: isFullscreen ? 0 : undefined,
+      zIndex: isFullscreen ? 9999 : undefined,
+      background: isFullscreen ? '#000' : undefined,
+      padding: isFullscreen ? '1rem' : undefined,
+    }}>
       {/* Main graph area */}
       <div
         ref={graphContainerRef}
-        style={{ flex: 1, position: 'relative', overflow: 'hidden', borderRadius: '32px' }}
+        style={{ flex: 1, position: 'relative', overflow: 'hidden', borderRadius: isFullscreen ? '16px' : '32px' }}
       >
         {/* Search bar */}
         <div style={{ position: 'absolute', top: '1.5rem', left: '1.5rem', zIndex: 10 }}>
@@ -119,7 +141,21 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
           ))}
         </div>
 
-        {/* 3D Sphere */}
+        {/* Fullscreen toggle */}
+        <div style={{ position: 'absolute', bottom: '1.5rem', right: '1.5rem', zIndex: 10 }}>
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            style={{
+              padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)',
+              background: 'rgba(0,0,0,0.7)', color: '#fff', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
+        </div>
+
+        {/* 2D Graph */}
         {analysis && (
           <SphericalKnowledgeGraph
             analysis={analysis}
@@ -129,6 +165,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             activeFilters={activeFilters}
             onNodeHover={(n) => setHoveredNode(n)}
             onNodeClick={(n) => setSelectedNode(n)}
+            isFullscreen={isFullscreen}
           />
         )}
         {!analysis && (

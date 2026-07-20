@@ -7,6 +7,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
+import { indexingService } from "./indexingService.js";
 
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
@@ -682,6 +683,16 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
         }
       }
     } catch { /* skip */ }
+
+    // Add all git repos discovered by the indexing service
+    const indexedProjectDirs = indexingService.getProjectDirs();
+    if (indexedProjectDirs.length > 0) {
+      for (const dir of indexedProjectDirs) {
+        if (!searchDirs.includes(dir)) {
+          searchDirs.push(dir);
+        }
+      }
+    }
   }
 
   const seen = new Set<string>();
@@ -768,8 +779,8 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
     if (onProjectLoadedCallback) {
       onProjectLoadedCallback(target.dir);
     }
-    if (!await fileExists(target.analysisPath)) {
-      logger.error(`[Auto-Scan] ❌ Dynamic async scanning is not supported on the server repo. Returning empty analysis for: ${target.dir}`);
+    if (!(await fileExists(target.analysisPath))) {
+      logger.error(`[Auto-Scan] ❌ analysis.json not found at ${target.analysisPath}. Returning empty analysis for: ${target.dir}`);
       return { analysis: { graph: { nodes: [], links: [] }, insights: [], entityCounts: { modules: 0, functions: 0, classes: 0, dependencies: 0, circularDeps: 0 }, totalFilesAnalyzed: 0, totalFilesSkipped: 0 }, projectName: target.name, projectDir: target.dir };
     }
 

@@ -1,12 +1,11 @@
 /**
- * Spherical Knowledge Graph — Interactive 3D Knowledge Planet
+ * Spherical Knowledge Graph — Interactive 2D Knowledge Planet
  *
- * Dynamically loaded — Three.js WebGL may fail on headless/VM environments.
- * Falls back gracefully to a "3D not supported" message.
+ * Falls back gracefully to a text-based summary.
  */
 
-import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import ForceGraph2D from 'force-graph';
 
 // ─── Types ──────────────────────────────────────────────────
 interface GraphNode {
@@ -17,9 +16,6 @@ interface GraphNode {
   file?: string;
   layer?: number; // 0=core, 1=middle, 2=outer
   children?: GraphNode[];
-  _x?: number;
-  _y?: number;
-  _z?: number;
 }
 
 interface GraphLink {
@@ -34,18 +30,6 @@ interface GraphData {
   links: GraphLink[];
 }
 
-// ─── Fallback TextGraph when Three.js unavailable ──────────
-function TextGraph({ data, height }: { data: GraphData; height: number }) {
-  const connections = data.links?.length || 0;
-  const nodes = data.nodes?.length || 0;
-  return (
-    <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.9rem', flexDirection: 'column', gap: '0.5rem' }}>
-      <div>📊 {nodes} nodes · {connections} connections</div>
-      <div style={{ fontSize: '0.8rem', opacity: 0.6 }}>3D visualization requires WebGL (unavailable in this browser)</div>
-    </div>
-  );
-}
-
 // ─── Main Export ───────────────────────────────────────────
 interface SphericalKnowledgeGraphProps {
   analysis?: any;
@@ -55,47 +39,45 @@ interface SphericalKnowledgeGraphProps {
   activeFilters?: string[];
   onNodeHover?: (node: GraphNode | null) => void;
   onNodeClick?: (node: GraphNode) => void;
+  isFullscreen?: boolean;
 }
 
 export function SphericalKnowledgeGraph({
   analysis, concepts, dreams, searchQuery, activeFilters,
-  onNodeHover, onNodeClick
+  onNodeHover, onNodeClick, isFullscreen
 }: SphericalKnowledgeGraphProps = {}) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [threeReady, setThreeReady] = useState(false);
-  const [ForceGraph3DComponent, setForceGraph3DComponent] = useState<any>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [totalNodes, setTotalNodes] = useState(0);
+  const [totalLinks, setTotalLinks] = useState(0);
 
-  // Load Three.js dynamically — may fail on headless/VM
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // Try rendering a small canvas to check WebGL
-        const testCanvas = document.createElement('canvas');
-        const gl = testCanvas.getContext('webgl') || testCanvas.getContext('webgl2');
-        if (!gl) throw new Error('WebGL not available');
-        (gl as WebGLRenderingContext).getExtension('WEBGL_lose_context')?.loseContext();
+  const MAX_INITIAL_NODES = 200;
 
-        const mod = await import('3d-force-graph');
-        if (!cancelled) {
-          setForceGraph3DComponent(() => mod.default);
-          setThreeReady(true);
-        }
-      } catch {
-        if (!cancelled) setThreeReady(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  // Update graph data from analysis prop
+  // Update graph data from analysis prop, filter invalid links and limit initial render
   useEffect(() => {
     if (analysis?.graph) {
-      setGraphData(analysis.graph);
+      const nodeIds = new Set(analysis.graph.nodes.map((n: GraphNode) => n.id));
+      const clonedLinks = analysis.graph.links.map((l: GraphLink) => ({ ...l }));
+      const filteredLinks = clonedLinks.filter(
+        (l: GraphLink) => nodeIds.has(l.source) && nodeIds.has(l.target)
+      );
+      setTotalNodes(analysis.graph.nodes.length);
+      setTotalLinks(filteredLinks.length);
+
+      if (!showAll && analysis.graph.nodes.length > MAX_INITIAL_NODES) {
+        const limitedNodes = analysis.graph.nodes.slice(0, MAX_INITIAL_NODES);
+        const limitedNodeIds = new Set(limitedNodes.map((n: GraphNode) => n.id));
+        const limitedLinks = filteredLinks.filter(
+          (l: GraphLink) => limitedNodeIds.has(l.source) && limitedNodeIds.has(l.target)
+        );
+        setGraphData({ nodes: limitedNodes, links: limitedLinks });
+      } else {
+        setGraphData({ nodes: analysis.graph.nodes, links: filteredLinks });
+      }
     } else {
       setGraphData(null);
     }
-  }, [analysis]);
+  }, [analysis, showAll]);
 
   if (!graphData) {
     return (
@@ -105,47 +87,56 @@ export function SphericalKnowledgeGraph({
     );
   }
 
-  if (!threeReady || !ForceGraph3DComponent) {
-    return <TextGraph data={graphData} height={400} />;
-  }
-
-  return <ForceGraph3DCanvas ForceGraph3D={ForceGraph3DComponent} data={graphData} />;
+  return (
+    <div style={{ position: 'relative' }}>
+      {!showAll && totalNodes > MAX_INITIAL_NODES && (
+        <div style={{
+          position: 'absolute', bottom: '4.5rem', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 10,
+        }}>
+          <button
+            onClick={() => setShowAll(true)}
+            style={{
+              padding: '0.6rem 1.5rem', borderRadius: '20px', border: 'none',
+              background: 'linear-gradient(45deg, #00BFFF, #00FFFF)',
+              color: '#000', fontWeight: 700, cursor: 'pointer',
+              fontSize: '0.85rem', boxShadow: '0 0 20px rgba(0, 240, 255, 0.4)',
+            }}
+          >
+            Load All ({totalNodes} nodes, {totalLinks} links)
+          </button>
+        </div>
+      )}
+      <ForceGraph2DCanvas data={graphData} isFullscreen={isFullscreen} />
+    </div>
+  );
 }
 
-// ─── Actual 3D renderer (lazy, only if WebGL available) ───
-function ForceGraph3DCanvas({ ForceGraph3D, data }: { ForceGraph3D: any; data: GraphData }) {
+// ─── Actual 2D renderer ───
+function ForceGraph2DCanvas({ data, isFullscreen }: { data: GraphData; isFullscreen?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
-    let graph: any = null;
-
-    try {
-      graph = ForceGraph3D()(container);
-
-      graph
-        .graphData(data)
-        .width(container.clientWidth)
-        .height(400)
-        .nodeLabel((n: GraphNode) => n.label || n.name || n.id)
-        .nodeColor(() => '#00F0FF')
-        .linkColor(() => 'rgba(0, 240, 255, 0.2)')
-        .backgroundColor('#0a0a0a');
-    } catch (err) {
-      console.warn('[3D] Render failed:', err);
-      container.innerHTML = '<div style="height:400px;display:flex;align-items:center;justify-content:center;color:#666">3D render failed</div>';
-    }
+    
+    // Clear container before re-creating graph
+    container.innerHTML = '';
+    
+    const graph = ForceGraph2D()(container)
+      .graphData(data)
+      .width(isFullscreen ? window.innerWidth : container.clientWidth)
+      .height(isFullscreen ? window.innerHeight : 400)
+      .nodeLabel((n: GraphNode) => n.label || n.name || n.id)
+      .nodeAutoColorBy('type')
+      .linkColor(() => 'rgba(0, 240, 255, 0.2)')
+      .backgroundColor('#0a0a0a');
 
     return () => {
-      if (graph && typeof graph.destroy === 'function') {
-        graph.destroy();
-      }
-      if (container && document.body.contains(container)) {
-        container.innerHTML = '';
-      }
+      graph._destructor();
     };
-  }, [ForceGraph3D, data]);
+  }, [data]);
 
-  return <div ref={containerRef} style={{ width: '100%', height: '400px' }} />;
+  return <div ref={containerRef} style={{ width: '100%', height: isFullscreen ? '100vh' : '400px' }} />;
 }
+

@@ -35,6 +35,10 @@ export class IndexingService {
 
   constructor() {}
 
+  getProjectDirs(): string[] {
+    return this.projectDirs;
+  }
+
   /**
    * Initialize: load project list from env
    */

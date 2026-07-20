@@ -1,5 +1,6 @@
 import express from "express";
 import helmet from "helmet";
+import compression from "compression";
 import { IncomingMessage, Server } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -149,6 +150,11 @@ export const app = express();
 // Use helmet for standard security headers
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin to match CORS logic below
+}));
+// Compression middleware for large JSON responses (gzip, brotli)
+app.use(compression({
+  level: 6, // Default: 6 (balanced speed/size)
+  threshold: 1024, // Compress responses > 1KB
 }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));

@@ -22,8 +22,10 @@ import {
   loadAnalysis, 
   discoverProjectsAsync, 
   loadAnalysisAsync, 
-  fileExists 
+  fileExists,
+  registerProject
 } from "./services/projectService.js";
+import { indexingService } from "./services/indexingService.js";
 
 // Initialize Firebase Admin (Infrastructure Configuration at Composition Root)
 const apps = getApps();
@@ -53,6 +55,10 @@ if (!apps || apps.length === 0) {
 // Start server
 async function main() {
   const port = process.env.PORT ? parseInt(process.env.PORT) : null;
+
+  // Index all local git repos on startup
+  await indexingService.init();
+  await indexingService.indexAll();
 
   if (port) {
     // SSE Mode - for remote server deployment
