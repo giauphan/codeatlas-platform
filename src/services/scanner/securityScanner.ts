@@ -21,6 +21,15 @@ export class SecurityScanner {
 
     const nodesMap = new Map(nodes.map((n: GraphNode) => [n.id, n]));
 
+    // Pre-compute an adjacency list to avoid O(N*L) lookups inside isSqlRelated
+    const linkMap = new Map<string, Set<string>>();
+    analysis.graph.links.forEach((link) => {
+      if (!linkMap.has(link.source)) linkMap.set(link.source, new Set());
+      if (!linkMap.has(link.target)) linkMap.set(link.target, new Set());
+      linkMap.get(link.source)!.add(link.target);
+      linkMap.get(link.target)!.add(link.source);
+    });
+
     const unsafeFuncs = [
       "eval",
       "exec",
@@ -153,15 +162,8 @@ export class SecurityScanner {
         return true;
       }
 
-      // 3. Check connected nodes (incoming / outgoing calls or imports)
-      const connectedNodeIds = new Set<string>();
-      analysis.graph.links.forEach((link) => {
-        if (link.source === node.id) {
-          connectedNodeIds.add(link.target);
-        } else if (link.target === node.id) {
-          connectedNodeIds.add(link.source);
-        }
-      });
+      // 3. Check connected nodes (incoming / outgoing calls or imports) using the pre-computed adjacency list
+      const connectedNodeIds = linkMap.get(node.id) || new Set<string>();
 
       for (const id of connectedNodeIds) {
         const otherNode = nodesMap.get(id);
