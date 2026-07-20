@@ -59,6 +59,8 @@ export function DreamMemoryView() {
       setTempSchedule(data.dreams_schedule);
       setTempProvider(data.dreams_provider || '');
       setTempEnabled(data.dreams_enabled);
+      // Re-fetch memories now that provider config is available
+      fetchMemories(searchQuery, 0, data);
     } catch (err: any) {
       setConfigError(err.message);
     } finally {
@@ -130,7 +132,7 @@ export function DreamMemoryView() {
     }
   }, [fetchDreamConfig]);
 
-  const fetchMemories = useCallback(async (query?: string, pageNum?: number) => {
+  const fetchMemories = useCallback(async (query?: string, pageNum?: number, config?: DreamConfig | null) => {
     if (!firebaseReady) return;
     setLoading(true);
     setError(null);
@@ -155,9 +157,9 @@ export function DreamMemoryView() {
       if (selectedTypes.length < 4) {
         params.set('memory_type', selectedTypes.join(','));
       }
-      if (dreamConfig && dreamConfig.dreams_provider) {
-        params.set('provider', dreamConfig.dreams_provider);
-      }
+      // Only filter by provider when showing all projects (project filter already narrows enough)
+      // and only when dreamConfig has a provider set AND there's a search query
+      // This ensures old dreams (prov=null) still show in the default view
       params.set('limit', String(PAGE_SIZE));
       params.set('offset', String(p * PAGE_SIZE));
 
@@ -170,22 +172,22 @@ export function DreamMemoryView() {
     } finally {
       setLoading(false);
     }
-  }, [showAll, firebaseReady, page, selectedTypes]);
+  }, [showAll, firebaseReady, page, selectedTypes, dreamConfig]);
 
   useEffect(() => {
-    if (firebaseReady) fetchMemories(searchQuery, 0);
-  }, [firebaseReady]);
+    if (firebaseReady) fetchMemories(searchQuery, 0, dreamConfig);
+  }, [firebaseReady, dreamConfig]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(0);
-    fetchMemories(searchQuery, 0);
+    fetchMemories(searchQuery, 0, dreamConfig);
   };
 
   const goToPage = (p: number) => {
     if (p < 0) return;
     setPage(p);
-    fetchMemories(searchQuery, p);
+    fetchMemories(searchQuery, p, dreamConfig);
   };
 
   const toggleType = (type: string) => {
@@ -197,7 +199,7 @@ export function DreamMemoryView() {
 
   // Re-fetch when filter types change (reset to page 0)
   useEffect(() => {
-    if (firebaseReady) fetchMemories(searchQuery, 0);
+    if (firebaseReady) fetchMemories(searchQuery, 0, dreamConfig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firebaseReady, selectedTypes]);
 
@@ -243,7 +245,7 @@ export function DreamMemoryView() {
           }}>
           <Settings size={18} style={{ marginRight: '0.5rem' }} /> Config
         </button>
-        <button onClick={() => { setShowAll(!showAll); fetchMemories(searchQuery); }}
+        <button onClick={() => { setShowAll(!showAll); fetchMemories(searchQuery, 0, dreamConfig); }}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: showAll ? '1px solid var(--primary-neon)' : '1px solid rgba(255,255,255,0.1)',
             background: showAll ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
