@@ -33,6 +33,7 @@ import { DocumentationView } from './DocumentationView';
 import { OrchestrationTasksView } from './OrchestrationTasksView';
 import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
 import { getAuthHeaders } from '../lib/auth';
+import { setCacheItem, getCacheItem, removeCacheItem, clearCache } from '../lib/db';
 
 // API Configuration
 const API_BASE = window.location.origin.includes('localhost:5173')
@@ -88,32 +89,7 @@ export const Dashboard: React.FC = () => {
   const loading = projectsLoading || keysLoading;
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Control Center');
-  const [analysis, setAnalysis] = useState<AnalysisData | null>(() => {
-    const savedProjDir = safeSessionStorageGetItem('ca_selected_project_dir');
-    if (savedProjDir) {
-      const cachedProject = safeSessionStorageGetItem(`ca_analysis_cache_${savedProjDir}`);
-      if (cachedProject) {
-        try {
-          const parsed = JSON.parse(cachedProject);
-          memoryAnalysisCache.set(savedProjDir, parsed);
-          return parsed;
-        } catch (e) {
-          safeSessionStorageRemoveItem(`ca_analysis_cache_${savedProjDir}`);
-        }
-      }
-    }
-    const cached = safeSessionStorageGetItem('ca_analysis_cache');
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        memoryAnalysisCache.set('', parsed);
-        return parsed;
-      } catch (e) {
-        safeSessionStorageRemoveItem('ca_analysis_cache');
-      }
-    }
-    return null;
-  });
+  const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [selectedProjectDir, setSelectedProjectDir] = useState<string>(() => {
     return safeSessionStorageGetItem('ca_selected_project_dir') || '';
   });
@@ -227,22 +203,13 @@ export const Dashboard: React.FC = () => {
     return null;
   });
 
-  const clearAllCaches = () => {
+  const clearAllCaches = async () => {
     setProjects([]);
     setSelectedProjectDir('');
     setAnalysis(null);
     memoryAnalysisCache.clear();
     safeSessionStorageRemoveItem('ca_selected_project_dir');
-    safeSessionStorageRemoveItem('ca_analysis_cache');
-    try {
-      Object.keys(sessionStorage).forEach(k => {
-        if (k.startsWith('ca_analysis_cache_') || k.startsWith('codeatlas_indexing_enabled_')) {
-          safeSessionStorageRemoveItem(k);
-        }
-      });
-    } catch {
-      // sessionStorage not available — skip
-    }
+    await clearCache();
     safeSessionStorageRemoveItem('ca_projects_cache');
   };
 
@@ -266,24 +233,19 @@ export const Dashboard: React.FC = () => {
           setAnalysis(null);
           memoryAnalysisCache.set(cacheKey, null);
         } else {
-          setAnalysis(data);
-          memoryAnalysisCache.set(cacheKey, data);
-          if (projectDir) {
-            safeSessionStorageSetItem(`ca_analysis_cache_${projectDir}`, JSON.stringify(data));
-          } else {
-            safeSessionStorageSetItem('ca_analysis_cache', JSON.stringify(data));
-          }
+          setAnalysis(data.analysis);
+          memoryAnalysisCache.set(cacheKey, data.analysis);
+          
+          // Store in IndexedDB
+          const dbKey = projectDir ? `ca_analysis_${projectDir}` : 'ca_analysis';
+          await setCacheItem(dbKey, data.analysis);
         }
       } else {
-        // Clear cached stale data if backend rejects access (404/403 boundary violation)
         setAnalysis(null);
         memoryAnalysisCache.delete(cacheKey);
-        if (projectDir) {
-          safeSessionStorageRemoveItem(`ca_analysis_cache_${projectDir}`);
-        }
-        safeSessionStorageRemoveItem('ca_analysis_cache');
+        const dbKey = projectDir ? `ca_analysis_${projectDir}` : 'ca_analysis';
+        await removeCacheItem(dbKey);
 
-        // Gracefully handle 404/failure: clear state, don't retry (prevents infinite loop)
         if (resp.status === 404 && projectDir) {
           setSelectedProjectDir('');
           safeSessionStorageRemoveItem('ca_selected_project_dir');
@@ -293,8 +255,8 @@ export const Dashboard: React.FC = () => {
       console.error("Failed to fetch analysis:", err);
       setAnalysis(null);
       memoryAnalysisCache.delete(cacheKey);
-      safeSessionStorageRemoveItem(`ca_analysis_cache_${projectDir}`);
-      safeSessionStorageRemoveItem('ca_analysis_cache');
+      const dbKey = projectDir ? `ca_analysis_${projectDir}` : 'ca_analysis';
+      await removeCacheItem(dbKey);
     }
   };
 
@@ -365,6 +327,27 @@ export const Dashboard: React.FC = () => {
     }
   }, []);
 
+  // Load analysis from IndexedDB on mount
+  useEffect(() => {
+    const loadAnalysisFromDB = async () => {
+      const savedProjDir = safeSessionStorageGetItem('ca_selected_project_dir');
+      if (savedProjDir) {
+        const cached = await getCacheItem<AnalysisData>(`ca_analysis_${savedProjDir}`);
+        if (cached) {
+          setAnalysis(cached);
+          memoryAnalysisCache.set(savedProjDir, cached);
+        }
+      } else {
+        const cached = await getCacheItem<AnalysisData>('ca_analysis');
+        if (cached) {
+          setAnalysis(cached);
+          memoryAnalysisCache.set('', cached);
+        }
+      }
+    };
+    loadAnalysisFromDB();
+  }, []);
+
   useEffect(() => {
     fetchProjects();
     fetchApiKeys();
@@ -380,10 +363,9 @@ export const Dashboard: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this project? This cannot be undone.')) return;
     try {
       const headers = await getAuthHeaders();
-      const resp = await fetch(`${API_BASE}/api/projects`, {
+      const resp = await fetch(`${API_BASE}/api/projects?projectDir=${encodeURIComponent(dir)}`, {
         method: 'DELETE',
-        headers,
-        body: JSON.stringify({ projectDir: dir })
+        headers
       });
       if (!resp.ok) throw new Error('Failed to delete project');
       fetchProjects(); // Refresh the list

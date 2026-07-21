@@ -30,7 +30,7 @@ export class A2AClientService {
 
   private getTenantCache(): Map<string, unknown> {
     const auth = authStorage.getStore();
-    const tenantId = auth ? auth.uid : "admin";
+    const tenantId = authStorage.getStore()!.uid;
     if (!this.agentCache.has(tenantId)) {
       this.agentCache.set(tenantId, new Map<string, unknown>());
     }

@@ -737,7 +737,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         const engine = new ConsolidationEngine();
         const consolidationReport = await engine.run({
           project: projectName || undefined,
-          operations: ["dedup", "extract_concepts", "score"],
+          operations: ["dedup", "extract_concepts", "score", "score_dreams"],
           provider: provider || undefined,
         });
 
@@ -1580,10 +1580,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const auth = await checkAuth();
       await logActivity(auth, "consolidation_run", { project });
       const engine = new ConsolidationEngine();
-      const ops: ("dedup" | "extract_concepts" | "score")[] = [];
+      const ops: ("dedup" | "extract_concepts" | "score" | "score_dreams")[] = [];
       if (dedup) ops.push("dedup");
       if (extractConcepts) ops.push("extract_concepts");
-      if (score) ops.push("score");
+      if (score) { ops.push("score"); ops.push("score_dreams"); }
       if (ops.length === 0) {
         return { content: [{ type: "text" as const, text: "No operations requested. At least one of dedup, extractConcepts, or score must be enabled." }], isError: true as const };
       }

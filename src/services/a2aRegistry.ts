@@ -59,7 +59,7 @@ export class A2ARegistry {
     const agentId = record.agentId || this.slugify(record.agentName);
 
     const auth = authStorage.getStore();
-    const tenantId = auth ? auth.uid : "admin";
+    const tenantId = authStorage.getStore()!.uid;
     // Clone to avoid mutating the caller's object
     const safeRecord = { ...record, tenantId };
 
@@ -116,7 +116,7 @@ export class A2ARegistry {
     this.markStale();
 
     const auth = authStorage.getStore(); // Get tenantId from context
-    const requestorTenantId = auth ? auth.uid : "admin";
+    const requestorTenantId = authStorage.getStore()!.uid;
 
     const results: A2AAgentRecord[] = [];
     const capability = query.capability?.toLowerCase();
@@ -149,7 +149,7 @@ export class A2ARegistry {
   async listAll(): Promise<A2AAgentRecord[]> {
     this.markStale();
     const auth = authStorage.getStore(); // Get tenantId from context
-    const requestorTenantId = auth ? auth.uid : "admin";
+    const requestorTenantId = authStorage.getStore()!.uid;
     return Array.from(memoryStore.values())
       .filter(r => r.tenantId === requestorTenantId) // Filter by tenantId
       .map(r => ({ ...r }));

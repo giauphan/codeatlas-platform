@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getAuthHeaders } from '../lib/auth';
 
 interface DreamConfig {
   dreams_schedule: string;
@@ -46,12 +47,7 @@ export function DreamMemoryView() {
     setConfigLoading(true);
     setConfigError(null);
     try {
-      const headers: Record<string, string> = {};
-      const savedKey = sessionStorage.getItem('ca_api_key');
-      if (savedKey) {
-        if (savedKey.startsWith('ca_')) headers['x-api-key'] = savedKey;
-        else headers['Authorization'] = `Bearer ${savedKey}`;
-      }
+      const headers = await getAuthHeaders();
       const resp = await fetch('/api/settings/cron', { headers });
       if (!resp.ok) throw new Error('Failed to load dream config');
       const data = await resp.json() as DreamConfig;
@@ -72,12 +68,7 @@ export function DreamMemoryView() {
     setSavingConfig(true);
     setConfigError(null);
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      const savedKey = sessionStorage.getItem('ca_api_key');
-      if (savedKey) {
-        if (savedKey.startsWith('ca_')) headers['x-api-key'] = savedKey;
-        else headers['Authorization'] = `Bearer ${savedKey}`;
-      }
+      const headers = await getAuthHeaders();
       const resp = await fetch('/api/settings/cron', {
         method: 'PUT',
         headers,
@@ -104,12 +95,7 @@ export function DreamMemoryView() {
   const runDailyDreamsNow = useCallback(async () => {
     setSavingConfig(true);
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      const savedKey = sessionStorage.getItem('ca_api_key');
-      if (savedKey) {
-        if (savedKey.startsWith('ca_')) headers['x-api-key'] = savedKey;
-        else headers['Authorization'] = `Bearer ${savedKey}`;
-      }
+      const headers = await getAuthHeaders();
       const resp = await fetch('/api/dreams/generate-daily-dreams', {
         method: 'POST',
         headers,
@@ -138,15 +124,8 @@ export function DreamMemoryView() {
     setError(null);
     const p = pageNum ?? page;
     try {
-      let headers: Record<string, string> = {};
-      const savedKey = sessionStorage.getItem('ca_api_key');
-      if (savedKey) {
-        if (savedKey.startsWith('ca_')) {
-          headers['x-api-key'] = savedKey;
-        } else {
-          headers['Authorization'] = `Bearer ${savedKey}`;
-        }
-      } else {
+      const headers = await getAuthHeaders();
+      if (!headers['x-api-key'] && !headers['Authorization']) {
         setError('Please log in to view Dream Memories');
         setLoading(false);
         return;
@@ -166,7 +145,11 @@ export function DreamMemoryView() {
       const resp = await fetch(`/api/dreams/query?${params}`, { headers });
       if (!resp.ok) throw new Error(resp.status === 403 ? 'API key required' : await resp.text());
       const data = await resp.json();
-      setMemories(data.memories || []);
+      // Sort by created_at descending (newest first) — server orders by relevance by default
+      const sorted = (data.memories || []).sort((a: DreamMemory, b: DreamMemory) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setMemories(sorted);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -355,7 +338,7 @@ export function DreamMemoryView() {
                   </span>
                 )}
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  {new Date(mem.created_at).toLocaleString()}
+                  {new Date(mem.created_at).toLocaleDateString('en-CA')} {new Date(mem.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

@@ -163,19 +163,24 @@ export function registerDreamingRoutes(app: express.Application): void {
         return res.json({ success: true, session_id: sessId, project: projectName, provider: prov, dreamsExtracted: 0 });
       }
 
-      // Save each extracted dream
+      // Save each extracted dream — skip noise-blocked entries
       const savedDreams: Array<{ id: string; memory_type: string; content: string }> = [];
+      const skipped: string[] = [];
       for (const dream of dreams) {
         const memId = await authStorage.run(auth, () =>
           OracleDreamingService.saveDreamMemory(
             projectName, sessId, dream.memoryType as DreamMemoryType, dream.content, dream.importance, prov
           )
         );
-        savedDreams.push({ id: memId, memory_type: dream.memoryType, content: dream.content });
+        if (memId === '__noise_blocked__') {
+          skipped.push(dream.content.slice(0, 60));
+        } else {
+          savedDreams.push({ id: memId, memory_type: dream.memoryType, content: dream.content });
+        }
       }
 
-      logger.info(`[Dreaming] Ingested session ${sessId}: extracted ${savedDreams.length} dreams for provider ${prov}`);
-      res.json({ success: true, session_id: sessId, project: projectName, provider: prov, dreamsExtracted: savedDreams.length, dreams: savedDreams });
+      logger.info(`[Dreaming] Ingested session ${sessId}: extracted ${savedDreams.length} dreams, ${skipped.length} blocked by noise gate for provider ${prov}`);
+      res.json({ success: true, session_id: sessId, project: projectName, provider: prov, dreamsExtracted: savedDreams.length, noiseBlocked: skipped.length, dreams: savedDreams });
     } catch (err) {
       handleError(res, err, "IngestSession");
     }
@@ -199,7 +204,7 @@ export function registerDreamingRoutes(app: express.Application): void {
         const engine = new ConsolidationEngine();
         consolidationResult = await engine.run({
           project: projectName || undefined,
-          operations: ["dedup", "extract_concepts", "score"],
+          operations: ["dedup", "extract_concepts", "score", "score_dreams"],
           provider: provider || undefined,
         });
         logger.info(`[Dreaming] Daily consolidation done for project="${projectName}" provider="${provider}"`);

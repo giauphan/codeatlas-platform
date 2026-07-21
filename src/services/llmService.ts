@@ -58,8 +58,14 @@ export async function summarizeConversationForDreams(
         memoryType = "KNOWLEDGE";
         importance = 5;
       }
-      // KNOWLEDGE: general learnings (only from assistant, not user)
-      else if (role === "ASSISTANT" && sl.length > 80) {
+      // KNOWLEDGE: general learnings (only from assistant, not user).
+      // Requires both minimum length AND information content — not just "assistant said something long".
+      // Matches sentences containing code-related, architecture, or decision content.
+      else if (
+        role === "ASSISTANT" &&
+        sl.length > 120 &&
+        /\b(code|function|class|module|api|method|pattern|approach|architectur|solution|implement|use\s|because|reason|cause|root|fix|change|config|deploy|error|issue|problem|prefer|better|worse|instead|recommend|learn|found|discover|notice|understand|see\s|need|should|must|require|support|handle|process|manag|build|create|design|structur|dependenc|interface|service|component|system|framework|library|database|query|request|response|endpoint|route|middleware|schema|migrat|test|deploy|version|releas|update|optimize|refactor)\b/i.test(sl)
+      ) {
         memoryType = "KNOWLEDGE";
         importance = 4;
       }

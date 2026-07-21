@@ -12,6 +12,7 @@ import {
   Shield, Key, Mail, Lock, LogIn, Loader2
 } from 'lucide-react';
 import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
+import { storeAuthTokens } from '../lib/auth';
 
 interface AuthProps {
   onLogin: (key: string) => void;
@@ -73,9 +74,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         throw new Error(friendlyMsg);
       }
 
-      // Store the Firebase ID token as session — subsequent API calls use it as Bearer token
-      safeSessionStorageSetItem('ca_api_key', data.idToken);
+      // Store Firebase ID token + refresh token — auto-refresh handles expiry
       safeSessionStorageSetItem('ca_user_email', data.email);
+      storeAuthTokens(data.idToken, data.refreshToken);
       onLogin(data.idToken);
     } catch (err: unknown) {
       setError((err as Error).message || 'Sign in failed');

@@ -53,7 +53,7 @@ describe('Clean Architecture Repositories & Use Cases', () => {
     assert.strictEqual(auth.uid, 'admin');
     assert.strictEqual(auth.tier, 'enterprise');
     assert.strictEqual(auth.keyId, 'admin');
-    assert.strictEqual(mockRepo.callsToVerifyKey, 0, 'Should not query repository for super admin bypass');
+    assert.strictEqual(mockRepo.callsToVerifyKey, 1, 'Should query repository first to try resolving real uid');
   });
 
   test('should authenticate standard tenant key and update usage stats', async () => {

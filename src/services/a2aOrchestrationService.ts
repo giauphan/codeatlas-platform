@@ -12,8 +12,7 @@ export class A2AOrchestrationService {
    * Defaults to "admin" if no auth context is found.
    */
   private getTenantId(): string {
-    const auth = authStorage.getStore();
-    return auth ? auth.uid : "admin";
+    return authStorage.getStore()!.uid;
   }
 
   /**

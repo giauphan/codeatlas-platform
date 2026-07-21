@@ -4,6 +4,7 @@ import { Dashboard } from './components/Dashboard';
 import { Loader2, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from './lib/safeSessionStorage';
+import { storeAuthTokens } from './lib/auth';
 
 function App() {
   const [user, setUser] = useState<any>(null);
@@ -87,7 +88,7 @@ function App() {
         throw new Error(errMsg);
       }
 
-      safeSessionStorageSetItem('ca_api_key', key.trim());
+      storeAuthTokens(key.trim(), undefined);
       const isApiKey = key.trim().startsWith('ca_');
       setUser({
         uid: 'session',
