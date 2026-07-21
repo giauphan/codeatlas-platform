@@ -46,18 +46,18 @@ export function mountConsolidationRoutes(app: express.Application): void {
 
       const { authStorage } = await import("../utils/context.js");
       const auth = authStorage.getStore();
-      const tenantId = auth ? auth.uid : "admin";
+      const tenantId = authStorage.getStore()!.uid;
 
       let connection;
       try {
         const pool = await initPool();
         connection = await pool.getConnection();
-        await setSessionContext(connection, tenantId);
+        await setSessionContext(connection);
 
         const projectFilter = project ? "AND project = :project" : "";
         const whereClause = `WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter}`;
         
-        const binds: Record<string, unknown> = { tenantId, limit, queryVector: new Float32Array(embedding) };
+        const binds: Record<string, unknown> = { tenantId: authStorage.getStore()!.uid, limit, queryVector: new Float32Array(embedding) };
         if (project) binds.project = project;
 
         const result = await connection.execute<any[]>(

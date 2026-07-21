@@ -36,8 +36,7 @@ export class OracleMemoryService {
       await setSessionContext(connection);
 
       const id = `${project}_${eventType}_${Date.now()}`;
-      const auth = authStorage.getStore();
-      const tenantId = auth ? auth.uid : "admin";
+      const tenantId = authStorage.getStore()!.uid;
 
       const sql = `
           INSERT INTO ai_episodic_memory (id, project_name, event_type, event_data, tenant_id)
@@ -78,15 +77,14 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await setSessionContext(connection);
 
-      const auth = authStorage.getStore();
-      const tenantId = auth ? auth.uid : "admin";
+      const tenantId = authStorage.getStore()!.uid;
 
       let sql = `
         SELECT id, event_type, event_data, created_at
         FROM ai_episodic_memory
         WHERE project_name = :project AND tenant_id = :tenantId
       `;
-      const binds: Record<string, unknown> = { project, tenantId };
+      const binds: Record<string, unknown> = { project, tenantId: authStorage.getStore()!.uid };
 
       if (eventType) {
         sql += ` AND event_type = :eventType`;
@@ -125,8 +123,7 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await setSessionContext(connection);
 
-      const auth = authStorage.getStore();
-      const tenantId = auth ? auth.uid : "admin";
+      const tenantId = authStorage.getStore()!.uid;
 
       const sql = `
           MERGE INTO ai_semantic_memory trg
@@ -181,8 +178,7 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await setSessionContext(connection);
 
-      const auth = authStorage.getStore();
-      const tenantId = auth ? auth.uid : "admin";
+      const tenantId = authStorage.getStore()!.uid;
 
       const sql = `
           MERGE INTO ai_relational_memory trg
@@ -233,8 +229,7 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await setSessionContext(connection);
 
-      const auth = authStorage.getStore();
-      const tenantId = auth ? auth.uid : "admin";
+      const tenantId = authStorage.getStore()!.uid;
 
       const sql = `
           SELECT entity_name, entity_type, file_path, content
@@ -244,7 +239,7 @@ export class OracleMemoryService {
           FETCH FIRST :limit ROWS ONLY
         `;
 
-      const binds: Record<string, unknown> = { project, limit, tenantId };
+      const binds: Record<string, unknown> = { project, limit, tenantId: authStorage.getStore()!.uid };
       if (queryVector) {
         binds.queryVector = new Float32Array(queryVector);
       }
@@ -277,8 +272,7 @@ export class OracleMemoryService {
       connection = await pool.getConnection();
       await setSessionContext(connection);
 
-      const auth = authStorage.getStore();
-      const tenantId = auth ? auth.uid : "admin";
+      const tenantId = authStorage.getStore()!.uid;
 
       const smells: ArchSmells = {
         circularDependencies: [],
@@ -295,7 +289,7 @@ export class OracleMemoryService {
             COLUMNS (a.entity_name, a.file_path)
           )
         `;
-      const circularRes = await OracleMemoryService.executeAsync(connection, circularSql, { project, tenantId });
+      const circularRes = await OracleMemoryService.executeAsync(connection, circularSql, { project, tenantId: authStorage.getStore()!.uid });
       smells.circularDependencies = (circularRes.rows ?? []) as unknown[];
 
       // 2. Detect God Objects (Entities with excessively high incoming relationships / high in-degree)
@@ -312,7 +306,7 @@ export class OracleMemoryService {
           ORDER BY in_degree DESC
           FETCH FIRST 10 ROWS ONLY
         `;
-      const godRes = await OracleMemoryService.executeAsync(connection, godSql, { project, tenantId });
+      const godRes = await OracleMemoryService.executeAsync(connection, godSql, { project, tenantId: authStorage.getStore()!.uid });
       smells.godObjects = (godRes.rows ?? []) as unknown[];
 
       // 3. Detect Dead Code (Entities with zero incoming relationships, and not main entry points)
@@ -327,7 +321,7 @@ export class OracleMemoryService {
             )
           FETCH FIRST 20 ROWS ONLY
         `;
-      const deadRes = await OracleMemoryService.executeAsync(connection, deadSql, { project, tenantId });
+      const deadRes = await OracleMemoryService.executeAsync(connection, deadSql, { project, tenantId: authStorage.getStore()!.uid });
       smells.deadCode = (deadRes.rows ?? []) as unknown[];
 
       return smells;
@@ -361,31 +355,31 @@ export class OracleMemoryService {
       }
       const tenantId = auth.uid;
 
-      await setSessionContext(connection, tenantId);
+      await setSessionContext(connection);
 
       // 1. Delete episodic memory
       const deleteEpisodic = `
         DELETE FROM ai_episodic_memory
         WHERE project_name = :project AND tenant_id = :tenantId
       `;
-      await connection.execute(deleteEpisodic, { project, tenantId }, { autoCommit: false });
+      await connection.execute(deleteEpisodic, { project, tenantId: authStorage.getStore()!.uid }, { autoCommit: false });
 
       // 2. Delete semantic memory
       const deleteSemantic = `
         DELETE FROM ai_semantic_memory
         WHERE project_name = :project AND tenant_id = :tenantId
       `;
-      await connection.execute(deleteSemantic, { project, tenantId }, { autoCommit: false });
+      await connection.execute(deleteSemantic, { project, tenantId: authStorage.getStore()!.uid }, { autoCommit: false });
 
       // 3. Delete relational memory
       const deleteRelational = `
         DELETE FROM ai_relational_memory
         WHERE project_name = :project AND tenant_id = :tenantId
       `;
-      await connection.execute(deleteRelational, { project, tenantId }, { autoCommit: false });
+      await connection.execute(deleteRelational, { project, tenantId: authStorage.getStore()!.uid }, { autoCommit: false });
 
       await connection.commit();
-      logger.info(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${tenantId}`);
+      logger.info(`[Oracle Memory] Successfully deleted all memory for project: ${project} and tenant: ${authStorage.getStore()!.uid}`);
     } catch (err) {
       logger.error("Error deleting project memory from Oracle DB:", err instanceof Error ? err.message : String(err));
       if (connection) {

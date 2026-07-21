@@ -363,10 +363,9 @@ export const Dashboard: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this project? This cannot be undone.')) return;
     try {
       const headers = await getAuthHeaders();
-      const resp = await fetch(`${API_BASE}/api/projects`, {
+      const resp = await fetch(`${API_BASE}/api/projects?projectDir=${encodeURIComponent(dir)}`, {
         method: 'DELETE',
-        headers,
-        body: JSON.stringify({ projectDir: dir })
+        headers
       });
       if (!resp.ok) throw new Error('Failed to delete project');
       fetchProjects(); // Refresh the list

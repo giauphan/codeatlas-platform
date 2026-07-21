@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getAuthHeaders } from '../lib/auth';
 
 
 interface Concept {
@@ -26,18 +27,7 @@ export function SecondBrainView() {
     ? 'http://localhost:8080'
     : window.location.origin;
 
-  const getAuthHeaders = async () => {
-    const savedKey = sessionStorage.getItem('ca_api_key');
-    const headers: Record<string, string> = {};
-    if (savedKey) {
-      if (savedKey.startsWith('ca_')) {
-        headers['x-api-key'] = savedKey;
-      } else {
-        headers['Authorization'] = `Bearer ${savedKey}`;
-      }
-    }
-    return headers;
-  };
+
 
   const fetchConcepts = useCallback(async (query?: string) => {
     setLoading(true);

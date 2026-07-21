@@ -83,9 +83,12 @@ export async function initPool(): Promise<oracledb.Pool> {
 /**
  * Configures the Session Context for Row-Level Security (Oracle Virtual Private Database)
  */
-export async function setSessionContext(connection: oracledb.Connection, overrideTenantId?: string) {
+export async function setSessionContext(connection: oracledb.Connection) {
   const auth = authStorage.getStore();
-  const tenantId = overrideTenantId || (auth ? auth.uid : "admin");
+  if (!auth) {
+    throw new Error("Auth context required — call within authStorage.run()");
+  }
+  const tenantId = auth.uid;
 
   try {
     // Invoke the context package to dynamically apply Row-Level Security row-filtering policies

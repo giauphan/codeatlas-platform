@@ -188,18 +188,116 @@ export class IndexingService {
     };
   }
 
+  /** Load ignore file lines into an ordered pattern list */
+  private loadIgnoreFile(filePath: string, patterns: string[]): void {
+    if (!fs.existsSync(filePath)) return;
+    try {
+      const content = fs.readFileSync(filePath, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith("#")) patterns.push(trimmed);
+      }
+    } catch { /* ignore unreadable */ }
+  }
+
+  /** Check if path matches any gitignore-style pattern, anchored to a specific base dir */
+  private matchesIgnorePattern(relPath: string, patterns: string[]): boolean {
+    const normalized = relPath.replace(/\\/g, "/");
+    const parts = normalized.split("/");
+
+    for (const pat of patterns) {
+      // Negation pattern — skip (we only exclude)
+      if (pat.startsWith("!")) continue;
+
+      const p = pat.replace(/\\/g, "/");
+
+      // Directory-only pattern (trailing /)
+      const dirOnly = p.endsWith("/");
+      const cleanPat = dirOnly ? p.slice(0, -1) : p;
+
+      // Build regex from gitignore wildcard pattern
+      const toRegex = (s: string): string => {
+        let r = "";
+        for (let i = 0; i < s.length; i++) {
+          const c = s[i];
+          if (c === "*" && s[i + 1] === "*" && s[i + 2] === "/") {
+            r += "(?:.+/)?";
+            i += 2;
+          } else if (c === "*") r += "[^/]*";
+          else if (c === "?") r += "[^/]";
+          else r += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+        }
+        return r;
+      };
+
+      // Pattern with / means anchored to root, otherwise match any segment.
+      // Strip leading / because normalized paths are relative (no leading /).
+      // Also treat leading-/ patterns as anchored root matches.
+      const cleanTrimmed = cleanPat.replace(/^\//, "");
+      const anchored = cleanPat.includes("/");
+      // If original had leading /, force root-anchor match
+      const partsPattern = (anchored && cleanPat.startsWith("/"))
+        ? `^${toRegex(cleanTrimmed)}(?:/|$)`
+        : anchored
+          ? `^${toRegex(cleanPat)}`
+          : `(?:^|/)${toRegex(cleanPat)}$`;
+      const re = new RegExp(partsPattern);
+      const target = dirOnly ? normalized + "/" : normalized;
+      if (re.test(target)) return true;
+
+      // Also match bare name against any path segment
+      if (!anchored && !dirOnly) {
+        const bareRe = new RegExp(`^${toRegex(cleanPat)}$`);
+        for (const part of parts) {
+          if (part === cleanPat || bareRe.test(part)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   private scanFiles(rootDir: string): string[] {
     const files: string[] = [];
-    const excluded = ["node_modules", ".git", "dist", "out", "build", "__pycache__", ".codeatlas", ".cache", "venv", ".venv"];
 
-    const walk = (dir: string) => {
+    // Hardcoded excludes — always skip these directories/files
+    const excluded = new Set(["node_modules", ".git", "dist", "out", "build", "__pycache__", ".codeatlas", ".cache", "venv", ".venv"]);
+
+    // Root-level gitignore patterns
+    const rootPatterns: string[] = [];
+    this.loadIgnoreFile(path.join(rootDir, ".gitignore"), rootPatterns);
+    this.loadIgnoreFile(path.join(rootDir, ".codeatlasignore"), rootPatterns);
+
+    // Also treat rootPatterns as flat exclusions by bare name
+    for (const pat of rootPatterns) {
+      const clean = pat.replace(/\\/g, "/").replace(/\/$/, "");
+      if (!clean.includes("/") && !clean.includes("*") && !clean.includes("?")) {
+        excluded.add(clean);
+      }
+    }
+
+    const walk = (dir: string, parentPatterns: string[]) => {
       try {
+        // Load nested .gitignore if present — patterns apply relative to this dir
+        const localPatterns = [...parentPatterns];
+        const dirRelative = path.relative(rootDir, dir);
+        if (dirRelative) {
+          this.loadIgnoreFile(path.join(dir, ".gitignore"), localPatterns);
+          this.loadIgnoreFile(path.join(dir, ".codeatlasignore"), localPatterns);
+        }
+
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
-          if (excluded.includes(entry.name)) continue;
+          if (excluded.has(entry.name)) continue;
+
           const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) walk(fullPath);
-          else if (entry.isFile()) {
+          const relPath = path.relative(rootDir, fullPath);
+
+          // Skip if matches any ignore pattern
+          if (localPatterns.length > 0 && this.matchesIgnorePattern(relPath, localPatterns)) continue;
+
+          if (entry.isDirectory()) {
+            walk(fullPath, localPatterns);
+          } else if (entry.isFile()) {
             const ext = path.extname(entry.name).toLowerCase();
             if ([".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".php", ".phtml", ".ctp", ".rs", ".java", ".rb", ".swift", ".kt"].includes(ext)) {
               const stat = fs.statSync(fullPath);
@@ -209,7 +307,7 @@ export class IndexingService {
         }
       } catch { /* permission denied */ }
     };
-    walk(rootDir);
+    walk(rootDir, rootPatterns);
     return files;
   }
 

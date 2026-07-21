@@ -146,8 +146,14 @@ export class AuthenticateUserUseCase {
       throw new Error("Unauthorized: API Key is required. Set CODEATLAS_API_KEY env var or provide x-api-key header.");
     }
 
-    // 1. Super Admin Bypass
+    // 1. Super Admin — try Firestore first so the key resolves to the user's real uid
     if (superAdminKey && apiKey === superAdminKey) {
+      const firestoreData = await this.authRepo.verifyKey(apiKey);
+      if (firestoreData) {
+        firestoreData.expires = Infinity;
+        this.authCache.set(apiKey, firestoreData);
+        return firestoreData;
+      }
       return { tier: 'enterprise', uid: 'admin', keyId: 'admin', expires: Infinity };
     }
 

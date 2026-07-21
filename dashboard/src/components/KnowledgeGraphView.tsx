@@ -58,15 +58,22 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     })();
   }, []);
 
+  const typeColors: Record<string, string> = {
+    module: '#00F0FF',
+    function: '#FF00A8',
+    class: '#FFB400',
+    variable: '#00FF94',
+  };
+
   const toggleFilter = (type: string) => {
     setActiveFilters(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
   };
 
   const filters = [
-    { id: 'module', label: 'Modules', icon: <Box size={14} />, color: '#00F0FF' },
-    { id: 'function', label: 'Functions', icon: <Code2 size={14} />, color: '#FF00A8' },
-    { id: 'class', label: 'Classes', icon: <Layers size={14} />, color: '#FFB400' },
-    { id: 'variable', label: 'Variables', icon: <Activity size={14} />, color: '#00FF94' },
+    { id: 'module', label: 'Modules', icon: <Box size={14} />, color: typeColors.module },
+    { id: 'function', label: 'Functions', icon: <Code2 size={14} />, color: typeColors.function },
+    { id: 'class', label: 'Classes', icon: <Layers size={14} />, color: typeColors.class },
+    { id: 'variable', label: 'Variables', icon: <Activity size={14} />, color: typeColors.variable },
   ];
 
   const entityCounts = analysis?.entityCounts;
@@ -161,8 +168,9 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             analysis={analysis}
             concepts={concepts}
             dreams={dreams}
-            searchQuery={searchQuery}
+            searchQuery={searchQuery} // Pass searchQuery
             activeFilters={activeFilters}
+            typeColors={typeColors}
             onNodeHover={(n) => setHoveredNode(n)}
             onNodeClick={(n) => setSelectedNode(n)}
             isFullscreen={isFullscreen}
@@ -217,9 +225,9 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '0.25rem', wordBreak: 'break-word' }}>
               {selectedNode.label || selectedNode.name || selectedNode.id}
             </div>
-            {selectedNode.file && (
+            {selectedNode.filePath && (
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                📁 {selectedNode.file}
+                📁 {selectedNode.filePath}
               </div>
             )}
             {selectedNode.confidence !== undefined && (

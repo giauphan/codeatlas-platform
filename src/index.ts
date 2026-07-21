@@ -26,6 +26,7 @@ import {
   registerProject
 } from "./services/projectService.js";
 import { indexingService } from "./services/indexingService.js";
+import { OracleDreamingService } from "./services/dreamingService.js";
 
 // Initialize Firebase Admin (Infrastructure Configuration at Composition Root)
 const apps = getApps();
@@ -59,6 +60,15 @@ async function main() {
   // Index all local git repos on startup
   await indexingService.init();
   await indexingService.indexAll();
+
+  // Initialize Oracle dreaming/memory schema (idempotent — safe to run every start)
+  if (process.env.ORACLE_CONN_STRING) {
+    try {
+      await OracleDreamingService.initialize();
+    } catch (initErr) {
+      logger.warn("[Startup] Oracle Dreaming schema init skipped:", initErr instanceof Error ? initErr.message : String(initErr));
+    }
+  }
 
   if (port) {
     // SSE Mode - for remote server deployment
