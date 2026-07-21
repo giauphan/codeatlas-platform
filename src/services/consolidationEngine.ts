@@ -585,7 +585,7 @@ export class ConsolidationEngine {
     let dot = 0, normA = 0, normB = 0;
 
     // ⚡ Bolt Optimization: Unroll loop to process 4 elements at a time
-    // This reduces loop overhead by ~40% for 1536-dimensional embedding vectors
+    // This reduces loop overhead for high-dimensional embedding vectors
     let i = 0;
     for (; i <= len - 4; i += 4) {
       const a0 = a[i], b0 = b[i];
