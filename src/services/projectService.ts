@@ -66,8 +66,7 @@ export function isSystemIdeDirectory(dir: string): boolean {
 }
 
 const IDE_KEYWORDS = ['code', 'vscode', 'cursor', 'windsurf', 'intellij', 'webstorm', 'phpstorm', 'idea', 'eclipse', 'sublime', 'gemini-cli'];
-// ⚡ Bolt Optimization: Use a compiled Regex for O(1) matching instead of O(N) array iteration in the hot process loop
-const IDE_REGEX = new RegExp(IDE_KEYWORDS.join('|'), 'i');
+const IDE_REGEX = new RegExp(IDE_KEYWORDS.join('|'));
 
 export async function getOpenIdeForDirAsync(dir: string): Promise<string | null> {
   try {
