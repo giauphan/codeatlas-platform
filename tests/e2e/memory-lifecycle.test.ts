@@ -334,7 +334,7 @@ describe('Memory Lifecycle', () => {
       // Should use weighted scoring expression, not raw VECTOR_DISTANCE
       assert.ok(sql.includes('0.50 * (1 - VECTOR_DISTANCE'), 'Should weight similarity');
       assert.ok(sql.includes('0.20 * NVL(confidence'), 'Should weight confidence');
-      assert.ok(sql.includes('0.15 * LEAST(1.0, (SYSDATE'), 'Should weight freshness');
+      assert.ok(sql.includes('0.15 * (1.0 - LEAST(1.0, (SYSDATE'), 'Should weight freshness');
       assert.ok(sql.includes('0.10 * (importance'), 'Should weight importance');
       assert.ok(sql.includes('evidence_count'), 'Should factor evidence');
       assert.ok(sql.includes("status IN ('active', 'superseded')"), 'Should filter out archived');

@@ -182,6 +182,22 @@ export class OracleDreamingService {
       OracleDreamingService._hasLifecycleColumns = await this.checkColumn(connection, 'STATUS');
       logger.info(`[Oracle Dreaming] Schema check — has_content_hash=${OracleDreamingService._hasContentHashColumn}, has_lifecycle=${OracleDreamingService._hasLifecycleColumns}`);
 
+      // Data migration: set existing NULL statuses to active (v2.18.1)
+      if (OracleDreamingService._hasLifecycleColumns) {
+        try {
+          const updResult = await connection.execute(
+            `UPDATE ai_dreaming_memory SET status = 'active' WHERE status IS NULL`,
+            {},
+            { autoCommit: true }
+          );
+          if (updResult.rowsAffected && updResult.rowsAffected > 0) {
+            logger.info(`[Oracle Dreaming] Data migration — set ${updResult.rowsAffected} NULL statuses to 'active'`);
+          }
+        } catch (updErr) {
+          logger.warn("[Oracle Dreaming] Data migration warning:", updErr);
+        }
+      }
+
       // Second Brain and Genome tables are lazily initialized on first server start.
       // This avoids forcing users to run a separate migration step.
       // Each CREATE TABLE uses EXECUTE IMMEDIATE wrapped in BEGIN...END blocks
@@ -512,8 +528,9 @@ export class OracleDreamingService {
       }
 
       // Build status filter — exclude archived/deprecated by default (only if column exists)
+      // NULL status means pre-migration row, treat as active
       const statusFilter = OracleDreamingService._hasLifecycleColumns
-        ? `AND status IN ('active', 'superseded')`
+        ? `AND (status IS NULL OR status IN ('active', 'superseded'))`
         : '';
 
       let orderClause: string;
@@ -525,7 +542,7 @@ export class OracleDreamingService {
         orderClause = `
           ORDER BY (
             0.50 * (1 - VECTOR_DISTANCE(embedding, :queryVector, COSINE))${lifecycleBonus}
-            + 0.15 * LEAST(1.0, (SYSDATE - CAST(created_at AS DATE)) / 90)
+            + 0.15 * (1.0 - LEAST(1.0, (SYSDATE - CAST(created_at AS DATE)) / 90))
             + 0.10 * (importance / 10.0)
           ) DESC
         `;
@@ -535,7 +552,7 @@ export class OracleDreamingService {
           : '';
         orderClause = `
           ORDER BY (
-            0.30 * LEAST(1.0, (SYSDATE - CAST(created_at AS DATE)) / 90)${lifecycleBonus}
+            0.30 * (1.0 - LEAST(1.0, (SYSDATE - CAST(created_at AS DATE)) / 90))${lifecycleBonus}
             + 0.20 * (importance / 10.0)
           ) DESC
         `;
