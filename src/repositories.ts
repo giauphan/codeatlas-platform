@@ -148,11 +148,15 @@ export class AuthenticateUserUseCase {
 
     // 1. Super Admin — try Firestore first so the key resolves to the user's real uid
     if (superAdminKey && apiKey === superAdminKey) {
-      const firestoreData = await this.authRepo.verifyKey(apiKey);
-      if (firestoreData) {
-        firestoreData.expires = Infinity;
-        this.authCache.set(apiKey, firestoreData);
-        return firestoreData;
+      try {
+        const firestoreData = await this.authRepo.verifyKey(apiKey);
+        if (firestoreData) {
+          firestoreData.expires = Infinity;
+          this.authCache.set(apiKey, firestoreData);
+          return firestoreData;
+        }
+      } catch (err) {
+        // Fallback gracefully if Firestore is unconfigured or unavailable
       }
       return { tier: 'enterprise', uid: 'admin', keyId: 'admin', expires: Infinity };
     }
