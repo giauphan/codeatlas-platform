@@ -29,13 +29,14 @@ export interface AnalysisResult {
   totalFilesSkipped: number;
 }
 
-export type CompiledPattern = {
+export type CompiledPattern = { skip: true } | {
+  skip: false;
   dirOnly: boolean;
   re: RegExp;
   anchored: boolean;
   bareRe: RegExp | null;
   cleanPat: string;
-} | null;
+};
 
 export class IndexingService {
   private projectDirs: string[] = [];
@@ -213,6 +214,21 @@ export class IndexingService {
     } catch { /* ignore unreadable */ }
   }
 
+  /** Build regex from gitignore wildcard pattern */
+  private toRegex(s: string): string {
+    let r = "";
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === "*" && s[i + 1] === "*" && s[i + 2] === "/") {
+        r += "(?:.+/)?";
+        i += 2;
+      } else if (c === "*") r += "[^/]*";
+      else if (c === "?") r += "[^/]";
+      else r += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    }
+    return r;
+  }
+
   /** Check if path matches any gitignore-style pattern, anchored to a specific base dir */
   private matchesIgnorePattern(relPath: string, patterns: string[]): boolean {
     const normalized = relPath.replace(/\\/g, "/");
@@ -223,47 +239,34 @@ export class IndexingService {
 
       if (compiled === undefined) {
         if (pat.startsWith("!")) {
-          this.patternCache.set(pat, null);
-          compiled = null;
+          // Negation pattern — skip (we only exclude)
+          compiled = { skip: true };
+          this.patternCache.set(pat, compiled);
         } else {
           const p = pat.replace(/\\/g, "/");
           const dirOnly = p.endsWith("/");
           const cleanPat = dirOnly ? p.slice(0, -1) : p;
 
-          const toRegex = (s: string): string => {
-            let r = "";
-            for (let i = 0; i < s.length; i++) {
-              const c = s[i];
-              if (c === "*" && s[i + 1] === "*" && s[i + 2] === "/") {
-                r += "(?:.+/)?";
-                i += 2;
-              } else if (c === "*") r += "[^/]*";
-              else if (c === "?") r += "[^/]";
-              else r += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-            }
-            return r;
-          };
-
           const cleanTrimmed = cleanPat.replace(/^\//, "");
           const anchored = cleanPat.includes("/");
           const partsPattern = (anchored && cleanPat.startsWith("/"))
-            ? `^${toRegex(cleanTrimmed)}(?:/|$)`
+            ? `^${this.toRegex(cleanTrimmed)}(?:/|$)`
             : anchored
-              ? `^${toRegex(cleanPat)}`
-              : `(?:^|/)${toRegex(cleanPat)}$`;
+              ? `^${this.toRegex(cleanPat)}`
+              : `(?:^|/)${this.toRegex(cleanPat)}$`;
 
           const re = new RegExp(partsPattern);
           let bareRe = null;
           if (!anchored && !dirOnly) {
-            bareRe = new RegExp(`^${toRegex(cleanPat)}$`);
+            bareRe = new RegExp(`^${this.toRegex(cleanPat)}$`);
           }
 
-          compiled = { dirOnly, re, anchored, bareRe, cleanPat };
+          compiled = { skip: false, dirOnly, re, anchored, bareRe, cleanPat };
           this.patternCache.set(pat, compiled);
         }
       }
 
-      if (!compiled) continue;
+      if (compiled.skip) continue;
 
       const target = compiled.dirOnly ? normalized + "/" : normalized;
       if (compiled.re.test(target)) return true;
