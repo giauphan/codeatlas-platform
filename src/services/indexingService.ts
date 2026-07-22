@@ -101,6 +101,9 @@ export class IndexingService {
    * Analyze a single project and write .codeatlas/analysis.json
    */
   async indexProject(projectPath: string): Promise<boolean> {
+    // Clear the cache before scanning a new project to prevent unbounded memory growth
+    this.patternCache.clear();
+
     const absPath = path.resolve(projectPath);
     if (!fs.existsSync(absPath)) {
       logger.warn(`[IndexingService] Project path does not exist: ${absPath}`);
