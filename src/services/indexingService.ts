@@ -29,11 +29,19 @@ export interface AnalysisResult {
   totalFilesSkipped: number;
 }
 
+export type CompiledPattern = {
+  dirOnly: boolean;
+  re: RegExp;
+  anchored: boolean;
+  bareRe: RegExp | null;
+  cleanPat: string;
+} | null;
+
 export class IndexingService {
   private projectDirs: string[] = [];
   private isIndexing = false;
   // Cache for compiled ignore patterns to avoid expensive regex recompilations during scanning
-  private patternCache = new Map<string, {dirOnly: boolean, re: RegExp, anchored: boolean, bareRe: RegExp | null, cleanPat: string} | null>();
+  private patternCache = new Map<string, CompiledPattern>();
 
   constructor() {}
 
