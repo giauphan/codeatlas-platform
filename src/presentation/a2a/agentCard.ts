@@ -5,7 +5,7 @@
  */
 
 import type { AgentCard, AgentSkill, MCPToolMeta } from "../../types/a2a.js";
-import * as fs from "fs";
+import { promises as fs } from "fs";
 import * as path from "path";
 
 // Global tool registry — populated by mcpTools.ts at registration time
@@ -84,7 +84,7 @@ async function getPackageVersion(): Promise<string> {
 
   try {
     const pkgPath = path.join(process.cwd(), "package.json");
-    const pkg = JSON.parse(await fs.promises.readFile(pkgPath, "utf-8"));
+    const pkg = JSON.parse(await fs.readFile(pkgPath, "utf-8"));
     const version = pkg.version || "unknown";
     cachedPackageVersion = version;
     return version;

@@ -16,15 +16,23 @@ import { authMiddleware } from "../../middleware/auth.js";
 
 export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, baseUrl: string): void {
   // === Agent Discovery ===
-  app.get("/.well-known/agent-card.json", authMiddleware, async (_req, res) => {
-    const card = await buildAgentCard(baseUrl);
-    res.json(card);
+  app.get("/.well-known/agent-card.json", authMiddleware, async (_req, res, next) => {
+    try {
+      const card = await buildAgentCard(baseUrl);
+      res.json(card);
+    } catch (err) {
+      next(err);
+    }
   });
 
   // Also serve at alternate path for compatibility
-  app.get("/a2a/agent-card", authMiddleware, async (_req, res) => {
-    const card = await buildAgentCard(baseUrl);
-    res.json(card);
+  app.get("/a2a/agent-card", authMiddleware, async (_req, res, next) => {
+    try {
+      const card = await buildAgentCard(baseUrl);
+      res.json(card);
+    } catch (err) {
+      next(err);
+    }
   });
 
   // === JSON-RPC 2.0 Endpoint ===
