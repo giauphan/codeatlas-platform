@@ -152,6 +152,8 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         <div style={{ position: 'absolute', bottom: '1.5rem', right: '1.5rem', zIndex: 10 }}>
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             style={{
               padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)',
               background: 'rgba(0,0,0,0.7)', color: '#fff', cursor: 'pointer',
