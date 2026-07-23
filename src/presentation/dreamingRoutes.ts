@@ -101,6 +101,18 @@ export function registerDreamingRoutes(app: express.Application): void {
       const offsetRaw = req.query.offset as string | undefined;
       const memoryType = req.query.memory_type as string | undefined;
       const provider = req.query.provider as string | undefined;
+      const startDateRaw = req.query.start_date as string | undefined;
+      const endDateRaw = req.query.end_date as string | undefined;
+
+      // Parse and validate date filters — accept ISO 8601 or YYYY-MM-DD
+      const parseDate = (d?: string): Date | undefined => {
+        if (!d) return undefined;
+        const parsed = new Date(d);
+        if (isNaN(parsed.getTime())) return undefined;
+        return parsed;
+      };
+      const startDate = parseDate(startDateRaw);
+      const endDate = parseDate(endDateRaw);
 
       const limit = limitRaw ? parseInt(limitRaw, 10) : 10;
       if (isNaN(limit) || limit < 1 || limit > 100) {
@@ -116,7 +128,7 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       const rows = await authStorage.run(
         auth,
-        () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset, memoryType, provider)
+        () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset, memoryType, provider, startDate ?? undefined, endDate ?? undefined)
       );
 
       const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
