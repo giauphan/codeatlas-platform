@@ -29,7 +29,7 @@ export function registerTool(meta: MCPToolMeta): void {
  * Build a fully-formed AgentCard from the current MCP tool registry.
  * @param baseUrl - The server's base URL (e.g. "http://localhost:3000")
  */
-export function buildAgentCard(baseUrl: string): AgentCard {
+export async function buildAgentCard(baseUrl: string): Promise<AgentCard> {
   const skills: AgentSkill[] = toolRegistry.map((t) => ({
     id: t.name,
     name: t.name,
@@ -45,7 +45,7 @@ export function buildAgentCard(baseUrl: string): AgentCard {
       "AI-powered codebase intelligence platform — semantic code search, dependency graph analysis, " +
       "architectural smell detection, vulnerability scanning, and dreaming memory with vector search.",
     protocolVersion: "0.3.0",
-    version: getPackageVersion(),
+    version: await getPackageVersion(),
     url: `${baseUrl}/a2a/jsonrpc`,
     skills,
     capabilities: {
@@ -77,14 +77,14 @@ let cachedPackageVersion: string | undefined;
 /**
  * Read version from package.json (npm_package_version is only available in npm scripts).
  */
-function getPackageVersion(): string {
+async function getPackageVersion(): Promise<string> {
   if (cachedPackageVersion !== undefined) {
     return cachedPackageVersion;
   }
 
   try {
     const pkgPath = path.join(process.cwd(), "package.json");
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    const pkg = JSON.parse(await fs.promises.readFile(pkgPath, "utf-8"));
     const version = pkg.version || "unknown";
     cachedPackageVersion = version;
     return version;
