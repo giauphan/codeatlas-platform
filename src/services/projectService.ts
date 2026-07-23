@@ -66,6 +66,7 @@ export function isSystemIdeDirectory(dir: string): boolean {
 }
 
 const IDE_KEYWORDS = ['code', 'vscode', 'cursor', 'windsurf', 'intellij', 'webstorm', 'phpstorm', 'idea', 'eclipse', 'sublime', 'gemini-cli'];
+const IDE_REGEX = new RegExp(IDE_KEYWORDS.join('|'));
 
 export async function getOpenIdeForDirAsync(dir: string): Promise<string | null> {
   try {
@@ -85,14 +86,8 @@ export async function getOpenIdeForDirAsync(dir: string): Promise<string | null>
       try {
         const cmdline = await fs.promises.readFile(cmdlinePath, 'utf8');
 
-        let hasIdeKeyword = false;
-        for(let i=0; i < IDE_KEYWORDS.length; i++) {
-            if (cmdline.includes(IDE_KEYWORDS[i])) {
-                hasIdeKeyword = true;
-                break;
-            }
-        }
-        if (!hasIdeKeyword) return null;
+        // Fast path: use Regex test instead of iterating keywords array
+        if (!IDE_REGEX.test(cmdline)) return null;
 
         if (!cmdline.includes(basename) && !cmdline.includes(absPath)) {
             return null;
@@ -111,10 +106,8 @@ export async function getOpenIdeForDirAsync(dir: string): Promise<string | null>
 
         if (hasDirArg) {
           const exePath = args[0].toLowerCase();
-          for (const keyword of IDE_KEYWORDS) {
-            if (exePath.includes(keyword)) {
-              return path.basename(args[0]);
-            }
+          if (IDE_REGEX.test(exePath)) {
+            return path.basename(args[0]);
           }
         }
       } catch {
