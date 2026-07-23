@@ -29,9 +29,20 @@ export interface AnalysisResult {
   totalFilesSkipped: number;
 }
 
+export type CompiledPattern = { skip: true } | {
+  skip: false;
+  dirOnly: boolean;
+  re: RegExp;
+  anchored: boolean;
+  bareRe: RegExp | null;
+  cleanPat: string;
+};
+
 export class IndexingService {
   private projectDirs: string[] = [];
   private isIndexing = false;
+  // Cache for compiled ignore patterns to avoid expensive regex recompilations during scanning
+  private patternCache = new Map<string, CompiledPattern>();
 
   constructor() {}
 
@@ -99,6 +110,9 @@ export class IndexingService {
    * Analyze a single project and write .codeatlas/analysis.json
    */
   async indexProject(projectPath: string): Promise<boolean> {
+    // Clear the cache before scanning a new project to prevent unbounded memory growth
+    this.patternCache.clear();
+
     const absPath = path.resolve(projectPath);
     if (!fs.existsSync(absPath)) {
       logger.warn(`[IndexingService] Project path does not exist: ${absPath}`);
@@ -200,56 +214,66 @@ export class IndexingService {
     } catch { /* ignore unreadable */ }
   }
 
+  /** Build regex from gitignore wildcard pattern */
+  private toRegex(s: string): string {
+    let r = "";
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === "*" && s[i + 1] === "*" && s[i + 2] === "/") {
+        r += "(?:.+/)?";
+        i += 2;
+      } else if (c === "*") r += "[^/]*";
+      else if (c === "?") r += "[^/]";
+      else r += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    }
+    return r;
+  }
+
   /** Check if path matches any gitignore-style pattern, anchored to a specific base dir */
   private matchesIgnorePattern(relPath: string, patterns: string[]): boolean {
     const normalized = relPath.replace(/\\/g, "/");
     const parts = normalized.split("/");
 
     for (const pat of patterns) {
-      // Negation pattern — skip (we only exclude)
-      if (pat.startsWith("!")) continue;
+      let compiled = this.patternCache.get(pat);
 
-      const p = pat.replace(/\\/g, "/");
+      if (compiled === undefined) {
+        if (pat.startsWith("!")) {
+          // Negation pattern — skip (we only exclude)
+          compiled = { skip: true };
+          this.patternCache.set(pat, compiled);
+        } else {
+          const p = pat.replace(/\\/g, "/");
+          const dirOnly = p.endsWith("/");
+          const cleanPat = dirOnly ? p.slice(0, -1) : p;
 
-      // Directory-only pattern (trailing /)
-      const dirOnly = p.endsWith("/");
-      const cleanPat = dirOnly ? p.slice(0, -1) : p;
+          const cleanTrimmed = cleanPat.replace(/^\//, "");
+          const anchored = cleanPat.includes("/");
+          const partsPattern = (anchored && cleanPat.startsWith("/"))
+            ? `^${this.toRegex(cleanTrimmed)}(?:/|$)`
+            : anchored
+              ? `^${this.toRegex(cleanPat)}`
+              : `(?:^|/)${this.toRegex(cleanPat)}$`;
 
-      // Build regex from gitignore wildcard pattern
-      const toRegex = (s: string): string => {
-        let r = "";
-        for (let i = 0; i < s.length; i++) {
-          const c = s[i];
-          if (c === "*" && s[i + 1] === "*" && s[i + 2] === "/") {
-            r += "(?:.+/)?";
-            i += 2;
-          } else if (c === "*") r += "[^/]*";
-          else if (c === "?") r += "[^/]";
-          else r += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+          const re = new RegExp(partsPattern);
+          let bareRe = null;
+          if (!anchored && !dirOnly) {
+            bareRe = new RegExp(`^${this.toRegex(cleanPat)}$`);
+          }
+
+          compiled = { skip: false, dirOnly, re, anchored, bareRe, cleanPat };
+          this.patternCache.set(pat, compiled);
         }
-        return r;
-      };
+      }
 
-      // Pattern with / means anchored to root, otherwise match any segment.
-      // Strip leading / because normalized paths are relative (no leading /).
-      // Also treat leading-/ patterns as anchored root matches.
-      const cleanTrimmed = cleanPat.replace(/^\//, "");
-      const anchored = cleanPat.includes("/");
-      // If original had leading /, force root-anchor match
-      const partsPattern = (anchored && cleanPat.startsWith("/"))
-        ? `^${toRegex(cleanTrimmed)}(?:/|$)`
-        : anchored
-          ? `^${toRegex(cleanPat)}`
-          : `(?:^|/)${toRegex(cleanPat)}$`;
-      const re = new RegExp(partsPattern);
-      const target = dirOnly ? normalized + "/" : normalized;
-      if (re.test(target)) return true;
+      if (compiled.skip) continue;
 
-      // Also match bare name against any path segment
-      if (!anchored && !dirOnly) {
-        const bareRe = new RegExp(`^${toRegex(cleanPat)}$`);
+      const target = compiled.dirOnly ? normalized + "/" : normalized;
+      if (compiled.re.test(target)) return true;
+
+      if (!compiled.anchored && !compiled.dirOnly && compiled.bareRe) {
         for (const part of parts) {
-          if (part === cleanPat || bareRe.test(part)) return true;
+          if (part === compiled.cleanPat || compiled.bareRe.test(part)) return true;
         }
       }
     }
