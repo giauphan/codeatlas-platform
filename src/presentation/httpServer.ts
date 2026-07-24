@@ -175,7 +175,8 @@ app.use(cors({
     }
 
     if (allowedList.includes('*')) {
-      return callback(null, '*');
+      // With credentials:true, reflect any valid origin dynamically
+      return callback(null, true);
     }
 
     try {
