@@ -128,7 +128,7 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       const rows = await authStorage.run(
         auth,
-        () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset, memoryType, provider, startDate ?? undefined, endDate ?? undefined)
+        () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset, memoryType, provider, startDate, endDate)
       );
 
       const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
