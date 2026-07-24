@@ -493,7 +493,9 @@ export class OracleDreamingService {
     limit: number = 10,
     offset: number = 0,
     memoryType?: string,
-    provider?: string
+    provider?: string,
+    startDate?: Date,
+    endDate?: Date
   ) {
     const queryVector = await generateEmbedding(queryText, 'query');
 
@@ -509,11 +511,17 @@ export class OracleDreamingService {
       // Build provider filter
       const providerFilter = provider ? 'AND provider = :provider' : '';
 
+      // Build date filters using direct Date binding instead of risky TO_TIMESTAMP formats
+      const startDateFilter = startDate ? 'AND created_at >= :startDate' : '';
+      const endDateFilter = endDate ? 'AND created_at <= :endDate' : '';
+
       // Build type filter for memory_type IN clause
       let typeFilter = '';
       const binds: Record<string, unknown> = { tenantId: authStorage.getStore()!.uid, limit, offset };
       if (project) binds.project = project;
       if (provider) binds.provider = provider;
+      if (startDate) binds.startDate = startDate;
+      if (endDate) binds.endDate = endDate;
       if (queryVector) {
         binds.queryVector = new Float32Array(queryVector);
       }
@@ -547,15 +555,9 @@ export class OracleDreamingService {
           ) DESC
         `;
       } else {
-        const lifecycleBonus = OracleDreamingService._hasLifecycleColumns
-          ? `\n            + 0.40 * NVL(confidence, 0.50)\n            + 0.10 * CASE WHEN evidence_count > 0 THEN LEAST(1.0, LOG(2, evidence_count + 1) / 5) ELSE 0 END`
-          : '';
-        orderClause = `
-          ORDER BY (
-            0.30 * (1.0 - LEAST(1.0, (SYSDATE - CAST(created_at AS DATE)) / 90))${lifecycleBonus}
-            + 0.20 * (importance / 10.0)
-          ) DESC
-        `;
+        // When there is no search query, default to purely chronological sorting (newest first)
+        // so the UI naturally shows recent memories instead of burying them under old high-importance ones.
+        orderClause = `ORDER BY created_at DESC`;
       }
 
       const selectCols = OracleDreamingService._hasLifecycleColumns
@@ -565,7 +567,7 @@ export class OracleDreamingService {
       const sql = `
         SELECT ${selectCols}
         FROM ai_dreaming_memory
-        WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter} ${statusFilter}
+        WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter} ${statusFilter} ${startDateFilter} ${endDateFilter}
         ${orderClause}
         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
       `;

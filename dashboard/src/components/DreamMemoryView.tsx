@@ -26,6 +26,8 @@ export function DreamMemoryView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<string[]>(['KNOWLEDGE', 'PREFERENCE', 'MISTAKE', 'PATTERN']);
   const [showAll, setShowAll] = useState(true);
   // user removed — auth handled via sessionStorage tokens
@@ -132,6 +134,8 @@ export function DreamMemoryView() {
       }
       const params = new URLSearchParams();
       if (query && query.trim()) params.set('query', query.trim());
+      if (startDate) params.set('start_date', `${startDate}T00:00:00.000Z`);
+      if (endDate) params.set('end_date', `${endDate}T23:59:59.999Z`);
       if (!showAll) params.set('project', 'GolikeTool');
       if (selectedTypes.length < 4) {
         params.set('memory_type', selectedTypes.join(','));
@@ -155,7 +159,7 @@ export function DreamMemoryView() {
     } finally {
       setLoading(false);
     }
-  }, [showAll, firebaseReady, page, selectedTypes, dreamConfig]);
+  }, [showAll, firebaseReady, page, selectedTypes, dreamConfig, startDate, endDate]);
 
   useEffect(() => {
     if (firebaseReady) fetchMemories(searchQuery, 0, dreamConfig);
@@ -180,11 +184,11 @@ export function DreamMemoryView() {
     setPage(0);
   };
 
-  // Re-fetch when filter types change (reset to page 0)
+  // Re-fetch when filter types or dates change (reset to page 0)
   useEffect(() => {
     if (firebaseReady) fetchMemories(searchQuery, 0, dreamConfig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firebaseReady, selectedTypes]);
+  }, [firebaseReady, selectedTypes, startDate, endDate]);
 
   const hasPrev = page > 0;
   const hasNext = memories.length >= PAGE_SIZE;
@@ -211,8 +215,8 @@ export function DreamMemoryView() {
         </div>
       </header>
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <form onSubmit={handleSearch} style={{ flex: 1, position: 'relative', minWidth: '250px' }}>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <form onSubmit={handleSearch} style={{ flex: '1 1 250px', position: 'relative' }}>
           <Search size={18} style={{ position: 'absolute', left: '1.25rem', top: '1.1rem', color: 'var(--text-muted)' }} />
           <input
             type="text" className="glass-input" placeholder="Search memories semantically..."
@@ -221,6 +225,68 @@ export function DreamMemoryView() {
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           />
         </form>
+
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.25rem 0.75rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <input
+            type="date"
+            aria-label="Start Date"
+            value={startDate}
+            onChange={e => {
+              setStartDate(e.target.value);
+              setPage(0);
+            }}
+            style={{
+              padding: '0.5rem',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(0,0,0,0.2)',
+              color: '#fff',
+              fontSize: '0.85rem',
+              outline: 'none'
+            }}
+          />
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>to</span>
+          <input
+            type="date"
+            aria-label="End Date"
+            value={endDate}
+            onChange={e => {
+              setEndDate(e.target.value);
+              setPage(0);
+            }}
+            style={{
+              padding: '0.5rem',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(0,0,0,0.2)',
+              color: '#fff',
+              fontSize: '0.85rem',
+              outline: 'none'
+            }}
+          />
+          {(startDate || endDate) && (
+            <button
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setPage(0);
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                color: '#fff',
+                padding: '0.4rem 0.8rem',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 600
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
         <button onClick={() => setShowConfig(!showConfig)}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)',
