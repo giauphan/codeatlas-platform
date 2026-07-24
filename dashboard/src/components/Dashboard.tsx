@@ -214,6 +214,7 @@ export const Dashboard: React.FC = () => {
     safeSessionStorageRemoveItem('ca_api_key');
     safeSessionStorageRemoveItem('ca_user_email');
     setUser(null);
+    setActiveTab('Control Center');
   };
 
   const fetchAnalysis = async (projectDir?: string, forceRefresh = false) => {
