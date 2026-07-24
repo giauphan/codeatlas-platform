@@ -590,8 +590,8 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       if (await fileExists(tenantRoot)) {
         try {
           const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
-          for (const t of tenants) {
-            if (t.name === tenantId) continue;
+          await Promise.all(tenants.map(async (t) => {
+            if (t.name === tenantId) return;
             const tDir = path.join(tenantRoot, t.name);
             if (t.isDirectory()) {
               try {
@@ -603,7 +603,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
                 });
               } catch { /* skip */ }
             }
-          }
+          }));
         } catch { /* skip */ }
       }
     }
