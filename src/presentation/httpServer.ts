@@ -1,6 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import compression from "compression";
+import cors from "cors";
 import { IncomingMessage, Server } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -161,51 +162,42 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
+const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    const allowedList = allowedOrigins.split(',').map(s => s.trim());
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
 
     // Explicitly reject null origin to prevent sandboxed iframe bypasses
-    if (origin !== 'null' && origin !== '*') {
-      try {
-        // Ensure origin is a valid HTTP/HTTPS URL
-        const parsedOrigin = new URL(origin);
-        if (parsedOrigin.protocol === 'http:' || parsedOrigin.protocol === 'https:') {
-          if (allowedList.includes(origin)) {
-            // Origin is allowed — echo back the specific origin for proper credential support
-            res.header('Access-Control-Allow-Origin', origin);
-            res.header('Vary', 'Origin');
-          } else if (allowedList.includes('*')) {
-             // If a wildcard is allowed, it should return * (which securely fails if credentials are required), not echo the origin dynamically.
-            res.header('Access-Control-Allow-Origin', '*');
-            res.header('Vary', 'Origin');
-          } else {
-            res.header('Vary', 'Origin');
-          }
-        } else {
-          res.header('Vary', 'Origin');
-        }
-      } catch (err) {
-        // Invalid URL format for origin
-        res.header('Vary', 'Origin');
-      }
-    } else {
-      // Origin is NOT in the allowed list, is null, or is * (which isn't valid for credentials)
-      // Omit the Access-Control-Allow-Origin header so the browser properly rejects the request
-      res.header('Vary', 'Origin');
+    if (origin === 'null') {
+      return callback(null, false);
     }
-  }
 
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
+    if (allowedList.includes('*')) {
+      // With credentials:true, reflect any valid origin dynamically
+      return callback(null, true);
+    }
 
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+    try {
+      const parsedOrigin = new URL(origin);
+      if (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') {
+        return callback(null, false);
+      }
+
+      if (allowedList.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(null, false);
+      }
+    } catch (err) {
+      return callback(null, false);
+    }
+  },
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
+  credentials: true
+}));
 
 // Auth Proxy (Firebase sign-in without Web SDK)
 app.use(authProxyRouter);
