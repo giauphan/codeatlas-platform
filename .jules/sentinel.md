@@ -7,3 +7,7 @@
 **Vulnerability:** Express app missing security headers (e.g. X-Powered-By exposed, missing XSS protection, etc.)
 **Learning:** Security headers are not enabled by default in Express and must be explicitly configured using middleware like helmet. Cross-origin configuration must be considered to avoid breaking existing CORS implementations.
 **Prevention:** Use helmet by default when initializing new Express applications and verify configuration against CORS needs.
+## 2026-07-24 - [Remove Hardcoded API Key Wildcard Bypass]
+**Vulnerability:** A hardcoded wildcard `*` was used as the `x-api-key` in a backend-to-backend `fetch` call within `src/presentation/mcpTools.ts` for the `sync_skills` endpoint.
+**Learning:** This bypass was likely introduced for convenience during testing or initial development, but hardcoded wildcards or bypass tokens violate the principle of least privilege and can allow unauthorized execution if standard API endpoints are exposed.
+**Prevention:** Internal/Server-to-Server API calls should dynamically reference actual secret tokens from environment variables (e.g., `process.env.CODEATLAS_API_KEY`) rather than relying on structural bypasses.
