@@ -152,7 +152,7 @@ describe('Dashboard', () => {
 
     render(<Dashboard />);
 
-    const signOutBtn = screen.getByText('SIGN OUT');
+    const signOutBtn = screen.getByText(/Logout/i);
     fireEvent.click(signOutBtn);
 
     await waitFor(() => {

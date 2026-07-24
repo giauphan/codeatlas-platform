@@ -211,6 +211,9 @@ export const Dashboard: React.FC = () => {
     safeSessionStorageRemoveItem('ca_selected_project_dir');
     await clearCache();
     safeSessionStorageRemoveItem('ca_projects_cache');
+    safeSessionStorageRemoveItem('ca_api_key');
+    safeSessionStorageRemoveItem('ca_user_email');
+    window.location.reload();
   };
 
   const fetchAnalysis = async (projectDir?: string, forceRefresh = false) => {
