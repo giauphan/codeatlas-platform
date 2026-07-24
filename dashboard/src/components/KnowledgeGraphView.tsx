@@ -138,7 +138,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               aria-pressed={activeFilters.includes(f.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.8rem',
-                borderRadius: '20px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
+                borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600,
                 background: activeFilters.includes(f.id) ? `${f.color}22` : 'rgba(255,255,255,0.05)',
                 border: `1px solid ${activeFilters.includes(f.id) ? f.color : 'transparent'}`,
                 color: activeFilters.includes(f.id) ? f.color : 'var(--text-muted)',
