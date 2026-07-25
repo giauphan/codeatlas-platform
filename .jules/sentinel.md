@@ -11,3 +11,7 @@
 **Vulnerability:** A hardcoded wildcard `*` was used as the `x-api-key` in a backend-to-backend `fetch` call within `src/presentation/mcpTools.ts` for the `sync_skills` endpoint.
 **Learning:** This bypass was likely introduced for convenience during testing or initial development, but hardcoded wildcards or bypass tokens violate the principle of least privilege and can allow unauthorized execution if standard API endpoints are exposed.
 **Prevention:** Internal/Server-to-Server API calls should dynamically reference actual secret tokens from environment variables (e.g., `process.env.CODEATLAS_API_KEY`) rather than relying on structural bypasses.
+## 2026-07-24 - [Fail Loudly on Missing Security Config]
+**Vulnerability:** A fallback to `""` was used when a required security environment variable (`CODEATLAS_API_KEY`) was missing.
+**Learning:** Silently falling back to invalid credentials masks configuration errors and can lead to obscure access denied responses (403s), making debugging difficult and potentially leaving endpoints in unexpected states.
+**Prevention:** When security configurations are mandatory, throw an explicit error early in the execution path to fail loudly and safely.
