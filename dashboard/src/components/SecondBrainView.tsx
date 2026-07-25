@@ -143,7 +143,6 @@ export function SecondBrainView() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              aria-pressed={selectedCategory === cat}
               style={{
                 padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
                 background: selectedCategory === cat ? 'rgba(0,240,255,0.15)' : 'rgba(0,0,0,0.2)',
