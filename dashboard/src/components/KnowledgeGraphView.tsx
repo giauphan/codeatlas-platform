@@ -131,12 +131,14 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         {/* Filter chips */}
         <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', zIndex: 10, display: 'flex', gap: '0.5rem' }}>
           {filters.map(f => (
-            <div
+            <button
+              type="button"
               key={f.id}
               onClick={() => toggleFilter(f.id)}
+              aria-pressed={activeFilters.includes(f.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.8rem',
-                borderRadius: '20px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
+                borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600,
                 background: activeFilters.includes(f.id) ? `${f.color}22` : 'rgba(255,255,255,0.05)',
                 border: `1px solid ${activeFilters.includes(f.id) ? f.color : 'transparent'}`,
                 color: activeFilters.includes(f.id) ? f.color : 'var(--text-muted)',
@@ -144,7 +146,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               }}
             >
               {f.icon} {f.label}
-            </div>
+            </button>
           ))}
         </div>
 

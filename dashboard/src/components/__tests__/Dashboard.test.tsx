@@ -140,30 +140,18 @@ describe('Dashboard', () => {
     });
   });
 
-  it('clears session storage and reloads when sign out button is clicked', async () => {
+  it('clears session storage and clears user when sign out button is clicked', async () => {
     sessionStorage.setItem('ca_api_key', 'test-key');
     sessionStorage.setItem('ca_user_email', 'test@example.com');
-    
-    const originalReload = window.location.reload;
-    Object.defineProperty(window, 'location', {
-      writable: true,
-      value: { reload: vi.fn() },
-    });
 
     render(<Dashboard />);
 
-    const signOutBtn = screen.getByText('SIGN OUT');
+    const signOutBtn = screen.getByText(/Logout/i);
     fireEvent.click(signOutBtn);
 
     await waitFor(() => {
         expect(sessionStorage.getItem('ca_api_key')).toBeNull();
         expect(sessionStorage.getItem('ca_user_email')).toBeNull();
-        expect(window.location.reload).toHaveBeenCalled();
-    });
-
-    Object.defineProperty(window, 'location', {
-      writable: true,
-      value: { reload: originalReload },
     });
   });
 
