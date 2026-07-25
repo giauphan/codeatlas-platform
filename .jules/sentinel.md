@@ -15,3 +15,7 @@
 **Vulnerability:** A fallback to `""` was used when a required security environment variable (`CODEATLAS_API_KEY`) was missing.
 **Learning:** Silently falling back to invalid credentials masks configuration errors and can lead to obscure access denied responses (403s), making debugging difficult and potentially leaving endpoints in unexpected states.
 **Prevention:** When security configurations are mandatory, throw an explicit error early in the execution path to fail loudly and safely.
+## 2026-07-24 - [Handle HTTP Error States Before Parsing JSON]
+**Vulnerability:** A missing HTTP status check (`!res.ok`) before calling `res.json()` could lead to unhelpful JSON parse exceptions if the server returned a non-2xx status (e.g., a 401 or 500 error page).
+**Learning:** Assuming that an HTTP response will always be JSON when the status code indicates an error masks the true nature of the failure. This makes diagnosing API or authentication failures difficult, especially when interacting with internal secure endpoints.
+**Prevention:** Always check `!res.ok` (or equivalent status logic) immediately after a `fetch` request, and throw a descriptive error containing the status code and text *before* attempting to parse the response body as JSON.
