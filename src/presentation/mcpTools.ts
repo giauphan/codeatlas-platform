@@ -1448,8 +1448,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey }
       });
       if (!res.ok) {
-        const bodyText = await res.text().catch(() => "");
-        throw new Error(`Sync failed (${res.status}) on port ${port}: ${res.statusText}. Body: ${bodyText.slice(0, 200)}`);
+        throw new Error(`Sync failed (${res.status}) on port ${port}: ${res.statusText}`);
       }
 
       const data = await res.json();
