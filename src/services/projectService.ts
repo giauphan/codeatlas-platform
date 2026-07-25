@@ -366,11 +366,12 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       const userDir = path.join(tenantRoot, tenantId);
       if (fs.existsSync(userDir)) {
         try {
-          const userProjects = fs.readdirSync(userDir);
+          // ⚡ Bolt: Using { withFileTypes: true } to get fs.Dirent objects directly from readdir,
+          // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
+          const userProjects = fs.readdirSync(userDir, { withFileTypes: true });
           for (const p of userProjects) {
-            const fullPath = path.join(userDir, p);
-            if (fs.statSync(fullPath).isDirectory()) {
-              searchDirs.push(fullPath);
+            if (p.isDirectory()) {
+              searchDirs.push(path.join(userDir, p.name));
             }
           }
         } catch { /* skip */ }
@@ -389,16 +390,15 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
       if (fs.existsSync(tenantRoot)) {
         try {
-          const tenants = fs.readdirSync(tenantRoot);
+          const tenants = fs.readdirSync(tenantRoot, { withFileTypes: true });
           for (const t of tenants) {
-            if (t === tenantId) continue;
-            const tDir = path.join(tenantRoot, t);
-            if (fs.statSync(tDir).isDirectory()) {
-              const tProjects = fs.readdirSync(tDir);
+            if (t.name === tenantId) continue;
+            const tDir = path.join(tenantRoot, t.name);
+            if (t.isDirectory()) {
+              const tProjects = fs.readdirSync(tDir, { withFileTypes: true });
               for (const p of tProjects) {
-                const fullPath = path.join(tDir, p);
-                if (fs.statSync(fullPath).isDirectory()) {
-                  searchDirs.push(fullPath);
+                if (p.isDirectory()) {
+                  searchDirs.push(path.join(tDir, p.name));
                 }
               }
             }
@@ -427,11 +427,10 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
     const projectsDir = path.join(process.cwd(), "projects");
     if (fs.existsSync(projectsDir)) {
       try {
-        const subDirs = fs.readdirSync(projectsDir);
+        const subDirs = fs.readdirSync(projectsDir, { withFileTypes: true });
         for (const p of subDirs) {
-          const fullPath = path.join(projectsDir, p);
-          if (fs.statSync(fullPath).isDirectory()) {
-            searchDirs.push(fullPath);
+          if (p.isDirectory()) {
+            searchDirs.push(path.join(projectsDir, p.name));
           }
         }
       } catch { /* skip */ }
@@ -566,16 +565,14 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       const userDir = path.join(tenantRoot, tenantId);
       if (await fileExists(userDir)) {
         try {
-          const userProjects = await fs.promises.readdir(userDir);
-          await Promise.all(userProjects.map(async (p) => {
-            const fullPath = path.join(userDir, p);
-            try {
-              const stat = await fs.promises.stat(fullPath);
-              if (stat.isDirectory()) {
-                searchDirs.push(fullPath);
-              }
-            } catch { /* skip */ }
-          }));
+          // ⚡ Bolt: Using { withFileTypes: true } to get fs.Dirent objects directly from readdir,
+          // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
+          const userProjects = await fs.promises.readdir(userDir, { withFileTypes: true });
+          userProjects.forEach((p) => {
+            if (p.isDirectory()) {
+              searchDirs.push(path.join(userDir, p.name));
+            }
+          });
         } catch { /* skip */ }
       }
     }
@@ -592,26 +589,21 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
       if (await fileExists(tenantRoot)) {
         try {
-          const tenants = await fs.promises.readdir(tenantRoot);
-          for (const t of tenants) {
-            if (t === tenantId) continue;
-            const tDir = path.join(tenantRoot, t);
-            try {
-              const tStat = await fs.promises.stat(tDir);
-              if (tStat.isDirectory()) {
-                const tProjects = await fs.promises.readdir(tDir);
-                await Promise.all(tProjects.map(async (p) => {
-                  const fullPath = path.join(tDir, p);
-                  try {
-                    const stat = await fs.promises.stat(fullPath);
-                    if (stat.isDirectory()) {
-                      searchDirs.push(fullPath);
-                    }
-                  } catch { /* skip */ }
-                }));
-              }
-            } catch { /* skip */ }
-          }
+          const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
+          await Promise.all(tenants.map(async (t) => {
+            if (t.name === tenantId) return;
+            const tDir = path.join(tenantRoot, t.name);
+            if (t.isDirectory()) {
+              try {
+                const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
+                tProjects.forEach((p) => {
+                  if (p.isDirectory()) {
+                    searchDirs.push(path.join(tDir, p.name));
+                  }
+                });
+              } catch { /* skip */ }
+            }
+          }));
         } catch { /* skip */ }
       }
     }
@@ -636,16 +628,12 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     const projectsDir = path.join(process.cwd(), "projects");
     if (await fileExists(projectsDir)) {
       try {
-        const subDirs = await fs.promises.readdir(projectsDir);
-        await Promise.all(subDirs.map(async (p) => {
-          const fullPath = path.join(projectsDir, p);
-          try {
-            const stat = await fs.promises.stat(fullPath);
-            if (stat.isDirectory()) {
-              searchDirs.push(fullPath);
-            }
-          } catch { /* skip */ }
-        }));
+        const subDirs = await fs.promises.readdir(projectsDir, { withFileTypes: true });
+        subDirs.forEach((p) => {
+          if (p.isDirectory()) {
+            searchDirs.push(path.join(projectsDir, p.name));
+          }
+        });
       } catch { /* skip */ }
     }
 
