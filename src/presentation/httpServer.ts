@@ -17,7 +17,8 @@ import {
   getStats,
   fileExists,
   resolveProjectDir,
-  unregisterProject
+  unregisterProject,
+  unregisterProjectAsync
 } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { registerTools } from "./mcpTools.js";
@@ -408,7 +409,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
     // 4. Unregister project from local registered list only if local cleanup was successful, or if force is enabled
     if (errors.length === 0 || isForce) {
       try {
-        unregisterProject(fullProjectDir);
+        await unregisterProjectAsync(fullProjectDir);
       } catch (regErr: unknown) {
         errors.push(`Failed to unregister project: ${regErr instanceof Error ? regErr.message : String(regErr)}`);
       }
