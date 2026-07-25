@@ -243,10 +243,11 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         {/* Project selector */}
         {projects && projects.length > 0 && (
           <div>
-            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', display: 'block' }}>
+            <label htmlFor="project-select" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', display: 'block' }}>
               Project
             </label>
             <select
+              id="project-select"
               value={selectedProjectDir}
               onChange={(e) => onProjectChange?.(e.target.value)}
               style={{

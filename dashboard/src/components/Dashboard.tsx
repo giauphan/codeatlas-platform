@@ -531,6 +531,7 @@ export const Dashboard: React.FC = () => {
               <li key={tab} style={{ marginBottom: '1rem' }}>
                 <button
                   onClick={() => setActiveTab(tab)}
+                  aria-current={activeTab === tab ? 'page' : undefined}
                   style={{
                     width: '100%', padding: '0.75rem 1rem', borderRadius: '8px',
                     background: activeTab === tab ? 'var(--button-active-background)' : 'transparent',
