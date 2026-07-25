@@ -1443,10 +1443,14 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const apiKey = process.env.CODEATLAS_API_KEY;
       if (!apiKey) throw new Error("CODEATLAS_API_KEY not configured");
 
-      const res = await fetch(`http://localhost:${process.env.PORT || 8080}/api/genome/sync-skills`, {
+      const port = process.env.PORT || 8080;
+      const res = await fetch(`http://localhost:${port}/api/genome/sync-skills`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey }
       });
-      if (!res.ok) throw new Error(`Sync failed with status: ${res.status} ${res.statusText}`);
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => "");
+        throw new Error(`Sync failed (${res.status}) on port ${port}: ${res.statusText}. Body: ${bodyText.slice(0, 200)}`);
+      }
 
       const data = await res.json();
       return { content: [{ type: "text" as const, text: "Synced " + (data.synced || 0) + " skills" }] };
