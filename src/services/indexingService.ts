@@ -130,7 +130,9 @@ export class IndexingService {
     try {
       const result = await this.analyzeProjectCode(projectName, absPath);
 
-      fs.writeFileSync(analysisPath, JSON.stringify(result, null, 2));
+      // ⚡ Bolt: Using asynchronous writeFile to avoid blocking the Node.js event loop,
+      // which allows the Express server to continue processing concurrent HTTP requests.
+      await fs.promises.writeFile(analysisPath, JSON.stringify(result, null, 2));
       logger.info(`[IndexingService] ✅ Indexed ${projectName}: ${result.totalFilesAnalyzed} files, ${result.graph.nodes.length} nodes, ${result.graph.links.length} links`);
       return true;
     } catch (err) {
@@ -145,12 +147,14 @@ export class IndexingService {
     let totalFilesAnalyzed = 0;
     let totalFilesSkipped = 0;
 
-    const files = this.scanFiles(projectPath);
+    const files = await this.scanFiles(projectPath);
 
     for (const filePath of files) {
       const relPath = path.relative(projectPath, filePath);
       try {
-        const content = fs.readFileSync(filePath, "utf-8");
+        // ⚡ Bolt: Using asynchronous readFile to avoid blocking the Node.js event loop,
+        // which allows the Express server to continue processing concurrent HTTP requests.
+        const content = await fs.promises.readFile(filePath, "utf-8");
         const ext = path.extname(filePath).toLowerCase();
 
         const moduleId = `module:${relPath}`;
@@ -203,10 +207,11 @@ export class IndexingService {
   }
 
   /** Load ignore file lines into an ordered pattern list */
-  private loadIgnoreFile(filePath: string, patterns: string[]): void {
+  private async loadIgnoreFile(filePath: string, patterns: string[]): Promise<void> {
     if (!fs.existsSync(filePath)) return;
     try {
-      const content = fs.readFileSync(filePath, "utf-8");
+      // ⚡ Bolt: Using asynchronous readFile to avoid blocking the Node.js event loop
+      const content = await fs.promises.readFile(filePath, "utf-8");
       for (const line of content.split("\n")) {
         const trimmed = line.trim();
         if (trimmed && !trimmed.startsWith("#")) patterns.push(trimmed);
@@ -280,7 +285,7 @@ export class IndexingService {
     return false;
   }
 
-  private scanFiles(rootDir: string): string[] {
+  private async scanFiles(rootDir: string): Promise<string[]> {
     const files: string[] = [];
 
     // Hardcoded excludes — always skip these directories/files
@@ -288,8 +293,8 @@ export class IndexingService {
 
     // Root-level gitignore patterns
     const rootPatterns: string[] = [];
-    this.loadIgnoreFile(path.join(rootDir, ".gitignore"), rootPatterns);
-    this.loadIgnoreFile(path.join(rootDir, ".codeatlasignore"), rootPatterns);
+    await this.loadIgnoreFile(path.join(rootDir, ".gitignore"), rootPatterns);
+    await this.loadIgnoreFile(path.join(rootDir, ".codeatlasignore"), rootPatterns);
 
     // Also treat rootPatterns as flat exclusions by bare name
     for (const pat of rootPatterns) {
@@ -299,17 +304,18 @@ export class IndexingService {
       }
     }
 
-    const walk = (dir: string, parentPatterns: string[]) => {
+    const walk = async (dir: string, parentPatterns: string[]) => {
       try {
         // Load nested .gitignore if present — patterns apply relative to this dir
         const localPatterns = [...parentPatterns];
         const dirRelative = path.relative(rootDir, dir);
         if (dirRelative) {
-          this.loadIgnoreFile(path.join(dir, ".gitignore"), localPatterns);
-          this.loadIgnoreFile(path.join(dir, ".codeatlasignore"), localPatterns);
+          await this.loadIgnoreFile(path.join(dir, ".gitignore"), localPatterns);
+          await this.loadIgnoreFile(path.join(dir, ".codeatlasignore"), localPatterns);
         }
 
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        // ⚡ Bolt: Using asynchronous readdir to avoid blocking the event loop
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
           if (excluded.has(entry.name)) continue;
 
@@ -320,18 +326,19 @@ export class IndexingService {
           if (localPatterns.length > 0 && this.matchesIgnorePattern(relPath, localPatterns)) continue;
 
           if (entry.isDirectory()) {
-            walk(fullPath, localPatterns);
+            await walk(fullPath, localPatterns);
           } else if (entry.isFile()) {
             const ext = path.extname(entry.name).toLowerCase();
             if ([".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".php", ".phtml", ".ctp", ".rs", ".java", ".rb", ".swift", ".kt"].includes(ext)) {
-              const stat = fs.statSync(fullPath);
+              // ⚡ Bolt: Using asynchronous stat to avoid blocking the event loop
+              const stat = await fs.promises.stat(fullPath);
               if (stat.size > 0 && stat.size < 500000) files.push(fullPath);
             }
           }
         }
       } catch { /* permission denied */ }
     };
-    walk(rootDir, rootPatterns);
+    await walk(rootDir, rootPatterns);
     return files;
   }
 
