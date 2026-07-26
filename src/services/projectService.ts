@@ -263,6 +263,34 @@ export function unregisterProject(dir: string): void {
   }
 }
 
+export async function unregisterProjectAsync(dir: string): Promise<void> {
+  try {
+    const homeDir = os.homedir();
+    const configDir = path.join(homeDir, ".codeatlas");
+    const regPath = path.join(configDir, "registered_projects.json");
+    if (await fileExists(regPath)) {
+      let projects: string[] = [];
+      try {
+        const data = await fs.promises.readFile(regPath, "utf-8");
+        projects = JSON.parse(data);
+      } catch {
+        projects = [];
+      }
+      if (Array.isArray(projects)) {
+        const absPath = path.resolve(dir);
+        const filtered = projects.filter((p) => p !== absPath);
+        if (filtered.length !== projects.length) {
+          await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+          logger.info(`[Project-Registry] 📝 Unregistered project (async): ${absPath}`);
+        }
+      }
+    }
+  } catch (err) {
+    logger.error(`[Project-Registry] ❌ Failed to unregister project (async): ${err}`);
+    throw err;
+  }
+}
+
 export function scanForCodeatlasProjects(parentDir: string): string[] {
   const discovered: string[] = [];
   try {
