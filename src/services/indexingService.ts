@@ -147,35 +147,53 @@ export class IndexingService {
 
     const files = this.scanFiles(projectPath);
 
-    for (const filePath of files) {
-      const relPath = path.relative(projectPath, filePath);
-      try {
-        const content = fs.readFileSync(filePath, "utf-8");
-        const ext = path.extname(filePath).toLowerCase();
+    // ⚡ Bolt: Process files concurrently with chunking to improve wall-clock time,
+    // avoid event loop blocking, prevent EMFILE errors, and maintain deterministic ordering.
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < files.length; i += CHUNK_SIZE) {
+      const chunk = files.slice(i, i + CHUNK_SIZE);
 
-        const moduleId = `module:${relPath}`;
-        nodes.push({
-          id: moduleId,
-          label: relPath,
-          type: "module",
-          filePath: relPath,
-          val: 1,
-          color: this.getColorForExt(ext),
-        });
+      const chunkResults = await Promise.all(chunk.map(async (filePath) => {
+        const relPath = path.relative(projectPath, filePath);
+        try {
+          const content = await fs.promises.readFile(filePath, "utf-8");
+          const ext = path.extname(filePath).toLowerCase();
 
-        if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx") {
-          this.parseTSJS(content, relPath, moduleId, nodes, links);
-        } else if (ext === ".py") {
-          this.parsePython(content, relPath, moduleId, nodes, links);
-        } else if (ext === ".go") {
-          this.parseGo(content, relPath, moduleId, nodes, links);
-        } else if (ext === ".php" || ext === ".phtml" || ext === ".ctp") {
-          this.parsePHP(content, relPath, moduleId, nodes, links);
+          const moduleId = `module:${relPath}`;
+          const fileNodes: GraphNode[] = [{
+            id: moduleId,
+            label: relPath,
+            type: "module",
+            filePath: relPath,
+            val: 1,
+            color: this.getColorForExt(ext),
+          }];
+          const fileLinks: GraphLink[] = [];
+
+          if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx") {
+            this.parseTSJS(content, relPath, moduleId, fileNodes, fileLinks);
+          } else if (ext === ".py") {
+            this.parsePython(content, relPath, moduleId, fileNodes, fileLinks);
+          } else if (ext === ".go") {
+            this.parseGo(content, relPath, moduleId, fileNodes, fileLinks);
+          } else if (ext === ".php" || ext === ".phtml" || ext === ".ctp") {
+            this.parsePHP(content, relPath, moduleId, fileNodes, fileLinks);
+          }
+
+          return { success: true, nodes: fileNodes, links: fileLinks };
+        } catch {
+          return { success: false };
         }
+      }));
 
-        totalFilesAnalyzed++;
-      } catch {
-        totalFilesSkipped++;
+      for (const result of chunkResults) {
+        if (result.success && result.nodes && result.links) {
+          nodes.push(...result.nodes);
+          links.push(...result.links);
+          totalFilesAnalyzed++;
+        } else {
+          totalFilesSkipped++;
+        }
       }
     }
 
