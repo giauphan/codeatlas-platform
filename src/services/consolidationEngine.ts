@@ -582,12 +582,20 @@ export class ConsolidationEngine {
   private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
     if (a.length !== b.length || a.length === 0) return 0;
     let dot = 0, normA = 0, normB = 0;
-    for (let i = 0; i < a.length; i++) {
-      dot += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
+    const len = a.length;
+
+    // ⚡ Bolt Optimization: Extract array elements to local variables to avoid multiple lookups
+    // per iteration, significantly speeding up this hot path math operation.
+    for (let i = 0; i < len; i++) {
+      const valA = a[i];
+      const valB = b[i];
+      dot += valA * valB;
+      normA += valA * valA;
+      normB += valB * valB;
     }
-    const denom = Math.sqrt(normA) * Math.sqrt(normB);
+
+    // ⚡ Bolt Optimization: Combine Math.sqrt calls to reduce expensive math operations by half.
+    const denom = Math.sqrt(normA * normB);
     return denom === 0 ? 0 : dot / denom;
   }
 
