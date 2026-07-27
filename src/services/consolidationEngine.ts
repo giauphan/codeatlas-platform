@@ -584,8 +584,6 @@ export class ConsolidationEngine {
     let dot = 0, normA = 0, normB = 0;
     const len = a.length;
 
-    // ⚡ Bolt Optimization: Extract array elements to local variables to avoid multiple lookups
-    // per iteration, significantly speeding up this hot path math operation.
     for (let i = 0; i < len; i++) {
       const valA = a[i];
       const valB = b[i];
@@ -594,8 +592,7 @@ export class ConsolidationEngine {
       normB += valB * valB;
     }
 
-    // ⚡ Bolt Optimization: Combine Math.sqrt calls to reduce expensive math operations by half.
-    const denom = Math.sqrt(normA * normB);
+    const denom = Math.sqrt(normA) * Math.sqrt(normB);
     return denom === 0 ? 0 : dot / denom;
   }
 
