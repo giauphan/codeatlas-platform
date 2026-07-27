@@ -147,7 +147,7 @@ export class IndexingService {
 
     const files = this.scanFiles(projectPath);
 
-    // ⚡ Bolt: Process files concurrently with chunking to improve wall-clock time,
+    // Process files concurrently with chunking to improve wall-clock time,
     // avoid event loop blocking, prevent EMFILE errors, and maintain deterministic ordering.
     const CHUNK_SIZE = 50;
     for (let i = 0; i < files.length; i += CHUNK_SIZE) {
