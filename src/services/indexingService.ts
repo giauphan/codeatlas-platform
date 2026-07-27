@@ -186,7 +186,8 @@ export class IndexingService {
           }
 
           return { success: true, nodes: fileNodes, links: fileLinks };
-        } catch {
+        } catch (err) {
+          logger.warn(`Failed to process file ${relPath}: ${err instanceof Error ? err.message : String(err)}`);
           return { success: false };
         }
       }));
