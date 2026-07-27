@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { logger } from "../utils/logger.js";
+import pLimit from "p-limit";
 
 // Types matching the parser output
 export interface GraphNode {
@@ -151,14 +152,11 @@ export class IndexingService {
       | { success: true; nodes: GraphNode[]; links: GraphLink[] }
       | { success: false };
 
-    // Process files concurrently with chunking to improve wall-clock time,
-    // allow the event loop to breathe between chunks, prevent EMFILE errors,
-    // and maintain deterministic ordering.
-    const CHUNK_SIZE = 50;
-    for (let i = 0; i < files.length; i += CHUNK_SIZE) {
-      const chunk = files.slice(i, i + CHUNK_SIZE);
-
-      const chunkResults: ChunkResult[] = await Promise.all(chunk.map((filePath) => {
+    // Process files concurrently with a strict concurrency limit to improve wall-clock time,
+    // pipeline execution efficiently, prevent EMFILE errors, and maintain deterministic ordering.
+    const limit = pLimit(50);
+    const chunkResults: ChunkResult[] = await Promise.all(
+      files.map((filePath) => limit(() => {
         const relPath = path.relative(projectPath, filePath);
         return fs.promises.readFile(filePath, "utf-8").then((content) => {
           const ext = path.extname(filePath).toLowerCase();
@@ -189,16 +187,16 @@ export class IndexingService {
           logger.warn(`Failed to process file ${relPath}: ${err instanceof Error ? err.message : String(err)}`);
           return { success: false } as ChunkResult;
         });
-      }));
+      }))
+    );
 
-      for (const result of chunkResults) {
-        if (result.success) {
-          nodes.push(...result.nodes);
-          links.push(...result.links);
-          totalFilesAnalyzed++;
-        } else {
-          totalFilesSkipped++;
-        }
+    for (const result of chunkResults) {
+      if (result.success) {
+        nodes.push(...result.nodes);
+        links.push(...result.links);
+        totalFilesAnalyzed++;
+      } else {
+        totalFilesSkipped++;
       }
     }
 

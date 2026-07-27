@@ -53,6 +53,9 @@ importers:
       oracledb:
         specifier: ^6.10.0
         version: 6.10.0
+      p-limit:
+        specifier: ^7.3.1
+        version: 7.3.1
       py-ast:
         specifier: ^1.9.0
         version: 1.9.0
@@ -2500,6 +2503,10 @@ packages:
   p-limit@5.0.0:
     resolution: {integrity: sha512-/Eaoq+QyLSiXQ4lyYV23f14mZRQcXnxfHrN0vCai+ak9G0pp9iEQukIIZq5NccEvwRB8PUnZT0KsOoDCINS1qQ==}
     engines: {node: '>=18'}
+
+  p-limit@7.3.1:
+    resolution: {integrity: sha512-0trZaiG7Y7kN/Egy9a8j47t9osC0Tch4PaIWd9yGF6bvmlk7muExRvGNYb8sXBwEKMoNKsbNN9P8EefuQekE4Q==}
+    engines: {node: '>=20'}
 
   package-json-from-dist@1.0.1:
     resolution: {integrity: sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==}
@@ -5725,6 +5732,10 @@ snapshots:
     optional: true
 
   p-limit@5.0.0:
+    dependencies:
+      yocto-queue: 1.2.2
+
+  p-limit@7.3.1:
     dependencies:
       yocto-queue: 1.2.2
 
