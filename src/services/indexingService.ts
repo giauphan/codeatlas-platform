@@ -183,10 +183,12 @@ export class IndexingService {
             this.parsePHP(content, relPath, moduleId, fileNodes, fileLinks);
           }
 
-          return { success: true, nodes: fileNodes, links: fileLinks } as ChunkResult;
+          const result: ChunkResult = { success: true, nodes: fileNodes, links: fileLinks };
+          return result;
         }).catch((err) => {
           logger.warn(`Failed to process file ${relPath}: ${err instanceof Error ? err.message : String(err)}`);
-          return { success: false } as ChunkResult;
+          const result: ChunkResult = { success: false };
+          return result;
         });
       }))
     );
