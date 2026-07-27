@@ -154,7 +154,8 @@ export class IndexingService {
 
     // Process files concurrently with a strict concurrency limit to improve wall-clock time,
     // pipeline execution efficiently, prevent EMFILE errors, and maintain deterministic ordering.
-    const limit = pLimit(50);
+    // Using a concurrency of 20 to balance SSD throughput with avoiding HDD/network mount contention.
+    const limit = pLimit(20);
     const chunkResults: ChunkResult[] = await Promise.all(
       files.map((filePath) => limit(() => {
         const relPath = path.relative(projectPath, filePath);
