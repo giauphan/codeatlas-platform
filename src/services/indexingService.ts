@@ -152,7 +152,8 @@ export class IndexingService {
       | { success: false };
 
     // Process files concurrently with chunking to improve wall-clock time,
-    // avoid event loop blocking, prevent EMFILE errors, and maintain deterministic ordering.
+    // allow the event loop to breathe between chunks, prevent EMFILE errors,
+    // and maintain deterministic ordering.
     const CHUNK_SIZE = 50;
     for (let i = 0; i < files.length; i += CHUNK_SIZE) {
       const chunk = files.slice(i, i + CHUNK_SIZE);
