@@ -187,9 +187,9 @@ export class IndexingService {
       }));
 
       for (const result of chunkResults) {
-        if (result.success && result.nodes && result.links) {
-          nodes.push(...result.nodes);
-          links.push(...result.links);
+        if (result.success) {
+          nodes.push(...result.nodes!);
+          links.push(...result.links!);
           totalFilesAnalyzed++;
         } else {
           totalFilesSkipped++;
