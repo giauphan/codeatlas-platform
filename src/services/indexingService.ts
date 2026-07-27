@@ -147,13 +147,17 @@ export class IndexingService {
 
     const files = this.scanFiles(projectPath);
 
+    type ChunkResult =
+      | { success: true; nodes: GraphNode[]; links: GraphLink[] }
+      | { success: false };
+
     // Process files concurrently with chunking to improve wall-clock time,
     // avoid event loop blocking, prevent EMFILE errors, and maintain deterministic ordering.
     const CHUNK_SIZE = 50;
     for (let i = 0; i < files.length; i += CHUNK_SIZE) {
       const chunk = files.slice(i, i + CHUNK_SIZE);
 
-      const chunkResults = await Promise.all(chunk.map(async (filePath) => {
+      const chunkResults: ChunkResult[] = await Promise.all(chunk.map(async (filePath) => {
         const relPath = path.relative(projectPath, filePath);
         try {
           const content = await fs.promises.readFile(filePath, "utf-8");
@@ -188,8 +192,8 @@ export class IndexingService {
 
       for (const result of chunkResults) {
         if (result.success) {
-          nodes.push(...result.nodes!);
-          links.push(...result.links!);
+          nodes.push(...result.nodes);
+          links.push(...result.links);
           totalFilesAnalyzed++;
         } else {
           totalFilesSkipped++;
