@@ -158,10 +158,9 @@ export class IndexingService {
     for (let i = 0; i < files.length; i += CHUNK_SIZE) {
       const chunk = files.slice(i, i + CHUNK_SIZE);
 
-      const chunkResults: ChunkResult[] = await Promise.all(chunk.map(async (filePath) => {
+      const chunkResults: ChunkResult[] = await Promise.all(chunk.map((filePath) => {
         const relPath = path.relative(projectPath, filePath);
-        try {
-          const content = await fs.promises.readFile(filePath, "utf-8");
+        return fs.promises.readFile(filePath, "utf-8").then((content) => {
           const ext = path.extname(filePath).toLowerCase();
 
           const moduleId = `module:${relPath}`;
@@ -185,11 +184,11 @@ export class IndexingService {
             this.parsePHP(content, relPath, moduleId, fileNodes, fileLinks);
           }
 
-          return { success: true, nodes: fileNodes, links: fileLinks };
-        } catch (err) {
+          return { success: true, nodes: fileNodes, links: fileLinks } as ChunkResult;
+        }).catch((err) => {
           logger.warn(`Failed to process file ${relPath}: ${err instanceof Error ? err.message : String(err)}`);
-          return { success: false };
-        }
+          return { success: false } as ChunkResult;
+        });
       }));
 
       for (const result of chunkResults) {
