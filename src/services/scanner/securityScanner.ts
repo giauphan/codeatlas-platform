@@ -66,6 +66,14 @@ export class SecurityScanner {
       "create",
     ];
 
+    // Helper to extract words from a camelCase, snake_case, or kebab-case string
+    const extractWords = (text: string, includeSlash: boolean = false): string[] => {
+      const regex = includeSlash
+        ? /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/
+        : /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/;
+      return text.split(regex).map((p) => p.toLowerCase());
+    };
+
     // Helper to identify test, mock or diagnostic files
     const isTestOrMockFile = (filePath: string): boolean => {
       const fp = filePath.toLowerCase().replace(/\\/g, "/");
@@ -84,9 +92,7 @@ export class SecurityScanner {
 
     // Helper to detect if a variable name represents a real security secret/token/password
     const isSecretVariable = (label: string): boolean => {
-      const parts = label
-        .split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/)
-        .map((p) => p.toLowerCase());
+      const parts = extractWords(label);
       const nonSecretSubstrings = [
         "expired",
         "count",
@@ -161,8 +167,8 @@ export class SecurityScanner {
       return false;
     };
 
-    const containsSqlKeyword = (text: string): boolean => {
-      const parts = text.split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/).map(p => p.toLowerCase());
+    const containsSqlKeyword = (text: string, isFilePath: boolean = false): boolean => {
+      const parts = extractWords(text, isFilePath);
       return sqlKeywords.some(k => parts.includes(k));
     };
 
@@ -170,7 +176,7 @@ export class SecurityScanner {
     const isSqlRelated = (node: GraphNode): boolean => {
       // 1. Check file path
       const fp = (node.filePath || "").toLowerCase();
-      if (dbKeywords.some((k) => fp.includes(k)) || containsSqlKeyword(fp)) {
+      if (dbKeywords.some((k) => fp.includes(k)) || containsSqlKeyword(fp, true)) {
         return true;
       }
 
@@ -191,7 +197,7 @@ export class SecurityScanner {
           if (
             dbKeywords.some(
               (k) => otherLabel.includes(k) || otherFp.includes(k),
-            ) || containsSqlKeyword(otherNode.label) || containsSqlKeyword(otherFp)
+            ) || containsSqlKeyword(otherNode.label) || containsSqlKeyword(otherFp, true)
           ) {
             return true;
           }
