@@ -147,7 +147,8 @@ export class IndexingService {
 
     const files = this.scanFiles(projectPath);
 
-    const concurrencyLimit = process.env.CODEATLAS_INDEXING_CONCURRENCY ? parseInt(process.env.CODEATLAS_INDEXING_CONCURRENCY, 10) : 20;
+    const rawLimit = process.env.CODEATLAS_INDEXING_CONCURRENCY;
+    const concurrencyLimit = rawLimit ? Math.max(1, parseInt(rawLimit, 10) || 20) : 20;
     for (let i = 0; i < files.length; i += concurrencyLimit) {
       const chunk = files.slice(i, i + concurrencyLimit);
       await Promise.all(chunk.map(async (filePath) => {
