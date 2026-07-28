@@ -583,7 +583,7 @@ export class ConsolidationEngine {
     if (a.length !== b.length || a.length === 0) return 0;
     let dot = 0, normA = 0, normB = 0;
 
-    // Fast path for hot N^2 similarity loops. Avoids manual unrolling (V8 anti-pattern).
+    // Cache array elements to avoid repeated access in hot loop.
     const len = a.length;
     for (let i = 0; i < len; i++) {
       const vA = a[i];
