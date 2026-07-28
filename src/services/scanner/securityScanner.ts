@@ -53,19 +53,6 @@ export class SecurityScanner {
       "transaction",
     ];
 
-    // Words that are often used in SQL but also very common in general English/programming
-    // They should only trigger a match if they appear as whole words in snake_case, camelCase, or separated by non-word chars
-    const sqlKeywords = [
-      "select",
-      "insert",
-      "update",
-      "delete",
-      "drop",
-      "alter",
-      "truncate",
-      "create",
-    ];
-
     // Helper to extract words from a camelCase, snake_case, or kebab-case string
     const extractWords = (text: string, includeSlash: boolean = false): string[] => {
       const regex = includeSlash
@@ -167,22 +154,17 @@ export class SecurityScanner {
       return false;
     };
 
-    const containsSqlKeyword = (text: string, isFilePath: boolean = false): boolean => {
-      const parts = extractWords(text, isFilePath);
-      return sqlKeywords.some(k => parts.includes(k));
-    };
-
     // Helper to verify if a function is actually SQL/Database related to avoid false-positive SQL injection warnings
     const isSqlRelated = (node: GraphNode): boolean => {
       // 1. Check file path
       const fp = (node.filePath || "").toLowerCase();
-      if (dbKeywords.some((k) => fp.includes(k)) || containsSqlKeyword(fp, true)) {
+      if (dbKeywords.some((k) => fp.includes(k))) {
         return true;
       }
 
       // 2. Check node label itself
       const labelLower = node.label.toLowerCase();
-      if (dbKeywords.some((k) => labelLower.includes(k)) || containsSqlKeyword(node.label)) {
+      if (dbKeywords.some((k) => labelLower.includes(k))) {
         return true;
       }
 
@@ -197,7 +179,7 @@ export class SecurityScanner {
           if (
             dbKeywords.some(
               (k) => otherLabel.includes(k) || otherFp.includes(k),
-            ) || containsSqlKeyword(otherNode.label) || containsSqlKeyword(otherFp, true)
+            )
           ) {
             return true;
           }
