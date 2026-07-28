@@ -151,8 +151,9 @@ export class IndexingService {
     const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 20;
     const concurrencyLimit = Number.isNaN(parsedLimit) ? 20 : Math.max(1, parsedLimit);
 
-    // Chunked concurrency queue. Note: The throughput gain here primarily comes
-    // from unblocking I/O (readFile). The subsequent AST parsing steps remain CPU-bound.
+    // Promise pool limiter for sliding-window concurrency without external dependencies.
+    // Note: The throughput gain here primarily comes from unblocking I/O (readFile).
+    // The subsequent AST parsing steps remain CPU-bound.
     const runTask = async (filePath: string) => {
       try {
         const relPath = path.relative(projectPath, filePath);
@@ -185,9 +186,19 @@ export class IndexingService {
       }
     };
 
-    for (let i = 0; i < files.length; i += concurrencyLimit) {
-      await Promise.all(files.slice(i, i + concurrencyLimit).map(runTask));
-    }
+    const limitPool = async <T>(tasks: (() => Promise<T>)[], limit: number): Promise<void> => {
+      const executing = new Set<Promise<void>>();
+      for (const task of tasks) {
+        const p = task().finally(() => { executing.delete(p); });
+        executing.add(p);
+        if (executing.size >= limit) {
+          await Promise.race(executing);
+        }
+      }
+      await Promise.allSettled(executing);
+    };
+
+    await limitPool(files.map(f => () => runTask(f)), concurrencyLimit);
 
     const funcCount = nodes.filter(n => n.type === "function").length;
     const classCount = nodes.filter(n => n.type === "class").length;
