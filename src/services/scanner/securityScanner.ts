@@ -60,6 +60,10 @@ export class SecurityScanner {
       "insert",
       "update",
       "delete",
+      "drop",
+      "alter",
+      "truncate",
+      "create",
     ];
 
     // Helper to identify test, mock or diagnostic files
@@ -81,7 +85,7 @@ export class SecurityScanner {
     // Helper to detect if a variable name represents a real security secret/token/password
     const isSecretVariable = (label: string): boolean => {
       const parts = label
-        .split(/(?<=[a-z])(?=[A-Z])|[_.-]/)
+        .split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/)
         .map((p) => p.toLowerCase());
       const nonSecretSubstrings = [
         "expired",
@@ -158,7 +162,7 @@ export class SecurityScanner {
     };
 
     const containsSqlKeyword = (text: string): boolean => {
-      const parts = text.split(/(?<=[a-z])(?=[A-Z])|[_.-]/).map(p => p.toLowerCase());
+      const parts = text.split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/).map(p => p.toLowerCase());
       return sqlKeywords.some(k => parts.includes(k));
     };
 
