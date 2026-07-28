@@ -51,6 +51,10 @@ export class SecurityScanner {
       "connection",
       "pool",
       "transaction",
+      "select",
+      "insert",
+      "update",
+      "delete",
     ];
 
     // Helper to identify test, mock or diagnostic files
@@ -108,7 +112,7 @@ export class SecurityScanner {
 
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
-        if (part === "secret" || part === "password" || part === "token") {
+        if (part === "secret" || part === "password" || part === "token" || part === "credential" || part === "bearer" || part === "apikey") {
           return true;
         }
         if (part === "key") {
