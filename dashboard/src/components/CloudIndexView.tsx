@@ -95,23 +95,39 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div style={{ cursor: 'pointer' }} onClick={() => setShowAdvanced(!showAdvanced)}>
+              <button
+                type="button"
+                style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0, outline: 'none', width: '100%', textAlign: 'left' }}
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                aria-expanded={showAdvanced}
+                aria-controls="setup-information-content"
+                className="focus-visible:ring-2 focus-visible:ring-primary-neon focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#fff', fontWeight: 700 }}>
                   <motion.div animate={{ rotate: showAdvanced ? 90 : 0 }}>{"> "}</motion.div> Setup Information
                 </div>
-              </div>
+              </button>
               
-              <div style={{ cursor: 'pointer' }} onClick={() => setShowAdvanced(!showAdvanced)}>
+              <button
+                type="button"
+                style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0, outline: 'none', width: '100%', textAlign: 'left' }}
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                aria-expanded={showAdvanced}
+                aria-controls="advanced-configuration-content"
+                className="focus-visible:ring-2 focus-visible:ring-primary-neon focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#fff', fontWeight: 700 }}>
                   <motion.div animate={{ rotate: showAdvanced ? 90 : 0 }}>{"> "}</motion.div> Advanced Configuration
                 </div>
-              </div>
+              </button>
 
               {showAdvanced && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                  Indexing Depth: Level 4 (Full Analysis)<br/>
-                  Exclusions: node_modules, .git, build, dist<br/>
-                  Target Directory: {analysis?.projectDir || 'active-workspace'}
+                <motion.div id="setup-information-content" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  <div id="advanced-configuration-content">
+                    Indexing Depth: Level 4 (Full Analysis)<br/>
+                    Exclusions: node_modules, .git, build, dist<br/>
+                    Target Directory: {analysis?.projectDir || 'active-workspace'}
+                  </div>
                 </motion.div>
               )}
             </div>
