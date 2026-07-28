@@ -98,17 +98,12 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
               <div>
                 <button
                   type="button"
+                  className="accordion-toggle"
                   aria-expanded={showAdvanced}
                   aria-controls="advanced-config-panel"
-                  style={{
-                    background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, outline: 'none',
-                    display: 'flex', alignItems: 'center', gap: '1rem', color: '#fff', fontWeight: 700
-                  }}
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  onFocus={(e) => { e.currentTarget.style.boxShadow = '0 0 0 2px var(--primary-neon)'; e.currentTarget.style.borderRadius = '4px'; }}
-                  onBlur={(e) => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderRadius = '0'; }}
                 >
-                  <motion.div animate={{ rotate: showAdvanced ? 90 : 0 }} style={{ display: 'inline-block' }}>{"> "}</motion.div> Advanced Configuration
+                  <motion.div animate={{ rotate: showAdvanced ? 90 : 0 }}>{"> "}</motion.div> Advanced Configuration
                 </button>
               </div>
 
