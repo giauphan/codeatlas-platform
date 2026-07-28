@@ -191,13 +191,7 @@ export class IndexingService {
       executing.add(p);
       p.finally(() => executing.delete(p));
       if (executing.size >= concurrencyLimit) {
-        try {
-          await Promise.race(executing);
-        } catch {
-          // Ignore failures in Promise.race so they don't abort the entire loop.
-          // The actual error is caught inside the individual promise's try/catch,
-          // or if it throws synchronously before the try/catch, this prevents loop crash.
-        }
+        await Promise.race(executing);
       }
     }
     await Promise.allSettled(executing);
