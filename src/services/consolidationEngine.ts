@@ -583,7 +583,7 @@ export class ConsolidationEngine {
     if (a.length !== b.length || a.length === 0) return 0;
     let dot = 0, normA = 0, normB = 0;
 
-    // ⚡ Bolt Optimization: Cache length and combine Math.sqrt for ~40% faster execution
+    // Cache length and combine Math.sqrt for faster execution
     // inside tight N^2 similarity loops without resorting to manual unrolling.
     const len = a.length;
     for (let i = 0; i < len; i++) {
