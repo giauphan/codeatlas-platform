@@ -213,8 +213,11 @@ export class IndexingService {
         const trimmed = line.trim();
         if (trimmed && !trimmed.startsWith("#")) patterns.push(trimmed);
       }
-    } catch {
-      // ignore unreadable or non-existent files (ENOENT)
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
+        throw err;
+      }
+      // ignore non-existent files (ENOENT)
     }
   }
 
