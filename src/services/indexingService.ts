@@ -192,7 +192,9 @@ export class IndexingService {
       // We must add the EXACT promise chain that we `await` in Promise.race
       // to the `executing` set. If we just add `p`, but wait on `clean` or vice-versa,
       // it doesn't work perfectly.
-      const task: Promise<void> = p.finally(() => { executing.delete(task); });
+      let task: Promise<void>;
+      const cleanup = () => { executing.delete(task); };
+      task = p.finally(cleanup);
       executing.add(task);
       if (executing.size >= concurrencyLimit) {
         await Promise.race(executing);
