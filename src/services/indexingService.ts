@@ -187,9 +187,9 @@ export class IndexingService {
     };
 
     const limitPool = async <T>(tasks: (() => Promise<T>)[], limit: number): Promise<void> => {
-      const executing = new Set<Promise<void>>();
+      const executing = new Set<Promise<T>>();
       for (const task of tasks) {
-        const p = task().finally(() => { executing.delete(p); });
+        const p: Promise<T> = task().finally(() => { executing.delete(p); });
         executing.add(p);
         if (executing.size >= limit) {
           await Promise.race(executing);
