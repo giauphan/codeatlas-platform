@@ -151,53 +151,64 @@ export class IndexingService {
     const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 20;
     const concurrencyLimit = Number.isNaN(parsedLimit) ? 20 : Math.max(1, parsedLimit);
 
-    // Sliding window concurrency. Note: The throughput gain here primarily comes from unblocking
-    // I/O (readFile). The subsequent AST parsing steps (parseTSJS, etc.) remain CPU-bound and
-    // will execute sequentially on Node's single thread.
-    const executing = new Set<Promise<void>>();
-    for (const filePath of files) {
-      const p = (async () => {
-        try {
-          const relPath = path.relative(projectPath, filePath);
-          // Async read to keep event loop unblocked for HTTP requests.
-          const content = await fs.promises.readFile(filePath, "utf-8");
-          const ext = path.extname(filePath).toLowerCase();
+    // Sliding window concurrency limit queue. Note: The throughput gain here primarily comes
+    // from unblocking I/O (readFile). The subsequent AST parsing steps remain CPU-bound.
+    const runTask = async (filePath: string) => {
+      try {
+        const relPath = path.relative(projectPath, filePath);
+        const content = await fs.promises.readFile(filePath, "utf-8");
+        const ext = path.extname(filePath).toLowerCase();
 
-          const moduleId = `module:${relPath}`;
-          nodes.push({
-            id: moduleId,
-            label: relPath,
-            type: "module",
-            filePath: relPath,
-            val: 1,
-            color: this.getColorForExt(ext),
-          });
+        const moduleId = `module:${relPath}`;
+        nodes.push({
+          id: moduleId,
+          label: relPath,
+          type: "module",
+          filePath: relPath,
+          val: 1,
+          color: this.getColorForExt(ext),
+        });
 
-          if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx") {
-            this.parseTSJS(content, relPath, moduleId, nodes, links);
-          } else if (ext === ".py") {
-            this.parsePython(content, relPath, moduleId, nodes, links);
-          } else if (ext === ".go") {
-            this.parseGo(content, relPath, moduleId, nodes, links);
-          } else if (ext === ".php" || ext === ".phtml" || ext === ".ctp") {
-            this.parsePHP(content, relPath, moduleId, nodes, links);
-          }
-
-          totalFilesAnalyzed++;
-        } catch {
-          totalFilesSkipped++;
+        if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx") {
+          this.parseTSJS(content, relPath, moduleId, nodes, links);
+        } else if (ext === ".py") {
+          this.parsePython(content, relPath, moduleId, nodes, links);
+        } else if (ext === ".go") {
+          this.parseGo(content, relPath, moduleId, nodes, links);
+        } else if (ext === ".php" || ext === ".phtml" || ext === ".ctp") {
+          this.parsePHP(content, relPath, moduleId, nodes, links);
         }
-      })();
 
-      // We must add the EXACT promise chain that we `await` in Promise.race
-      // to the `executing` set.
-      const task: Promise<void> = p.finally(() => { executing.delete(task); });
-      executing.add(task);
-      if (executing.size >= concurrencyLimit) {
-        await Promise.race(executing);
+        totalFilesAnalyzed++;
+      } catch {
+        totalFilesSkipped++;
       }
-    }
-    await Promise.allSettled(executing);
+    };
+
+    let activeCount = 0;
+    let nextIndex = 0;
+
+    await new Promise<void>((resolve) => {
+      if (files.length === 0) return resolve();
+
+      const next = () => {
+        if (nextIndex >= files.length && activeCount === 0) {
+          resolve();
+          return;
+        }
+
+        while (activeCount < concurrencyLimit && nextIndex < files.length) {
+          activeCount++;
+          const file = files[nextIndex++];
+          runTask(file).finally(() => {
+            activeCount--;
+            next();
+          });
+        }
+      };
+
+      next();
+    });
 
     const funcCount = nodes.filter(n => n.type === "function").length;
     const classCount = nodes.filter(n => n.type === "class").length;
