@@ -147,38 +147,42 @@ export class IndexingService {
 
     const files = this.scanFiles(projectPath);
 
-    for (const filePath of files) {
-      const relPath = path.relative(projectPath, filePath);
-      try {
-        // ⚡ Bolt: Use asynchronous file read to prevent blocking the Node.js event loop
-        // during indexing, allowing concurrent HTTP requests to be handled efficiently.
-        const content = await fs.promises.readFile(filePath, "utf-8");
-        const ext = path.extname(filePath).toLowerCase();
+    const concurrencyLimit = 50;
+    for (let i = 0; i < files.length; i += concurrencyLimit) {
+      const chunk = files.slice(i, i + concurrencyLimit);
+      await Promise.all(chunk.map(async (filePath) => {
+        const relPath = path.relative(projectPath, filePath);
+        try {
+          // Use asynchronous file read to prevent blocking the Node.js event loop
+          // during indexing, allowing concurrent HTTP requests to be handled efficiently.
+          const content = await fs.promises.readFile(filePath, "utf-8");
+          const ext = path.extname(filePath).toLowerCase();
 
-        const moduleId = `module:${relPath}`;
-        nodes.push({
-          id: moduleId,
-          label: relPath,
-          type: "module",
-          filePath: relPath,
-          val: 1,
-          color: this.getColorForExt(ext),
-        });
+          const moduleId = `module:${relPath}`;
+          nodes.push({
+            id: moduleId,
+            label: relPath,
+            type: "module",
+            filePath: relPath,
+            val: 1,
+            color: this.getColorForExt(ext),
+          });
 
-        if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx") {
-          this.parseTSJS(content, relPath, moduleId, nodes, links);
-        } else if (ext === ".py") {
-          this.parsePython(content, relPath, moduleId, nodes, links);
-        } else if (ext === ".go") {
-          this.parseGo(content, relPath, moduleId, nodes, links);
-        } else if (ext === ".php" || ext === ".phtml" || ext === ".ctp") {
-          this.parsePHP(content, relPath, moduleId, nodes, links);
+          if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx") {
+            this.parseTSJS(content, relPath, moduleId, nodes, links);
+          } else if (ext === ".py") {
+            this.parsePython(content, relPath, moduleId, nodes, links);
+          } else if (ext === ".go") {
+            this.parseGo(content, relPath, moduleId, nodes, links);
+          } else if (ext === ".php" || ext === ".phtml" || ext === ".ctp") {
+            this.parsePHP(content, relPath, moduleId, nodes, links);
+          }
+
+          totalFilesAnalyzed++;
+        } catch {
+          totalFilesSkipped++;
         }
-
-        totalFilesAnalyzed++;
-      } catch {
-        totalFilesSkipped++;
-      }
+      }));
     }
 
     const funcCount = nodes.filter(n => n.type === "function").length;
