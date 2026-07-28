@@ -149,9 +149,11 @@ export class IndexingService {
 
     const rawLimit = process.env.CODEATLAS_INDEXING_CONCURRENCY;
     const concurrencyLimit = rawLimit ? Math.max(1, parseInt(rawLimit, 10) || 20) : 20;
-    for (let i = 0; i < files.length; i += concurrencyLimit) {
-      const chunk = files.slice(i, i + concurrencyLimit);
-      await Promise.all(chunk.map(async (filePath) => {
+
+    // Sliding window concurrency
+    const executing = new Set<Promise<void>>();
+    for (const filePath of files) {
+      const p = (async () => {
         const relPath = path.relative(projectPath, filePath);
         try {
           // Async read to keep event loop unblocked for HTTP requests.
@@ -182,8 +184,14 @@ export class IndexingService {
         } catch {
           totalFilesSkipped++;
         }
-      }));
+      })();
+      executing.add(p);
+      p.finally(() => executing.delete(p));
+      if (executing.size >= concurrencyLimit) {
+        await Promise.race(executing);
+      }
     }
+    await Promise.all(executing);
 
     const funcCount = nodes.filter(n => n.type === "function").length;
     const classCount = nodes.filter(n => n.type === "class").length;
