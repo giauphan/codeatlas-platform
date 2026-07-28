@@ -208,7 +208,6 @@ export class IndexingService {
 
   /** Load ignore file lines into an ordered pattern list */
   private async loadIgnoreFile(filePath: string, patterns: string[]): Promise<void> {
-    if (!fs.existsSync(filePath)) return;
     try {
       // ⚡ Bolt: Using asynchronous readFile to avoid blocking the Node.js event loop
       const content = await fs.promises.readFile(filePath, "utf-8");
@@ -216,7 +215,9 @@ export class IndexingService {
         const trimmed = line.trim();
         if (trimmed && !trimmed.startsWith("#")) patterns.push(trimmed);
       }
-    } catch { /* ignore unreadable */ }
+    } catch {
+      // ignore unreadable or non-existent files (ENOENT)
+    }
   }
 
   /** Build regex from gitignore wildcard pattern */
@@ -336,7 +337,9 @@ export class IndexingService {
             }
           }
         }
-      } catch { /* permission denied */ }
+      } catch (err) {
+        logger.warn(`[IndexingService] permission denied or error accessing ${dir}: ${err}`);
+      }
     };
     await walk(rootDir, rootPatterns);
     return files;
