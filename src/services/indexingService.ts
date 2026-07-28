@@ -157,8 +157,8 @@ export class IndexingService {
     const executing = new Set<Promise<void>>();
     for (const filePath of files) {
       const p = (async () => {
-        const relPath = path.relative(projectPath, filePath);
         try {
+          const relPath = path.relative(projectPath, filePath);
           // Async read to keep event loop unblocked for HTTP requests.
           const content = await fs.promises.readFile(filePath, "utf-8");
           const ext = path.extname(filePath).toLowerCase();
@@ -190,11 +190,8 @@ export class IndexingService {
       })();
 
       // We must add the EXACT promise chain that we `await` in Promise.race
-      // to the `executing` set. If we just add `p`, but wait on `clean` or vice-versa,
-      // it doesn't work perfectly.
-      let task: Promise<void>;
-      const cleanup = () => { executing.delete(task); };
-      task = p.finally(cleanup);
+      // to the `executing` set.
+      const task: Promise<void> = p.finally(() => { executing.delete(task); });
       executing.add(task);
       if (executing.size >= concurrencyLimit) {
         await Promise.race(executing);
