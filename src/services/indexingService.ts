@@ -150,7 +150,9 @@ export class IndexingService {
     for (const filePath of files) {
       const relPath = path.relative(projectPath, filePath);
       try {
-        const content = fs.readFileSync(filePath, "utf-8");
+        // ⚡ Bolt: Use asynchronous file read to prevent blocking the Node.js event loop
+        // during indexing, allowing concurrent HTTP requests to be handled efficiently.
+        const content = await fs.promises.readFile(filePath, "utf-8");
         const ext = path.extname(filePath).toLowerCase();
 
         const moduleId = `module:${relPath}`;
