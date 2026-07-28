@@ -148,9 +148,12 @@ export class IndexingService {
     const files = this.scanFiles(projectPath);
 
     const rawLimit = process.env.CODEATLAS_INDEXING_CONCURRENCY;
-    const concurrencyLimit = rawLimit ? Math.max(1, parseInt(rawLimit, 10) || 20) : 20;
+    const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 20;
+    const concurrencyLimit = Number.isNaN(parsedLimit) ? 20 : Math.max(1, parsedLimit);
 
-    // Sliding window concurrency
+    // Sliding window concurrency. Note: The throughput gain here primarily comes from unblocking
+    // I/O (readFile). The subsequent AST parsing steps (parseTSJS, etc.) remain CPU-bound and
+    // will execute sequentially on Node's single thread.
     const executing = new Set<Promise<void>>();
     for (const filePath of files) {
       const p = (async () => {
@@ -188,10 +191,16 @@ export class IndexingService {
       executing.add(p);
       p.finally(() => executing.delete(p));
       if (executing.size >= concurrencyLimit) {
-        await Promise.race(executing);
+        try {
+          await Promise.race(executing);
+        } catch {
+          // Ignore failures in Promise.race so they don't abort the entire loop.
+          // The actual error is caught inside the individual promise's try/catch,
+          // or if it throws synchronously before the try/catch, this prevents loop crash.
+        }
       }
     }
-    await Promise.all(executing);
+    await Promise.allSettled(executing);
 
     const funcCount = nodes.filter(n => n.type === "function").length;
     const classCount = nodes.filter(n => n.type === "class").length;
