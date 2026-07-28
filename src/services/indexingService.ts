@@ -153,8 +153,7 @@ export class IndexingService {
       await Promise.all(chunk.map(async (filePath) => {
         const relPath = path.relative(projectPath, filePath);
         try {
-          // Use asynchronous file read to prevent blocking the Node.js event loop
-          // during indexing, allowing concurrent HTTP requests to be handled efficiently.
+          // Async read to keep event loop unblocked for HTTP requests.
           const content = await fs.promises.readFile(filePath, "utf-8");
           const ext = path.extname(filePath).toLowerCase();
 
