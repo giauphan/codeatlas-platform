@@ -162,7 +162,7 @@ export class SecurityScanner {
     };
 
     const containsSqlKeyword = (text: string): boolean => {
-      const parts = text.split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/).map(p => p.toLowerCase());
+      const parts = text.split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/).map(p => p.toLowerCase());
       return sqlKeywords.some(k => parts.includes(k));
     };
 
