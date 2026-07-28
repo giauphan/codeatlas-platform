@@ -130,8 +130,9 @@ export class IndexingService {
     try {
       const result = await this.analyzeProjectCode(projectName, absPath);
 
-      // ⚡ Bolt: Using asynchronous writeFile to avoid blocking the Node.js event loop,
-      // which allows the Express server to continue processing concurrent HTTP requests.
+      // ⚡ Bolt: Using asynchronous file I/O (readFile, writeFile, readdir, stat) throughout
+      // this service to avoid blocking the Node.js event loop. This allows the Express server
+      // to continue processing concurrent HTTP requests during large project indexing.
       await fs.promises.writeFile(analysisPath, JSON.stringify(result, null, 2));
       logger.info(`[IndexingService] ✅ Indexed ${projectName}: ${result.totalFilesAnalyzed} files, ${result.graph.nodes.length} nodes, ${result.graph.links.length} links`);
       return true;
@@ -152,8 +153,6 @@ export class IndexingService {
     for (const filePath of files) {
       const relPath = path.relative(projectPath, filePath);
       try {
-        // ⚡ Bolt: Using asynchronous readFile to avoid blocking the Node.js event loop,
-        // which allows the Express server to continue processing concurrent HTTP requests.
         const content = await fs.promises.readFile(filePath, "utf-8");
         const ext = path.extname(filePath).toLowerCase();
 
@@ -209,7 +208,6 @@ export class IndexingService {
   /** Load ignore file lines into an ordered pattern list */
   private async loadIgnoreFile(filePath: string, patterns: string[]): Promise<void> {
     try {
-      // ⚡ Bolt: Using asynchronous readFile to avoid blocking the Node.js event loop
       const content = await fs.promises.readFile(filePath, "utf-8");
       for (const line of content.split("\n")) {
         const trimmed = line.trim();
@@ -315,7 +313,6 @@ export class IndexingService {
           await this.loadIgnoreFile(path.join(dir, ".codeatlasignore"), localPatterns);
         }
 
-        // ⚡ Bolt: Using asynchronous readdir to avoid blocking the event loop
         const entries = await fs.promises.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
           if (excluded.has(entry.name)) continue;
@@ -331,7 +328,6 @@ export class IndexingService {
           } else if (entry.isFile()) {
             const ext = path.extname(entry.name).toLowerCase();
             if ([".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".php", ".phtml", ".ctp", ".rs", ".java", ".rb", ".swift", ".kt"].includes(ext)) {
-              // ⚡ Bolt: Using asynchronous stat to avoid blocking the event loop
               const stat = await fs.promises.stat(fullPath);
               if (stat.size > 0 && stat.size < 500000) files.push(fullPath);
             }
