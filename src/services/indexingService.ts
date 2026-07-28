@@ -188,8 +188,12 @@ export class IndexingService {
           totalFilesSkipped++;
         }
       })();
-      executing.add(p);
-      p.finally(() => executing.delete(p));
+
+      // We must add the EXACT promise chain that we `await` in Promise.race
+      // to the `executing` set. If we just add `p`, but wait on `clean` or vice-versa,
+      // it doesn't work perfectly.
+      const task: Promise<void> = p.finally(() => { executing.delete(task); });
+      executing.add(task);
       if (executing.size >= concurrencyLimit) {
         await Promise.race(executing);
       }
