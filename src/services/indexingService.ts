@@ -131,7 +131,10 @@ export class IndexingService {
     try {
       const result = await this.analyzeProjectCode(projectName, absPath);
 
-      fs.writeFileSync(analysisPath, JSON.stringify(result, null, 2));
+      // ⚡ Bolt: Using asynchronous file I/O (readFile, writeFile, readdir, stat) throughout
+      // this service to avoid blocking the Node.js event loop. This allows the Express server
+      // to continue processing concurrent HTTP requests during large project indexing.
+      await fs.promises.writeFile(analysisPath, JSON.stringify(result, null, 2));
       logger.info(`[IndexingService] ✅ Indexed ${projectName}: ${result.totalFilesAnalyzed} files, ${result.graph.nodes.length} nodes, ${result.graph.links.length} links`);
       return true;
     } catch (err) {
@@ -146,7 +149,7 @@ export class IndexingService {
     let totalFilesAnalyzed = 0;
     let totalFilesSkipped = 0;
 
-    const files = this.scanFiles(projectPath);
+    const files = await this.scanFiles(projectPath);
 
     type ChunkResult =
       | { success: true; nodes: GraphNode[]; links: GraphLink[] }
@@ -241,15 +244,19 @@ export class IndexingService {
   }
 
   /** Load ignore file lines into an ordered pattern list */
-  private loadIgnoreFile(filePath: string, patterns: string[]): void {
-    if (!fs.existsSync(filePath)) return;
+  private async loadIgnoreFile(filePath: string, patterns: string[]): Promise<void> {
     try {
-      const content = fs.readFileSync(filePath, "utf-8");
+      const content = await fs.promises.readFile(filePath, "utf-8");
       for (const line of content.split("\n")) {
         const trimmed = line.trim();
         if (trimmed && !trimmed.startsWith("#")) patterns.push(trimmed);
       }
-    } catch { /* ignore unreadable */ }
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw err;
+      }
+      // ignore non-existent files (ENOENT)
+    }
   }
 
   /** Build regex from gitignore wildcard pattern */
@@ -318,7 +325,7 @@ export class IndexingService {
     return false;
   }
 
-  private scanFiles(rootDir: string): string[] {
+  private async scanFiles(rootDir: string): Promise<string[]> {
     const files: string[] = [];
 
     // Hardcoded excludes — always skip these directories/files
@@ -326,8 +333,8 @@ export class IndexingService {
 
     // Root-level gitignore patterns
     const rootPatterns: string[] = [];
-    this.loadIgnoreFile(path.join(rootDir, ".gitignore"), rootPatterns);
-    this.loadIgnoreFile(path.join(rootDir, ".codeatlasignore"), rootPatterns);
+    await this.loadIgnoreFile(path.join(rootDir, ".gitignore"), rootPatterns);
+    await this.loadIgnoreFile(path.join(rootDir, ".codeatlasignore"), rootPatterns);
 
     // Also treat rootPatterns as flat exclusions by bare name
     for (const pat of rootPatterns) {
@@ -337,17 +344,17 @@ export class IndexingService {
       }
     }
 
-    const walk = (dir: string, parentPatterns: string[]) => {
+    const walk = async (dir: string, parentPatterns: string[]) => {
       try {
         // Load nested .gitignore if present — patterns apply relative to this dir
         const localPatterns = [...parentPatterns];
         const dirRelative = path.relative(rootDir, dir);
         if (dirRelative) {
-          this.loadIgnoreFile(path.join(dir, ".gitignore"), localPatterns);
-          this.loadIgnoreFile(path.join(dir, ".codeatlasignore"), localPatterns);
+          await this.loadIgnoreFile(path.join(dir, ".gitignore"), localPatterns);
+          await this.loadIgnoreFile(path.join(dir, ".codeatlasignore"), localPatterns);
         }
 
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
           if (excluded.has(entry.name)) continue;
 
@@ -358,18 +365,20 @@ export class IndexingService {
           if (localPatterns.length > 0 && this.matchesIgnorePattern(relPath, localPatterns)) continue;
 
           if (entry.isDirectory()) {
-            walk(fullPath, localPatterns);
+            await walk(fullPath, localPatterns);
           } else if (entry.isFile()) {
             const ext = path.extname(entry.name).toLowerCase();
             if ([".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".php", ".phtml", ".ctp", ".rs", ".java", ".rb", ".swift", ".kt"].includes(ext)) {
-              const stat = fs.statSync(fullPath);
+              const stat = await fs.promises.stat(fullPath);
               if (stat.size > 0 && stat.size < 500000) files.push(fullPath);
             }
           }
         }
-      } catch { /* permission denied */ }
+      } catch (err) {
+        logger.warn(`[IndexingService] permission denied or error accessing ${dir}: ${err}`);
+      }
     };
-    walk(rootDir, rootPatterns);
+    await walk(rootDir, rootPatterns);
     return files;
   }
 
