@@ -580,13 +580,19 @@ export class ConsolidationEngine {
    * Cosine similarity between two vectors (either standard arrays or Float32Array).
    */
   private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
-    if (a.length !== b.length || a.length === 0) return 0;
+    // Optimization: Cache array length
+    const len = a.length;
+    if (len !== b.length || len === 0) return 0;
     let dot = 0, normA = 0, normB = 0;
-    for (let i = 0; i < a.length; i++) {
-      dot += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
+    for (let i = 0; i < len; i++) {
+      // Optimization: Extract to local variables to avoid multiple array lookups
+      const valA = a[i];
+      const valB = b[i];
+      dot += valA * valB;
+      normA += valA * valA;
+      normB += valB * valB;
     }
+    // Math.sqrt applied separately to avoid floating point overflow on very large vectors
     const denom = Math.sqrt(normA) * Math.sqrt(normB);
     return denom === 0 ? 0 : dot / denom;
   }
