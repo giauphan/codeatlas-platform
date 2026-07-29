@@ -147,10 +147,17 @@ export class IndexingService {
 
     const files = this.scanFiles(projectPath);
 
-    for (const filePath of files) {
-      const relPath = path.relative(projectPath, filePath);
+    const rawLimit = process.env.CODEATLAS_INDEXING_CONCURRENCY;
+    const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 20;
+    const concurrencyLimit = Number.isNaN(parsedLimit) ? 20 : Math.max(1, parsedLimit);
+
+    // Promise pool limiter for sliding-window concurrency without external dependencies.
+    // Note: The throughput gain here primarily comes from unblocking I/O (readFile).
+    // The subsequent AST parsing steps remain CPU-bound.
+    const runTask = async (filePath: string) => {
       try {
-        const content = fs.readFileSync(filePath, "utf-8");
+        const relPath = path.relative(projectPath, filePath);
+        const content = await fs.promises.readFile(filePath, "utf-8");
         const ext = path.extname(filePath).toLowerCase();
 
         const moduleId = `module:${relPath}`;
@@ -177,7 +184,21 @@ export class IndexingService {
       } catch {
         totalFilesSkipped++;
       }
-    }
+    };
+
+    const limitPool = async <T>(tasks: (() => Promise<T>)[], limit: number): Promise<void> => {
+      const executing = new Set<Promise<T>>();
+      for (const task of tasks) {
+        const p: Promise<T> = task().finally(() => { executing.delete(p); });
+        executing.add(p);
+        if (executing.size >= limit) {
+          await Promise.race(executing);
+        }
+      }
+      await Promise.allSettled(executing);
+    };
+
+    await limitPool(files.map(f => () => runTask(f)), concurrencyLimit);
 
     const funcCount = nodes.filter(n => n.type === "function").length;
     const classCount = nodes.filter(n => n.type === "class").length;
