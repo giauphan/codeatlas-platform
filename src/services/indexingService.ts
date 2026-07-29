@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { logger } from "../utils/logger.js";
+import pLimit from "p-limit";
 
 // Types matching the parser output
 export interface GraphNode {
@@ -147,41 +148,57 @@ export class IndexingService {
 
     const files = this.scanFiles(projectPath);
 
-    const rawLimit = process.env.CODEATLAS_INDEXING_CONCURRENCY;
-    const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 20;
-    const concurrencyLimit = Number.isNaN(parsedLimit) ? 20 : Math.max(1, parsedLimit);
+    type ChunkResult =
+      | { success: true; nodes: GraphNode[]; links: GraphLink[] }
+      | { success: false };
 
-    // Promise pool limiter for sliding-window concurrency without external dependencies.
-    // Note: The throughput gain here primarily comes from unblocking I/O (readFile).
-    // The subsequent AST parsing steps remain CPU-bound.
-    const runTask = async (filePath: string) => {
-      try {
+    // Process files concurrently with a strict concurrency limit to improve wall-clock time,
+    // pipeline execution efficiently, prevent EMFILE errors, and maintain deterministic ordering.
+    // Using a concurrency of 20 to balance SSD throughput with avoiding HDD/network mount contention.
+    const limit = pLimit(20);
+    const chunkResults: ChunkResult[] = await Promise.all(
+      files.map((filePath) => limit(() => {
         const relPath = path.relative(projectPath, filePath);
-        const content = await fs.promises.readFile(filePath, "utf-8");
-        const ext = path.extname(filePath).toLowerCase();
+        return fs.promises.readFile(filePath, "utf-8").then((content) => {
+          const ext = path.extname(filePath).toLowerCase();
 
-        const moduleId = `module:${relPath}`;
-        nodes.push({
-          id: moduleId,
-          label: relPath,
-          type: "module",
-          filePath: relPath,
-          val: 1,
-          color: this.getColorForExt(ext),
+          const moduleId = `module:${relPath}`;
+          const fileNodes: GraphNode[] = [{
+            id: moduleId,
+            label: relPath,
+            type: "module",
+            filePath: relPath,
+            val: 1,
+            color: this.getColorForExt(ext),
+          }];
+          const fileLinks: GraphLink[] = [];
+
+          if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx") {
+            this.parseTSJS(content, relPath, moduleId, fileNodes, fileLinks);
+          } else if (ext === ".py") {
+            this.parsePython(content, relPath, moduleId, fileNodes, fileLinks);
+          } else if (ext === ".go") {
+            this.parseGo(content, relPath, moduleId, fileNodes, fileLinks);
+          } else if (ext === ".php" || ext === ".phtml" || ext === ".ctp") {
+            this.parsePHP(content, relPath, moduleId, fileNodes, fileLinks);
+          }
+
+          const result: ChunkResult = { success: true, nodes: fileNodes, links: fileLinks };
+          return result;
+        }).catch((err) => {
+          logger.warn(`Failed to process file ${relPath}: ${err instanceof Error ? err.message : String(err)}`);
+          const result: ChunkResult = { success: false };
+          return result;
         });
+      }))
+    );
 
-        if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx") {
-          this.parseTSJS(content, relPath, moduleId, nodes, links);
-        } else if (ext === ".py") {
-          this.parsePython(content, relPath, moduleId, nodes, links);
-        } else if (ext === ".go") {
-          this.parseGo(content, relPath, moduleId, nodes, links);
-        } else if (ext === ".php" || ext === ".phtml" || ext === ".ctp") {
-          this.parsePHP(content, relPath, moduleId, nodes, links);
-        }
-
+    for (const result of chunkResults) {
+      if (result.success) {
+        nodes.push(...result.nodes);
+        links.push(...result.links);
         totalFilesAnalyzed++;
-      } catch {
+      } else {
         totalFilesSkipped++;
       }
     };
