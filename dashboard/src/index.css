@@ -134,3 +134,24 @@ h1, h2, h3, .tech-font {
 .animate-bloom {
   animation: bloom 3s infinite ease-in-out;
 }
+
+/* Accessibility focus styles */
+.accordion-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #fff;
+  font-weight: 700;
+  border-radius: 4px;
+  transition: box-shadow 0.2s ease, border-radius 0.2s ease;
+}
+
+.accordion-toggle:focus-visible {
+  box-shadow: 0 0 0 2px var(--primary-neon);
+  border-radius: 4px;
+}
