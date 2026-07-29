@@ -592,8 +592,8 @@ export class ConsolidationEngine {
       normA += valA * valA;
       normB += valB * valB;
     }
-    // Optimization: Combine Math.sqrt calls to reduce JIT function call overhead
-    const denom = Math.sqrt(normA * normB);
+    // Math.sqrt applied separately to avoid floating point overflow on very large vectors
+    const denom = Math.sqrt(normA) * Math.sqrt(normB);
     return denom === 0 ? 0 : dot / denom;
   }
 
