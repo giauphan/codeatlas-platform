@@ -19,3 +19,7 @@
 **Vulnerability:** A missing HTTP status check (`!res.ok`) before calling `res.json()` could lead to unhelpful JSON parse exceptions if the server returned a non-2xx status (e.g., a 401 or 500 error page).
 **Learning:** Assuming that an HTTP response will always be JSON when the status code indicates an error masks the true nature of the failure. This makes diagnosing API or authentication failures difficult, especially when interacting with internal secure endpoints.
 **Prevention:** Always check `!res.ok` (or equivalent status logic) immediately after a `fetch` request, and throw a descriptive error containing the status code and text *before* attempting to parse the response body as JSON.
+## 2026-07-28 - [Enhanced Secrets & Injection Scanning]
+**Vulnerability:** Weak coverage for detecting hardcoded API keys and common SQL statements.
+**Learning:** The internal `SecurityScanner` relies on hardcoded string matching. It previously missed terms like "apikey", "credential", and SQL commands "select", "insert", "update".
+**Prevention:** Regularly review and update static analysis keyword lists to include modern token patterns and complete sets of risky commands.

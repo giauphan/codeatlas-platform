@@ -53,6 +53,14 @@ export class SecurityScanner {
       "transaction",
     ];
 
+    // Helper to extract words from a camelCase, snake_case, or kebab-case string
+    const extractWords = (text: string, includeSlash: boolean = false): string[] => {
+      const regex = includeSlash
+        ? /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/
+        : /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/;
+      return text.split(regex).map((p) => p.toLowerCase());
+    };
+
     // Helper to identify test, mock or diagnostic files
     const isTestOrMockFile = (filePath: string): boolean => {
       const fp = filePath.toLowerCase().replace(/\\/g, "/");
@@ -71,9 +79,7 @@ export class SecurityScanner {
 
     // Helper to detect if a variable name represents a real security secret/token/password
     const isSecretVariable = (label: string): boolean => {
-      const parts = label
-        .split(/(?<=[a-z])(?=[A-Z])|[_.-]/)
-        .map((p) => p.toLowerCase());
+      const parts = extractWords(label);
       const nonSecretSubstrings = [
         "expired",
         "count",
@@ -108,7 +114,7 @@ export class SecurityScanner {
 
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
-        if (part === "secret" || part === "password" || part === "token") {
+        if (part === "secret" || part === "password" || part === "token" || part === "credential" || part === "bearer" || part === "apikey") {
           return true;
         }
         if (part === "key") {
