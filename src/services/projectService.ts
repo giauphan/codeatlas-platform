@@ -235,6 +235,40 @@ export function registerProject(dir: string): void {
   }
 }
 
+export async function registerProjectAsync(dir: string): Promise<void> {
+  try {
+    const homeDir = os.homedir();
+    const configDir = path.join(homeDir, ".codeatlas");
+    if (!(await fileExists(configDir))) {
+      await fs.promises.mkdir(configDir, { recursive: true });
+    }
+    const regPath = path.join(configDir, "registered_projects.json");
+    let projects: string[] = [];
+    if (await fileExists(regPath)) {
+      try {
+        const data = await fs.promises.readFile(regPath, "utf-8");
+        projects = JSON.parse(data);
+      } catch {
+        projects = [];
+      }
+    }
+    if (!Array.isArray(projects)) {
+      projects = [];
+    }
+    const absPath = path.resolve(dir);
+    if (isSystemIdeDirectory(absPath)) {
+      return;
+    }
+    if (!projects.includes(absPath)) {
+      projects.push(absPath);
+      await fs.promises.writeFile(regPath, JSON.stringify(projects, null, 2));
+      logger.info(`[Project-Registry] 📝 Registered new project (async): ${absPath}`);
+    }
+  } catch (err) {
+    logger.error(`[Project-Registry] ❌ Failed to register project (async): ${err}`);
+  }
+}
+
 export function unregisterProject(dir: string): void {
   try {
     const homeDir = os.homedir();
@@ -767,9 +801,9 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
     );
     if (match) {
       target = match;
-      registerProject(target.dir);
+      await registerProjectAsync(target.dir);
     } else if (await fileExists(absPath) && await isProjectDirectoryAsync(absPath)) {
-      registerProject(absPath);
+      await registerProjectAsync(absPath);
       const reDiscovered = await discoverProjectsAsync(tenantId);
       match = reDiscovered.find((p) => p.dir === absPath);
       if (match) {
@@ -781,7 +815,7 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
       return null;
     }
   } else if (target) {
-    registerProject(target.dir);
+    await registerProjectAsync(target.dir);
   }
 
   try {
