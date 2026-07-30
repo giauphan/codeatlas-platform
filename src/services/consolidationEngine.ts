@@ -10,7 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
-import { generateEmbedding } from "./embeddingService.js";
+import { generateEmbedding, generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 import { OracleDreamingService } from "./dreamingService.js";
@@ -237,6 +237,14 @@ export class ConsolidationEngine {
 
       // Phase 1: Compute embeddings and prepare concept data
       const conceptsData: any[] = [];
+
+      const intermediateData: {
+        proj: string;
+        conceptLabel: string;
+        conceptDescription: string;
+        sources: string;
+      }[] = [];
+
       for (const [proj, group] of byProject) {
         // Take top 10 highest-importance dreams per project for concept extraction
         const topDreams = group.slice(0, 10);
@@ -247,20 +255,37 @@ export class ConsolidationEngine {
         // Generate a concept label and description from the content
         const conceptLabel = this.extractLabel(topDreams);
         const conceptDescription = combinedContent.slice(0, 1000);
-        const conceptEmbedding = await generateEmbedding(conceptDescription, "passage");
 
-        if (!conceptEmbedding || conceptEmbedding.length === 0) {
-          logger.warn(`[Consolidation] No embedding for concept "${conceptLabel}", skipping`);
-          continue;
-        }
-
-        conceptsData.push({
+        intermediateData.push({
           proj,
           conceptLabel,
           conceptDescription,
-          conceptEmbedding,
           sources: JSON.stringify(topDreams.map((d) => d[R_IDX.ID]))
         });
+      }
+
+      const descriptions = intermediateData.map(d => d.conceptDescription);
+      // ⚡ Bolt Optimization: Batch embedding generation to avoid N+1 API calls.
+      let batchEmbeddings: number[][] | null = null;
+      if (descriptions.length > 0) {
+        batchEmbeddings = await generateEmbeddingsBatch(descriptions, "passage");
+      }
+
+      if (batchEmbeddings) {
+        for (let i = 0; i < intermediateData.length; i++) {
+          const data = intermediateData[i];
+          const conceptEmbedding = batchEmbeddings[i];
+
+          if (!conceptEmbedding || conceptEmbedding.length === 0) {
+            logger.warn(`[Consolidation] No embedding for concept "${data.conceptLabel}", skipping`);
+            continue;
+          }
+
+          conceptsData.push({
+            ...data,
+            conceptEmbedding,
+          });
+        }
       }
 
       if (conceptsData.length > 0) {
