@@ -9,7 +9,6 @@ import {
   discoverProjectsAsync,
   fileExists,
   getStats,
-  registerProject,
 } from "../services/projectService.js";
 import { loadAnalysisAsync, AnalysisResultLocal } from "../services/projectService.js";
 import { OracleMemoryService } from "../services/memoryService.js";
