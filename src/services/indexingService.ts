@@ -206,20 +206,6 @@ export class IndexingService {
       }
     };
 
-    const limitPool = async <T>(tasks: (() => Promise<T>)[], limit: number): Promise<void> => {
-      const executing = new Set<Promise<T>>();
-      for (const task of tasks) {
-        const p: Promise<T> = task().finally(() => { executing.delete(p); });
-        executing.add(p);
-        if (executing.size >= limit) {
-          await Promise.race(executing);
-        }
-      }
-      await Promise.allSettled(executing);
-    };
-
-    await limitPool(files.map(f => () => runTask(f)), concurrencyLimit);
-
     const funcCount = nodes.filter(n => n.type === "function").length;
     const classCount = nodes.filter(n => n.type === "class").length;
     const varCount = nodes.filter(n => n.type === "variable").length;
