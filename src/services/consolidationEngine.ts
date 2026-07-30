@@ -10,7 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
-import { generateEmbedding, generateEmbeddingsBatch } from "./embeddingService.js";
+import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 import { OracleDreamingService } from "./dreamingService.js";
@@ -274,6 +274,12 @@ export class ConsolidationEngine {
       if (batchEmbeddings) {
         for (let i = 0; i < intermediateData.length; i++) {
           const data = intermediateData[i];
+
+          if (i >= batchEmbeddings.length) {
+            logger.warn(`[Consolidation] Batch returned fewer embeddings than requested. Missing embedding for "${data.conceptLabel}", skipping`);
+            continue;
+          }
+
           const conceptEmbedding = batchEmbeddings[i];
 
           if (!conceptEmbedding || conceptEmbedding.length === 0) {
@@ -286,6 +292,8 @@ export class ConsolidationEngine {
             conceptEmbedding,
           });
         }
+      } else if (intermediateData.length > 0) {
+        logger.warn(`[Consolidation] Batch embedding generation returned null for ${intermediateData.length} concepts, skipping`);
       }
 
       if (conceptsData.length > 0) {
