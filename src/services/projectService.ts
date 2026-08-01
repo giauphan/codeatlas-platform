@@ -28,41 +28,55 @@ export function getStats(analysis: AnalysisResultLocal) {
   };
 }
 
+// ⚡ Bolt: Cache os.homedir() and dynamic paths to avoid recomputing in tight loops
+const cachedHomeDir = os.homedir();
+const cachedDynamicAntigravityPath = path.resolve(path.join(cachedHomeDir, ".gemini", "antigravity"));
+
+// ⚡ Bolt: Bounded cache to avoid redundant expensive fs.existsSync calls during project discovery
+const ideDirCache = new Map<string, boolean>();
+const IDE_DIR_CACHE_MAX_SIZE = 1000;
+
 export function isSystemIdeDirectory(dir: string): boolean {
   try {
     const absPath = path.resolve(dir.trim());
-    if (absPath === "/config/Downloads/Antigravity" || absPath.startsWith("/config/Downloads/Antigravity/")) {
-      return true;
-    }
     
-    // Dynamically resolve ~/.gemini/antigravity across operating systems
-    const homeDir = os.homedir();
-    const dynamicAntigravityPath = path.resolve(path.join(homeDir, ".gemini", "antigravity"));
-    if (absPath === dynamicAntigravityPath || absPath.startsWith(dynamicAntigravityPath + path.sep)) {
-      return true;
+    // ⚡ Bolt: Quick cache check
+    if (ideDirCache.has(absPath)) {
+      return ideDirCache.get(absPath)!;
     }
 
-    // Ignore home directory itself, system root, or /config root
-    if (absPath === homeDir || absPath === "/" || absPath === "/config") {
-      return true;
+    let isIde = false;
+
+    if (absPath === "/config/Downloads/Antigravity" || absPath.startsWith("/config/Downloads/Antigravity/")) {
+      isIde = true;
+    } else if (absPath === cachedDynamicAntigravityPath || absPath.startsWith(cachedDynamicAntigravityPath + path.sep)) {
+      isIde = true;
+    } else if (absPath === cachedHomeDir || absPath === "/" || absPath === "/config") {
+      isIde = true;
+    } else {
+      const parts = absPath.split(path.sep);
+      if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas')) {
+        isIde = true;
+      } else if (
+        fs.existsSync(path.join(absPath, "resources", "app", "extensions")) ||
+        fs.existsSync(path.join(absPath, "resources", "app", "out", "vs"))
+      ) {
+        isIde = true;
+      }
     }
 
-    // Ignore system/IDE configuration folders starting with a dot (e.g. .codeium, .vscode, .cursor)
-    // but allow double-dot prefixes (like ..projectA)
-    const parts = absPath.split(path.sep);
-    if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas')) {
-      return true;
+    // ⚡ Bolt: Manage cache size
+    if (ideDirCache.size >= IDE_DIR_CACHE_MAX_SIZE) {
+      // Clear 10% of cache when full
+      const keysToDelete = Array.from(ideDirCache.keys()).slice(0, Math.floor(IDE_DIR_CACHE_MAX_SIZE / 10));
+      for (const key of keysToDelete) ideDirCache.delete(key);
     }
 
-    // Check if it's the IDE resources directory
-    if (fs.existsSync(path.join(absPath, "resources", "app", "extensions")) ||
-        fs.existsSync(path.join(absPath, "resources", "app", "out", "vs"))) {
-      return true;
-    }
+    ideDirCache.set(absPath, isIde);
+    return isIde;
   } catch {
-    // Ignore errors
+    return false;
   }
-  return false;
 }
 
 const IDE_KEYWORDS = ['code', 'vscode', 'cursor', 'windsurf', 'intellij', 'webstorm', 'phpstorm', 'idea', 'eclipse', 'sublime', 'gemini-cli'];
