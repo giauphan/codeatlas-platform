@@ -288,6 +288,8 @@ export function DreamMemoryView() {
         </div>
 
         <button onClick={() => setShowConfig(!showConfig)}
+          aria-expanded={showConfig}
+          aria-controls="dream-config-panel"
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)',
             background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
@@ -304,18 +306,21 @@ export function DreamMemoryView() {
       </div>
 
       {showConfig && (
-        <div className="glass-panel" style={{ padding: '1.5rem', borderRadius: '16px', marginBottom: '1.5rem' }}>
+        <div id="dream-config-panel" className="glass-panel" style={{ padding: '1.5rem', borderRadius: '16px', marginBottom: '1.5rem' }}>
           <h3 style={{ marginTop: 0 }}>Dream Configuration</h3>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <label>
-              Enabled: <input type="checkbox" checked={tempEnabled} onChange={e => setTempEnabled(e.target.checked)} />
-            </label>
-            <label>
-              Schedule (cron): <input type="text" value={tempSchedule} onChange={e => setTempSchedule(e.target.value)} style={{ padding: '0.5rem' }} />
-            </label>
-            <label>
-              Provider: <input type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} style={{ padding: '0.5rem' }} />
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label htmlFor="config-enabled">Enabled:</label>
+              <input id="config-enabled" type="checkbox" checked={tempEnabled} onChange={e => setTempEnabled(e.target.checked)} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label htmlFor="config-schedule">Schedule (cron):</label>
+              <input id="config-schedule" type="text" value={tempSchedule} onChange={e => setTempSchedule(e.target.value)} style={{ padding: '0.5rem' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label htmlFor="config-provider">Provider:</label>
+              <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} style={{ padding: '0.5rem' }} />
+            </div>
             <button onClick={saveDreamConfig} disabled={savingConfig} style={{ padding: '0.5rem 1rem' }}>
               {savingConfig ? 'Saving...' : 'Save Config'}
             </button>
