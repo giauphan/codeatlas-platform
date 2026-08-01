@@ -206,10 +206,11 @@ const freqLabels: Record<string, string> = {
                 <button onClick={saveCron} disabled={cronSaving}
                   style={{
                     width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--primary-neon)',
-                    background: 'rgba(0,240,255,0.1)', color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: '0.95rem'
+                    background: 'rgba(0,240,255,0.1)', color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: '0.95rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'
                   }}>
-                  {cronSaving ? <RefreshCw className="animate-spin" size={20} /> : (
-                    <><Save size={18} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />{cronSaved ? '✅ SAVED' : 'SAVE SCHEDULE'}</>
+                  {cronSaving ? <><RefreshCw className="animate-spin" size={20} /> SAVING...</> : (
+                    <><Save size={18} />{cronSaved ? '✅ SAVED' : 'SAVE SCHEDULE'}</>
                   )}
                 </button>
                 {cronError && <div style={{ color: '#FF4B4B', fontSize: '0.85rem' }}>{cronError}</div>}
@@ -233,8 +234,8 @@ const freqLabels: Record<string, string> = {
           <div className="glass-panel" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.05)', alignSelf: 'start' }}>
             <h3 className="tech-font" style={{ fontSize: '1.25rem', marginBottom: '1.5rem', fontWeight: 800 }}>GENERATE TOKEN</h3>
             <form onSubmit={createKey} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontSize: '1rem', fontWeight: 800 }} disabled={loading}>
-                {loading ? <RefreshCw className="animate-spin" size={20} /> : 'CREATE ACCESS TOKEN'}
+              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={loading}>
+                {loading ? <><RefreshCw className="animate-spin" size={20} /> CREATING...</> : 'CREATE ACCESS TOKEN'}
               </button>
             </form>
           </div>
