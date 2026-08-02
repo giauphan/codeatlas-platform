@@ -49,7 +49,7 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
   // no bearer token) and the system admin key isn't configured, we should fail loudly.
   // We should also fail if the provided apiKey matches a configured but empty CODEATLAS_API_KEY.
   const adminKey = process.env.CODEATLAS_API_KEY;
-  if (apiKey && adminKey !== undefined && adminKey.trim() === "" && apiKey === adminKey) {
+  if (adminKey !== undefined && adminKey.trim() === "") {
     throw new Error("Critical Configuration Error: CODEATLAS_API_KEY cannot be an empty string.");
   }
 
