@@ -32,7 +32,6 @@
     "@vitejs/plugin-react": "^4.2.1",
     "@vitest/ui": "1.6.0",
     "jsdom": "^29.1.1",
-    "playwright": "^1.62.1",
     "typescript": "^5.2.2",
     "vite": "^5.2.11",
     "vitest": "^1.6.0"
