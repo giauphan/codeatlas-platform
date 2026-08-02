@@ -346,10 +346,10 @@ describe('GenomeService', () => {
       // Mock returns genes with varying confidence
       let queryExecuted = false;
       mockConnection.execute.mock.mockImplementation(async (sql: string, binds: any) => {
-        if (sql.includes('confidence > 0.3')) {
+        if (sql.includes('AND confidence > 0.3')) {
           queryExecuted = true;
           // Verify the bind has the confidence threshold
-          assert.ok(sql.includes('confidence > 0.3'), 'Must filter by confidence > 0.3');
+          assert.ok(sql.includes('AND confidence > 0.3'), 'Must filter by AND confidence > 0.3');
         }
         return { rows: [mockGeneRow('gene-imm-3', '[IMMUNE] Low Confidence', 'immune')], rowsAffected: 0 };
       });
