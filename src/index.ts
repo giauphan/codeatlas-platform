@@ -23,7 +23,7 @@ import {
   discoverProjectsAsync, 
   loadAnalysisAsync, 
   fileExists,
-  registerProject
+  registerProjectAsync
 } from "./services/projectService.js";
 import { indexingService } from "./services/indexingService.js";
 import { OracleDreamingService } from "./services/dreamingService.js";
