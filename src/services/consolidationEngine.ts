@@ -272,7 +272,7 @@ export class ConsolidationEngine {
           logger.error(`[Consolidation] Batch embedding call failed for ${textsToEmbed.length} inputs`);
         } else if (batchEmbeddings.length === 0) {
           logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
-        } else if (batchEmbeddings !== null) {
+        } else {
           if (batchEmbeddings.length !== textsToEmbed.length) {
             logger.warn(`[Consolidation] Batch API returned ${batchEmbeddings.length} embeddings, expected ${textsToEmbed.length}.`);
           }
