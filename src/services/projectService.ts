@@ -339,8 +339,11 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     let parentStat;
     try {
       parentStat = await fs.promises.stat(parentDir);
-    } catch {
-      return [];
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        return [];
+      }
+      throw err;
     }
     if (!parentStat.isDirectory()) {
       return [];
