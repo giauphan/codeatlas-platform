@@ -238,7 +238,6 @@ export class ConsolidationEngine {
       // Phase 1: Compute embeddings and prepare concept data
       const conceptsData: any[] = [];
       const conceptInputs: any[] = [];
-      const textsToEmbed: string[] = [];
 
       for (const [proj, group] of byProject) {
         // Take top 10 highest-importance dreams per project for concept extraction
@@ -257,9 +256,9 @@ export class ConsolidationEngine {
           conceptDescription,
           sources: JSON.stringify(topDreams.map((d) => d[R_IDX.ID]))
         });
-        textsToEmbed.push(conceptDescription);
       }
 
+      const textsToEmbed = conceptInputs.map(c => c.conceptDescription);
       const batchEmbeddings = textsToEmbed.length > 0
         ? await generateEmbeddingsBatch(textsToEmbed, "passage")
         : null;
