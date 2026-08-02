@@ -260,7 +260,7 @@ export class ConsolidationEngine {
 
       const textsToEmbed = conceptInputs.map(c => c.conceptDescription);
 
-      let batchEmbeddings: number[][] | null = null;
+      let batchEmbeddings: (number[] | null)[] | null = null;
       if (textsToEmbed.length > 0) {
         try {
           batchEmbeddings = await generateEmbeddingsBatch(textsToEmbed, "passage");

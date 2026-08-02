@@ -64,14 +64,14 @@ export async function generateEmbedding(text: string, inputType: 'passage' | 'qu
 /**
  * Generates embeddings in batches using NVIDIA NIM Embeddings API
  */
-export async function generateEmbeddingsBatch(texts: string[], inputType: 'passage' | 'query'): Promise<number[][] | null> {
+export async function generateEmbeddingsBatch(texts: string[], inputType: 'passage' | 'query'): Promise<(number[] | null)[] | null> {
   const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) {
     logger.warn("[NVIDIA SDK] NVIDIA_API_KEY is not set. Skipping embedding generation.");
     return null;
   }
 
-  const results: number[][] = [];
+  const results: (number[] | null)[] = new Array(texts.length).fill(null);
   const chunkSize = 50; // process 50 texts at a time to prevent payload size issues
 
   for (let i = 0; i < texts.length; i += chunkSize) {
@@ -100,10 +100,12 @@ export async function generateEmbeddingsBatch(texts: string[], inputType: 'passa
 
       const data: NvidiaEmbeddingResponse = await response.json();
       if (data?.data) {
-        // Sort by index to guarantee correct positional mapping regardless of API response order
-        const sortedData = [...data.data].sort((a, b) => a.index - b.index);
-        const embeddings = sortedData.map((item: NvidiaEmbeddingData) => item.embedding);
-        results.push(...embeddings);
+        // Explicitly map by index to guarantee correct positional mapping, handling sparse returns safely
+        data.data.forEach((item: NvidiaEmbeddingData) => {
+          if (item.index !== undefined && item.embedding) {
+            results[i + item.index] = item.embedding;
+          }
+        });
       } else {
         return null;
       }
