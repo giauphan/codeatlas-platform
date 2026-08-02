@@ -10,7 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
-import { generateEmbedding, generateEmbeddingsBatch } from "./embeddingService.js";
+import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 import { OracleDreamingService } from "./dreamingService.js";
@@ -266,31 +266,31 @@ export class ConsolidationEngine {
       if (batchEmbeddings) {
         if (batchEmbeddings.length === 0 && textsToEmbed.length > 0) {
           logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
-        }
-
-        if (batchEmbeddings.length !== textsToEmbed.length && batchEmbeddings.length > 0) {
-          logger.warn(`[Consolidation] Batch API returned ${batchEmbeddings.length} embeddings, expected ${textsToEmbed.length}.`);
-        }
-
-        for (let i = 0; i < conceptInputs.length; i++) {
-          const input = conceptInputs[i];
-
-          if (i >= batchEmbeddings.length) {
-            logger.warn(`[Consolidation] Batch API truncated results. Skipping remaining concept "${input.conceptLabel}".`);
-            continue;
+        } else {
+          if (batchEmbeddings.length !== textsToEmbed.length && batchEmbeddings.length > 0) {
+            logger.warn(`[Consolidation] Batch API returned ${batchEmbeddings.length} embeddings, expected ${textsToEmbed.length}.`);
           }
 
-          const conceptEmbedding = batchEmbeddings[i];
+          for (let i = 0; i < conceptInputs.length; i++) {
+            const input = conceptInputs[i];
 
-          if (!conceptEmbedding || conceptEmbedding.length === 0) {
-            logger.warn(`[Consolidation] No embedding for concept "${input.conceptLabel}", skipping`);
-            continue;
+            if (i >= batchEmbeddings.length) {
+              logger.warn(`[Consolidation] Batch API truncated results. Skipping remaining concept "${input.conceptLabel}".`);
+              continue;
+            }
+
+            const conceptEmbedding = batchEmbeddings[i];
+
+            if (!conceptEmbedding || conceptEmbedding.length === 0) {
+              logger.warn(`[Consolidation] No embedding for concept "${input.conceptLabel}", skipping`);
+              continue;
+            }
+
+            conceptsData.push({
+              ...input,
+              conceptEmbedding,
+            });
           }
-
-          conceptsData.push({
-            ...input,
-            conceptEmbedding,
-          });
         }
       }
 
