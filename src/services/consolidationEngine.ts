@@ -264,7 +264,11 @@ export class ConsolidationEngine {
         : null;
 
       if (batchEmbeddings) {
-        if (batchEmbeddings.length !== textsToEmbed.length) {
+        if (batchEmbeddings.length === 0 && textsToEmbed.length > 0) {
+          logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
+        }
+
+        if (batchEmbeddings.length !== textsToEmbed.length && batchEmbeddings.length > 0) {
           logger.warn(`[Consolidation] Batch API returned ${batchEmbeddings.length} embeddings, expected ${textsToEmbed.length}.`);
         }
 
