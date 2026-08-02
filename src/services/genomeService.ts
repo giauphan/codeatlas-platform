@@ -663,8 +663,9 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND category = 'immune' AND status = 'active' ${projectFilter}
-           AND confidence > 0.3
+         WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter}
+           AND (category = 'immune' OR category = 'pattern' OR category = 'lesson')
+           AND (confidence > 0.2 OR problem LIKE '%immune%' OR problem LIKE '%prevent%' OR problem LIKE '%failure%')
          ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
          FETCH FIRST :limit ROWS ONLY`,
         binds as any
