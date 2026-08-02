@@ -261,18 +261,16 @@ export class ConsolidationEngine {
       const textsToEmbed = conceptInputs.map(c => c.conceptDescription);
 
       let batchEmbeddings: number[][] | null = null;
-      let batchError = false;
       if (textsToEmbed.length > 0) {
         try {
           batchEmbeddings = await generateEmbeddingsBatch(textsToEmbed, "passage");
         } catch (err) {
-          batchError = true;
           logger.error(`[Consolidation] Batch embedding generation threw an error for ${textsToEmbed.length} inputs`, err);
         }
 
-        if (batchEmbeddings === null && !batchError) {
+        if (batchEmbeddings === null) {
           logger.error(`[Consolidation] Batch embedding call failed for ${textsToEmbed.length} inputs`);
-        } else if (batchEmbeddings !== null && batchEmbeddings.length === 0) {
+        } else if (batchEmbeddings.length === 0) {
           logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
         } else if (batchEmbeddings !== null) {
           if (batchEmbeddings.length !== textsToEmbed.length) {
