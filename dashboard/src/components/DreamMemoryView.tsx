@@ -287,7 +287,14 @@ export function DreamMemoryView() {
           )}
         </div>
 
-        <button onClick={() => setShowConfig(!showConfig)}
+        <button onClick={() => {
+            if (!showConfig && dreamConfig) {
+              setTempEnabled(dreamConfig.dreams_enabled !== false);
+              setTempSchedule(dreamConfig.dreams_schedule || '0 19 * * *');
+              setTempProvider(dreamConfig.dreams_provider || 'google');
+            }
+            setShowConfig(!showConfig);
+          }}
           aria-expanded={showConfig}
           aria-controls="dream-config-panel"
           style={{
