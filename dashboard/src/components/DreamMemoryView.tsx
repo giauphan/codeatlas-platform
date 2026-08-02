@@ -305,31 +305,29 @@ export function DreamMemoryView() {
         </button>
       </div>
 
-      {showConfig && (
-        <div id="dream-config-panel" className="glass-panel" style={{ padding: '1.5rem', borderRadius: '16px', marginBottom: '1.5rem' }}>
-          <h3 style={{ marginTop: 0 }}>Dream Configuration</h3>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <label htmlFor="config-enabled">Enabled:</label>
-              <input id="config-enabled" type="checkbox" checked={tempEnabled} onChange={e => setTempEnabled(e.target.checked)} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <label htmlFor="config-schedule">Schedule (cron):</label>
-              <input id="config-schedule" type="text" value={tempSchedule} onChange={e => setTempSchedule(e.target.value)} style={{ padding: '0.5rem' }} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <label htmlFor="config-provider">Provider:</label>
-              <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} style={{ padding: '0.5rem' }} />
-            </div>
-            <button onClick={saveDreamConfig} disabled={savingConfig} style={{ padding: '0.5rem 1rem' }}>
-              {savingConfig ? 'Saving...' : 'Save Config'}
-            </button>
-            <button onClick={runDailyDreamsNow} disabled={savingConfig} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
-              Run Now
-            </button>
+      <div id="dream-config-panel" className="glass-panel" style={{ padding: '1.5rem', borderRadius: '16px', marginBottom: '1.5rem', display: showConfig ? 'block' : 'none' }}>
+        <h3 style={{ marginTop: 0 }}>Dream Configuration</h3>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label htmlFor="config-enabled">Enabled:</label>
+            <input id="config-enabled" type="checkbox" checked={tempEnabled} onChange={e => setTempEnabled(e.target.checked)} />
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label htmlFor="config-schedule">Schedule (cron):</label>
+            <input id="config-schedule" type="text" value={tempSchedule} onChange={e => setTempSchedule(e.target.value)} style={{ padding: '0.5rem' }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label htmlFor="config-provider">Provider:</label>
+            <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} style={{ padding: '0.5rem' }} />
+          </div>
+          <button onClick={saveDreamConfig} disabled={savingConfig} style={{ padding: '0.5rem 1rem' }}>
+            {savingConfig ? 'Saving...' : 'Save Config'}
+          </button>
+          <button onClick={runDailyDreamsNow} disabled={savingConfig} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
+            Run Now
+          </button>
         </div>
-      )}
+      </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         {['KNOWLEDGE', 'PREFERENCE', 'MISTAKE', 'PATTERN'].map(type => (

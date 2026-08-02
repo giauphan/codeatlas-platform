@@ -280,7 +280,8 @@ describe('DreamMemoryView', () => {
     // Click again to hide
     fireEvent.click(configBtn);
     await waitFor(() => {
-      expect(screen.queryByText('Dream Configuration')).toBeNull();
+      const panel = screen.getByText('Dream Configuration').closest('div');
+      expect(panel).toHaveStyle({ display: 'none' });
     });
   });
 
