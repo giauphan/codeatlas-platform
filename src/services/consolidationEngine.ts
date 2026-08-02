@@ -282,7 +282,7 @@ export class ConsolidationEngine {
 
             if (i >= batchEmbeddings.length) {
               logger.warn(`[Consolidation] Batch API truncated results. Skipping remaining concept "${input.conceptLabel}".`);
-              continue;
+              break;
             }
 
             const conceptEmbedding = batchEmbeddings[i];
