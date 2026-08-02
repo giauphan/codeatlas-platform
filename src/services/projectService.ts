@@ -79,7 +79,7 @@ export function isSystemIdeDirectory(dir: string): boolean {
     }
 
     // ⚡ Bolt: Manage cache size (evict least recently used)
-    if (ideDirCache.size >= IDE_DIR_CACHE_MAX_SIZE) {
+    if (ideDirCache.size > IDE_DIR_CACHE_MAX_SIZE) {
       // Because we delete/re-insert on access, Map's insertion order guarantees the first elements are the LRU
       const keysToDelete = Array.from(ideDirCache.keys()).slice(0, Math.floor(IDE_DIR_CACHE_MAX_SIZE / 10));
       for (const key of keysToDelete) ideDirCache.delete(key);
