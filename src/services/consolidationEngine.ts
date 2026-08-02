@@ -268,7 +268,7 @@ export class ConsolidationEngine {
           logger.error(`[Consolidation] Batch embedding generation threw an error for ${textsToEmbed.length} inputs`, err);
         }
 
-        if (batchEmbeddings === null || batchEmbeddings === undefined) {
+        if (batchEmbeddings === null) {
           logger.error(`[Consolidation] Batch embedding call failed for ${textsToEmbed.length} inputs`);
         } else if (batchEmbeddings.length === 0) {
           logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
