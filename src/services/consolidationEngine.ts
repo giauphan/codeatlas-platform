@@ -263,34 +263,34 @@ export class ConsolidationEngine {
         ? await generateEmbeddingsBatch(textsToEmbed, "passage")
         : null;
 
-      if (batchEmbeddings) {
-        if (batchEmbeddings.length === 0 && textsToEmbed.length > 0) {
-          logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
-        } else {
-          if (batchEmbeddings.length !== textsToEmbed.length && batchEmbeddings.length > 0) {
-            logger.warn(`[Consolidation] Batch API returned ${batchEmbeddings.length} embeddings, expected ${textsToEmbed.length}.`);
+      if (!batchEmbeddings) {
+        // nothing to do, conceptsData stays empty
+      } else if (batchEmbeddings.length === 0 && textsToEmbed.length > 0) {
+        logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
+      } else {
+        if (batchEmbeddings.length !== textsToEmbed.length) {
+          logger.warn(`[Consolidation] Batch API returned ${batchEmbeddings.length} embeddings, expected ${textsToEmbed.length}.`);
+        }
+
+        for (let i = 0; i < conceptInputs.length; i++) {
+          const input = conceptInputs[i];
+
+          if (i >= batchEmbeddings.length) {
+            logger.warn(`[Consolidation] Batch API truncated results. Skipping remaining concept "${input.conceptLabel}".`);
+            continue;
           }
 
-          for (let i = 0; i < conceptInputs.length; i++) {
-            const input = conceptInputs[i];
+          const conceptEmbedding = batchEmbeddings[i];
 
-            if (i >= batchEmbeddings.length) {
-              logger.warn(`[Consolidation] Batch API truncated results. Skipping remaining concept "${input.conceptLabel}".`);
-              continue;
-            }
-
-            const conceptEmbedding = batchEmbeddings[i];
-
-            if (!conceptEmbedding || conceptEmbedding.length === 0) {
-              logger.warn(`[Consolidation] No embedding for concept "${input.conceptLabel}", skipping`);
-              continue;
-            }
-
-            conceptsData.push({
-              ...input,
-              conceptEmbedding,
-            });
+          if (!conceptEmbedding || conceptEmbedding.length === 0) {
+            logger.warn(`[Consolidation] No embedding for concept "${input.conceptLabel}", skipping`);
+            continue;
           }
+
+          conceptsData.push({
+            ...input,
+            conceptEmbedding,
+          });
         }
       }
 
