@@ -5,6 +5,7 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { initPool, setSessionContext } from "../database/connection.js";
 import { generateEmbedding } from "./embeddingService.js";
+import { triggerContextReload } from "./llmService.js";
 
 /**
  * Stop words for noise gate — English + Vietnamese.
@@ -366,7 +367,7 @@ export class OracleDreamingService {
     if (importance < minImp) return { isNoise: true, reason: `importance ${importance} < minimum ${minImp} for ${memoryType}` };
 
     // Content quality: check information density via stop-word ratio
-    const words = trimmed.split(/\s+/);
+    const words = trimmed.split(/\s+/).map(w => w.replace(/[^\w]/g, ''));
     const stopWordCount = words.filter(w => STOP_WORDS.has(w.toLowerCase())).length;
     const stopRatio = words.length > 0 ? stopWordCount / words.length : 1;
 
@@ -393,7 +394,19 @@ export class OracleDreamingService {
     // Noise gate: reject low-quality, low-value dreams before spending embedding cost
     const noiseCheck = OracleDreamingService.checkNoise(memoryType, content, importance);
     if (noiseCheck.isNoise) {
-      logger.info(`[Oracle Dreaming] Noise gate blocked dream: ${noiseCheck.reason} (type=${memoryType} imp=${importance})`);
+      logger.warn(`[Oracle Dreaming] Noise gate blocked dream: ${noiseCheck.reason} (type=${memoryType} imp=${importance})`);
+      // Trigger context reload before returning noise block
+      const sessionId = `session_${project}_${Date.now()}`;
+      await triggerContextReload(sessionId, project, "noise_blocked");
+
+      // Log to noise filtering file for debugging
+      const fs = await import('node:fs');
+      const logEntry = `[${new Date().toISOString()}] BLOCKED: ${memoryType} (imp=${importance}) - ${noiseCheck.reason}: ${content.slice(0, 100)}\n`;
+      try {
+        await fs.promises.appendFile('/tmp/noise_filtering.log', logEntry);
+      } catch (err) {
+        logger.error(`[Oracle Dreaming] Failed to write noise log: ${err}`);
+      }
       // Return a sentinel so callers know it was filtered, not an error
       return '__noise_blocked__';
     }
