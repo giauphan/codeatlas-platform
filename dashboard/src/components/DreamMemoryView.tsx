@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
@@ -44,6 +44,7 @@ export function DreamMemoryView() {
   const [tempEnabled, setTempEnabled] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const dreamConfigRef = useRef<DreamConfig | null>(null);
 
   const fetchDreamConfig = useCallback(async () => {
     setConfigLoading(true);
@@ -54,6 +55,7 @@ export function DreamMemoryView() {
       if (!resp.ok) throw new Error('Failed to load dream config');
       const data = await resp.json() as DreamConfig;
       setDreamConfig(data);
+      dreamConfigRef.current = data;
       setTempSchedule(data.dreams_schedule);
       setTempProvider(data.dreams_provider || '');
       setTempEnabled(data.dreams_enabled);
@@ -288,10 +290,11 @@ export function DreamMemoryView() {
         </div>
 
         <button onClick={() => {
-            if (!showConfig && dreamConfig) {
-              setTempEnabled(dreamConfig.dreams_enabled !== false);
-              setTempSchedule(dreamConfig.dreams_schedule || '0 19 * * *');
-              setTempProvider(dreamConfig.dreams_provider || 'google');
+            const currentConfig = dreamConfigRef.current;
+            if (!showConfig && currentConfig) {
+              setTempEnabled(currentConfig.dreams_enabled !== false);
+              setTempSchedule(currentConfig.dreams_schedule || '0 19 * * *');
+              setTempProvider(currentConfig.dreams_provider || 'google');
             }
             setShowConfig(!showConfig);
           }}
