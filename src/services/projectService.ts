@@ -722,11 +722,14 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           try {
             const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
             let modifiedAt: Date;
-            // ⚡ Bolt: Using EAFP (try/catch) to avoid redundant fs.access (via fileExists) before fs.stat
             try {
               modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
-            } catch {
-              modifiedAt = (await fs.promises.stat(dir)).mtime;
+            } catch (err: any) {
+              if (err.code === 'ENOENT') {
+                modifiedAt = (await fs.promises.stat(dir)).mtime;
+              } else {
+                throw err;
+              }
             }
             return {
               name: path.basename(dir),
@@ -791,11 +794,10 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
     if (onProjectLoadedCallback) {
       onProjectLoadedCallback(target.dir);
     }
-    // ⚡ Bolt: Using EAFP to read file directly, handling ENOENT to avoid redundant fs.access check
     let data: string;
     try {
       data = await fs.promises.readFile(target.analysisPath, "utf-8");
-    } catch (err: any) {
+    } catch (err: NodeJS.ErrnoException | any) {
       if (err.code === 'ENOENT') {
         logger.error(`[Auto-Scan] ❌ analysis.json not found at ${target.analysisPath}. Returning empty analysis for: ${target.dir}`);
         return { analysis: { graph: { nodes: [], links: [] }, insights: [], entityCounts: { modules: 0, functions: 0, classes: 0, dependencies: 0, circularDeps: 0 }, totalFilesAnalyzed: 0, totalFilesSkipped: 0 }, projectName: target.name, projectDir: target.dir };
