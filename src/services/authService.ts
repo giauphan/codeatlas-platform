@@ -44,6 +44,9 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
 
   // Pass API key explicitly to authentication use case. If it's a super-admin key,
   // the use case will handle it.
+  if (!process.env.CODEATLAS_API_KEY) {
+    throw new Error("Critical Configuration Error: CODEATLAS_API_KEY environment variable must be set for secure operations.");
+  }
   const result = await authenticateUseCase.execute(apiKey || "", process.env.CODEATLAS_API_KEY);
   return {
     tier: result.tier,
