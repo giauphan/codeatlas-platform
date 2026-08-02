@@ -265,9 +265,19 @@ export class ConsolidationEngine {
         : null;
 
       if (batchEmbeddings) {
+        if (batchEmbeddings.length !== textsToEmbed.length) {
+          logger.warn(`[Consolidation] Batch API returned ${batchEmbeddings.length} embeddings, expected ${textsToEmbed.length}.`);
+        }
+
         for (let i = 0; i < conceptInputs.length; i++) {
-          const conceptEmbedding = batchEmbeddings[i];
           const input = conceptInputs[i];
+
+          if (i >= batchEmbeddings.length) {
+            logger.warn(`[Consolidation] Batch API truncated results. Skipping remaining concept "${input.conceptLabel}".`);
+            continue;
+          }
+
+          const conceptEmbedding = batchEmbeddings[i];
 
           if (!conceptEmbedding || conceptEmbedding.length === 0) {
             logger.warn(`[Consolidation] No embedding for concept "${input.conceptLabel}", skipping`);
