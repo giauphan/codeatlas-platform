@@ -29,7 +29,8 @@ export function getStats(analysis: AnalysisResultLocal) {
 }
 
 // ⚡ Bolt: Cache dynamic paths to avoid recomputing in tight loops
-const cachedDynamicAntigravityPath = path.join(os.homedir(), ".gemini", "antigravity");
+const cachedHomeDir = os.homedir();
+const cachedDynamicAntigravityPath = path.join(cachedHomeDir, ".gemini", "antigravity");
 
 // ⚡ Bolt: Bounded LRU cache to avoid redundant expensive fs.existsSync calls during project discovery
 const ideDirCache = new Map<string, { isIde: boolean; timestamp: number }>();
@@ -63,7 +64,7 @@ export function isSystemIdeDirectory(dir: string): boolean {
       isIde = true;
     } else if (absPath === cachedDynamicAntigravityPath || absPath.startsWith(cachedDynamicAntigravityPath + path.sep)) {
       isIde = true;
-    } else if (absPath === os.homedir() || absPath === "/" || absPath === "/config") {
+    } else if (absPath === cachedHomeDir || absPath === "/" || absPath === "/config") {
       isIde = true;
     } else {
       const parts = absPath.split(path.sep);
