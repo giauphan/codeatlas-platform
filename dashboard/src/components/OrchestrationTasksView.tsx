@@ -122,11 +122,12 @@ export function OrchestrationTasksView() {
             }}
           />
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div role="group" aria-label="Filter tasks by state" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {availableStates.map(state => (
             <button
               key={state}
               onClick={() => setFilterState(state)}
+              aria-pressed={filterState === state}
               style={{
                 padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
                 background: filterState === state ? 'rgba(0,240,255,0.15)' : 'rgba(0,0,0,0.2)',

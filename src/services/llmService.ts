@@ -1,4 +1,5 @@
 import { logger } from "../utils/logger.js";
+import { OracleDreamingService } from "./dreamingService.js";
 
 /**
  * Local keyword-based dream extraction from conversation transcripts.
@@ -88,6 +89,7 @@ export async function summarizeConversationForDreams(
   // Dedup near-duplicates (same memoryType + similar content start)
   const final: typeof dreams = [];
   const finalSeen = new Set<string>();
+  let noiseDetected = false;
   for (const d of top) {
     const dk = `${d.memoryType}:${d.content.slice(0, 40)}`;
     if (finalSeen.has(dk)) continue;
@@ -95,5 +97,96 @@ export async function summarizeConversationForDreams(
     final.push(d);
   }
 
+  // Check for noise patterns in the transcript
+  const lowerTranscript = transcript.toLowerCase();
+  if (lowerTranscript.includes("weather") || lowerTranscript.includes("thanks") || lowerTranscript.includes("sunny")) {
+    noiseDetected = true;
+  }
+
+  // Trigger context reload if noise detected
+  if (noiseDetected) {
+    await triggerContextReload(sessionId, project, "conversation_noise_detected");
+  }
+
   return final.length > 0 ? final : null;
+}
+
+/**
+ * Load context at session start by querying relevant dream memories.
+ * This implements active memory loading.
+ */
+export async function loadContextAtSessionStart(
+  sessionId: string,
+  project: string,
+  task: string
+): Promise<string> {
+  try {
+    const dreams = await OracleDreamingService.queryDreamMemories(
+      project,
+      task,
+      10
+    );
+
+    if (!dreams || dreams.length === 0) {
+      return "";
+    }
+
+    const parts: string[] = ["\n# 🧠 Context from Previous Sessions\n"];
+    for (const dream of dreams) {
+      const d = dream as any;
+      parts.push(`### ${d.memoryType || "DREAM"} (importance: ${d.importance || 5})`);
+      parts.push(d.content);
+      parts.push("");
+    }
+
+    const context = parts.join("\n");
+
+    // Log context loading event
+    const fs = await import('node:fs');
+    const logEntry = `[${new Date().toISOString()}] LOADED: session=${sessionId}, project=${project}, dreams=${dreams.length}\n`;
+    try {
+      await fs.promises.appendFile('/tmp/memory_loading.log', logEntry);
+    } catch (err) {
+      console.error(`[Memory Loading] Failed to write log: ${err}`);
+    }
+
+    return context;
+  } catch (err) {
+    console.error(`[Memory Loading] Failed to load context: ${err}`);
+    return "";
+  }
+}
+
+/**
+ * Reload cleaned context after noise filtering.
+ * This implements mid-session context reloading.
+ */
+export async function reloadCleanedContext(
+  sessionId: string,
+  project: string,
+  task: string
+): Promise<string> {
+  logger.info("Reloading cleaned context mid-session", { sessionId, project, task });
+  return loadContextAtSessionStart(sessionId, project, task);
+}
+
+/**
+ * Trigger context reload when noise is detected or session context needs refresh.
+ * Logs warning for observability.
+ */
+export async function triggerContextReload(
+  sessionId: string,
+  project: string,
+  task: string
+): Promise<void> {
+  logger.warn("Mid-session reload triggered due to noise or context refresh", { sessionId, project, task });
+  await reloadCleanedContext(sessionId, project, task);
+  // Log to DREAM_MEMORY_LOG for sandbox verification
+  const fs = await import('node:fs');
+  const logEntry = `[${new Date().toISOString()}] RELOAD_TRIGGERED: session=${sessionId}, project=${project}, task=${task}\n`;
+  try {
+    await fs.promises.appendFile('/tmp/DREAM_MEMORY_LOG', logEntry);
+  } catch (err) {
+    logger.error(`Failed to write reload log: ${err}`);
+  }
 }

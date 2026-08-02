@@ -9,7 +9,6 @@ import {
   discoverProjectsAsync,
   fileExists,
   getStats,
-  registerProject,
 } from "../services/projectService.js";
 import { loadAnalysisAsync, AnalysisResultLocal } from "../services/projectService.js";
 import { OracleMemoryService } from "../services/memoryService.js";
@@ -18,7 +17,7 @@ import { SecurityScanner } from "../services/scanner/securityScanner.js";
 import { GenomeService } from "../services/genomeService.js";
 import { SecondBrainService } from "../services/secondBrainService.js";
 import { ConsolidationEngine, consolidationEngine } from "../services/consolidationEngine.js";
-import { summarizeConversationForDreams } from "../services/llmService.js";
+import { summarizeConversationForDreams, loadContextAtSessionStart, reloadCleanedContext, triggerContextReload } from "../services/llmService.js";
 import { logger } from "../utils/logger.js";
 import { registerTool } from "./a2a/agentCard.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
@@ -718,7 +717,55 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     })
   );
 
-  // Tool 7.9: Generate Daily Dreams
+  // Tool 7.9: Load Context at Session Start
+  server.tool(
+    "load_context_at_session_start",
+    "Load relevant context from dream memories at the start of a new session. This implements active memory loading for the AI Second Brain.",
+    {
+      session_id: z.string().describe("Session identifier"),
+      project: z.string().optional().describe("Project name or path"),
+      task: z.string().describe("Current task or query to find relevant dreams for"),
+    },
+    mcpHandler(async ({ session_id, project, task }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "load_context_at_session_start", { session_id, project, task });
+      try {
+        const loaded = project ? await loadAnalysisAsync(project) : null;
+        const projectName = loaded ? loaded.projectName : (project || "global");
+
+        const context = await loadContextAtSessionStart(session_id, projectName, task);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id, project: projectName, contextLength: context.length, hasContext: context.length > 0 }, null, 2) }] };
+      } catch (err: unknown) {
+        return { content: [{ type: "text" as const, text: `Failed to load context: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    })
+  );
+
+  // Tool 7.10: Reload Context Mid-Session
+  server.tool(
+    "reload_context_mid_session",
+    "Reload cleaned context mid-session after noise filtering. This implements context refresh when noise is detected.",
+    {
+      session_id: z.string().describe("Session identifier"),
+      project: z.string().optional().describe("Project name or path"),
+      task: z.string().describe("Current task or query for context reload"),
+    },
+    mcpHandler(async ({ session_id, project, task }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "reload_context_mid_session", { session_id, project, task });
+      try {
+        const loaded = project ? await loadAnalysisAsync(project) : null;
+        const projectName = loaded ? loaded.projectName : (project || "global");
+
+        await triggerContextReload(session_id, projectName, task);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id, project: projectName, message: "Context reloaded mid-session" }, null, 2) }] };
+      } catch (err: unknown) {
+        return { content: [{ type: "text" as const, text: `Failed to reload context: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    })
+  );
+
+  // Tool 7.10: Generate Daily Dreams
   server.tool(
     "generate_daily_dreams",
     "Trigger the daily dream generation and consolidation process, optionally filtering by project and AI provider.",
@@ -1343,6 +1390,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   a2a("save_dream_memory", "Save a dreaming memory entry (mistake, preference, knowledge, pattern) with vector embedding.", ["memory_type", "content", "importance", "session_id", "project", "provider"]);
   a2a("query_dream_memories", "Query dreaming memories by semantic similarity using Oracle 26ai vector search.", ["query", "project", "limit", "provider"]);
   a2a("ingest_session_transcript", "Ingest conversation transcript, extract dreams per provider.", ["transcript", "session_id", "project", "provider"]);
+  a2a("load_context_at_session_start", "Load relevant context from dream memories at session start.", ["session_id", "project", "task"]);
+  a2a("reload_context_mid_session", "Reload cleaned context mid-session after noise filtering.", ["session_id", "project", "task"]);
   a2a("generate_daily_dreams", "Trigger daily dream generation and consolidation.", ["project", "provider"]);
   a2a("trace_feature_flow", "Trace the complete execution flow of a feature through the codebase.", ["project", "keyword", "depth"]);
   a2a("generate_feature_flow_diagram", "Generate a Mermaid diagram showing the execution flow of a feature (call chains).", ["project", "keyword", "diagramType", "depth", "maxNodes"]);
