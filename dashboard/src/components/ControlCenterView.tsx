@@ -170,10 +170,10 @@ const freqLabels: Record<string, string> = {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', display: 'block' }}>
+                  <label htmlFor="cron-frequency" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', display: 'block' }}>
                     Frequency
                   </label>
-                  <select value={cronSchedule} onChange={e => setCronSchedule(e.target.value)}
+                  <select id="cron-frequency" value={cronSchedule} onChange={e => setCronSchedule(e.target.value)}
                     className="glass-input" style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px' }}>
                     {Object.entries(freqLabels).map(([expr, label]) => (
                       <option key={expr} value={expr} style={{ background: '#111', color: '#fff' }}>{label} ({expr})</option>
@@ -181,6 +181,7 @@ const freqLabels: Record<string, string> = {
                   </select>
                   <input type="text" value={cronSchedule} onChange={e => setCronSchedule(e.target.value)}
                     placeholder="Custom cron (e.g. 0 19 * * *)"
+                    aria-label="Custom cron frequency"
                     style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem 1rem', borderRadius: '12px',
                       border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
                       color: '#fff', fontSize: '0.85rem', fontFamily: 'monospace' }}
