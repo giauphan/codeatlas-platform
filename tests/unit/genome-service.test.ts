@@ -345,6 +345,10 @@ describe('GenomeService', () => {
       mockGenerateEmbedding.mock.mockImplementationOnce(async () => new Array(1024).fill(0.01));
       // Mock returns genes with varying confidence
       let queryExecuted = false;
+
+      // Keep track of the original mock before we temporarily override it just for this test
+      const originalMock = mockConnection.execute.mock.calls;
+
       mockConnection.execute.mock.mockImplementation(async (sql: string, binds: any) => {
         if (sql.includes('confidence > 0.2')) {
           queryExecuted = true;
@@ -356,6 +360,11 @@ describe('GenomeService', () => {
 
       await GenomeService.scanImmuneGenes('any problem');
       assert.ok(queryExecuted, 'Confidence filter query must be executed');
+
+      // Restore the mock behavior
+      mockConnection.execute.mock.mockImplementation(async () => ({
+        rows: [mockGeneRow('gene-imm-1', '[IMMUNE] Failure Pattern', 'immune')],
+      }));
     });
 
     test('CRISPR: multiple immune genes ranked by vector distance', async () => {
