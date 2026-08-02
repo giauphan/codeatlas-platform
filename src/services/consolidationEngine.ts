@@ -259,40 +259,46 @@ export class ConsolidationEngine {
       }
 
       const textsToEmbed = conceptInputs.map(c => c.conceptDescription);
-      const batchEmbeddings = textsToEmbed.length > 0
-        ? await generateEmbeddingsBatch(textsToEmbed, "passage")
-        : null;
 
-      if (!batchEmbeddings) {
-        if (textsToEmbed.length > 0) {
+      let batchEmbeddings: number[][] | null = null;
+      if (textsToEmbed.length > 0) {
+        try {
+          batchEmbeddings = await generateEmbeddingsBatch(textsToEmbed, "passage");
+        } catch (err) {
+          logger.error(`[Consolidation] Batch embedding generation threw an error for ${textsToEmbed.length} inputs`, err);
+        }
+      }
+
+      if (textsToEmbed.length > 0) {
+        if (batchEmbeddings === null || batchEmbeddings === undefined) {
           logger.error(`[Consolidation] Batch embedding call failed for ${textsToEmbed.length} inputs`);
-        }
-      } else if (batchEmbeddings.length === 0 && textsToEmbed.length > 0) {
-        logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
-      } else {
-        if (batchEmbeddings.length !== textsToEmbed.length) {
-          logger.warn(`[Consolidation] Batch API returned ${batchEmbeddings.length} embeddings, expected ${textsToEmbed.length}.`);
-        }
-
-        for (let i = 0; i < conceptInputs.length; i++) {
-          const input = conceptInputs[i];
-
-          if (i >= batchEmbeddings.length) {
-            logger.warn(`[Consolidation] Batch API truncated results. Skipping remaining concept "${input.conceptLabel}".`);
-            continue;
+        } else if (batchEmbeddings.length === 0) {
+          logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
+        } else {
+          if (batchEmbeddings.length !== textsToEmbed.length) {
+            logger.warn(`[Consolidation] Batch API returned ${batchEmbeddings.length} embeddings, expected ${textsToEmbed.length}.`);
           }
 
-          const conceptEmbedding = batchEmbeddings[i];
+          for (let i = 0; i < conceptInputs.length; i++) {
+            const input = conceptInputs[i];
 
-          if (!conceptEmbedding || conceptEmbedding.length === 0) {
-            logger.warn(`[Consolidation] No embedding for concept "${input.conceptLabel}", skipping`);
-            continue;
+            if (i >= batchEmbeddings.length) {
+              logger.warn(`[Consolidation] Batch API truncated results. Skipping remaining concept "${input.conceptLabel}".`);
+              continue;
+            }
+
+            const conceptEmbedding = batchEmbeddings[i];
+
+            if (!conceptEmbedding || conceptEmbedding.length === 0) {
+              logger.warn(`[Consolidation] No embedding for concept "${input.conceptLabel}", skipping`);
+              continue;
+            }
+
+            conceptsData.push({
+              ...input,
+              conceptEmbedding,
+            });
           }
-
-          conceptsData.push({
-            ...input,
-            conceptEmbedding,
-          });
         }
       }
 
