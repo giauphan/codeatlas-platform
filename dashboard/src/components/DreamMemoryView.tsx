@@ -292,7 +292,7 @@ export function DreamMemoryView() {
         <button onClick={() => {
             const currentConfig = dreamConfigRef.current;
             if (!showConfig && currentConfig) {
-              setTempEnabled(currentConfig.dreams_enabled !== false);
+              setTempEnabled(currentConfig.dreams_enabled ?? true);
               setTempSchedule(currentConfig.dreams_schedule || '0 19 * * *');
               setTempProvider(currentConfig.dreams_provider || 'google');
             }
