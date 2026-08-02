@@ -48,13 +48,12 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
   // If the system admin key is configured but explicitly empty (e.g. whitespace), we should fail loudly.
   // This prevents an empty string from unintentionally becoming a valid admin bypass key.
   const rawAdminKey = process.env.CODEATLAS_API_KEY;
-  const adminKey = rawAdminKey !== undefined ? rawAdminKey.trim() : undefined;
 
-  if (adminKey === "") {
-    throw new Error("Critical Configuration Error: CODEATLAS_API_KEY cannot be an empty string.");
+  if (rawAdminKey !== undefined && rawAdminKey.trim() === "") {
+    throw new Error("Critical Configuration Error: CODEATLAS_API_KEY cannot be empty or whitespace-only.");
   }
 
-  const result = await authenticateUseCase.execute(apiKey || "", adminKey);
+  const result = await authenticateUseCase.execute(apiKey || "", rawAdminKey);
   return {
     tier: result.tier,
     uid: result.uid,
