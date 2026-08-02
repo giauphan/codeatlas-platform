@@ -30,7 +30,7 @@ export function getStats(analysis: AnalysisResultLocal) {
 
 // ⚡ Bolt: Cache os.homedir() and dynamic paths to avoid recomputing in tight loops
 const cachedHomeDir = os.homedir();
-const cachedDynamicAntigravityPath = path.resolve(path.join(cachedHomeDir, ".gemini", "antigravity"));
+const cachedDynamicAntigravityPath = path.join(cachedHomeDir, ".gemini", "antigravity");
 
 // ⚡ Bolt: Bounded cache to avoid redundant expensive fs.existsSync calls during project discovery
 const ideDirCache = new Map<string, boolean>();
