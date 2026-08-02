@@ -45,11 +45,12 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
   // Pass API key explicitly to authentication use case. If it's a super-admin key,
   // the use case will handle it.
 
-  // If the server explicitly requests "API Key auth only" (e.g., multi-tenant disabled,
-  // no bearer token) and the system admin key isn't configured, we should fail loudly.
-  // We should also fail if the provided apiKey matches a configured but empty CODEATLAS_API_KEY.
-  const adminKey = process.env.CODEATLAS_API_KEY;
-  if (adminKey != null && adminKey.trim() === "") {
+  // If the system admin key is configured but explicitly empty (e.g. whitespace), we should fail loudly.
+  // This prevents an empty string from unintentionally becoming a valid admin bypass key.
+  const rawAdminKey = process.env.CODEATLAS_API_KEY;
+  const adminKey = rawAdminKey !== undefined ? rawAdminKey.trim() : undefined;
+
+  if (adminKey === "") {
     throw new Error("Critical Configuration Error: CODEATLAS_API_KEY cannot be an empty string.");
   }
 
