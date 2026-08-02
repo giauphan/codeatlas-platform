@@ -5,7 +5,6 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { initPool, setSessionContext } from "../database/connection.js";
 import { generateEmbedding } from "./embeddingService.js";
-import { triggerContextReload } from "./llmService.js";
 
 /**
  * Stop words for noise gate — English + Vietnamese.
