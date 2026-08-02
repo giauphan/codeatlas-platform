@@ -134,8 +134,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 </div>
               </div>
               {error && <div style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
-              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800 }} disabled={loading}>
-                {loading ? <Loader2 className="animate-spin" size={24} /> : 'INITIALIZE SESSION'}
+              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={loading}>
+                {loading ? <><Loader2 className="animate-spin" size={24} /> INITIALIZING...</> : 'INITIALIZE SESSION'}
               </button>
             </motion.form>
           ) : (
@@ -157,8 +157,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 </div>
               </div>
               {error && <div style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
-              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800 }} disabled={loading}>
-                {loading ? <Loader2 className="animate-spin" size={24} /> : 'ENTER SYSTEM'}
+              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={loading}>
+                {loading ? <><Loader2 className="animate-spin" size={24} /> ENTERING...</> : 'ENTER SYSTEM'}
               </button>
             </motion.form>
           )}

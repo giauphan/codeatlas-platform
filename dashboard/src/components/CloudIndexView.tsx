@@ -118,8 +118,8 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
             </div>
 
             <div style={{ marginTop: '3rem', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn-neon-cyan" style={{ padding: '0.75rem 2rem' }} onClick={onReindex} disabled={isIndexing}>
-                {isIndexing ? <Loader2 className="animate-spin" size={20} /> : 'Save & Index Now'}
+              <button className="btn-neon-cyan" style={{ padding: '0.75rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} onClick={onReindex} disabled={isIndexing}>
+                {isIndexing ? <><Loader2 className="animate-spin" size={20} /> INDEXING...</> : 'Save & Index Now'}
               </button>
             </div>
           </div>
