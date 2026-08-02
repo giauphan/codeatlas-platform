@@ -32,17 +32,27 @@ export function getStats(analysis: AnalysisResultLocal) {
 const cachedHomeDir = os.homedir();
 const cachedDynamicAntigravityPath = path.join(cachedHomeDir, ".gemini", "antigravity");
 
-// ⚡ Bolt: Bounded cache to avoid redundant expensive fs.existsSync calls during project discovery
-const ideDirCache = new Map<string, boolean>();
+// ⚡ Bolt: Bounded LRU cache to avoid redundant expensive fs.existsSync calls during project discovery
+const ideDirCache = new Map<string, { isIde: boolean; timestamp: number }>();
 const IDE_DIR_CACHE_MAX_SIZE = 1000;
+const CACHE_TTL_MS = 60000; // 1 minute TTL to prevent stale cache entries if directories change on disk
 
 export function isSystemIdeDirectory(dir: string): boolean {
   try {
     const absPath = path.resolve(dir.trim());
+    const now = Date.now();
     
-    // ⚡ Bolt: Quick cache check
+    // ⚡ Bolt: LRU-style access and TTL cache check
     if (ideDirCache.has(absPath)) {
-      return ideDirCache.get(absPath)!;
+      const entry = ideDirCache.get(absPath)!;
+      if (now - entry.timestamp < CACHE_TTL_MS) {
+        // Refresh access order by deleting and re-inserting
+        ideDirCache.delete(absPath);
+        ideDirCache.set(absPath, { isIde: entry.isIde, timestamp: now });
+        return entry.isIde;
+      }
+      // Expired
+      ideDirCache.delete(absPath);
     }
 
     let isIde = false;
@@ -65,14 +75,14 @@ export function isSystemIdeDirectory(dir: string): boolean {
       }
     }
 
-    // ⚡ Bolt: Manage cache size
+    // ⚡ Bolt: Manage cache size (evict oldest accessed)
     if (ideDirCache.size >= IDE_DIR_CACHE_MAX_SIZE) {
-      // Clear 10% of cache when full
+      // Because we delete/re-insert on access, the first entries are the LRU
       const keysToDelete = Array.from(ideDirCache.keys()).slice(0, Math.floor(IDE_DIR_CACHE_MAX_SIZE / 10));
       for (const key of keysToDelete) ideDirCache.delete(key);
     }
 
-    ideDirCache.set(absPath, isIde);
+    ideDirCache.set(absPath, { isIde, timestamp: now });
     return isIde;
   } catch {
     // Ignore errors

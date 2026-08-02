@@ -346,16 +346,9 @@ describe('GenomeService', () => {
       // Mock returns genes with varying confidence
       let queryExecuted = false;
       mockConnection.execute.mock.mockImplementation(async (sql: string, binds: any) => {
-        if (sql.includes('confidence > 0.3')) {
-          queryExecuted = true;
-          // Verify the bind has the confidence threshold
-          assert.ok(sql.includes('confidence > 0.3'), 'Must filter by confidence > 0.3');
-        } else if (sql.includes('codeatlas_genome') && sql.includes('category = \'immune\'')) {
-           // Fallback in case the exact string match is somehow slightly different in formatting
-           // We just want to make sure it includes some form of confidence check
-           if (sql.includes('confidence > 0.3')) {
-              queryExecuted = true;
-           }
+        // Just verify the query structure directly using a regex to handle arbitrary whitespace
+        if (/confidence\s*>\s*0\.3/.test(sql) && sql.includes('codeatlas_genome') && /category\s*=\s*'immune'/.test(sql)) {
+           queryExecuted = true;
         }
         return { rows: [mockGeneRow('gene-imm-3', '[IMMUNE] Low Confidence', 'immune')], rowsAffected: 0 };
       });
