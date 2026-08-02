@@ -28,18 +28,20 @@ export function getStats(analysis: AnalysisResultLocal) {
   };
 }
 
-// ⚡ Bolt: Cache os.homedir() and dynamic paths to avoid recomputing in tight loops
-const cachedHomeDir = os.homedir();
-const cachedDynamicAntigravityPath = path.join(cachedHomeDir, ".gemini", "antigravity");
+// ⚡ Bolt: Cache dynamic paths to avoid recomputing in tight loops
+const cachedDynamicAntigravityPath = path.join(os.homedir(), ".gemini", "antigravity");
 
 // ⚡ Bolt: Bounded LRU cache to avoid redundant expensive fs.existsSync calls during project discovery
 const ideDirCache = new Map<string, { isIde: boolean; timestamp: number }>();
 const IDE_DIR_CACHE_MAX_SIZE = 1000;
-const CACHE_TTL_MS = 60000; // 1 minute TTL to prevent stale cache entries if directories change on disk
+// TTL ensures entries that haven't been accessed for 60s expire
+const CACHE_TTL_MS = 60000;
 
 export function isSystemIdeDirectory(dir: string): boolean {
   try {
-    const absPath = path.resolve(dir.trim());
+    const trimmedDir = dir.trim();
+    if (!trimmedDir) return false;
+    const absPath = path.resolve(trimmedDir);
     const now = Date.now();
     
     // ⚡ Bolt: LRU-style access and TTL cache check
@@ -61,7 +63,7 @@ export function isSystemIdeDirectory(dir: string): boolean {
       isIde = true;
     } else if (absPath === cachedDynamicAntigravityPath || absPath.startsWith(cachedDynamicAntigravityPath + path.sep)) {
       isIde = true;
-    } else if (absPath === cachedHomeDir || absPath === "/" || absPath === "/config") {
+    } else if (absPath === os.homedir() || absPath === "/" || absPath === "/config") {
       isIde = true;
     } else {
       const parts = absPath.split(path.sep);
