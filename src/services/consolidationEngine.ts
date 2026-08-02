@@ -264,7 +264,9 @@ export class ConsolidationEngine {
         : null;
 
       if (!batchEmbeddings) {
-        // nothing to do, conceptsData stays empty
+        if (textsToEmbed.length > 0) {
+          logger.error(`[Consolidation] Batch embedding call failed for ${textsToEmbed.length} inputs`);
+        }
       } else if (batchEmbeddings.length === 0 && textsToEmbed.length > 0) {
         logger.warn(`[Consolidation] Batch API returned no embeddings for ${textsToEmbed.length} inputs`);
       } else {
