@@ -5,7 +5,6 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { initPool, setSessionContext } from "../database/connection.js";
 import { generateEmbedding } from "./embeddingService.js";
-import { triggerContextReload } from "./llmService.js";
 
 /**
  * Stop words for noise gate — English + Vietnamese.
@@ -367,7 +366,8 @@ export class OracleDreamingService {
     if (importance < minImp) return { isNoise: true, reason: `importance ${importance} < minimum ${minImp} for ${memoryType}` };
 
     // Content quality: check information density via stop-word ratio
-    const words = trimmed.split(/\s+/).map(w => w.replace(/[^\w]/g, ''));
+    // Use Unicode-aware regex to preserve Vietnamese letters (e.g., 'của', 'là')
+    const words = trimmed.split(/\s+/).map(w => w.replace(/[^\p{L}\p{N}]/gu, ''));
     const stopWordCount = words.filter(w => STOP_WORDS.has(w.toLowerCase())).length;
     const stopRatio = words.length > 0 ? stopWordCount / words.length : 1;
 
@@ -395,9 +395,6 @@ export class OracleDreamingService {
     const noiseCheck = OracleDreamingService.checkNoise(memoryType, content, importance);
     if (noiseCheck.isNoise) {
       logger.warn(`[Oracle Dreaming] Noise gate blocked dream: ${noiseCheck.reason} (type=${memoryType} imp=${importance})`);
-      // Trigger context reload before returning noise block
-      const sessionId = `session_${project}_${Date.now()}`;
-      await triggerContextReload(sessionId, project, "noise_blocked");
 
       // Log to noise filtering file for debugging
       const fs = await import('node:fs');
