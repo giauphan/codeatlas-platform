@@ -44,10 +44,16 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
 
   // Pass API key explicitly to authentication use case. If it's a super-admin key,
   // the use case will handle it.
-  if (!process.env.CODEATLAS_API_KEY) {
-    throw new Error("Critical Configuration Error: CODEATLAS_API_KEY environment variable must be set for secure operations.");
+
+  // If the server explicitly requests "API Key auth only" (e.g., multi-tenant disabled,
+  // no bearer token) and the system admin key isn't configured, we should fail loudly.
+  // We should also fail if the provided apiKey matches a configured but empty CODEATLAS_API_KEY.
+  const adminKey = process.env.CODEATLAS_API_KEY;
+  if (apiKey && adminKey !== undefined && adminKey.trim() === "" && apiKey === adminKey) {
+    throw new Error("Critical Configuration Error: CODEATLAS_API_KEY cannot be an empty string.");
   }
-  const result = await authenticateUseCase.execute(apiKey || "", process.env.CODEATLAS_API_KEY);
+
+  const result = await authenticateUseCase.execute(apiKey || "", adminKey);
   return {
     tier: result.tier,
     uid: result.uid,
