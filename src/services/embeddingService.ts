@@ -100,7 +100,9 @@ export async function generateEmbeddingsBatch(texts: string[], inputType: 'passa
 
       const data: NvidiaEmbeddingResponse = await response.json();
       if (data?.data) {
-        const embeddings = data.data.map((item: NvidiaEmbeddingData) => item.embedding);
+        // Sort by index to guarantee correct positional mapping regardless of API response order
+        const sortedData = [...data.data].sort((a, b) => a.index - b.index);
+        const embeddings = sortedData.map((item: NvidiaEmbeddingData) => item.embedding);
         results.push(...embeddings);
       } else {
         return null;
