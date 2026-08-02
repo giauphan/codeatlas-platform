@@ -44,7 +44,15 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
 
   // Pass API key explicitly to authentication use case. If it's a super-admin key,
   // the use case will handle it.
-  const result = await authenticateUseCase.execute(apiKey || "", process.env.CODEATLAS_API_KEY);
+  const rawAdminKey = process.env.CODEATLAS_API_KEY;
+
+  // Only trigger the hard fail if the caller is actually attempting to use API key authentication.
+  // This prevents a misconfigured admin key from breaking legitimate bearer-token auth for normal users.
+  if (apiKey && rawAdminKey !== undefined && rawAdminKey.trim() === "") {
+    throw new Error("Critical Configuration Error: CODEATLAS_API_KEY cannot be empty or whitespace-only.");
+  }
+
+  const result = await authenticateUseCase.execute(apiKey || "", rawAdminKey);
   return {
     tier: result.tier,
     uid: result.uid,
