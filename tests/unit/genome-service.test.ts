@@ -353,7 +353,7 @@ describe('GenomeService', () => {
         } else if (sql.includes('codeatlas_genome') && sql.includes('category = \'immune\'')) {
            // Fallback in case the exact string match is somehow slightly different in formatting
            // We just want to make sure it includes some form of confidence check
-           if (sql.includes('confidence >')) {
+           if (sql.includes('confidence > 0.3')) {
               queryExecuted = true;
            }
         }

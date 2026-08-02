@@ -75,6 +75,7 @@ export function isSystemIdeDirectory(dir: string): boolean {
     ideDirCache.set(absPath, isIde);
     return isIde;
   } catch {
+    // Ignore errors
     return false;
   }
 }
