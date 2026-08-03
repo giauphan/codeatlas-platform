@@ -519,7 +519,7 @@ export const Dashboard: React.FC = () => {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif'
     }}>
       {/* Sidebar Navigation */}
-      <nav style={{
+      <nav aria-label="Main Navigation" style={{
         width: '240px', background: 'var(--background-light)', padding: '2rem 1.5rem',
         display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-color)'
       }}>
@@ -535,6 +535,7 @@ export const Dashboard: React.FC = () => {
               <li key={tab} style={{ marginBottom: '1rem' }}>
                 <button
                   onClick={() => setActiveTab(tab)}
+                  aria-current={activeTab === tab ? 'page' : undefined}
                   style={{
                     width: '100%', padding: '0.75rem 1rem', borderRadius: '8px',
                     background: activeTab === tab ? 'var(--button-active-background)' : 'transparent',
