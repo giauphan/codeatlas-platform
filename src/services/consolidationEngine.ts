@@ -126,13 +126,13 @@ export class ConsolidationEngine {
 
       let merged = 0;
       for (const [, group] of byProject) {
-        const toRemove: string[] = [];
+        const toRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
-          if (toRemove.includes(String(group[i][R_IDX.ID]))) continue;
+          if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
 
           for (let j = i + 1; j < group.length; j++) {
-            if (toRemove.includes(String(group[j][R_IDX.ID]))) continue;
+            if (toRemove.has(String(group[j][R_IDX.ID]))) continue;
 
             // Cosine similarity on embeddings (both must exist)
             const embI = group[i][R_IDX.EMBEDDING];
@@ -150,21 +150,21 @@ export class ConsolidationEngine {
               // Merge: keep the one with higher importance
               const keepIdx = Number(group[i][R_IDX.IMPORTANCE]) >= Number(group[j][R_IDX.IMPORTANCE]) ? i : j;
               const removeIdx = keepIdx === i ? j : i;
-              toRemove.push(String(group[removeIdx][R_IDX.ID]));
+              toRemove.add(String(group[removeIdx][R_IDX.ID]));
             }
           }
         }
 
         // Batch delete duplicate concepts using executeMany for N+1 avoidance.
-        if (toRemove.length > 0) {
+        if (toRemove.size > 0) {
           try {
-            const binds = toRemove.map((id) => ({ id }));
+            const binds = Array.from(toRemove).map((id) => ({ id }));
             await connection.executeMany(
               `DELETE FROM ai_dreaming_memory WHERE id = :id`,
               binds as any,
               { autoCommit: true }
             );
-            merged += toRemove.length;
+            merged += toRemove.size;
           } catch {
             // skip delete errors
           }
