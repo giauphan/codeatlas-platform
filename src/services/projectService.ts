@@ -535,10 +535,15 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       try {
         const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
         let modifiedAt: Date;
-        if (fs.existsSync(analysisPath)) {
+        // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before statSync
+        try {
           modifiedAt = fs.statSync(analysisPath).mtime;
-        } else {
-          modifiedAt = fs.statSync(dir).mtime;
+        } catch (err: any) {
+          if (err.code === 'ENOENT') {
+            modifiedAt = fs.statSync(dir).mtime;
+          } else {
+            throw err;
+          }
         }
         projects.push({
           name: path.basename(dir),
@@ -597,11 +602,17 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
     if (onProjectLoadedCallback) {
       onProjectLoadedCallback(target.dir);
     }
-    if (!fs.existsSync(target.analysisPath)) {
-      logger.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
-      return null;
+    let data: string;
+    // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before readFileSync
+    try {
+      data = fs.readFileSync(target.analysisPath, "utf-8");
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        logger.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
+        return null;
+      }
+      throw err;
     }
-    const data = fs.readFileSync(target.analysisPath, "utf-8");
     return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
   } catch (err) {
     logger.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
