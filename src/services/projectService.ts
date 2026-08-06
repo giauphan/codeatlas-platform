@@ -268,21 +268,23 @@ export function unregisterProject(dir: string): void {
     const homeDir = os.homedir();
     const configDir = path.join(homeDir, ".codeatlas");
     const regPath = path.join(configDir, "registered_projects.json");
-    if (fs.existsSync(regPath)) {
-      let projects: string[] = [];
-      try {
-        const data = fs.readFileSync(regPath, "utf-8");
-        projects = JSON.parse(data);
-      } catch {
+
+    let projects: string[] = [];
+    try {
+      const data = fs.readFileSync(regPath, "utf-8");
+      projects = JSON.parse(data);
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
         projects = [];
       }
-      if (Array.isArray(projects)) {
-        const absPath = path.resolve(dir);
-        const filtered = projects.filter((p) => p !== absPath);
-        if (filtered.length !== projects.length) {
-          fs.writeFileSync(regPath, JSON.stringify(filtered, null, 2));
-          logger.info(`[Project-Registry] 📝 Unregistered project: ${absPath}`);
-        }
+    }
+
+    if (Array.isArray(projects) && projects.length > 0) {
+      const absPath = path.resolve(dir);
+      const filtered = projects.filter((p) => p !== absPath);
+      if (filtered.length !== projects.length) {
+        fs.writeFileSync(regPath, JSON.stringify(filtered, null, 2));
+        logger.info(`[Project-Registry] 📝 Unregistered project: ${absPath}`);
       }
     }
   } catch (err) {
@@ -501,8 +503,16 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
     try {
       const homeDir = os.homedir();
       const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
-      if (fs.existsSync(regPath)) {
-        const registered = JSON.parse(fs.readFileSync(regPath, "utf-8"));
+
+      let data: string | undefined;
+      try {
+        data = fs.readFileSync(regPath, "utf-8");
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') throw err;
+      }
+
+      if (data) {
+        const registered = JSON.parse(data);
         if (Array.isArray(registered)) {
           let updated = false;
           const filtered = registered.filter((dir) => {
@@ -535,10 +545,14 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       try {
         const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
         let modifiedAt: Date;
-        if (fs.existsSync(analysisPath)) {
+        try {
           modifiedAt = fs.statSync(analysisPath).mtime;
-        } else {
-          modifiedAt = fs.statSync(dir).mtime;
+        } catch (err: any) {
+          if (err.code === 'ENOENT') {
+            modifiedAt = fs.statSync(dir).mtime;
+          } else {
+            throw err;
+          }
         }
         projects.push({
           name: path.basename(dir),
@@ -597,11 +611,16 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
     if (onProjectLoadedCallback) {
       onProjectLoadedCallback(target.dir);
     }
-    if (!fs.existsSync(target.analysisPath)) {
-      logger.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
-      return null;
+    let data: string;
+    try {
+      data = fs.readFileSync(target.analysisPath, "utf-8");
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        logger.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
+        return null;
+      }
+      throw err;
     }
-    const data = fs.readFileSync(target.analysisPath, "utf-8");
     return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
   } catch (err) {
     logger.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
