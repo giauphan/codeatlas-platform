@@ -548,6 +548,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       try {
         const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
         let modifiedAt: Date;
+        // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before statSync
         try {
           modifiedAt = fs.statSync(analysisPath).mtime;
         } catch (err: any) {
@@ -615,6 +616,10 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
       onProjectLoadedCallback(target.dir);
     }
     let data: string;
+<<<<<<< HEAD
+=======
+    // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before readFileSync
+>>>>>>> origin/main
     try {
       data = fs.readFileSync(target.analysisPath, "utf-8");
     } catch (err: any) {
