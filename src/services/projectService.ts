@@ -238,11 +238,11 @@ export async function registerProjectAsync(dir: string): Promise<void> {
 
     const regPath = path.join(configDir, "registered_projects.json");
     let projects: string[] = [];
-    if (await fileExists(regPath)) {
-      try {
-        const data = await fs.promises.readFile(regPath, "utf-8");
-        projects = JSON.parse(data);
-      } catch {
+    try {
+      const data = await fs.promises.readFile(regPath, "utf-8");
+      projects = JSON.parse(data);
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
         projects = [];
       }
     }
@@ -298,21 +298,23 @@ export async function unregisterProjectAsync(dir: string): Promise<void> {
     const homeDir = os.homedir();
     const configDir = path.join(homeDir, ".codeatlas");
     const regPath = path.join(configDir, "registered_projects.json");
-    if (await fileExists(regPath)) {
-      let projects: string[] = [];
-      try {
-        const data = await fs.promises.readFile(regPath, "utf-8");
-        projects = JSON.parse(data);
-      } catch {
+
+    let projects: string[] = [];
+    try {
+      const data = await fs.promises.readFile(regPath, "utf-8");
+      projects = JSON.parse(data);
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
         projects = [];
       }
-      if (Array.isArray(projects)) {
-        const absPath = path.resolve(dir);
-        const filtered = projects.filter((p) => p !== absPath);
-        if (filtered.length !== projects.length) {
-          await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
-          logger.info(`[Project-Registry] 📝 Unregistered project (async): ${absPath}`);
-        }
+    }
+
+    if (Array.isArray(projects) && projects.length > 0) {
+      const absPath = path.resolve(dir);
+      const filtered = projects.filter((p) => p !== absPath);
+      if (filtered.length !== projects.length) {
+        await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+        logger.info(`[Project-Registry] 📝 Unregistered project (async): ${absPath}`);
       }
     }
   } catch (err) {
@@ -726,9 +728,18 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     try {
       const homeDir = os.homedir();
       const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
-      if (await fileExists(regPath)) {
+
+      let registered: any = [];
+      try {
         const data = await fs.promises.readFile(regPath, "utf-8");
-        const registered = JSON.parse(data);
+        registered = JSON.parse(data);
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') {
+          registered = [];
+        }
+      }
+
+      if (registered) {
         if (Array.isArray(registered)) {
           let updated = false;
           const filtered = registered.filter((dir) => {
