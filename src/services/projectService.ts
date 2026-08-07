@@ -268,21 +268,23 @@ export function unregisterProject(dir: string): void {
     const homeDir = os.homedir();
     const configDir = path.join(homeDir, ".codeatlas");
     const regPath = path.join(configDir, "registered_projects.json");
-    if (fs.existsSync(regPath)) {
-      let projects: string[] = [];
-      try {
-        const data = fs.readFileSync(regPath, "utf-8");
-        projects = JSON.parse(data);
-      } catch {
+
+    let projects: string[] = [];
+    try {
+      const data = fs.readFileSync(regPath, "utf-8");
+      projects = JSON.parse(data);
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
         projects = [];
       }
-      if (Array.isArray(projects)) {
-        const absPath = path.resolve(dir);
-        const filtered = projects.filter((p) => p !== absPath);
-        if (filtered.length !== projects.length) {
-          fs.writeFileSync(regPath, JSON.stringify(filtered, null, 2));
-          logger.info(`[Project-Registry] 📝 Unregistered project: ${absPath}`);
-        }
+    }
+
+    if (Array.isArray(projects) && projects.length > 0) {
+      const absPath = path.resolve(dir);
+      const filtered = projects.filter((p) => p !== absPath);
+      if (filtered.length !== projects.length) {
+        fs.writeFileSync(regPath, JSON.stringify(filtered, null, 2));
+        logger.info(`[Project-Registry] 📝 Unregistered project: ${absPath}`);
       }
     }
   } catch (err) {
@@ -501,8 +503,19 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
     try {
       const homeDir = os.homedir();
       const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
-      if (fs.existsSync(regPath)) {
-        const registered = JSON.parse(fs.readFileSync(regPath, "utf-8"));
+
+      let registered: any = [];
+      try {
+        const data = fs.readFileSync(regPath, "utf-8");
+        registered = JSON.parse(data);
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') {
+          // Keep old behavior: swallow parse errors gracefully
+          registered = [];
+        }
+      }
+
+      if (registered) {
         if (Array.isArray(registered)) {
           let updated = false;
           const filtered = registered.filter((dir) => {
@@ -603,7 +616,10 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
       onProjectLoadedCallback(target.dir);
     }
     let data: string;
+<<<<<<< HEAD
+=======
     // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before readFileSync
+>>>>>>> origin/main
     try {
       data = fs.readFileSync(target.analysisPath, "utf-8");
     } catch (err: any) {
