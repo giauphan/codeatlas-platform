@@ -748,7 +748,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
         }
       }
     } catch (err) {
-      logger.error(`[Auto-Scan] ❌ Failed to load registered projects: ${err}`);
+      logger.error(`[Auto-Scan] ❌ Failed to load registered projects: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     // Add all git repos discovered by the indexing service
