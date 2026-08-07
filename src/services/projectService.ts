@@ -234,7 +234,11 @@ async function loadRegisteredProjectsAsync(regPath: string): Promise<string[]> {
   try {
     const data = await fs.promises.readFile(regPath, "utf-8");
     const projects = JSON.parse(data);
-    return Array.isArray(projects) ? projects : [];
+    if (!Array.isArray(projects)) {
+      logger.warn(`[Project-Registry] ⚠️ Invalid JSON structure at ${regPath}. Expected array. Returning empty array.`);
+      return [];
+    }
+    return projects;
   } catch (err: any) {
     if (err.code === 'ENOENT') {
       return [];
