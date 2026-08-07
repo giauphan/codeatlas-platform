@@ -504,15 +504,18 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       const homeDir = os.homedir();
       const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
 
-      let data: string | undefined;
+      let registered: any = [];
       try {
-        data = fs.readFileSync(regPath, "utf-8");
+        const data = fs.readFileSync(regPath, "utf-8");
+        registered = JSON.parse(data);
       } catch (err: any) {
-        if (err.code !== 'ENOENT') throw err;
+        if (err.code !== 'ENOENT') {
+          // Keep old behavior: swallow parse errors gracefully
+          registered = [];
+        }
       }
 
-      if (data) {
-        const registered = JSON.parse(data);
+      if (registered) {
         if (Array.isArray(registered)) {
           let updated = false;
           const filtered = registered.filter((dir) => {
