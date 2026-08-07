@@ -35,7 +35,7 @@ ORACLE_CONN_STRING=your_oracle_connection_string
 
 Optional variables:
 ```
-PORT=8080
+PORT=3381
 CODEATLAS_API_KEY=your_api_key
 NVIDIA_API_KEY=nvapi-your_nvidia_key
 CODEATLAS_MULTI_TENANT=true
@@ -69,7 +69,7 @@ npm run dev
 npm start
 ```
 
-The server will start at **http://localhost:8080**.
+The server will start at **http://localhost:3381**.
 
 ## AI Editor Integration
 
@@ -81,7 +81,7 @@ Add to `.cursor/mcp.json` or `mcp_config.json`:
 {
   "mcpServers": {
     "codeatlas": {
-      "url": "http://localhost:8080/sse"
+      "url": "http://localhost:3381/sse"
     }
   }
 }

@@ -26,7 +26,7 @@ server.tool("scan_enterprise_vulnerabilities", ...);
 | Mode | When | Endpoint |
 |---|---|---|
 | **Stdio** | `PORT` not set | stdin/stdout (Claude Desktop) |
-| **SSE** | `PORT=8080` | `:8080/sse` + `:8080/messages` |
+| **SSE** | `PORT=3381` | `:3381/sse` + `:3381/messages` |
 
 ## Request Flow
 

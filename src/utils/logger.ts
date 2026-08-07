@@ -7,7 +7,7 @@
  *
  * Usage:
  *   import { logger } from "./logger.js";
- *   logger.info("Server started", { port: 8080 });
+ *   logger.info("Server started", { port: 3381 });
  *   logger.error("Failed to connect", err);
  */
 

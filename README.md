@@ -5,7 +5,7 @@ AI-powered codebase intelligence platform — MCP Server, AST analysis, Knowledg
 ## 🏗 Architecture
 
 ```
-AI IDE (Claude/Cursor) → MCP (stdio/SSE) → Platform :8080 → Oracle 26ai + Firebase + NVIDIA
+AI IDE (Claude/Cursor) → MCP (stdio/SSE) → Platform :3381 → Oracle 26ai + Firebase + NVIDIA
 ```
 
 | Layer | Components |
@@ -40,7 +40,7 @@ cp .env.example .env  # Configure Oracle, Firebase, NVIDIA keys
 pnpm install
 pnpm run build
 cd dashboard && pnpm run build && cd ..
-PORT=8080 node dist/src/index.js
+PORT=3381 node dist/src/index.js
 ```
 
 ## 📡 MCP Tools (30+)
