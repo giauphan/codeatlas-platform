@@ -1090,6 +1090,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         flowLines.push("    classDef func fill:#607D8B,stroke:#37474F,color:#fff");
 
         const mermaidIdMap = new Map<string, string>();
+        // ⚡ Bolt Optimization: Replace O(N) array includes with O(1) Set lookup
+        const entryPointIds = new Set(entryPoints.map(n => n.id));
         let nCounter = 0;
         for (const node of traceNodes) {
           const mid = `f${nCounter++}`;
@@ -1103,7 +1105,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
             flowLines.push(`    ${mid}("⚡ ${label}${fileSuffix}")`);
           }
 
-          if (entryPoints.includes(node) && !hasIncoming.has(node.id)) {
+          if (entryPointIds.has(node.id) && !hasIncoming.has(node.id)) {
             flowLines.push(`    class ${mid} entry`);
           } else if (seedNodes.has(node.id)) {
             flowLines.push(`    class ${mid} seed`);
