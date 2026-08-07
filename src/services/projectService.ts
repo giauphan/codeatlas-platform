@@ -230,6 +230,23 @@ export function registerOnProjectLoaded(cb: (dir: string) => void) {
 }
 
 
+async function loadRegisteredProjectsAsync(regPath: string): Promise<string[]> {
+  try {
+    const data = await fs.promises.readFile(regPath, "utf-8");
+    const projects = JSON.parse(data);
+    return Array.isArray(projects) ? projects : [];
+  } catch (err: any) {
+    if (err.code === 'ENOENT') {
+      return [];
+    }
+    if (err instanceof SyntaxError) {
+      logger.warn(`[Project-Registry] ⚠️ Failed to parse JSON at ${regPath}. Returning empty array.`);
+      return [];
+    }
+    throw err;
+  }
+}
+
 export async function registerProjectAsync(dir: string): Promise<void> {
   try {
     const homeDir = os.homedir();
@@ -237,18 +254,7 @@ export async function registerProjectAsync(dir: string): Promise<void> {
     await fs.promises.mkdir(configDir, { recursive: true });
 
     const regPath = path.join(configDir, "registered_projects.json");
-    let projects: string[] = [];
-    try {
-      const data = await fs.promises.readFile(regPath, "utf-8");
-      projects = JSON.parse(data);
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') {
-        projects = [];
-      }
-    }
-    if (!Array.isArray(projects)) {
-      projects = [];
-    }
+    const projects = await loadRegisteredProjectsAsync(regPath);
     const absPath = path.resolve(dir);
     if (isSystemIdeDirectory(absPath)) {
       return;
@@ -299,17 +305,9 @@ export async function unregisterProjectAsync(dir: string): Promise<void> {
     const configDir = path.join(homeDir, ".codeatlas");
     const regPath = path.join(configDir, "registered_projects.json");
 
-    let projects: string[] = [];
-    try {
-      const data = await fs.promises.readFile(regPath, "utf-8");
-      projects = JSON.parse(data);
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') {
-        projects = [];
-      }
-    }
+    const projects = await loadRegisteredProjectsAsync(regPath);
 
-    if (Array.isArray(projects) && projects.length > 0) {
+    if (projects.length > 0) {
       const absPath = path.resolve(dir);
       const filtered = projects.filter((p) => p !== absPath);
       if (filtered.length !== projects.length) {
@@ -729,37 +727,29 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       const homeDir = os.homedir();
       const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
 
-      let registered: any = [];
-      try {
-        const data = await fs.promises.readFile(regPath, "utf-8");
-        registered = JSON.parse(data);
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') {
-          registered = [];
-        }
-      }
+      const registered = await loadRegisteredProjectsAsync(regPath);
 
-      if (registered) {
-        if (Array.isArray(registered)) {
-          let updated = false;
-          const filtered = registered.filter((dir) => {
-            if (isSystemIdeDirectory(dir)) {
-              updated = true;
-              return false;
-            }
-            return true;
-          });
-          if (updated) {
-            await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+      if (registered.length > 0) {
+        let updated = false;
+        const filtered = registered.filter((dir) => {
+          if (isSystemIdeDirectory(dir)) {
+            updated = true;
+            return false;
           }
-          for (const dir of filtered) {
-            if (await fileExists(dir)) {
-              searchDirs.push(dir);
-            }
+          return true;
+        });
+        if (updated) {
+          await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+        }
+        for (const dir of filtered) {
+          if (await fileExists(dir)) {
+            searchDirs.push(dir);
           }
         }
       }
-    } catch { /* skip */ }
+    } catch (err) {
+      logger.error(`[Auto-Scan] ❌ Failed to load registered projects: ${err}`);
+    }
 
     // Add all git repos discovered by the indexing service
     const indexedProjectDirs = indexingService.getProjectDirs();
