@@ -310,6 +310,7 @@ export async function unregisterProjectAsync(dir: string): Promise<void> {
     const regPath = path.join(configDir, "registered_projects.json");
 
     const projects = await loadRegisteredProjectsAsync(regPath);
+    if (projects.length === 0) return;
 
     const absPath = path.resolve(dir);
     const filtered = projects.filter((p) => p !== absPath);
