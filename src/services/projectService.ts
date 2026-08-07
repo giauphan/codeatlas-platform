@@ -616,10 +616,7 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
       onProjectLoadedCallback(target.dir);
     }
     let data: string;
-<<<<<<< HEAD
-=======
     // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before readFileSync
->>>>>>> origin/main
     try {
       data = fs.readFileSync(target.analysisPath, "utf-8");
     } catch (err: any) {
