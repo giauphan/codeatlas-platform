@@ -247,6 +247,7 @@ async function loadRegisteredProjectsAsync(regPath: string): Promise<string[]> {
       logger.warn(`[Project-Registry] ⚠️ Failed to parse JSON at ${regPath}. Returning empty array.`);
       return [];
     }
+    logger.error(`[Project-Registry] ❌ Failed to read registry at ${regPath}: ${err instanceof Error ? err.message : String(err)}`);
     throw err;
   }
 }
