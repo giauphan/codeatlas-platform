@@ -307,13 +307,11 @@ export async function unregisterProjectAsync(dir: string): Promise<void> {
 
     const projects = await loadRegisteredProjectsAsync(regPath);
 
-    if (projects.length > 0) {
-      const absPath = path.resolve(dir);
-      const filtered = projects.filter((p) => p !== absPath);
-      if (filtered.length !== projects.length) {
-        await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
-        logger.info(`[Project-Registry] 📝 Unregistered project (async): ${absPath}`);
-      }
+    const absPath = path.resolve(dir);
+    const filtered = projects.filter((p) => p !== absPath);
+    if (filtered.length !== projects.length) {
+      await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+      logger.info(`[Project-Registry] 📝 Unregistered project (async): ${absPath}`);
     }
   } catch (err) {
     logger.error(`[Project-Registry] ❌ Failed to unregister project (async): ${err}`);
