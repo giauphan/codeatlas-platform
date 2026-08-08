@@ -741,8 +741,14 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           if (updated) {
             await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
           }
-          for (const dir of filtered) {
-            if (await fileExists(dir)) {
+          const existsResults = await Promise.all(
+            filtered.map(async (dir) => ({
+              dir,
+              exists: await fileExists(dir)
+            }))
+          );
+          for (const { dir, exists } of existsResults) {
+            if (exists) {
               searchDirs.push(dir);
             }
           }
