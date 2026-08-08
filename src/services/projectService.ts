@@ -243,7 +243,7 @@ async function loadRegisteredProjectsAsync(regPath: string): Promise<string[]> {
     if (err.code === 'ENOENT') {
       return [];
     }
-    if (err instanceof SyntaxError) {
+    if (err instanceof SyntaxError || err.name === 'SyntaxError') {
       logger.warn(`[Project-Registry] ⚠️ Failed to parse JSON at ${regPath}. Returning empty array.`);
       return [];
     }
