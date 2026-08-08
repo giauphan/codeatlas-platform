@@ -325,7 +325,7 @@ export class ConsolidationEngine {
           bindsForSelect.tid = authStorage.getStore()!.uid;
 
           logger.info(`[Consolidation] Concepts lookup: ${query.substring(0, 200)}...`);
-          const existing = await connection.execute<any[]>(query, bindsForSelect);
+          const existing = await connection!.execute<any[]>(query, bindsForSelect);
 
           return existing.rows || [];
         }));

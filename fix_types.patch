@@ -1,0 +1,17 @@
+--- src/services/consolidationEngine.ts
++++ src/services/consolidationEngine.ts
+@@ -91,3 +91,3 @@
+   private async dedupDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
+-    let connection;
++    let connection: oracledb.Connection | undefined;
+     try {
+@@ -418,3 +418,3 @@
+   private async scoreDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
+-    let connection;
++    let connection: oracledb.Connection | undefined;
+     try {
+@@ -558,3 +558,3 @@
+   private async scoreRelevance(report?: ConsolidationReport): Promise<void> {
+-    let connection;
++    let connection: oracledb.Connection | undefined;
+     try {

@@ -89,7 +89,7 @@ export class ConsolidationEngine {
    * Keeps the dream with higher importance, merges metadata.
    */
   private async dedupDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
-    let connection;
+    let connection: oracledb.Connection | undefined;
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
@@ -303,8 +303,8 @@ export class ConsolidationEngine {
         // ⚡ Bolt Optimization: Use pLimit to execute batches concurrently instead of sequentially
         // while also safely increasing the batch size to further reduce overhead.
         const existingConcepts = new Set<string>();
-        const BATCH_SIZE = 200;
-        const chunks: any[][] = [];
+        const BATCH_SIZE = 50; // reverted to 50 due to Oracle OR limit
+        const chunks: any[][] = []; // batches of concepts
 
         for (let i = 0; i < conceptsData.length; i += BATCH_SIZE) {
           chunks.push(conceptsData.slice(i, i + BATCH_SIZE));
@@ -324,8 +324,10 @@ export class ConsolidationEngine {
           const query = `SELECT label, project FROM codeatlas_concepts WHERE tenant_id = :tid AND (${orConditions.join(' OR ')})`;
           bindsForSelect.tid = authStorage.getStore()!.uid;
 
+          logger.info(`[Consolidation] Concepts binds: ${JSON.stringify(bindsForSelect).substring(0, 500)}`);
           logger.info(`[Consolidation] Concepts lookup: ${query.substring(0, 200)}...`);
-          const existing = await connection!.execute<any[]>(query, bindsForSelect);
+          if (!connection) throw new Error('Database connection not initialized');
+          const existing = await connection.execute<any[]>(query, bindsForSelect);
 
           return existing.rows || [];
         }));
@@ -416,7 +418,7 @@ export class ConsolidationEngine {
       logger.info("[Consolidation] Lifecycle columns missing — skipping dream scoring");
       return;
     }
-    let connection;
+    let connection: oracledb.Connection | undefined;
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
@@ -556,7 +558,7 @@ export class ConsolidationEngine {
    * - access_count and last_accessed_at are tracked externally (via concepts/search API)
    */
   private async scoreRelevance(report?: ConsolidationReport): Promise<void> {
-    let connection;
+    let connection: oracledb.Connection | undefined;
     try {
       const pool = await initPool();
       connection = await pool.getConnection();
