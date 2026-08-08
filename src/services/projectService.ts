@@ -230,6 +230,29 @@ export function registerOnProjectLoaded(cb: (dir: string) => void) {
 }
 
 
+async function loadRegisteredProjectsAsync(regPath: string): Promise<string[]> {
+  try {
+    const data = await fs.promises.readFile(regPath, "utf-8");
+    const projects = JSON.parse(data);
+    if (!Array.isArray(projects)) {
+      logger.warn(`[Project-Registry] ⚠️ Invalid JSON structure at ${regPath}. Expected array. Returning empty array.`);
+      return [];
+    }
+    // ⚡ Bolt: Type-harden the parsed array to prevent downstream crashes from malformed/edited JSON arrays
+    const validProjects = projects.filter((p: any) => typeof p === 'string');
+    if (validProjects.length !== projects.length) {
+      logger.warn(`[Project-Registry] ⚠️ Ignored ${projects.length - validProjects.length} non-string entries in ${regPath}`);
+    }
+    return [...new Set(validProjects)];
+  } catch (err: any) {
+    if (err.code === 'ENOENT') {
+      return [];
+    }
+    logger.warn(`[Project-Registry] ⚠️ Failed to read or parse registry at ${regPath}: ${err instanceof Error ? err.message : String(err)}. Returning empty array.`);
+    return [];
+  }
+}
+
 export async function registerProjectAsync(dir: string): Promise<void> {
   try {
     const homeDir = os.homedir();
@@ -237,18 +260,7 @@ export async function registerProjectAsync(dir: string): Promise<void> {
     await fs.promises.mkdir(configDir, { recursive: true });
 
     const regPath = path.join(configDir, "registered_projects.json");
-    let projects: string[] = [];
-    if (await fileExists(regPath)) {
-      try {
-        const data = await fs.promises.readFile(regPath, "utf-8");
-        projects = JSON.parse(data);
-      } catch {
-        projects = [];
-      }
-    }
-    if (!Array.isArray(projects)) {
-      projects = [];
-    }
+    const projects = await loadRegisteredProjectsAsync(regPath);
     const absPath = path.resolve(dir);
     if (isSystemIdeDirectory(absPath)) {
       return;
@@ -298,25 +310,18 @@ export async function unregisterProjectAsync(dir: string): Promise<void> {
     const homeDir = os.homedir();
     const configDir = path.join(homeDir, ".codeatlas");
     const regPath = path.join(configDir, "registered_projects.json");
-    if (await fileExists(regPath)) {
-      let projects: string[] = [];
-      try {
-        const data = await fs.promises.readFile(regPath, "utf-8");
-        projects = JSON.parse(data);
-      } catch {
-        projects = [];
-      }
-      if (Array.isArray(projects)) {
-        const absPath = path.resolve(dir);
-        const filtered = projects.filter((p) => p !== absPath);
-        if (filtered.length !== projects.length) {
-          await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
-          logger.info(`[Project-Registry] 📝 Unregistered project (async): ${absPath}`);
-        }
-      }
+
+    const projects = await loadRegisteredProjectsAsync(regPath);
+    if (projects.length === 0) return;
+
+    const absPath = path.resolve(dir);
+    const filtered = projects.filter((p) => p !== absPath);
+    if (filtered.length !== projects.length) {
+      await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+      logger.info(`[Project-Registry] 📝 Unregistered project (async): ${absPath}`);
     }
   } catch (err) {
-    logger.error(`[Project-Registry] ❌ Failed to unregister project (async): ${err}`);
+    logger.error(`[Project-Registry] ❌ Failed to unregister project (async): ${err instanceof Error ? err.message : String(err)}`);
     throw err;
   }
 }
@@ -726,29 +731,30 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     try {
       const homeDir = os.homedir();
       const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
-      if (await fileExists(regPath)) {
-        const data = await fs.promises.readFile(regPath, "utf-8");
-        const registered = JSON.parse(data);
-        if (Array.isArray(registered)) {
-          let updated = false;
-          const filtered = registered.filter((dir) => {
-            if (isSystemIdeDirectory(dir)) {
-              updated = true;
-              return false;
-            }
-            return true;
-          });
-          if (updated) {
-            await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+
+      const registered = await loadRegisteredProjectsAsync(regPath);
+
+      if (registered.length > 0) {
+        let updated = false;
+        const filtered = registered.filter((dir) => {
+          if (isSystemIdeDirectory(dir)) {
+            updated = true;
+            return false;
           }
-          for (const dir of filtered) {
-            if (await fileExists(dir)) {
-              searchDirs.push(dir);
-            }
+          return true;
+        });
+        if (updated) {
+          await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+        }
+        for (const dir of filtered) {
+          if (await fileExists(dir)) {
+            searchDirs.push(dir);
           }
         }
       }
-    } catch { /* skip */ }
+    } catch (err) {
+      logger.warn(`[Project-Registry] ⚠️ Failed to load registered projects: ${err instanceof Error ? err.message : String(err)}`);
+    }
 
     // Add all git repos discovered by the indexing service
     const indexedProjectDirs = indexingService.getProjectDirs();
