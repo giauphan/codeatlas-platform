@@ -1,9 +1,18 @@
 import { logger } from "./logger.js";
 
 /**
- * Resolves CORS origins securely, rejecting wildcards when credentials are true.
+ * Creates a CORS origin resolution callback for Express that securely validates
+ * incoming requests against an allowed list, explicitly rejecting wildcards.
+ *
+ * @param allowedList An array of explicitly permitted origins (e.g. ['https://example.com'])
+ * @returns A callback function matching the Express `cors` middleware signature
  */
 export function createCorsOriginCallback(allowedList: string[]) {
+  /**
+   * Evaluates the incoming Origin header.
+   * @param origin The Origin header from the HTTP request (undefined if not provided)
+   * @param callback The callback invoked to instruct the middleware to allow/deny
+   */
   return function (origin: string | undefined, callback: (err: Error | null, allow: boolean) => void) {
     if (!origin) return callback(null, true);
 
