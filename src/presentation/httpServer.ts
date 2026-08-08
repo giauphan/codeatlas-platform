@@ -178,7 +178,10 @@ app.use(cors({
     if (allowedList.includes('*')) {
       // Security: explicitly reject wildcard origin when credentials are enabled
       // to prevent arbitrary origin reflection vulnerabilities.
-      return callback(new Error('Wildcard origin is not permitted with credentials enabled'), false);
+      // Instead of throwing an error which causes a 500, we log a warning
+      // and cleanly reject the CORS request (causes a 403 usually depending on the client).
+      logger.warn('[CORS] Security Warning: Wildcard origin (*) is not permitted with credentials enabled. Request rejected.');
+      return callback(null, false);
     }
 
     try {
