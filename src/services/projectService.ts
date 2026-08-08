@@ -2,12 +2,15 @@ import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
 import * as os from "os";
+import pLimit from "p-limit";
 import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
+
+const MAX_DIR_SCAN_CONCURRENCY = 50;
 
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
@@ -387,33 +390,27 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
     const validEntries = entries.filter(e => e.isDirectory() && e.name !== "node_modules" && !e.name.startsWith("."));
 
-    // ⚡ Bolt: Chunk directory scanning to avoid sequential N+1 bottleneck and prevent EMFILE
-    const chunkSize = 50;
-    for (let i = 0; i < validEntries.length; i += chunkSize) {
-      const chunk = validEntries.slice(i, i + chunkSize);
-      await Promise.all(chunk.map(async (entry) => {
-        const subPath = path.join(parentDir, entry.name);
-        if (await fileExists(path.join(subPath, ".codeatlas"))) {
-          discovered.push(path.resolve(subPath));
-        } else {
-          // Check 2nd level
-          try {
-            const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-            const validSubEntries = subEntries.filter(e => e.isDirectory() && e.name !== "node_modules" && !e.name.startsWith("."));
+    // ⚡ Bolt: Use bounded concurrency for directory scanning to avoid N+1 bottleneck, EMFILE limits, and excessive nested concurrency spikes
+    const limit = pLimit(MAX_DIR_SCAN_CONCURRENCY);
+    await Promise.all(validEntries.map(entry => limit(async () => {
+      const subPath = path.join(parentDir, entry.name);
+      if (await fileExists(path.join(subPath, ".codeatlas"))) {
+        discovered.push(path.resolve(subPath));
+      } else {
+        // Check 2nd level
+        try {
+          const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
+          const validSubEntries = subEntries.filter(e => e.isDirectory() && e.name !== "node_modules" && !e.name.startsWith("."));
 
-            for (let j = 0; j < validSubEntries.length; j += chunkSize) {
-              const subChunk = validSubEntries.slice(j, j + chunkSize);
-              await Promise.all(subChunk.map(async (subEntry) => {
-                const subSubPath = path.join(subPath, subEntry.name);
-                if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                  discovered.push(path.resolve(subSubPath));
-                }
-              }));
+          await Promise.all(validSubEntries.map(subEntry => limit(async () => {
+            const subSubPath = path.join(subPath, subEntry.name);
+            if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+              discovered.push(path.resolve(subSubPath));
             }
-          } catch { /* skip */ }
-        }
-      }));
-    }
+          })));
+        } catch { /* skip */ }
+      }
+    })));
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed async scan for .codeatlas projects: ${err}`);
   }
@@ -684,24 +681,21 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
         try {
           const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
           // ⚡ Bolt: Limit concurrency for tenant directory traversal
-          const chunkSize = 50;
-          for (let i = 0; i < tenants.length; i += chunkSize) {
-            const chunk = tenants.slice(i, i + chunkSize);
-            await Promise.all(chunk.map(async (t) => {
-              if (t.name === tenantId) return;
-              const tDir = path.join(tenantRoot, t.name);
-              if (t.isDirectory()) {
-                try {
-                  const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
-                  tProjects.forEach((p) => {
-                    if (p.isDirectory()) {
-                      searchDirs.push(path.join(tDir, p.name));
-                    }
-                  });
-                } catch { /* skip */ }
-              }
-            }));
-          }
+          const limit = pLimit(MAX_DIR_SCAN_CONCURRENCY);
+          await Promise.all(tenants.map(t => limit(async () => {
+            if (t.name === tenantId) return;
+            const tDir = path.join(tenantRoot, t.name);
+            if (t.isDirectory()) {
+              try {
+                const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
+                tProjects.forEach((p) => {
+                  if (p.isDirectory()) {
+                    searchDirs.push(path.join(tDir, p.name));
+                  }
+                });
+              } catch { /* skip */ }
+            }
+          })));
         } catch { /* skip */ }
       }
     }
@@ -755,15 +749,12 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
             await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
           }
           // ⚡ Bolt: Chunk file system existence checks to prevent sequential blocking
-          const chunkSize = 50;
-          for (let i = 0; i < filtered.length; i += chunkSize) {
-            const chunk = filtered.slice(i, i + chunkSize);
-            await Promise.all(chunk.map(async (dir) => {
-              if (await fileExists(dir)) {
-                searchDirs.push(dir);
-              }
-            }));
-          }
+          const limit = pLimit(MAX_DIR_SCAN_CONCURRENCY);
+          await Promise.all(filtered.map((dir: string) => limit(async () => {
+            if (await fileExists(dir)) {
+              searchDirs.push(dir);
+            }
+          })));
         }
       }
     } catch { /* skip */ }
@@ -786,38 +777,34 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     return true;
   });
 
-  const chunkSize = 50; // Batch file system operations to prevent EMFILE
-  for (let i = 0; i < uniqueDirs.length; i += chunkSize) {
-    const chunk = uniqueDirs.slice(i, i + chunkSize);
-    const results = await Promise.all(
-      chunk.map(async (dir) => {
-        if (await isProjectDirectoryAsync(dir)) {
-          try {
-            const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
-            let modifiedAt: Date;
-            try {
-              modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
-            } catch (err: any) {
-              if (err.code === 'ENOENT') {
-                modifiedAt = (await fs.promises.stat(dir)).mtime;
-              } else {
-                throw err;
-              }
-            }
-            return {
-              name: path.basename(dir),
-              dir,
-              analysisPath,
-              modifiedAt,
-            };
-          } catch { /* skip */ }
+  const limit = pLimit(MAX_DIR_SCAN_CONCURRENCY); // Batch file system operations to prevent EMFILE
+  const results = await Promise.all(uniqueDirs.map(dir => limit(async () => {
+    if (await isProjectDirectoryAsync(dir)) {
+      try {
+        const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
+        let modifiedAt: Date;
+        try {
+          modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
+        } catch (err: any) {
+          if (err.code === 'ENOENT') {
+            modifiedAt = (await fs.promises.stat(dir)).mtime;
+          } else {
+            throw err;
+          }
         }
-        return null;
-      })
-    );
-    for (const res of results) {
-      if (res) projects.push(res);
+        return {
+          name: path.basename(dir),
+          dir,
+          analysisPath,
+          modifiedAt,
+        };
+      } catch { /* skip */ }
     }
+    return null;
+  })));
+
+  for (const res of results) {
+    if (res) projects.push(res);
   }
 
   projects.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime());
