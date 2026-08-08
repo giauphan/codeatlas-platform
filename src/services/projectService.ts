@@ -239,7 +239,11 @@ async function loadRegisteredProjectsAsync(regPath: string): Promise<string[]> {
       return [];
     }
     // ⚡ Bolt: Type-harden the parsed array to prevent downstream crashes from malformed/edited JSON arrays
-    return projects.filter((p: any) => typeof p === 'string');
+    const validProjects = projects.filter((p: any) => typeof p === 'string');
+    if (validProjects.length !== projects.length) {
+      logger.warn(`[Project-Registry] ⚠️ Ignored ${projects.length - validProjects.length} non-string entries in ${regPath}`);
+    }
+    return validProjects;
   } catch (err: any) {
     if (err.code === 'ENOENT') {
       return [];
