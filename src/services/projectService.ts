@@ -320,7 +320,7 @@ export async function unregisterProjectAsync(dir: string): Promise<void> {
       logger.info(`[Project-Registry] 📝 Unregistered project (async): ${absPath}`);
     }
   } catch (err) {
-    logger.error(`[Project-Registry] ❌ Failed to unregister project (async): ${err}`);
+    logger.error(`[Project-Registry] ❌ Failed to unregister project (async): ${err instanceof Error ? err.message : String(err)}`);
     throw err;
   }
 }
