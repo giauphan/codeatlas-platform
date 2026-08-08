@@ -24,7 +24,7 @@
 **Learning:** The internal `SecurityScanner` relies on hardcoded string matching. It previously missed terms like "apikey", "credential", and SQL commands "select", "insert", "update".
 **Prevention:** Regularly review and update static analysis keyword lists to include modern token patterns and complete sets of risky commands.
 
-## 2024-05-18 - Fix arbitrary origin reflection in CORS
+## 2026-08-08 - Fix arbitrary origin reflection in CORS
 **Vulnerability:** The Express HTTP server dynamically reflected wildcard origins (`*`) via `callback(null, true)` inside the `cors` middleware when `allowedList.includes('*')`. If requests are made with `credentials: true`, this creates a critical security vulnerability where any malicious website can make authenticated requests to the API.
 **Learning:** Returning boolean `true` dynamically for a wildcard configuration in `cors` bypasses the browser's built-in block against using wildcard origins combined with credentials.
 **Prevention:** When a wildcard origin is configured and allowed, always return the static string `*` (e.g., `callback(null, '*')`) instead of dynamically returning `true`. This sets the literal `Access-Control-Allow-Origin: *` header, allowing browsers to properly reject credential-bearing requests while maintaining legitimate public API access.
