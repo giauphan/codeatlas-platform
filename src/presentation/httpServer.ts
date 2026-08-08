@@ -175,15 +175,6 @@ app.use(cors({
       return callback(null, false);
     }
 
-    if (allowedList.includes('*')) {
-      // Security: explicitly reject wildcard origin when credentials are enabled
-      // to prevent arbitrary origin reflection vulnerabilities.
-      // Instead of throwing an error which causes a 500, we log a warning
-      // and cleanly reject the CORS request (causes a 403 usually depending on the client).
-      logger.warn('[CORS] Security Warning: Wildcard origin (*) is not permitted with credentials enabled. Request rejected.');
-      return callback(null, false);
-    }
-
     try {
       const parsedOrigin = new URL(origin);
       if (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') {
@@ -192,6 +183,13 @@ app.use(cors({
 
       if (allowedList.includes(origin)) {
         return callback(null, true);
+      } else if (allowedList.includes('*')) {
+        // Security: explicitly reject wildcard origin when credentials are enabled
+        // to prevent arbitrary origin reflection vulnerabilities.
+        // Instead of throwing an error which causes a 500, we log a warning
+        // and cleanly reject the CORS request (causes a 403 usually depending on the client).
+        logger.warn(`[CORS] Security Warning: Wildcard origin (*) is not permitted with credentials enabled. Request from ${origin} rejected.`);
+        return callback(null, false);
       } else {
         return callback(null, false);
       }
