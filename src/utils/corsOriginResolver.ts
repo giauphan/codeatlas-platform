@@ -4,6 +4,10 @@ import { logger } from "./logger.js";
  * Creates a CORS origin resolution callback for Express that securely validates
  * incoming requests against an allowed list, explicitly rejecting wildcards.
  *
+ * **Warning**: If a wildcard `*` is present in `allowedList`, this resolver will
+ * reject **all** origins, including explicitly listed valid ones. This is a fail-safe
+ * mechanism. The caller should validate configuration before using this resolver.
+ *
  * @param allowedList An array of explicitly permitted origins (e.g. ['https://example.com'])
  * @returns A callback function matching the Express `cors` middleware signature
  */
@@ -39,7 +43,7 @@ export function createCorsOriginCallback(allowedList: string[]) {
       }
 
       return callback(null, false);
-    } catch (err) {
+    } catch (err: unknown) {
       logger.warn(`[CORS] Rejected malformed origin URI: ${origin}`);
       return callback(null, false);
     }

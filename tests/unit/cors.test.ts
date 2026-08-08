@@ -31,7 +31,7 @@ describe('CORS Origin Logic', () => {
     assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com/'), false);
   });
 
-  test('rejects path domain when * is in the list', async () => {
+  test('rejects origin with path component when * is in the list', async () => {
     assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com//path'), false);
   });
 
