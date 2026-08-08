@@ -164,11 +164,15 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
-const allowedList = allowedOrigins.split(',').map(s => s.trim());
+// Strip trailing slashes from configured origins to ensure robust matching against parsedOrigin.origin
+const allowedList = allowedOrigins.split(',').map(s => {
+  const trimmed = s.trim();
+  return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+});
 
 // Fail fast on dangerous configuration
 if (allowedList.includes('*')) {
-  logger.error("Critical Configuration Error: ALLOWED_ORIGINS cannot contain a wildcard '*' because CORS credentials are enabled. This is a severe security risk.");
+  logger.error("[CORS] Critical Configuration Error: ALLOWED_ORIGINS cannot contain a wildcard '*' because CORS credentials are enabled. This is a severe security risk.");
   process.exit(1);
 }
 

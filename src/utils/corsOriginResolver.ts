@@ -24,8 +24,8 @@ export function createCorsOriginCallback(allowedList: string[]) {
       // handles trailing slashes and edge cases natively, rather than manual string slicing.
       const normalizedOrigin = parsedOrigin.origin;
 
-      // Security: explicit check for wildcard BEFORE checking exact matches to ensure consistency
-      // and prevent a bypass via misconfiguration
+      // Note: Because httpServer.ts enforces a fail-fast startup crash if '*' is present,
+      // this check acts as an additional defense-in-depth layer against dynamic config injections.
       if (allowedList.includes('*')) {
         logger.warn(`[CORS] Security Warning: Wildcard origin (*) is not permitted with credentials enabled. Request from ${origin} rejected.`);
         return callback(null, false);
@@ -38,7 +38,9 @@ export function createCorsOriginCallback(allowedList: string[]) {
       // Default reject if no match
       return callback(null, false);
     } catch (err) {
-      // Swallows URL parsing errors (e.g. malformed URIs) and rejects request cleanly
+      // Catch URL parsing errors (e.g. malformed URIs) and reject the request cleanly.
+      // We log at debug level to allow operators to see dropped traffic without overwhelming prod logs.
+      logger.debug(`[CORS] Rejected malformed origin URI: ${origin}`);
       return callback(null, false);
     }
   };
