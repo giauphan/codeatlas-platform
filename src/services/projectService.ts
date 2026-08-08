@@ -385,8 +385,13 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     }
     
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
+    const validEntries = entries.filter(e => e.isDirectory() && e.name !== "node_modules" && !e.name.startsWith("."));
+
+    // ⚡ Bolt: Chunk directory scanning to avoid sequential N+1 bottleneck and prevent EMFILE
+    const chunkSize = 50;
+    for (let i = 0; i < validEntries.length; i += chunkSize) {
+      const chunk = validEntries.slice(i, i + chunkSize);
+      await Promise.all(chunk.map(async (entry) => {
         const subPath = path.join(parentDir, entry.name);
         if (await fileExists(path.join(subPath, ".codeatlas"))) {
           discovered.push(path.resolve(subPath));
@@ -394,17 +399,20 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
           // Check 2nd level
           try {
             const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-            for (const subEntry of subEntries) {
-              if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+            const validSubEntries = subEntries.filter(e => e.isDirectory() && e.name !== "node_modules" && !e.name.startsWith("."));
+
+            for (let j = 0; j < validSubEntries.length; j += chunkSize) {
+              const subChunk = validSubEntries.slice(j, j + chunkSize);
+              await Promise.all(subChunk.map(async (subEntry) => {
                 const subSubPath = path.join(subPath, subEntry.name);
                 if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
                   discovered.push(path.resolve(subSubPath));
                 }
-              }
+              }));
             }
           } catch { /* skip */ }
         }
-      }
+      }));
     }
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed async scan for .codeatlas projects: ${err}`);
@@ -675,20 +683,25 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       if (await fileExists(tenantRoot)) {
         try {
           const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
-          await Promise.all(tenants.map(async (t) => {
-            if (t.name === tenantId) return;
-            const tDir = path.join(tenantRoot, t.name);
-            if (t.isDirectory()) {
-              try {
-                const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
-                tProjects.forEach((p) => {
-                  if (p.isDirectory()) {
-                    searchDirs.push(path.join(tDir, p.name));
-                  }
-                });
-              } catch { /* skip */ }
-            }
-          }));
+          // ⚡ Bolt: Limit concurrency for tenant directory traversal
+          const chunkSize = 50;
+          for (let i = 0; i < tenants.length; i += chunkSize) {
+            const chunk = tenants.slice(i, i + chunkSize);
+            await Promise.all(chunk.map(async (t) => {
+              if (t.name === tenantId) return;
+              const tDir = path.join(tenantRoot, t.name);
+              if (t.isDirectory()) {
+                try {
+                  const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
+                  tProjects.forEach((p) => {
+                    if (p.isDirectory()) {
+                      searchDirs.push(path.join(tDir, p.name));
+                    }
+                  });
+                } catch { /* skip */ }
+              }
+            }));
+          }
         } catch { /* skip */ }
       }
     }
@@ -741,10 +754,15 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           if (updated) {
             await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
           }
-          for (const dir of filtered) {
-            if (await fileExists(dir)) {
-              searchDirs.push(dir);
-            }
+          // ⚡ Bolt: Chunk file system existence checks to prevent sequential blocking
+          const chunkSize = 50;
+          for (let i = 0; i < filtered.length; i += chunkSize) {
+            const chunk = filtered.slice(i, i + chunkSize);
+            await Promise.all(chunk.map(async (dir) => {
+              if (await fileExists(dir)) {
+                searchDirs.push(dir);
+              }
+            }));
           }
         }
       }
