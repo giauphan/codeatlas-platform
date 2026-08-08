@@ -36,6 +36,7 @@ import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { a2aOrchestrationService } from "../services/a2aOrchestrationService.js";
 import { indexingService } from "../services/indexingService.js";
 import { logger } from "../utils/logger.js";
+import { createCorsOriginCallback } from "../utils/corsOriginResolver.js";
 import * as crypto from "crypto";
 import { matchesCron } from "../utils/cron.js";
 import { loadSettings } from "./cronSettingsRoute.js";
@@ -166,37 +167,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,htt
 const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-
-    // Explicitly reject null origin to prevent sandboxed iframe bypasses
-    if (origin === 'null') {
-      return callback(null, false);
-    }
-
-    try {
-      const parsedOrigin = new URL(origin);
-      if (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') {
-        return callback(null, false);
-      }
-
-      if (allowedList.includes(origin)) {
-        return callback(null, true);
-      } else if (allowedList.includes('*')) {
-        // Security: explicitly reject wildcard origin when credentials are enabled
-        // to prevent arbitrary origin reflection vulnerabilities.
-        // Instead of throwing an error which causes a 500, we log a warning
-        // and cleanly reject the CORS request (causes a 403 usually depending on the client).
-        logger.warn(`[CORS] Security Warning: Wildcard origin (*) is not permitted with credentials enabled. Request from ${origin} rejected.`);
-        return callback(null, false);
-      } else {
-        return callback(null, false);
-      }
-    } catch (err) {
-      return callback(null, false);
-    }
-  },
+  origin: createCorsOriginCallback(allowedList),
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
   credentials: true
