@@ -24,16 +24,19 @@ export function createCorsOriginCallback(allowedList: string[]) {
       // handles trailing slashes and edge cases natively, rather than manual string slicing.
       const normalizedOrigin = parsedOrigin.origin;
 
-      if (allowedList.includes(normalizedOrigin)) {
-        return callback(null, true);
-      } else if (allowedList.includes('*')) {
-        // Security: explicitly reject wildcard origin when credentials are enabled
-        // to prevent arbitrary origin reflection vulnerabilities.
+      // Security: explicit check for wildcard BEFORE checking exact matches to ensure consistency
+      // and prevent a bypass via misconfiguration
+      if (allowedList.includes('*')) {
         logger.warn(`[CORS] Security Warning: Wildcard origin (*) is not permitted with credentials enabled. Request from ${origin} rejected.`);
         return callback(null, false);
-      } else {
-        return callback(null, false);
       }
+
+      if (allowedList.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      // Default reject if no match
+      return callback(null, false);
     } catch (err) {
       // Swallows URL parsing errors (e.g. malformed URIs) and rejects request cleanly
       return callback(null, false);

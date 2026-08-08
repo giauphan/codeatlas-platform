@@ -166,6 +166,12 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
 const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
+// Fail fast on dangerous configuration
+if (allowedList.includes('*')) {
+  logger.error("Critical Configuration Error: ALLOWED_ORIGINS cannot contain a wildcard '*' because CORS credentials are enabled. This is a severe security risk.");
+  process.exit(1);
+}
+
 app.use(cors({
   origin: createCorsOriginCallback(allowedList),
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],

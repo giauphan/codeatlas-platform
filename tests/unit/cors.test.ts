@@ -23,16 +23,16 @@ describe('CORS Origin Logic', () => {
     assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://malicious.com'), false);
   });
 
-  test('allows known domain when * is in the list', async () => {
-    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com'), true);
+  test('rejects known domain when * is in the list (fail-safe)', async () => {
+    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com'), false);
   });
 
-  test('normalizes trailing slash and allows known domain', async () => {
-    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com/'), true);
+  test('rejects trailing slash domain when * is in the list', async () => {
+    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com/'), false);
   });
 
-  test('ignores path and only evaluates origin base (scheme+host)', async () => {
-    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com//path'), true);
+  test('rejects path domain when * is in the list', async () => {
+    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com//path'), false);
   });
 
   test('rejects null domain (sandboxed iframe mitigation) when * is in the list', async () => {
