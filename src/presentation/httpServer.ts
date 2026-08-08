@@ -176,8 +176,9 @@ app.use(cors({
     }
 
     if (allowedList.includes('*')) {
-      // With credentials:true, reflect any valid origin dynamically
-      return callback(null, true);
+      // Security: explicitly reject wildcard origin when credentials are enabled
+      // to prevent arbitrary origin reflection vulnerabilities.
+      return callback(new Error('Wildcard origin is not permitted with credentials enabled'), false);
     }
 
     try {
