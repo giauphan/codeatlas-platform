@@ -23,3 +23,7 @@
 **Vulnerability:** Weak coverage for detecting hardcoded API keys and common SQL statements.
 **Learning:** The internal `SecurityScanner` relies on hardcoded string matching. It previously missed terms like "apikey", "credential", and SQL commands "select", "insert", "update".
 **Prevention:** Regularly review and update static analysis keyword lists to include modern token patterns and complete sets of risky commands.
+## 2026-08-06 - [Prevent Wildcard Origin Reflection with Credentials]
+**Vulnerability:** The Express CORS middleware configuration was explicitly allowing any origin to be reflected if `ALLOWED_ORIGINS` included a wildcard `*`, even when `credentials: true` was enabled.
+**Learning:** Returning a dynamic wildcard (`*`) reflection alongside `credentials: true` allows any site to make authenticated requests, completely circumventing CORS security. This is particularly dangerous for sensitive API endpoints.
+**Prevention:** Ensure CORS configurations explicitly reject wildcard origins when credentials are required, or remove the wildcard fallback and strictly enforce a known whitelist of origins.
