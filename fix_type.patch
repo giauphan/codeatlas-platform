@@ -1,0 +1,11 @@
+--- src/services/consolidationEngine.ts
++++ src/services/consolidationEngine.ts
+@@ -188,7 +188,7 @@
+    * For each project, groups related dreams and generates concept entries.
+    */
+   private async extractConcepts(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
+-    let connection;
++    let connection: oracledb.Connection | undefined;
+     try {
+       const pool = await initPool();
+       connection = await pool.getConnection();

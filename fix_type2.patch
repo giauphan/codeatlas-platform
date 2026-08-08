@@ -1,0 +1,10 @@
+--- src/services/consolidationEngine.ts
++++ src/services/consolidationEngine.ts
+@@ -16,6 +16,7 @@
+ import { authStorage } from "../utils/context.js";
+ import { OracleDreamingService } from "./dreamingService.js";
+ import pLimit from "p-limit";
++import oracledb from "oracledb";
+
+ // Row index helpers for Oracle queries
+ const R_IDX = Object.freeze({

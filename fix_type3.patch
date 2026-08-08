@@ -1,0 +1,11 @@
+--- src/services/consolidationEngine.ts
++++ src/services/consolidationEngine.ts
+@@ -324,7 +324,7 @@
+           bindsForSelect.tid = authStorage.getStore()!.uid;
+
+           logger.info(`[Consolidation] Concepts lookup: ${query.substring(0, 200)}...`);
+-          const existing = await connection.execute<any[]>(query, bindsForSelect);
++          const existing = await connection!.execute<any[]>(query, bindsForSelect);
+
+           return existing.rows || [];
+         }));
