@@ -20,8 +20,9 @@ export function createCorsOriginCallback(allowedList: string[]) {
         return callback(null, false);
       }
 
-      // Normalize origin: remove trailing slash for exact match comparison
-      const normalizedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
+      // Normalize origin securely using parsedOrigin.origin which automatically
+      // handles trailing slashes and edge cases natively, rather than manual string slicing.
+      const normalizedOrigin = parsedOrigin.origin;
 
       if (allowedList.includes(normalizedOrigin)) {
         return callback(null, true);
