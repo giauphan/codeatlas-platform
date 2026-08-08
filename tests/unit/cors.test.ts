@@ -69,4 +69,17 @@ describe('CORS Origin Logic', () => {
     // Test allowance of undefined origin
     assert.strictEqual(await executeOriginCheck(allowedList, undefined), true);
   });
+
+  test('preserves explicit ports during origin evaluation', async () => {
+    const allowedList = ['https://example.com:8443'];
+
+    // Allows identical port match
+    assert.strictEqual(await executeOriginCheck(allowedList, 'https://example.com:8443'), true);
+
+    // Rejects implicit or omitted port mismatch
+    assert.strictEqual(await executeOriginCheck(allowedList, 'https://example.com'), false);
+
+    // Rejects mismatched explicit port
+    assert.strictEqual(await executeOriginCheck(allowedList, 'https://example.com:8080'), false);
+  });
 });
