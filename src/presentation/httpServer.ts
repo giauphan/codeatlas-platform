@@ -164,11 +164,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
-// Strip trailing slashes from configured origins to ensure robust matching against parsedOrigin.origin
-const allowedList = allowedOrigins.split(',').map(s => {
-  const trimmed = s.trim();
-  return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
-});
+const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
 // Fail fast on dangerous configuration
 if (allowedList.includes('*')) {
