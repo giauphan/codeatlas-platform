@@ -20,7 +20,10 @@ export function createCorsOriginCallback(allowedList: string[]) {
         return callback(null, false);
       }
 
-      if (allowedList.includes(origin)) {
+      // Normalize origin: remove trailing slash for exact match comparison
+      const normalizedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
+
+      if (allowedList.includes(normalizedOrigin)) {
         return callback(null, true);
       } else if (allowedList.includes('*')) {
         // Security: explicitly reject wildcard origin when credentials are enabled

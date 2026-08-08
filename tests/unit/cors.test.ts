@@ -19,6 +19,10 @@ describe('CORS Origin Logic', () => {
     originCallback('https://example.com', (err, allow) => { allowResult = allow; });
     assert.strictEqual(allowResult, true);
 
+    // Test normalization (trailing slash) allowance of known domain
+    originCallback('https://example.com/', (err, allow) => { allowResult = allow; });
+    assert.strictEqual(allowResult, true);
+
     // Test rejection of null domain with * in the list
     originCallback('null', (err, allow) => { allowResult = allow; });
     assert.strictEqual(allowResult, false);
