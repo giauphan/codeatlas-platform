@@ -176,8 +176,9 @@ app.use(cors({
     }
 
     if (allowedList.includes('*')) {
-      // With credentials:true, reflect any valid origin dynamically
-      return callback(null, true);
+      // Security: Prevent arbitrary origin reflection when credentials are used.
+      // Returning '*' causes the browser to reject credentialed requests correctly.
+      return callback(null, '*');
     }
 
     try {
