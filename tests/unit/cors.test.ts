@@ -3,9 +3,7 @@ import assert from 'node:assert/strict';
 import { createCorsOriginCallback } from '../../src/utils/corsOriginResolver.js';
 
 describe('CORS Origin Logic', () => {
-  test('rejects wildcard origin when credentials are true, even when a valid origin is in the allowed list', () => {
-    // This simulates the behavior of the fix where ANY wildcard in the list explicitly rejects requests
-    // when credentials are enabled.
+  test('handles wildcard correctly and allows valid origins', () => {
     const allowedOrigins = 'https://example.com,*';
     const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
@@ -27,6 +25,32 @@ describe('CORS Origin Logic', () => {
 
     // Test rejection of invalid URI
     originCallback('not a valid url', (err, allow) => { allowResult = allow; });
+    assert.strictEqual(allowResult, false);
+  });
+
+  test('rejects unsupported protocols (e.g., file://, wss://)', () => {
+    const allowedList = ['https://example.com'];
+    const originCallback = createCorsOriginCallback(allowedList);
+
+    let allowResult: boolean | undefined;
+
+    // file:// protocol
+    originCallback('file:///etc/passwd', (err, allow) => { allowResult = allow; });
+    assert.strictEqual(allowResult, false);
+
+    // wss:// protocol
+    originCallback('wss://example.com', (err, allow) => { allowResult = allow; });
+    assert.strictEqual(allowResult, false);
+  });
+
+  test('rejects unknown origin when no wildcard is present', () => {
+    const allowedList = ['https://example.com'];
+    const originCallback = createCorsOriginCallback(allowedList);
+
+    let allowResult: boolean | undefined;
+
+    // Test rejection of unknown domain
+    originCallback('https://malicious.com', (err, allow) => { allowResult = allow; });
     assert.strictEqual(allowResult, false);
   });
 });
