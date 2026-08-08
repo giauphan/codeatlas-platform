@@ -17,26 +17,30 @@ describe('CORS Origin Logic', () => {
     });
   };
 
-  test('handles wildcard correctly and allows valid origins', async () => {
-    const allowedList = ['https://example.com', '*'];
+  const wildcardAllowedList = ['https://example.com', '*'];
 
-    // Test rejection of unknown domain with * in the list
-    assert.strictEqual(await executeOriginCheck(allowedList, 'https://malicious.com'), false);
+  test('rejects unknown domain when * is in the list', async () => {
+    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://malicious.com'), false);
+  });
 
-    // Test allowance of known domain with * in the list
-    assert.strictEqual(await executeOriginCheck(allowedList, 'https://example.com'), true);
+  test('allows known domain when * is in the list', async () => {
+    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com'), true);
+  });
 
-    // Test normalization (trailing slash) allowance of known domain
-    assert.strictEqual(await executeOriginCheck(allowedList, 'https://example.com/'), true);
+  test('normalizes trailing slash and allows known domain', async () => {
+    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com/'), true);
+  });
 
-    // Test double slash normalization allowance
-    assert.strictEqual(await executeOriginCheck(allowedList, 'https://example.com//path'), true);
+  test('ignores path and only evaluates origin base (scheme+host)', async () => {
+    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'https://example.com//path'), true);
+  });
 
-    // Test rejection of null domain with * in the list
-    assert.strictEqual(await executeOriginCheck(allowedList, 'null'), false);
+  test('rejects null domain (sandboxed iframe mitigation) when * is in the list', async () => {
+    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'null'), false);
+  });
 
-    // Test rejection of invalid URI
-    assert.strictEqual(await executeOriginCheck(allowedList, 'not a valid url'), false);
+  test('rejects invalid URI strings cleanly via catch block', async () => {
+    assert.strictEqual(await executeOriginCheck(wildcardAllowedList, 'not a valid url'), false);
   });
 
   test('rejects unsupported protocols (e.g., file://, wss://) regardless of wildcard configuration', async () => {
