@@ -243,7 +243,7 @@ async function loadRegisteredProjectsAsync(regPath: string): Promise<string[]> {
     if (validProjects.length !== projects.length) {
       logger.warn(`[Project-Registry] ⚠️ Ignored ${projects.length - validProjects.length} non-string entries in ${regPath}`);
     }
-    return validProjects;
+    return [...new Set(validProjects)];
   } catch (err: any) {
     if (err.code === 'ENOENT') {
       return [];
