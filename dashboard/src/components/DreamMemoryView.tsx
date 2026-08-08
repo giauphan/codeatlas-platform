@@ -268,6 +268,7 @@ export function DreamMemoryView() {
           />
           {(startDate || endDate) && (
             <button
+              aria-label="Clear date filters"
               onClick={() => {
                 setStartDate('');
                 setEndDate('');
@@ -289,7 +290,7 @@ export function DreamMemoryView() {
           )}
         </div>
 
-        <button onClick={() => {
+        <button aria-label="Toggle configuration" onClick={() => {
             const currentConfig = dreamConfigRef.current;
             if (!showConfig && currentConfig) {
               setTempEnabled(currentConfig.dreams_enabled ?? true);
