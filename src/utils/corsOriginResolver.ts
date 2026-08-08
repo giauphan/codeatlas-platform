@@ -4,7 +4,7 @@ import { logger } from "./logger.js";
  * Resolves CORS origins securely, rejecting wildcards when credentials are true.
  */
 export function createCorsOriginCallback(allowedList: string[]) {
-  return function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+  return function (origin: string | undefined, callback: (err: Error | null, allow: boolean) => void) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 

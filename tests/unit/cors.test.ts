@@ -53,4 +53,15 @@ describe('CORS Origin Logic', () => {
     originCallback('https://malicious.com', (err, allow) => { allowResult = allow; });
     assert.strictEqual(allowResult, false);
   });
+
+  test('allows undefined origins (e.g. non-browser requests)', () => {
+    const allowedList = ['https://example.com'];
+    const originCallback = createCorsOriginCallback(allowedList);
+
+    let allowResult: boolean | undefined;
+
+    // Test allowance of undefined origin
+    originCallback(undefined, (err, allow) => { allowResult = allow; });
+    assert.strictEqual(allowResult, true);
+  });
 });
