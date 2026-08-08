@@ -58,6 +58,7 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
                 aria-checked={isIndexingEnabled}
                 aria-label="Enable Codebase Indexing"
                 disabled={isUpdatingSettings}
+                className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
                 style={{
                   width: '24px', height: '24px', border: '2px solid var(--primary-neon)', borderRadius: '6px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',

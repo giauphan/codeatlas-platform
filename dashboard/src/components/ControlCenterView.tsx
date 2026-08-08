@@ -142,10 +142,10 @@ const freqLabels: Record<string, string> = {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button aria-label="Copy token" title="Copy token" onClick={() => copyToClipboard(key.key, key.id)} className="btn-ghost" style={{ padding: '0.5rem' }}>
+                        <button aria-label="Copy token" title="Copy token" onClick={() => copyToClipboard(key.key, key.id)} className="btn-ghost focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]" style={{ padding: '0.5rem' }}>
                           {copiedId === key.id ? <Check size={16} color="#00F0FF" /> : <Copy size={16} />}
                         </button>
-                        <button aria-label="Delete token" title="Delete token" onClick={() => deleteKey(key.id)} className="btn-ghost" style={{ padding: '0.5rem', color: '#FF4B4B' }}>
+                        <button aria-label="Delete token" title="Delete token" onClick={() => deleteKey(key.id)} className="btn-ghost focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]" style={{ padding: '0.5rem', color: '#FF4B4B' }}>
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -191,6 +191,7 @@ const freqLabels: Record<string, string> = {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <label id="cron-enabled-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Enabled</label>
                   <button role="switch" aria-checked={cronEnabled} aria-labelledby="cron-enabled-label" onClick={() => setCronEnabled(!cronEnabled)}
+                    className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
                     style={{
                       width: '44px', height: '24px', borderRadius: '12px', border: 'none', cursor: 'pointer',
                       background: cronEnabled ? 'var(--primary-neon)' : 'rgba(255,255,255,0.2)',
