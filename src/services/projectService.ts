@@ -238,7 +238,8 @@ async function loadRegisteredProjectsAsync(regPath: string): Promise<string[]> {
       logger.warn(`[Project-Registry] ⚠️ Invalid JSON structure at ${regPath}. Expected array. Returning empty array.`);
       return [];
     }
-    return projects;
+    // ⚡ Bolt: Type-harden the parsed array to prevent downstream crashes from malformed/edited JSON arrays
+    return projects.filter((p: any) => typeof p === 'string');
   } catch (err: any) {
     if (err.code === 'ENOENT') {
       return [];
