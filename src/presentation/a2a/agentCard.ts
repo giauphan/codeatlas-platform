@@ -7,6 +7,7 @@
 import type { AgentCard, AgentSkill, MCPToolMeta } from "../../types/a2a.js";
 import { promises as fs } from "fs";
 import * as path from "path";
+import { isToolEnabled } from "../../config/env.js";
 
 // Global tool registry — populated by mcpTools.ts at registration time
 let toolRegistry: MCPToolMeta[] = [];
@@ -16,6 +17,9 @@ let toolRegistry: MCPToolMeta[] = [];
  * Called from mcpTools.ts after each server.tool() registration.
  */
 export function registerTool(meta: MCPToolMeta): void {
+  if (!isToolEnabled(meta.name)) {
+    return;
+  }
   // De-duplicate by name (re-registration on hot-reload is safe)
   const existing = toolRegistry.findIndex((t) => t.name === meta.name);
   if (existing >= 0) {

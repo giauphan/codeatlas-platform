@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { isToolEnabled } from "../config/env.js";
 import { checkAuth, logActivity } from "../services/authService.js";
 import { logger } from "../utils/logger.js";
 import { registerTool } from "./a2a/agentCard.js";
@@ -9,6 +10,10 @@ import type { Artifact, OrchestrationState } from "../types/a2a.js";
 
 /** Auto-register tool metadata for A2A Agent Card AND register handler on executor */
 function registerA2AOrch(name: string, description: string, params: string[], handler: (params: Record<string, unknown>) => Promise<unknown>) {
+  if (!isToolEnabled(name)) {
+    logger.info(`[A2A Orchestration] Tool disabled by configuration: ${name}`);
+    return;
+  }
   registerTool({ name, description, params });
   a2aExecutor.registerToolHandler(name, handler);
 }

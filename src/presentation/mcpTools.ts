@@ -24,9 +24,14 @@ import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { indexingService } from "../services/indexingService.js";
 import { authStorage } from "../utils/context.js";
 import { randomUUID } from "node:crypto";
+import { isToolEnabled } from "../config/env.js";
 
 /** Auto-register tool metadata for A2A Agent Card AND register handler on executor (Stub) */
 function a2a(name: string, description: string, params: string[]) {
+  if (!isToolEnabled(name)) {
+    logger.info(`[MCP] A2A tool disabled by configuration: ${name}`);
+    return;
+  }
   registerTool({ name, description, params });
   a2aExecutor.registerToolHandler(name, async (p: Record<string, unknown>) => {
     return {
@@ -40,6 +45,10 @@ function a2a(name: string, description: string, params: string[]) {
 
 /** Register tool with REAL handler for A2A executor */
 function a2aReal(name: string, description: string, params: string[], handler: (params: Record<string, unknown>) => Promise<unknown>) {
+  if (!isToolEnabled(name)) {
+    logger.info(`[MCP] A2A real tool disabled by configuration: ${name}`);
+    return;
+  }
   registerTool({ name, description, params });
   a2aExecutor.registerToolHandler(name, handler);
 }

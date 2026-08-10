@@ -14,8 +14,7 @@ import { registerTool } from "./agentCard.js";
 import { a2aExecutor } from "./a2aExecutor.js";
 import { a2aRegistry } from "../../services/a2aRegistry.js";
 import { authStorage } from "../../utils/context.js";
-
-
+import { isToolEnabled } from "../../config/env.js";
 import { injectAuthContext } from "../../utils/authContext.js";
 
 export function registerA2ATools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }): void {
@@ -134,10 +133,14 @@ export function registerA2ATools(server: McpServer, sessionAuth?: { tier: string
   );
 
   // Register A2A tools in Agent Card
-  registerTool({ name: "a2a_discover_agents", description: "Discover A2A-compatible agents by capability keyword.", params: ["capability", "status"] });
-  registerTool({ name: "a2a_delegate_task", description: "Delegate a code analysis task to a remote A2A agent via JSON-RPC.", params: ["agent_url", "tool_name", "params"] });
-  registerTool({ name: "a2a_get_task_status", description: "Check the status of a previously delegated A2A task.", params: ["agent_url", "task_id"] });
-  registerTool({ name: "a2a_broadcast_context", description: "Share context via CodeAtlas Dreaming Memory for agent discovery.", params: ["project", "key", "value", "visibility"] });
+  const a2aClientTools = [
+    { name: "a2a_discover_agents", description: "Discover A2A-compatible agents by capability keyword.", params: ["capability", "status"] },
+    { name: "a2a_delegate_task", description: "Delegate a code analysis task to a remote A2A agent via JSON-RPC.", params: ["agent_url", "tool_name", "params"] },
+    { name: "a2a_get_task_status", description: "Check the status of a previously delegated A2A task.", params: ["agent_url", "task_id"] },
+    { name: "a2a_broadcast_context", description: "Share context via CodeAtlas Dreaming Memory for agent discovery.", params: ["project", "key", "value", "visibility"] },
+  ];
 
-  logger.info("[A2A Tools] Registered 4 A2A client tools + Agent Card auto-registration");
+  a2aClientTools.filter(tool => isToolEnabled(tool.name)).forEach(registerTool);
+
+  logger.info("[A2A Tools] Registered enabled A2A client tools + Agent Card auto-registration");
 }

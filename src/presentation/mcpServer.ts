@@ -1,9 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerTools } from "./mcpTools.js";
 import { registerA2ATools } from "./a2a/a2aTools.js";
+import { wrapServerWithToolFilter } from "./toolFilter.js";
 
 // MCP SDK requires a single server instance; tools are registered before transport.start().
-export const server = new McpServer(
+export const server = wrapServerWithToolFilter(new McpServer(
   {
     name: "CodeAtlas",
     version: "2.14.4",
@@ -15,7 +16,7 @@ export const server = new McpServer(
       logging: {},
     },
   }
-);
+));
 
 registerTools(server);
 registerA2ATools(server);
