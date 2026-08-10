@@ -268,6 +268,7 @@ export function DreamMemoryView() {
           />
           {(startDate || endDate) && (
             <button
+              aria-label="Clear date filters"
               onClick={() => {
                 setStartDate('');
                 setEndDate('');
@@ -283,6 +284,7 @@ export function DreamMemoryView() {
                 fontSize: '0.8rem',
                 fontWeight: 600
               }}
+              className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
             >
               Clear
             </button>
@@ -303,14 +305,18 @@ export function DreamMemoryView() {
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)',
             background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
-          }}>
+          }}
+          className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
+        >
           <Settings size={18} style={{ marginRight: '0.5rem' }} /> Config
         </button>
         <button onClick={() => { setShowAll(!showAll); fetchMemories(searchQuery, 0, dreamConfig); }}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: showAll ? '1px solid var(--primary-neon)' : '1px solid rgba(255,255,255,0.1)',
             background: showAll ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
-          }}>
+          }}
+          className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
+        >
           {showAll ? 'All Projects' : 'GolikeTool'}
         </button>
       </div>
@@ -435,25 +441,35 @@ export function DreamMemoryView() {
 
       {/* Pagination */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', padding: '0.75rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
-        <button onClick={() => goToPage(page - 1)} disabled={!hasPrev}
+        <button
+          aria-label="Previous page"
+          onClick={() => goToPage(page - 1)}
+          disabled={!hasPrev}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
             background: hasPrev ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)',
             color: hasPrev ? 'var(--primary-neon)' : 'var(--text-muted)',
             cursor: hasPrev ? 'pointer' : 'default', fontWeight: 700, fontSize: '0.85rem'
-          }}>
+          }}
+          className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
+        >
           ← Prev
         </button>
         <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>
           Page {page + 1}
         </span>
-        <button onClick={() => goToPage(page + 1)} disabled={!hasNext}
+        <button
+          aria-label="Next page"
+          onClick={() => goToPage(page + 1)}
+          disabled={!hasNext}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
             background: hasNext ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)',
             color: hasNext ? 'var(--primary-neon)' : 'var(--text-muted)',
             cursor: hasNext ? 'pointer' : 'default', fontWeight: 700, fontSize: '0.85rem'
-          }}>
+          }}
+          className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
+        >
           Next →
         </button>
       </div>
