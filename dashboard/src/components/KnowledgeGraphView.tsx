@@ -268,6 +268,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         {/* Delete */}
         {selectedProjectDir && onDeleteProject && (
           <button
+            aria-label="Delete project"
             onClick={() => {
               if (window.confirm("Delete project index data?")) onDeleteProject();
             }}
