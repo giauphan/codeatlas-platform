@@ -138,10 +138,38 @@ async function run() {
           content CLOB,
           embedding VECTOR(4096, FLOAT32),
           importance NUMBER(1),
+          scope VARCHAR2(500),
+          tags CLOB,
+          related_ids CLOB,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           tenant_id VARCHAR2(255)
       )
     `, "CREATE TABLE ai_dreaming_memory");
+
+    // Auto-migration: Ensure metadata columns exist for older tables
+    const dreamMetadataColumns: Array<{ name: string; ddl: string }> = [
+      { name: "SCOPE", ddl: "ALTER TABLE ai_dreaming_memory ADD (scope VARCHAR2(500))" },
+      { name: "TAGS", ddl: "ALTER TABLE ai_dreaming_memory ADD (tags CLOB)" },
+      { name: "RELATED_IDS", ddl: "ALTER TABLE ai_dreaming_memory ADD (related_ids CLOB)" },
+    ];
+
+    for (const col of dreamMetadataColumns) {
+      try {
+        const res = await connection!.execute(
+          `SELECT column_name FROM all_tab_columns WHERE table_name = 'AI_DREAMING_MEMORY' AND column_name = :1`,
+          [col.name]
+        );
+        if (res.rows && res.rows.length === 0) {
+          console.log(`   ⚠️ Missing column ${col.name} in ai_dreaming_memory. Adding...`);
+          await connection!.execute(col.ddl, {}, { autoCommit: true } as any);
+          console.log(`   └─ ✅ Added column ${col.name}`);
+        } else {
+          console.log(`   ✅ Column ${col.name} already exists.`);
+        }
+      } catch (err: any) {
+        console.warn(`   ⚠️ Column check skip for ${col.name}:`, err.message);
+      }
+    }
 
     // Optional property graph
     await execSql(`

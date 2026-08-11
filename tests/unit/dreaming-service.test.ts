@@ -194,6 +194,27 @@ describe('OracleDreamingService', () => {
       // Error should have been logged
       assert.strict(mockLogger.error.mock.calls.length >= 1, true);
     });
+
+    test('with scope, tags, related_ids and SESSION_SUMMARY memory type saves correctly', async () => {
+      mockConnection.execute.mock.mockImplementation(async () => {
+        return { rowsAffected: 1 };
+      });
+
+      const longSummary = 'This is a detailed summary of the current working session. We implemented context retention across sessions by supporting scope, tags, and related_ids metadata fields in Oracle 26ai database and MCP server.'.repeat(2);
+      const id = await OracleDreamingService.saveDreamMemory(
+        'codeatlas-platform', 'session-99', 'SESSION_SUMMARY', longSummary, 8, 'claude-3-5-sonnet',
+        'auth/login', ['jwt', 'security'], ['rel-1', 'rel-2']
+      );
+
+      assert.ok(id);
+      assert.ok(id.includes('SESSION_SUMMARY'));
+
+      assert.strictEqual(mockConnection.execute.mock.calls.length, 1);
+      const binds = mockConnection.execute.mock.calls[0].arguments[1] as Record<string, unknown>;
+      assert.strictEqual(binds.scope, 'auth/login');
+      assert.strictEqual(binds.tagsJson, JSON.stringify(['jwt', 'security']));
+      assert.strictEqual(binds.relatedIdsJson, JSON.stringify(['rel-1', 'rel-2']));
+    });
   });
 
   // ── queryDreamMemories ─────────────────────────────────────────────
@@ -265,6 +286,42 @@ describe('OracleDreamingService', () => {
       // Verify the limit was passed to the SQL query
       const binds = mockConnection.execute.mock.calls[0].arguments[1] as Record<string, unknown>;
       assert.strictEqual(binds.limit, 3);
+    });
+
+    test('supports scope, tags and memory_type filtering', async () => {
+      // Setup column existence check to true for TAGS column
+      const origExecute = mockConnection.execute.mock.mockImplementation(async (sql: string) => {
+        if (sql.includes('USER_TAB_COLUMNS')) {
+          return { rows: [{ CNT: 1 }] };
+        }
+        return { rows: sampleRows };
+      });
+
+      const rows = await OracleDreamingService.queryDreamMemories(
+        'test-project', 'query filter', 10, 0, 'SESSION_SUMMARY, KNOWLEDGE', undefined, undefined, undefined, 'auth', ['jwt', 'login']
+      );
+
+      assert.strictEqual(rows.length, 2);
+      // Main query + USER_TAB_COLUMNS check + connection context + bump access count
+      const executeCalls = mockConnection.execute.mock.calls;
+      const mainQueryCall = executeCalls.find(c => (c.arguments[0] as string).includes('FROM ai_dreaming_memory'));
+      assert.ok(mainQueryCall);
+
+      const sql = mainQueryCall.arguments[0] as string;
+      const binds = mainQueryCall.arguments[1] as Record<string, unknown>;
+
+      // Check binds
+      assert.strictEqual(binds.scopeExact, 'auth');
+      assert.strictEqual(binds.scopeLike, 'auth/%');
+      assert.strictEqual(binds.tag_like_0, '%"jwt"%');
+      assert.strictEqual(binds.tag_like_1, '%"login"%');
+      assert.strictEqual(binds.type0, 'SESSION_SUMMARY');
+      assert.strictEqual(binds.type1, 'KNOWLEDGE');
+
+      // Check SQL generated filters
+      assert.ok(sql.includes('scope = :scopeExact OR scope LIKE :scopeLike'));
+      assert.ok(sql.includes('tags LIKE :tag_like_0 OR tags LIKE :tag_like_1'));
+      assert.ok(sql.includes('memory_type IN (:type0, :type1)'));
     });
 
     test('with null embedding (no API key) still queries, ordered by date', async () => {
@@ -341,8 +398,8 @@ describe('OracleDreamingService', () => {
 
       await OracleDreamingService.initialize();
 
-      // Should have executed: table creation + 9 column checks + 9 alters + 2 cache checks + concepts + genome + mutations + relationships = 25
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 25);
+      // Should have executed: table creation + 12 column checks + 12 alters + 2 cache checks + concepts + genome + mutations + relationships = 31
+      assert.strictEqual(mockConnection.execute.mock.calls.length, 31);
       const sql0 = mockConnection.execute.mock.calls[0].arguments[0] as string;
       assert.ok(sql0.includes('CREATE TABLE ai_dreaming_memory'));
     });
@@ -354,8 +411,8 @@ describe('OracleDreamingService', () => {
 
       await OracleDreamingService.initialize();
 
-      // 1 table + 9 column checks + 9 alters + 2 cache checks + concepts + genome + mutations + relationships = 25
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 25);
+      // 1 table + 12 column checks + 12 alters + 2 cache checks + concepts + genome + mutations + relationships = 31
+      assert.strictEqual(mockConnection.execute.mock.calls.length, 31);
     });
 
     test('throws on initPool failure', async () => {

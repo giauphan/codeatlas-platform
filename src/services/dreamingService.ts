@@ -38,7 +38,7 @@ const STOP_WORDS = new Set([
 /**
  * Memory types for dreaming memories
  */
-export type DreamMemoryType = 'MISTAKE' | 'PREFERENCE' | 'KNOWLEDGE' | 'PATTERN' | 'A2A_SHARED_CONTEXT' | 'FEEDBACK';
+export type DreamMemoryType = 'MISTAKE' | 'PREFERENCE' | 'KNOWLEDGE' | 'PATTERN' | 'A2A_SHARED_CONTEXT' | 'FEEDBACK' | 'SESSION_SUMMARY';
 
 export interface DreamMemory {
   id: string;
@@ -50,6 +50,9 @@ export interface DreamMemory {
   importance: number;
   createdAt: string;
   tenantId: string;
+  scope?: string;
+  tags?: string[];
+  relatedIds?: string[];
   /** Lifecycle fields — set on save, updated on retrieval/consolidation */
   confidence?: number;
   status?: string;
@@ -156,6 +159,10 @@ export class OracleDreamingService {
         { name: 'ACCESS_COUNT', ddl: 'ADD (access_count NUMBER DEFAULT 0)' },
         { name: 'LAST_ACCESSED_AT', ddl: 'ADD (last_accessed_at TIMESTAMP)' },
         { name: 'VERSION', ddl: 'ADD (version NUMBER DEFAULT 1)' },
+        // v2.20.0: Scope, Tags, Related IDs for contextual memory retrieval
+        { name: 'SCOPE', ddl: 'ADD (scope VARCHAR2(500) DEFAULT NULL)' },
+        { name: 'TAGS', ddl: 'ADD (tags CLOB)' },
+        { name: 'RELATED_IDS', ddl: 'ADD (related_ids CLOB)' },
       ];
       for (const col of columnsToAdd) {
         const exists = await this.checkColumn(connection, col.name);
@@ -350,8 +357,16 @@ export class OracleDreamingService {
     // Empty or too-short content
     const trimmed = (content || '').trim();
     if (!trimmed) return { isNoise: true, reason: 'empty content' };
-    if (trimmed.length < 40) return { isNoise: true, reason: `too short (${trimmed.length} chars, min 40)` };
-    if (trimmed.length > 2000) return { isNoise: true, reason: `too long (${trimmed.length} chars, max 2000)` };
+
+    let minLength = 40;
+    let maxLength = 2000;
+    if (memoryType === 'SESSION_SUMMARY') {
+      minLength = 100;
+      maxLength = 5000;
+    }
+
+    if (trimmed.length < minLength) return { isNoise: true, reason: `too short (${trimmed.length} chars, min ${minLength})` };
+    if (trimmed.length > maxLength) return { isNoise: true, reason: `too long (${trimmed.length} chars, max ${maxLength})` };
 
     // Minimum importance thresholds by type
     const minImportance: Record<string, number> = {
@@ -361,6 +376,7 @@ export class OracleDreamingService {
       MISTAKE: 3,
       FEEDBACK: 1,
       A2A_SHARED_CONTEXT: 1,
+      SESSION_SUMMARY: 3,
     };
     const minImp = minImportance[memoryType] ?? 2;
     if (importance < minImp) return { isNoise: true, reason: `importance ${importance} < minimum ${minImp} for ${memoryType}` };
@@ -389,7 +405,10 @@ export class OracleDreamingService {
     memoryType: DreamMemoryType,
     content: string,
     importance: number,
-    aiModel?: string
+    aiModel?: string,
+    scope?: string,
+    tags?: string[],
+    relatedIds?: string[]
   ): Promise<string> {
     // Noise gate: reject low-quality, low-value dreams before spending embedding cost
     const noiseCheck = OracleDreamingService.checkNoise(memoryType, content, importance);
@@ -422,6 +441,8 @@ export class OracleDreamingService {
       const tenantId = authStorage.getStore()!.uid;
       const id = `${project}_${memoryType}_${sessionId}_${Date.now()}`;
       const initialConfidence = OracleDreamingService.calcInitialConfidence(memoryType, importance);
+      const tagsJson = tags ? JSON.stringify(tags) : null;
+      const relatedIdsJson = relatedIds ? JSON.stringify(relatedIds) : null;
 
       if (OracleDreamingService._hasContentHashColumn && OracleDreamingService._hasLifecycleColumns) {
         // Full MERGE with dedup on content_hash (preferred path)
@@ -438,10 +459,13 @@ export class OracleDreamingService {
               provider       = :provider,
               id             = :id,
               confidence     = GREATEST(trg.confidence, :initialConfidence),
-              evidence_count = trg.evidence_count + 1
+              evidence_count = trg.evidence_count + 1,
+              scope          = COALESCE(:scope, trg.scope),
+              tags           = COALESCE(TO_CLOB(:tagsJson), trg.tags),
+              related_ids    = COALESCE(TO_CLOB(:relatedIdsJson), trg.related_ids)
           WHEN NOT MATCHED THEN
-            INSERT (id, session_id, project, provider, memory_type, content, embedding, importance, content_hash, confidence, status, evidence_count, access_count, version, tenant_id)
-            VALUES (:id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :contentHash, :initialConfidence, 'active', 1, 0, 1, :tenantId)
+            INSERT (id, session_id, project, provider, memory_type, content, embedding, importance, content_hash, confidence, status, evidence_count, access_count, version, tenant_id, scope, tags, related_ids)
+            VALUES (:id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :contentHash, :initialConfidence, 'active', 1, 0, 1, :tenantId, :scope, :tagsJson, :relatedIdsJson)
         `;
 
         await connection.execute(sql, {
@@ -455,19 +479,22 @@ export class OracleDreamingService {
           embedding: embeddingVector ? new Float32Array(embeddingVector) : null,
           importance,
           initialConfidence,
-          tenantId
+          tenantId,
+          scope: scope ?? null,
+          tagsJson,
+          relatedIdsJson
         } as oracledb.BindParameters, { autoCommit: true });
       } else {
         // Fallback: simple INSERT when content_hash column is missing
         const cols = OracleDreamingService._hasLifecycleColumns
-          ? 'id, session_id, project, provider, memory_type, content, embedding, importance, confidence, status, evidence_count, access_count, version, tenant_id'
-          : 'id, session_id, project, provider, memory_type, content, embedding, importance, tenant_id';
+          ? 'id, session_id, project, provider, memory_type, content, embedding, importance, confidence, status, evidence_count, access_count, version, tenant_id, scope, tags, related_ids'
+          : 'id, session_id, project, provider, memory_type, content, embedding, importance, tenant_id, scope, tags, related_ids';
         const vals = OracleDreamingService._hasLifecycleColumns
-          ? ':id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :initialConfidence, \'active\', 1, 0, 1, :tenantId'
-          : ':id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :tenantId';
+          ? ':id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :initialConfidence, \'active\', 1, 0, 1, :tenantId, :scope, :tagsJson, :relatedIdsJson'
+          : ':id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :tenantId, :scope, :tagsJson, :relatedIdsJson';
         const binds = OracleDreamingService._hasLifecycleColumns
-          ? { id, sessionId, project, provider: aiModel ?? null, memoryType, content, embedding: embeddingVector ? new Float32Array(embeddingVector) : null, importance, initialConfidence, tenantId }
-          : { id, sessionId, project, provider: aiModel ?? null, memoryType, content, embedding: embeddingVector ? new Float32Array(embeddingVector) : null, importance, tenantId };
+          ? { id, sessionId, project, provider: aiModel ?? null, memoryType, content, embedding: embeddingVector ? new Float32Array(embeddingVector) : null, importance, initialConfidence, tenantId, scope: scope ?? null, tagsJson, relatedIdsJson }
+          : { id, sessionId, project, provider: aiModel ?? null, memoryType, content, embedding: embeddingVector ? new Float32Array(embeddingVector) : null, importance, tenantId, scope: scope ?? null, tagsJson, relatedIdsJson };
 
         await connection.execute(
           `INSERT INTO ai_dreaming_memory (${cols}) VALUES (${vals})`,
@@ -505,7 +532,9 @@ export class OracleDreamingService {
     memoryType?: string,
     provider?: string,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
+    scope?: string,
+    tags?: string[]
   ) {
     const queryVector = await generateEmbedding(queryText, 'query');
 
@@ -525,6 +554,27 @@ export class OracleDreamingService {
       const startDateFilter = startDate ? 'AND created_at >= :startDate' : '';
       const endDateFilter = endDate ? 'AND created_at <= :endDate' : '';
 
+      // Scope filter: support hierarchical matching (e.g. scope "auth" matches "auth/login" or exact "auth")
+      let scopeFilter = '';
+      if (scope) {
+        scopeFilter = 'AND (scope = :scopeExact OR scope LIKE :scopeLike)';
+      }
+
+      // Tags filter: check if any of the requested tags exist in the JSON array tags column
+      let tagsFilter = '';
+      if (tags && tags.length > 0) {
+        // Oracle JSON_EXISTS is strict about path literals — cannot bind path dynamically.
+        // Fallback: use LIKE for older Oracle versions, or JSON_EXISTS with literal paths.
+        // We'll use LIKE for compatibility, and JSON_EXISTS if the column exists and we're on Oracle 23ai+.
+        const hasTagsColumn = await OracleDreamingService.checkColumn(connection, 'TAGS');
+        if (hasTagsColumn) {
+          // Use LIKE bound parameters for compatibility: tags is a JSON array like ["jwt","security"]
+          // We search for typical JSON formatted tag values ("%tag%")
+          const tagsConditions = tags.map((_, idx) => `tags LIKE :tag_like_${idx}`);
+          tagsFilter = `AND (${tagsConditions.join(' OR ')})`;
+        }
+      }
+
       // Build type filter for memory_type IN clause
       let typeFilter = '';
       const binds: Record<string, unknown> = { tenantId: authStorage.getStore()!.uid, limit, offset };
@@ -532,6 +582,15 @@ export class OracleDreamingService {
       if (provider) binds.provider = provider;
       if (startDate) binds.startDate = startDate;
       if (endDate) binds.endDate = endDate;
+      if (scope) {
+        binds.scopeExact = scope;
+        binds.scopeLike = `${scope}/%`;
+      }
+      if (tags && tags.length > 0) {
+        tags.forEach((tag, idx) => {
+          binds[`tag_like_${idx}`] = `%"${tag}"%`;
+        });
+      }
       if (queryVector) {
         binds.queryVector = new Float32Array(queryVector);
       }
@@ -553,13 +612,16 @@ export class OracleDreamingService {
 
       let orderClause: string;
       if (queryVector) {
-        // Weighted ranking: similarity + freshness + importance + lifecycle bonuses
+        // Weighted ranking: similarity + freshness + importance + lifecycle bonuses + optional scope match boost
         const lifecycleBonus = OracleDreamingService._hasLifecycleColumns
           ? `\n            + 0.20 * NVL(confidence, 0.50)\n            + 0.05 * CASE WHEN evidence_count > 0 THEN LEAST(1.0, LOG(2, evidence_count + 1) / 5) ELSE 0 END`
           : '';
+        const scopeBoost = scope
+          ? `\n            + CASE WHEN scope = :scopeExact THEN 0.30 WHEN scope LIKE :scopeLike THEN 0.15 ELSE 0 END`
+          : '';
         orderClause = `
           ORDER BY (
-            0.50 * (1 - VECTOR_DISTANCE(embedding, :queryVector, COSINE))${lifecycleBonus}
+            0.50 * (1 - VECTOR_DISTANCE(embedding, :queryVector, COSINE))${lifecycleBonus}${scopeBoost}
             + 0.15 * (1.0 - LEAST(1.0, (SYSDATE - CAST(created_at AS DATE)) / 90))
             + 0.10 * (importance / 10.0)
           ) DESC
@@ -571,13 +633,13 @@ export class OracleDreamingService {
       }
 
       const selectCols = OracleDreamingService._hasLifecycleColumns
-        ? 'id, session_id, project, provider, memory_type, content, importance, created_at, confidence, status, evidence_count, access_count, version'
-        : 'id, session_id, project, provider, memory_type, content, importance, created_at';
+        ? 'id, session_id, project, provider, memory_type, content, importance, created_at, confidence, status, evidence_count, access_count, version, scope, tags, related_ids'
+        : 'id, session_id, project, provider, memory_type, content, importance, created_at, scope, tags, related_ids';
 
       const sql = `
         SELECT ${selectCols}
         FROM ai_dreaming_memory
-        WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter} ${statusFilter} ${startDateFilter} ${endDateFilter}
+        WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter} ${statusFilter} ${startDateFilter} ${endDateFilter} ${scopeFilter} ${tagsFilter}
         ${orderClause}
         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
       `;

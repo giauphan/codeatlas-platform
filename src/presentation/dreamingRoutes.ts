@@ -7,7 +7,7 @@ import { logger } from "../utils/logger.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { summarizeConversationForDreams } from "../services/llmService.js";
 
-const VALID_MEMORY_TYPES = ["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN"] as const;
+const VALID_MEMORY_TYPES = ["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN", "SESSION_SUMMARY"] as const;
 
 /** Extract auth from request headers — API key or Firebase Bearer token. */
 function extractAuth(req: express.Request) {
@@ -63,13 +63,16 @@ export function registerDreamingRoutes(app: express.Application): void {
     try {
       const { apiKey, bearerToken } = extractAuth(req);
       const auth = await checkAuth(apiKey, bearerToken);
-      const { memory_type, content, importance, session_id, project, provider } = req.body as {
+      const { memory_type, content, importance, session_id, project, provider, scope, tags, related_ids } = req.body as {
         memory_type: typeof VALID_MEMORY_TYPES[number];
         content: string;
         importance?: number;
         session_id?: string;
         project?: string;
         provider?: string;
+        scope?: string;
+        tags?: string[];
+        related_ids?: string[];
       };
 
       if (!VALID_MEMORY_TYPES.includes(memory_type)) {
@@ -78,12 +81,26 @@ export function registerDreamingRoutes(app: express.Application): void {
       if (!content || typeof content !== "string") {
         return res.status(400).json({ error: "Missing or invalid content (must be a non-empty string)" });
       }
+
+      // Validate scope format: alphanumeric + slash, max 500 chars
+      if (scope && !/^[a-z0-9][a-z0-9/-]{0,499}$/.test(scope)) {
+        return res.status(400).json({ error: "Invalid scope format. Must be alphanumeric with optional slashes, max 500 chars." });
+      }
+
+      // Validate tags and related_ids: arrays of strings, max 100 items, max 100 chars per item
+      if (tags && (!Array.isArray(tags) || tags.some(t => typeof t !== "string" || t.length > 100) || tags.length > 100)) {
+        return res.status(400).json({ error: "Invalid tags. Must be an array of strings, max 100 items, max 100 chars per item." });
+      }
+      if (related_ids && (!Array.isArray(related_ids) || related_ids.some(id => typeof id !== "string" || id.length > 100) || related_ids.length > 100)) {
+        return res.status(400).json({ error: "Invalid related_ids. Must be an array of strings, max 100 items, max 100 chars per item." });
+      }
+
       const importanceVal = typeof importance === "number" ? Math.min(9, Math.max(1, importance)) : 5;
       const projectName = await resolveProjectName(project || "global");
 
-      await logActivity(auth, "save_dream_memory", { memory_type, content, importance: importanceVal, session_id, project: projectName, provider });
+      await logActivity(auth, "save_dream_memory", { memory_type, content, importance: importanceVal, session_id, project: projectName, provider, scope, tags, related_ids });
       const memId = await authStorage.run(auth, () =>
-        OracleDreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, importanceVal, provider)
+        OracleDreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, importanceVal, provider, scope, tags, related_ids)
       );
       res.json({ success: true, id: memId, memory_type });
     } catch (err) {
@@ -114,6 +131,17 @@ export function registerDreamingRoutes(app: express.Application): void {
       const startDate = parseDate(startDateRaw);
       const endDate = parseDate(endDateRaw);
 
+      const scope = req.query.scope as string | undefined;
+      let tags: string[] | undefined;
+      const tagsRaw = req.query.tags as string | undefined;
+      if (tagsRaw) {
+        try {
+          // Allow comma-separated string or JSON array
+          if (tagsRaw.startsWith('[')) tags = JSON.parse(tagsRaw);
+          else tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+        } catch {}
+      }
+
       const limit = limitRaw ? parseInt(limitRaw, 10) : 10;
       if (isNaN(limit) || limit < 1 || limit > 100) {
         return res.status(400).json({ error: "limit must be a number between 1 and 100" });
@@ -124,24 +152,34 @@ export function registerDreamingRoutes(app: express.Application): void {
       }
 
       const projectName = await resolveProjectName(project);
-      await logActivity(auth, "query_dream_memories", { query: queryText, project: projectName, limit, provider });
+      await logActivity(auth, "query_dream_memories", { query: queryText, project: projectName, limit, provider, scope });
 
       const rows = await authStorage.run(
         auth,
-        () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset, memoryType, provider, startDate, endDate)
+        () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset, memoryType, provider, startDate, endDate, scope, tags)
       );
 
       const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
-      const memories = rawMemories.map((r: Record<string, unknown>) => ({
-        id: r.ID,
-        session_id: r.SESSION_ID,
-        project: r.PROJECT,
-        provider: r.PROVIDER,
-        memory_type: r.MEMORY_TYPE,
-        content: r.CONTENT,
-        importance: r.IMPORTANCE,
-        created_at: r.CREATED_AT,
-      }));
+      const memories = rawMemories.map((r: Record<string, unknown>) => {
+        let tags: string[] | undefined;
+        let relatedIds: string[] | undefined;
+        try { if (typeof r.TAGS === 'string') tags = JSON.parse(r.TAGS); } catch {}
+        try { if (typeof r.RELATED_IDS === 'string') relatedIds = JSON.parse(r.RELATED_IDS); } catch {}
+
+        return {
+          id: r.ID,
+          session_id: r.SESSION_ID,
+          project: r.PROJECT,
+          provider: r.PROVIDER,
+          memory_type: r.MEMORY_TYPE,
+          content: r.CONTENT,
+          importance: r.IMPORTANCE,
+          created_at: r.CREATED_AT,
+          scope: r.SCOPE,
+          tags,
+          related_ids: relatedIds,
+        };
+      });
 
       res.json({ memories, count: memories.length });
     } catch (err) {
