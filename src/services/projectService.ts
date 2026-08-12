@@ -8,6 +8,7 @@ import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
+import pLimit from "p-limit";
 
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
@@ -390,18 +391,21 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     }
     
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
-    let chunkSize = 50;
+    let concurrencyLimit = 50;
     if (process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE) {
-      const parsed = parseInt(process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE, 10);
-      if (!isNaN(parsed) && parsed >= 1) {
+      const parsed = Number.parseInt(process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE, 10);
+      if (!Number.isNaN(parsed) && parsed >= 1) {
         // Cap at 1000 to prevent accidental OS limit exhaustion from typo'd massive values
-        chunkSize = Math.min(parsed, 1000);
+        concurrencyLimit = Math.min(parsed, 1000);
       }
     }
 
+    const limit = pLimit(concurrencyLimit);
+
     const processDirEntry = async (entry: fs.Dirent) => {
       try {
-        if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
+        const isDir = entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".");
+        if (isDir) {
           const subPath = path.join(parentDir, entry.name);
           if (await fileExists(path.join(subPath, ".codeatlas"))) {
             // Array.push is synchronous and atomic on the JS main thread; safe from race conditions here
@@ -410,14 +414,14 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
             // Check 2nd level
             try {
               const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-              await Promise.all(subEntries.map(async (subEntry) => {
+              await Promise.all(subEntries.map(subEntry => limit(async () => {
                 if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
                   const subSubPath = path.join(subPath, subEntry.name);
                   if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
                     discovered.push(path.resolve(subSubPath));
                   }
                 }
-              }));
+              })));
             } catch (err) {
               logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
             }
@@ -428,11 +432,8 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     };
 
-    // Process directories in batched chunks to limit concurrent file system operations
-    for (let i = 0; i < entries.length; i += chunkSize) {
-      const chunk = entries.slice(i, i + chunkSize);
-      await Promise.all(chunk.map(processDirEntry));
-    }
+    // Use p-limit to globally throttle concurrent filesystem operations across all levels
+    await Promise.all(entries.map(entry => limit(() => processDirEntry(entry))));
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${err}`);
   }
