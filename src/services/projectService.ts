@@ -389,7 +389,8 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     if (process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE) {
       const parsed = parseInt(process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE, 10);
       if (!isNaN(parsed) && parsed >= 1) {
-        chunkSize = parsed;
+        // Cap at 1000 to prevent accidental OS limit exhaustion from typo'd massive values
+        chunkSize = Math.min(parsed, 1000);
       }
     }
 
@@ -413,16 +414,18 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
                 }
               }));
             } catch (err) {
-              logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${err}`);
+              const msg = err instanceof Error ? err.message : String(err);
+              logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${msg}`);
             }
           }
         }
       } catch (err) {
-        logger.debug(`[Project-Discovery] Skipped processing entry ${entry.name}: ${err}`);
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.debug(`[Project-Discovery] Skipped processing entry ${entry.name}: ${msg}`);
       }
     };
 
-    // We keep outer chunking in case the limit mechanism is not p-limit, to give basic throttling
+    // Process directories in batched chunks to limit concurrent file system operations
     for (let i = 0; i < entries.length; i += chunkSize) {
       const chunk = entries.slice(i, i + chunkSize);
       await Promise.all(chunk.map(processDirEntry));
