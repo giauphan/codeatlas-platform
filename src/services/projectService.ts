@@ -385,8 +385,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     }
     
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
-    // TODO: Consider making chunkSize configurable via env var for users on unusual systems with lower FD limits
-    const chunkSize = 50; // Batch concurrency to avoid EMFILE limits while speeding up scans
+    const chunkSize = process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE ? parseInt(process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE, 10) : 50;
 
     for (let i = 0; i < entries.length; i += chunkSize) {
       const chunk = entries.slice(i, i + chunkSize);
@@ -403,14 +402,12 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
                 for (let j = 0; j < subEntries.length; j += chunkSize) {
                   const subChunk = subEntries.slice(j, j + chunkSize);
                   await Promise.all(subChunk.map(async (subEntry) => {
-                    try {
-                      if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
-                        const subSubPath = path.join(subPath, subEntry.name);
-                        if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                          discovered.push(path.resolve(subSubPath));
-                        }
+                    if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+                      const subSubPath = path.join(subPath, subEntry.name);
+                      if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                        discovered.push(path.resolve(subSubPath));
                       }
-                    } catch { /* skip */ }
+                    }
                   }));
                 }
               } catch { /* skip */ }
