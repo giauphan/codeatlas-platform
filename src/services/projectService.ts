@@ -8,7 +8,6 @@ import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
-import pLimit from "p-limit";
 
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
@@ -405,29 +404,24 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     }
 
-    // A single global limit strictly bounds filesystem checks across all nested directory layers
-    const limit = pLimit(concurrencyLimit);
-
-    const processDirEntry = async (entry: fs.Dirent): Promise<void> => {
+    // Process directory entries sequentially via chunks to naturally limit concurrency
+    // and avoid EMFILE without requiring external dependencies or nested deadlock risks.
+    const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
       try {
         const isDir = entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".");
         if (isDir) {
-          const subPath = path.join(parentDir, entry.name);
+          const subPath = path.join(currentParentDir, entry.name);
           if (await fileExists(path.join(subPath, ".codeatlas"))) {
-            discovered.push(path.resolve(subPath));
+            currentDiscovered.push(path.resolve(subPath));
           } else {
             // Check 2nd level
             try {
               const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-
-              // We `await` the inner `Promise.all` here, which holds the current concurrency slot.
-              // This is safe from deadlocks because the inner jobs themselves do NOT use the limiter queue.
-              // They execute immediately within the bounds of the outer chunk's open concurrency limit.
               await Promise.all(subEntries.map(async (subEntry) => {
                 if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
                   const subSubPath = path.join(subPath, subEntry.name);
                   if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                    discovered.push(path.resolve(subSubPath));
+                    currentDiscovered.push(path.resolve(subSubPath));
                   }
                 }
               }));
@@ -445,7 +439,10 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     };
 
-    await Promise.all(entries.map(entry => limit(() => processDirEntry(entry))));
+    for (let i = 0; i < entries.length; i += concurrencyLimit) {
+      const chunk = entries.slice(i, i + concurrencyLimit);
+      await Promise.all(chunk.map(entry => processDirEntry(entry, parentDir, discovered)));
+    }
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${extractErrorMessage(err)}`);
   }
