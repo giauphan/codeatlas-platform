@@ -13,6 +13,11 @@ export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
 }
 
+/** Helper to format error messages robustly */
+function extractErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 /** Unified stats helper */
 export function getStats(analysis: AnalysisResultLocal) {
   const ec = analysis.entityCounts;
@@ -414,14 +419,12 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
                 }
               }));
             } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${msg}`);
+              logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
             }
           }
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.debug(`[Project-Discovery] Skipped processing entry ${entry.name}: ${msg}`);
+        logger.debug(`[Project-Discovery] Skipped processing entry ${entry.name}: ${extractErrorMessage(err)}`);
       }
     };
 
