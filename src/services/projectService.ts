@@ -406,7 +406,9 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
 
+    /** Default chunks of parallel ops per sweep to avoid EMFILE limits */
     const DEFAULT_CONCURRENCY_LIMIT = 50;
+    /** Safe max ceiling on concurrency to protect OS resources against misconfiguration */
     const MAX_CONCURRENCY_CAP = 1000;
 
     let concurrencyLimit = DEFAULT_CONCURRENCY_LIMIT;
@@ -417,35 +419,38 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     }
 
+    const checkSecondLevel = async (subPath: string, currentDiscovered: string[]): Promise<void> => {
+      try {
+        const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
+        for (let j = 0; j < subEntries.length; j += concurrencyLimit) {
+          const subChunk = subEntries.slice(j, j + concurrencyLimit);
+          await Promise.all(subChunk.map(async (subEntry) => {
+            if (isScanableDirectory(subEntry)) {
+              const subSubPath = path.join(subPath, subEntry.name);
+              if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                currentDiscovered.push(path.resolve(subSubPath));
+              }
+            }
+          }));
+        }
+      } catch (err: unknown) {
+        if (isRecoverableError(err)) {
+          logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
+          return;
+        }
+        logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
+      }
+    };
+
     const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
       try {
-        if (isScanableDirectory(entry)) {
-          const subPath = path.join(currentParentDir, entry.name);
-          if (await fileExists(path.join(subPath, ".codeatlas"))) {
-            currentDiscovered.push(path.resolve(subPath));
-          } else {
-            // Check 2nd level
-            try {
-              const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-              for (let j = 0; j < subEntries.length; j += concurrencyLimit) {
-                const subChunk = subEntries.slice(j, j + concurrencyLimit);
-                await Promise.all(subChunk.map(async (subEntry) => {
-                  if (isScanableDirectory(subEntry)) {
-                    const subSubPath = path.join(subPath, subEntry.name);
-                    if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                      currentDiscovered.push(path.resolve(subSubPath));
-                    }
-                  }
-                }));
-              }
-            } catch (err: unknown) {
-              if (isRecoverableError(err)) {
-                logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
-                return;
-              }
-              logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
-            }
-          }
+        if (!isScanableDirectory(entry)) return;
+
+        const subPath = path.join(currentParentDir, entry.name);
+        if (await fileExists(path.join(subPath, ".codeatlas"))) {
+          currentDiscovered.push(path.resolve(subPath));
+        } else {
+          await checkSecondLevel(subPath, currentDiscovered);
         }
       } catch (err: unknown) {
         if (isRecoverableError(err)) {
