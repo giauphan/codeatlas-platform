@@ -372,6 +372,8 @@ export function scanForCodeatlasProjects(parentDir: string): string[] {
  * Scans a directory 2-levels deep to discover '.codeatlas' projects.
  * Uses a manual chunked concurrency strategy to avoid EMFILE limits.
  */
+const isScanableDirectory = (entry: fs.Dirent) => entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".");
+
 export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<string[]> {
   const discovered: string[] = [];
   try {
@@ -408,8 +410,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
 
     const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
       try {
-        const isDir = entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".");
-        if (isDir) {
+        if (isScanableDirectory(entry)) {
           const subPath = path.join(currentParentDir, entry.name);
           if (await fileExists(path.join(subPath, ".codeatlas"))) {
             currentDiscovered.push(path.resolve(subPath));
@@ -420,7 +421,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
               for (let j = 0; j < subEntries.length; j += concurrencyLimit) {
                 const subChunk = subEntries.slice(j, j + concurrencyLimit);
                 await Promise.all(subChunk.map(async (subEntry) => {
-                  if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+                  if (isScanableDirectory(subEntry)) {
                     const subSubPath = path.join(subPath, subEntry.name);
                     if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
                       currentDiscovered.push(path.resolve(subSubPath));
@@ -428,14 +429,14 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
                   }
                 }));
               }
-            } catch (err: any) {
-              if (err && (err.code === 'EACCES' || err.code === 'ENOENT')) return;
+            } catch (err: unknown) {
+              if (err instanceof Error && ('code' in err) && (err as any).code && ((err as any).code === 'EACCES' || (err as any).code === 'ENOENT')) return;
               logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
             }
           }
         }
-      } catch (err: any) {
-        if (err && (err.code === 'EACCES' || err.code === 'ENOENT')) return;
+      } catch (err: unknown) {
+        if (err instanceof Error && ('code' in err) && (err as any).code && ((err as any).code === 'EACCES' || (err as any).code === 'ENOENT')) return;
         logger.warn(`[Project-Discovery] ⚠️ Skipped processing entry ${entry.name}: ${extractErrorMessage(err)}`);
       }
     };
@@ -445,7 +446,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       await Promise.all(chunk.map(entry => processDirEntry(entry, parentDir, discovered)));
     }
   } catch (err) {
-    logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${extractErrorMessage(err)}`);
+    logger.error(`[Project-Discovery] ❌ Failed to read parent directory during scan: ${extractErrorMessage(err)}`);
   }
   return discovered;
 }
