@@ -8,7 +8,6 @@ import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
-import pLimit from "p-limit";
 
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
@@ -364,7 +363,7 @@ export function scanForCodeatlasProjects(parentDir: string): string[] {
       }
     }
   } catch (err) {
-    logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${err}`);
+    logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${extractErrorMessage(err)}`);
   }
   return discovered;
 }
@@ -404,8 +403,6 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
         concurrencyLimit = Math.min(parsed, MAX_CONCURRENCY_CAP);
       }
     }
-
-    const limit = pLimit(concurrencyLimit);
 
     const processDirEntry = async (entry: fs.Dirent) => {
       try {
@@ -448,7 +445,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       await Promise.all(chunk.map(processDirEntry));
     }
   } catch (err) {
-    logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${err}`);
+    logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${extractErrorMessage(err)}`);
   }
   return discovered;
 }
