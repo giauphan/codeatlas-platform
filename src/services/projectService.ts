@@ -18,6 +18,15 @@ function extractErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Helper to check if an error is a recoverable/expected filesystem error */
+function isRecoverableError(err: unknown): boolean {
+  if (err instanceof Error && ('code' in err)) {
+    const code = (err as any).code;
+    return code === 'EACCES' || code === 'ENOENT';
+  }
+  return false;
+}
+
 /** Unified stats helper */
 export function getStats(analysis: AnalysisResultLocal) {
   const ec = analysis.entityCounts;
@@ -430,17 +439,26 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
                 }));
               }
             } catch (err: unknown) {
-              if (err instanceof Error && ('code' in err) && (err as any).code && ((err as any).code === 'EACCES' || (err as any).code === 'ENOENT')) return;
+              if (isRecoverableError(err)) {
+                logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
+                return;
+              }
               logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
             }
           }
         }
       } catch (err: unknown) {
-        if (err instanceof Error && ('code' in err) && (err as any).code && ((err as any).code === 'EACCES' || (err as any).code === 'ENOENT')) return;
+        if (isRecoverableError(err)) {
+          logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible directory entry: ${entry.name}`);
+          return;
+        }
         logger.warn(`[Project-Discovery] ⚠️ Skipped processing entry ${entry.name}: ${extractErrorMessage(err)}`);
       }
     };
 
+    // To prevent quadratic concurrency blowup (where each outer limit launches multiple inner loops
+    // bounded by the same limit), the inner loop inherits the same batch size but does NOT use an overarching limit.
+    // This allows natural Promise.all bursting bounded cleanly per-directory.
     for (let i = 0; i < entries.length; i += concurrencyLimit) {
       const chunk = entries.slice(i, i + concurrencyLimit);
       await Promise.all(chunk.map(entry => processDirEntry(entry, parentDir, discovered)));
