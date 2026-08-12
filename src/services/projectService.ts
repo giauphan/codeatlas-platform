@@ -404,7 +404,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     }
 
-    // Process directory entries sequentially via chunks to naturally limit concurrency
+    // Process directory entries via chunks to naturally limit outer concurrency
     // and avoid EMFILE without requiring external dependencies or nested deadlock risks.
     const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
       try {
@@ -417,14 +417,19 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
             // Check 2nd level
             try {
               const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-              await Promise.all(subEntries.map(async (subEntry) => {
-                if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
-                  const subSubPath = path.join(subPath, subEntry.name);
-                  if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                    currentDiscovered.push(path.resolve(subSubPath));
+              // We chunk the sub entries exactly like the outer loop to strictly bound deeply nested directories
+              // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
+              for (let j = 0; j < subEntries.length; j += concurrencyLimit) {
+                const subChunk = subEntries.slice(j, j + concurrencyLimit);
+                await Promise.all(subChunk.map(async (subEntry) => {
+                  if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+                    const subSubPath = path.join(subPath, subEntry.name);
+                    if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                      currentDiscovered.push(path.resolve(subSubPath));
+                    }
                   }
-                }
-              }));
+                }));
+              }
             } catch (err) {
               const msg = extractErrorMessage(err);
               if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
