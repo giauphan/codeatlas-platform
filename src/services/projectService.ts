@@ -420,26 +420,17 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
             try {
               const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
 
-              // Map child entries as detached limit() jobs directly into Promise.all.
-              // We intentionally do NOT `await` the inner Promise.all from within `processDirEntry`.
-              // This is crucial: if a parent job holds its concurrency slot and waits for inner jobs
-              // that cannot acquire slots (because the queue is full of other parents), it deadlocks.
-              // Returning the Promise array directly to the caller flattens the hierarchy in the event loop.
-              return Promise.all(
-                subEntries.map(subEntry => limit(async () => {
-                  try {
-                    if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
-                      const subSubPath = path.join(subPath, subEntry.name);
-                      if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                        discovered.push(path.resolve(subSubPath));
-                      }
-                    }
-                  } catch {
-                    // Swallow deep file system errors to preserve fail-skip semantics
+              // We `await` the inner `Promise.all` here, which holds the current concurrency slot.
+              // This is safe from deadlocks because the inner jobs themselves do NOT use the limiter queue.
+              // They execute immediately within the bounds of the outer chunk's open concurrency limit.
+              await Promise.all(subEntries.map(async (subEntry) => {
+                if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+                  const subSubPath = path.join(subPath, subEntry.name);
+                  if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                    discovered.push(path.resolve(subSubPath));
                   }
-                }))
-              ).then(() => {}); // Coerce to Promise<void> signature
-
+                }
+              }));
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
