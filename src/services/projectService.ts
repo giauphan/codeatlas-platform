@@ -369,6 +369,11 @@ export function scanForCodeatlasProjects(parentDir: string): string[] {
   return discovered;
 }
 
+/**
+ * Scans a directory 2-levels deep to discover '.codeatlas' projects.
+ * Uses a bounded concurrency strategy mapping across sibling folders via chunking to avoid EMFILE limits
+ * and OOM, without nesting promises that could cause execution deadlocks on dense graphs.
+ */
 export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<string[]> {
   const discovered: string[] = [];
   try {
@@ -392,11 +397,11 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
     let concurrencyLimit = 50;
+    const MAX_CONCURRENCY_CAP = 1000;
     if (process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE) {
       const parsed = Number.parseInt(process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE, 10);
       if (!Number.isNaN(parsed) && parsed >= 1) {
-        // Cap at 1000 to prevent accidental OS limit exhaustion from typo'd massive values
-        concurrencyLimit = Math.min(parsed, 1000);
+        concurrencyLimit = Math.min(parsed, MAX_CONCURRENCY_CAP);
       }
     }
 
@@ -408,22 +413,24 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
         if (isDir) {
           const subPath = path.join(parentDir, entry.name);
           if (await fileExists(path.join(subPath, ".codeatlas"))) {
-            // Array.push is synchronous and atomic on the JS main thread; safe from race conditions here
             discovered.push(path.resolve(subPath));
           } else {
             // Check 2nd level
             try {
               const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-              // Remove inner limit() wrapper to avoid shared-limiter deadlock and unexpected bottlenecking,
-              // relying entirely on the outer loop to throttle parent directories.
-              await Promise.all(subEntries.map(async (subEntry) => {
-                if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
-                  const subSubPath = path.join(subPath, subEntry.name);
-                  if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                    discovered.push(path.resolve(subSubPath));
+              // We chunk the sub entries to ensure dense folders with >1000 inner entries
+              // do not spike `Promise.all` concurrency limits, adhering to `concurrencyLimit`.
+              for (let j = 0; j < subEntries.length; j += concurrencyLimit) {
+                const subChunk = subEntries.slice(j, j + concurrencyLimit);
+                await Promise.all(subChunk.map(async (subEntry) => {
+                  if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+                    const subSubPath = path.join(subPath, subEntry.name);
+                    if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                      discovered.push(path.resolve(subSubPath));
+                    }
                   }
-                }
-              }));
+                }));
+              }
             } catch (err) {
               logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
             }
