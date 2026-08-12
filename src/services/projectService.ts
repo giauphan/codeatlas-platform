@@ -432,16 +432,16 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
                 }
               }));
             } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
+              const msg = extractErrorMessage(err);
               if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
-              logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
+              logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${msg}`);
             }
           }
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = extractErrorMessage(err);
         if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
-        logger.debug(`[Project-Discovery] Skipped processing entry ${entry.name}: ${extractErrorMessage(err)}`);
+        logger.warn(`[Project-Discovery] ⚠️ Skipped processing entry ${entry.name}: ${msg}`);
       }
     };
 
