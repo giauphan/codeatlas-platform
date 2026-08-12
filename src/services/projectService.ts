@@ -414,14 +414,16 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
             // Check 2nd level
             try {
               const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-              await Promise.all(subEntries.map(subEntry => limit(async () => {
+              // Remove inner limit() wrapper to avoid shared-limiter deadlock and unexpected bottlenecking,
+              // relying entirely on the outer loop to throttle parent directories.
+              await Promise.all(subEntries.map(async (subEntry) => {
                 if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
                   const subSubPath = path.join(subPath, subEntry.name);
                   if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
                     discovered.push(path.resolve(subSubPath));
                   }
                 }
-              })));
+              }));
             } catch (err) {
               logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
             }
@@ -432,8 +434,12 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     };
 
-    // Use p-limit to globally throttle concurrent filesystem operations across all levels
-    await Promise.all(entries.map(entry => limit(() => processDirEntry(entry))));
+    // Process directories in batched chunks instead of global p-limit to avoid nested deadlocks
+    // and confusing concurrency contention across levels.
+    for (let i = 0; i < entries.length; i += concurrencyLimit) {
+      const chunk = entries.slice(i, i + concurrencyLimit);
+      await Promise.all(chunk.map(processDirEntry));
+    }
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${err}`);
   }
