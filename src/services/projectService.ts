@@ -387,34 +387,36 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
     const chunkSize = process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE ? parseInt(process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE, 10) : 50;
 
+    const processDirEntry = async (entry: fs.Dirent) => {
+      try {
+        if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
+          const subPath = path.join(parentDir, entry.name);
+          if (await fileExists(path.join(subPath, ".codeatlas"))) {
+            discovered.push(path.resolve(subPath));
+          } else {
+            // Check 2nd level
+            try {
+              const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
+              for (let j = 0; j < subEntries.length; j += chunkSize) {
+                const subChunk = subEntries.slice(j, j + chunkSize);
+                await Promise.all(subChunk.map(async (subEntry) => {
+                  if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+                    const subSubPath = path.join(subPath, subEntry.name);
+                    if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                      discovered.push(path.resolve(subSubPath));
+                    }
+                  }
+                }));
+              }
+            } catch { /* skip */ }
+          }
+        }
+      } catch { /* skip */ }
+    };
+
     for (let i = 0; i < entries.length; i += chunkSize) {
       const chunk = entries.slice(i, i + chunkSize);
-      await Promise.all(chunk.map(async (entry) => {
-        try {
-          if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
-            const subPath = path.join(parentDir, entry.name);
-            if (await fileExists(path.join(subPath, ".codeatlas"))) {
-              discovered.push(path.resolve(subPath));
-            } else {
-              // Check 2nd level
-              try {
-                const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-                for (let j = 0; j < subEntries.length; j += chunkSize) {
-                  const subChunk = subEntries.slice(j, j + chunkSize);
-                  await Promise.all(subChunk.map(async (subEntry) => {
-                    if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
-                      const subSubPath = path.join(subPath, subEntry.name);
-                      if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                        discovered.push(path.resolve(subSubPath));
-                      }
-                    }
-                  }));
-                }
-              } catch { /* skip */ }
-            }
-          }
-        } catch { /* skip */ }
-      }));
+      await Promise.all(chunk.map(processDirEntry));
     }
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${err}`);
