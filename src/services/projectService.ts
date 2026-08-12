@@ -8,6 +8,7 @@ import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
+import pLimit from "p-limit";
 
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
@@ -370,8 +371,8 @@ export function scanForCodeatlasProjects(parentDir: string): string[] {
 
 /**
  * Scans a directory 2-levels deep to discover '.codeatlas' projects.
- * Uses a bounded concurrency strategy mapping across sibling folders via chunking to avoid EMFILE limits
- * and OOM, without nesting promises that could cause execution deadlocks on dense graphs.
+ * Uses a strict bounded concurrency strategy via `p-limit` to avoid EMFILE limits
+ * and OOM during deep tree traversal on heavy monorepos.
  */
 export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<string[]> {
   const discovered: string[] = [];
@@ -404,7 +405,10 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     }
 
-    const processDirEntry = async (entry: fs.Dirent) => {
+    // A single global limit strictly bounds filesystem checks across all nested directory layers
+    const limit = pLimit(concurrencyLimit);
+
+    const processDirEntry = async (entry: fs.Dirent): Promise<void> => {
       try {
         const isDir = entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".");
         if (isDir) {
@@ -415,35 +419,42 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
             // Check 2nd level
             try {
               const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-              // We chunk the sub entries to ensure dense folders with >1000 inner entries
-              // do not spike `Promise.all` concurrency limits, adhering to `concurrencyLimit`.
-              for (let j = 0; j < subEntries.length; j += concurrencyLimit) {
-                const subChunk = subEntries.slice(j, j + concurrencyLimit);
-                await Promise.all(subChunk.map(async (subEntry) => {
-                  if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
-                    const subSubPath = path.join(subPath, subEntry.name);
-                    if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                      discovered.push(path.resolve(subSubPath));
+
+              // Map child entries as detached limit() jobs directly into Promise.all.
+              // We intentionally do NOT `await` the inner Promise.all from within `processDirEntry`.
+              // This is crucial: if a parent job holds its concurrency slot and waits for inner jobs
+              // that cannot acquire slots (because the queue is full of other parents), it deadlocks.
+              // Returning the Promise array directly to the caller flattens the hierarchy in the event loop.
+              return Promise.all(
+                subEntries.map(subEntry => limit(async () => {
+                  try {
+                    if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
+                      const subSubPath = path.join(subPath, subEntry.name);
+                      if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                        discovered.push(path.resolve(subSubPath));
+                      }
                     }
+                  } catch {
+                    // Swallow deep file system errors to preserve fail-skip semantics
                   }
-                }));
-              }
+                }))
+              ).then(() => {}); // Coerce to Promise<void> signature
+
             } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
               logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
             }
           }
         }
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
         logger.debug(`[Project-Discovery] Skipped processing entry ${entry.name}: ${extractErrorMessage(err)}`);
       }
     };
 
-    // Process directories in batched chunks instead of global p-limit to avoid nested deadlocks
-    // and confusing concurrency contention across levels.
-    for (let i = 0; i < entries.length; i += concurrencyLimit) {
-      const chunk = entries.slice(i, i + concurrencyLimit);
-      await Promise.all(chunk.map(processDirEntry));
-    }
+    await Promise.all(entries.map(entry => limit(() => processDirEntry(entry))));
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${extractErrorMessage(err)}`);
   }
