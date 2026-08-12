@@ -370,7 +370,7 @@ export function scanForCodeatlasProjects(parentDir: string): string[] {
 
 /**
  * Scans a directory 2-levels deep to discover '.codeatlas' projects.
- * Uses a strict bounded concurrency strategy via `p-limit` to avoid EMFILE limits
+ * Uses a manual chunked concurrency strategy to avoid EMFILE limits
  * and OOM during deep tree traversal on heavy monorepos.
  */
 export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<string[]> {
@@ -395,8 +395,11 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     }
     
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
-    let concurrencyLimit = 50;
+
+    const DEFAULT_CONCURRENCY_LIMIT = 50;
     const MAX_CONCURRENCY_CAP = 1000;
+
+    let concurrencyLimit = DEFAULT_CONCURRENCY_LIMIT;
     if (process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE) {
       const parsed = Number.parseInt(process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE, 10);
       if (!Number.isNaN(parsed) && parsed >= 1) {
@@ -430,14 +433,16 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
                   }
                 }));
               }
-            } catch (err) {
+            } catch (err: any) {
+              if (err && (err.code === 'EACCES' || err.code === 'ENOENT')) return;
               const msg = extractErrorMessage(err);
               if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
               logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${msg}`);
             }
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err && (err.code === 'EACCES' || err.code === 'ENOENT')) return;
         const msg = extractErrorMessage(err);
         if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
         logger.warn(`[Project-Discovery] ⚠️ Skipped processing entry ${entry.name}: ${msg}`);
