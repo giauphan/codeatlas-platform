@@ -388,8 +388,8 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     let chunkSize = 50;
     if (process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE) {
       const parsed = parseInt(process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE, 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        chunkSize = Math.max(1, Math.min(parsed, entries.length > 0 ? entries.length : 50));
+      if (!isNaN(parsed) && parsed >= 1) {
+        chunkSize = parsed;
       }
     }
 
@@ -398,6 +398,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
         if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
           const subPath = path.join(parentDir, entry.name);
           if (await fileExists(path.join(subPath, ".codeatlas"))) {
+            // Array.push is synchronous and atomic on the JS main thread; safe from race conditions here
             discovered.push(path.resolve(subPath));
           } else {
             // Check 2nd level
@@ -411,10 +412,14 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
                   }
                 }
               }));
-            } catch { /* skip */ }
+            } catch (err) {
+              logger.debug(`[Project-Discovery] Skipped sub-directory read for ${subPath}: ${err}`);
+            }
           }
         }
-      } catch { /* skip */ }
+      } catch (err) {
+        logger.debug(`[Project-Discovery] Skipped processing entry ${entry.name}: ${err}`);
+      }
     };
 
     // We keep outer chunking in case the limit mechanism is not p-limit, to give basic throttling
