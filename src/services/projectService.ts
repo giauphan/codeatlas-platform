@@ -20,11 +20,8 @@ function extractErrorMessage(err: unknown): string {
 
 /** Helper to check if an error is a recoverable/expected filesystem error */
 function isRecoverableError(err: unknown): boolean {
-  if (err instanceof Error && ('code' in err)) {
-    const code = (err as any).code;
-    return code === 'EACCES' || code === 'ENOENT';
-  }
-  return false;
+  const code = (err as { code?: string })?.code;
+  return code === 'EACCES' || code === 'ENOENT';
 }
 
 /** Unified stats helper */
@@ -435,7 +432,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
         }
       } catch (err: unknown) {
         if (isRecoverableError(err)) {
-          logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
+          logger.debug(`[Project-Discovery] ⚠️ Ignored inaccessible sub-directory: ${subPath}`);
           return;
         }
         logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
@@ -454,7 +451,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
         }
       } catch (err: unknown) {
         if (isRecoverableError(err)) {
-          logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible directory entry: ${entry.name}`);
+          logger.debug(`[Project-Discovery] ⚠️ Ignored inaccessible directory entry: ${entry.name}`);
           return;
         }
         logger.warn(`[Project-Discovery] ⚠️ Skipped processing entry ${entry.name}: ${extractErrorMessage(err)}`);
