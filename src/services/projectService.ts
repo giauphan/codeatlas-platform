@@ -385,6 +385,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     }
     
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
+    // TODO: Consider making chunkSize configurable via env var for users on unusual systems with lower FD limits
     const chunkSize = 50; // Batch concurrency to avoid EMFILE limits while speeding up scans
 
     for (let i = 0; i < entries.length; i += chunkSize) {
