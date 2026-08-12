@@ -370,8 +370,7 @@ export function scanForCodeatlasProjects(parentDir: string): string[] {
 
 /**
  * Scans a directory 2-levels deep to discover '.codeatlas' projects.
- * Uses a manual chunked concurrency strategy to avoid EMFILE limits
- * and OOM during deep tree traversal on heavy monorepos.
+ * Uses a manual chunked concurrency strategy to avoid EMFILE limits.
  */
 export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<string[]> {
   const discovered: string[] = [];
@@ -407,8 +406,6 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     }
 
-    // Process directory entries via chunks to naturally limit outer concurrency
-    // and avoid EMFILE without requiring external dependencies or nested deadlock risks.
     const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
       try {
         const isDir = entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".");
@@ -420,8 +417,6 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
             // Check 2nd level
             try {
               const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-              // We chunk the sub entries exactly like the outer loop to strictly bound deeply nested directories
-              // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
               for (let j = 0; j < subEntries.length; j += concurrencyLimit) {
                 const subChunk = subEntries.slice(j, j + concurrencyLimit);
                 await Promise.all(subChunk.map(async (subEntry) => {
@@ -435,17 +430,13 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
               }
             } catch (err: any) {
               if (err && (err.code === 'EACCES' || err.code === 'ENOENT')) return;
-              const msg = extractErrorMessage(err);
-              if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
-              logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${msg}`);
+              logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
             }
           }
         }
       } catch (err: any) {
         if (err && (err.code === 'EACCES' || err.code === 'ENOENT')) return;
-        const msg = extractErrorMessage(err);
-        if (msg.includes('EACCES') || msg.includes('ENOENT')) return;
-        logger.warn(`[Project-Discovery] ⚠️ Skipped processing entry ${entry.name}: ${msg}`);
+        logger.warn(`[Project-Discovery] ⚠️ Skipped processing entry ${entry.name}: ${extractErrorMessage(err)}`);
       }
     };
 
