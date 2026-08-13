@@ -416,38 +416,8 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     }
 
-    // A simple utility to chunk arrays and process them concurrently
-    const processInChunks = async <T>(items: T[], chunkSize: number, processor: (item: T) => Promise<void>) => {
-      for (let i = 0; i < items.length; i += chunkSize) {
-        const chunk = items.slice(i, i + chunkSize);
-        await Promise.all(chunk.map(processor));
-      }
-    };
-
     // Process directory entries sequentially via chunks to naturally limit concurrency
     // and avoid EMFILE without requiring external dependencies or nested deadlock risks.
-    const checkSecondLevel = async (subPath: string, currentDiscovered: string[]): Promise<void> => {
-      try {
-        const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-        // We chunk the sub entries exactly like the outer loop to strictly bound deeply nested directories
-        // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
-        await processInChunks(subEntries, concurrencyLimit, async (subEntry) => {
-          if (isScanableDirectory(subEntry)) {
-            const subSubPath = path.join(subPath, subEntry.name);
-            if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-              currentDiscovered.push(path.resolve(subSubPath));
-            }
-          }
-        });
-      } catch (err: unknown) {
-        if (isRecoverableError(err)) {
-          logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
-          return;
-        }
-        logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
-      }
-    };
-
     const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
       try {
         if (!isScanableDirectory(entry)) return;
@@ -456,7 +426,29 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
         if (await fileExists(path.join(subPath, ".codeatlas"))) {
           currentDiscovered.push(path.resolve(subPath));
         } else {
-          await checkSecondLevel(subPath, currentDiscovered);
+          // checkSecondLevel inlined
+          try {
+            const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
+            // We chunk the sub entries to strictly bound deeply nested directories
+            // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
+            for (let i = 0; i < subEntries.length; i += concurrencyLimit) {
+              const chunk = subEntries.slice(i, i + concurrencyLimit);
+              await Promise.all(chunk.map(async (subEntry) => {
+                if (isScanableDirectory(subEntry)) {
+                  const subSubPath = path.join(subPath, subEntry.name);
+                  if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                    currentDiscovered.push(path.resolve(subSubPath));
+                  }
+                }
+              }));
+            }
+          } catch (err: unknown) {
+            if (isRecoverableError(err)) {
+              logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
+              return;
+            }
+            logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
+          }
         }
       } catch (err: unknown) {
         if (isRecoverableError(err)) {
@@ -467,7 +459,10 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     };
 
-    await processInChunks(entries, concurrencyLimit, entry => processDirEntry(entry, parentDir, discovered));
+    for (let i = 0; i < entries.length; i += concurrencyLimit) {
+      const chunk = entries.slice(i, i + concurrencyLimit);
+      await Promise.all(chunk.map(entry => processDirEntry(entry, parentDir, discovered)));
+    }
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to read parent directory during scan: ${extractErrorMessage(err)}`);
   }
