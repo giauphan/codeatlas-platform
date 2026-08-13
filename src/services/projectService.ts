@@ -418,56 +418,56 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     }
 
-    // A single global limit tightly caps total concurrent async file system checks across
-    // all branches of the traversal, preventing multiplicative concurrency bursts.
-    const limit = pLimit(concurrencyLimit);
-
-    const checkSecondLevel = async (subPath: string, currentDiscovered: string[]): Promise<void> => {
-      try {
-        const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-        // Map tasks safely within the global limit queue rather than isolated Promise chunks
-        await Promise.all(subEntries.map(subEntry => limit(async () => {
-          if (isScanableDirectory(subEntry)) {
-            const subSubPath = path.join(subPath, subEntry.name);
-            if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-              currentDiscovered.push(path.resolve(subSubPath));
-            }
-          }
-        })));
-      } catch (err: unknown) {
-        if (isRecoverableError(err)) {
-          logger.debug(`[Project-Discovery] ⚠️ Ignored inaccessible sub-directory: ${subPath}`);
-          return;
-        }
-        logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
-      }
-    };
-
+    // Process directory entries sequentially via chunks to naturally limit concurrency
+    // and avoid EMFILE without requiring external dependencies or nested deadlock risks.
     const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
       try {
-        if (!isScanableDirectory(entry)) return;
-
-        const subPath = path.join(currentParentDir, entry.name);
-        if (await fileExists(path.join(subPath, ".codeatlas"))) {
-          currentDiscovered.push(path.resolve(subPath));
-        } else {
-          // Detach the sub-directory scan from the global limit queue here.
-          // `checkSecondLevel` itself pushes operations back into the `limit` queue cleanly,
-          // but we cannot `await` it inside a function that is already consuming a `limit` slot,
-          // otherwise it would cause a circular-wait deadlock when the queue is saturated.
-          return checkSecondLevel(subPath, currentDiscovered);
+        if (isScanableDirectory(entry)) {
+          const subPath = path.join(currentParentDir, entry.name);
+          if (await fileExists(path.join(subPath, ".codeatlas"))) {
+            currentDiscovered.push(path.resolve(subPath));
+          } else {
+            // Check 2nd level
+            try {
+              const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
+              // We chunk the sub entries exactly like the outer loop to strictly bound deeply nested directories
+              // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
+              for (let j = 0; j < subEntries.length; j += concurrencyLimit) {
+                const subChunk = subEntries.slice(j, j + concurrencyLimit);
+                await Promise.all(subChunk.map(async (subEntry) => {
+                  if (isScanableDirectory(subEntry)) {
+                    const subSubPath = path.join(subPath, subEntry.name);
+                    if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                      currentDiscovered.push(path.resolve(subSubPath));
+                    }
+                  }
+                }));
+              }
+            } catch (err: unknown) {
+              if (isRecoverableError(err)) {
+                logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
+                return;
+              }
+              logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
+            }
+          }
         }
       } catch (err: unknown) {
         if (isRecoverableError(err)) {
-          logger.debug(`[Project-Discovery] ⚠️ Ignored inaccessible directory entry: ${entry.name}`);
+          logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible directory entry: ${entry.name}`);
           return;
         }
         logger.warn(`[Project-Discovery] ⚠️ Skipped processing entry ${entry.name}: ${extractErrorMessage(err)}`);
       }
     };
 
-    // The mapping executes instantly but defers the actual work correctly to the p-limit queue
-    await Promise.all(entries.map(entry => limit(() => processDirEntry(entry, parentDir, discovered))));
+    // To prevent quadratic concurrency blowup (where each outer limit launches multiple inner loops
+    // bounded by the same limit), the inner loop inherits the same batch size but does NOT use an overarching limit.
+    // This allows natural Promise.all bursting bounded cleanly per-directory.
+    for (let i = 0; i < entries.length; i += concurrencyLimit) {
+      const chunk = entries.slice(i, i + concurrencyLimit);
+      await Promise.all(chunk.map(entry => processDirEntry(entry, parentDir, discovered)));
+    }
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to read parent directory during scan: ${extractErrorMessage(err)}`);
   }
