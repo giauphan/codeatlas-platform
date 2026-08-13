@@ -376,8 +376,7 @@ export function scanForCodeatlasProjects(parentDir: string): string[] {
 
 /**
  * Scans a directory 2-levels deep to discover '.codeatlas' projects.
- * Uses a strict bounded concurrency strategy via `p-limit` to prevent EMFILE and OS resource
- * exhaustion during deep tree traversals on massive monorepos, preventing multiplicative bursts.
+ * Uses a manual chunked concurrency strategy to avoid EMFILE limits.
  */
 const isScanableDirectory = (entry: fs.Dirent) => entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".");
 
@@ -427,34 +426,37 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
 
     // Process directory entries sequentially via chunks to naturally limit concurrency
     // and avoid EMFILE without requiring external dependencies or nested deadlock risks.
-    const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
+    const checkSecondLevel = async (subPath: string, currentDiscovered: string[]): Promise<void> => {
       try {
-        if (isScanableDirectory(entry)) {
-          const subPath = path.join(currentParentDir, entry.name);
-          if (await fileExists(path.join(subPath, ".codeatlas"))) {
-            currentDiscovered.push(path.resolve(subPath));
-          } else {
-            // Check 2nd level
-            try {
-              const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-              // We chunk the sub entries exactly like the outer loop to strictly bound deeply nested directories
-              // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
-              await processInChunks(subEntries, concurrencyLimit, async (subEntry) => {
-                if (isScanableDirectory(subEntry)) {
-                  const subSubPath = path.join(subPath, subEntry.name);
-                  if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                    currentDiscovered.push(path.resolve(subSubPath));
-                  }
-                }
-              });
-            } catch (err: unknown) {
-              if (isRecoverableError(err)) {
-                logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
-                return;
-              }
-              logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
+        const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
+        // We chunk the sub entries exactly like the outer loop to strictly bound deeply nested directories
+        // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
+        await processInChunks(subEntries, concurrencyLimit, async (subEntry) => {
+          if (isScanableDirectory(subEntry)) {
+            const subSubPath = path.join(subPath, subEntry.name);
+            if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+              currentDiscovered.push(path.resolve(subSubPath));
             }
           }
+        });
+      } catch (err: unknown) {
+        if (isRecoverableError(err)) {
+          logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
+          return;
+        }
+        logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
+      }
+    };
+
+    const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
+      try {
+        if (!isScanableDirectory(entry)) return;
+
+        const subPath = path.join(currentParentDir, entry.name);
+        if (await fileExists(path.join(subPath, ".codeatlas"))) {
+          currentDiscovered.push(path.resolve(subPath));
+        } else {
+          await checkSecondLevel(subPath, currentDiscovered);
         }
       } catch (err: unknown) {
         if (isRecoverableError(err)) {
