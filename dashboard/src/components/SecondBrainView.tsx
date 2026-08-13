@@ -107,7 +107,7 @@ export function SecondBrainView() {
             opacity: consolidating ? 0.6 : 1,
           }}
         >
-          {consolidating ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
+          {consolidating ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
           {consolidating ? 'Consolidating…' : 'Run Consolidation'}
         </motion.button>
       </div>
@@ -160,7 +160,7 @@ export function SecondBrainView() {
       {/* Loading */}
       {loading && (
         <div style={{ textAlign: 'center', padding: '3rem' }}>
-          <Loader2 size={32} className="spin" style={{ color: 'var(--primary-neon)' }} />
+          <Loader2 size={32} className="animate-spin" style={{ color: 'var(--primary-neon)' }} />
         </div>
       )}
 
