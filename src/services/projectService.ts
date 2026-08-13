@@ -8,7 +8,6 @@ import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
-import pLimit from "p-limit";
 
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
@@ -418,6 +417,14 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     }
 
+    // A simple utility to chunk arrays and process them concurrently
+    const processInChunks = async <T>(items: T[], chunkSize: number, processor: (item: T) => Promise<void>) => {
+      for (let i = 0; i < items.length; i += chunkSize) {
+        const chunk = items.slice(i, i + chunkSize);
+        await Promise.all(chunk.map(processor));
+      }
+    };
+
     // Process directory entries sequentially via chunks to naturally limit concurrency
     // and avoid EMFILE without requiring external dependencies or nested deadlock risks.
     const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
@@ -432,17 +439,14 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
               const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
               // We chunk the sub entries exactly like the outer loop to strictly bound deeply nested directories
               // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
-              for (let j = 0; j < subEntries.length; j += concurrencyLimit) {
-                const subChunk = subEntries.slice(j, j + concurrencyLimit);
-                await Promise.all(subChunk.map(async (subEntry) => {
-                  if (isScanableDirectory(subEntry)) {
-                    const subSubPath = path.join(subPath, subEntry.name);
-                    if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                      currentDiscovered.push(path.resolve(subSubPath));
-                    }
+              await processInChunks(subEntries, concurrencyLimit, async (subEntry) => {
+                if (isScanableDirectory(subEntry)) {
+                  const subSubPath = path.join(subPath, subEntry.name);
+                  if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                    currentDiscovered.push(path.resolve(subSubPath));
                   }
-                }));
-              }
+                }
+              });
             } catch (err: unknown) {
               if (isRecoverableError(err)) {
                 logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
@@ -461,13 +465,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
       }
     };
 
-    // To prevent quadratic concurrency blowup (where each outer limit launches multiple inner loops
-    // bounded by the same limit), the inner loop inherits the same batch size but does NOT use an overarching limit.
-    // This allows natural Promise.all bursting bounded cleanly per-directory.
-    for (let i = 0; i < entries.length; i += concurrencyLimit) {
-      const chunk = entries.slice(i, i + concurrencyLimit);
-      await Promise.all(chunk.map(entry => processDirEntry(entry, parentDir, discovered)));
-    }
+    await processInChunks(entries, concurrencyLimit, entry => processDirEntry(entry, parentDir, discovered));
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to read parent directory during scan: ${extractErrorMessage(err)}`);
   }
