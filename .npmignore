@@ -1,0 +1,75 @@
+# Defense-in-depth for npm pack — package.json "files" field is authoritative
+# This file ensures dev-only content is excluded even if "files" is bypassed
+
+# Tests and benchmarks
+tests/
+benchmark_*.ts
+
+# Scripts (dev only)
+scripts/
+reindex.mjs
+*-e2e.sh
+test-*.sh
+verify-*.sh
+run-*.sh
+auto-e2e.sh
+sandbox-*.sh
+agent-runner.sh
+
+# Source and configs (dist/src is shipped, raw src is not)
+src/
+tsconfig.json
+nodemon.json
+pnpm-workspace.yaml
+pnpm-lock.yaml
+
+# Dashboard (separate package)
+dashboard/
+
+# Docs (only README/LICENSE/CHANGELOG ship)
+docs/
+
+# Secrets
+.env*
+!.env.example
+serviceAccountKey.json
+atlas-intelligence-node-firebase-adminsdk-*.json
+wallet/
+instantclient/
+
+# CI / tooling
+.github/
+.vscode/
+.idea/
+.git/
+.gitignore
+.npmignore
+.prettierrc*
+.eslintrc*
+
+# AI tool configs
+.claude/
+.agents/
+.codeatlas/
+.cursor/
+.windsurfrules
+.clinerules
+.rooignore
+.jules/
+.Jules/
+.codegraph/
+.gemini/
+
+# Logs and patches
+*.log
+*.patch
+backend.log
+
+# Temp files
+test.py
+test.sh
+test_parse.js
+submit.sh
+pr.md
+pr_description.md
+fix_buttons.patch

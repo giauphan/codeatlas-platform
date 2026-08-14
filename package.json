@@ -5,16 +5,27 @@
   "version": "2.14.4",
   "license": "MIT",
   "type": "module",
+  "author": "giauphan",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "bin": {
     "codeatlas-mcp": "dist/src/index.js"
   },
+  "files": [
+    "dist/src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    ".env.example"
+  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/giauphan/codeatlas-ai.git"
+    "url": "git+https://github.com/giauphan/codeatlas-platform.git"
   },
-  "homepage": "https://github.com/giauphan/codeatlas-ai#readme",
+  "homepage": "https://github.com/giauphan/codeatlas-platform#readme",
   "bugs": {
-    "url": "https://github.com/giauphan/codeatlas-ai/issues"
+    "url": "https://github.com/giauphan/codeatlas-platform/issues"
   },
   "keywords": [
     "codeatlas",

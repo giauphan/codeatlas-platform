@@ -1,59 +1,67 @@
 # CodeAtlas Management Dashboard
 
-Dashboard chuyên nghiệp để quản lý người dùng và API Keys cho CodeAtlas MCP Server.
+Professional dashboard for managing users and API keys for the CodeAtlas MCP Server.
 
-## Kiến trúc Hệ thống
+## Architecture
 
-### 1. Luồng Xác thực (Auth Flow)
-- **Frontend**: Sử dụng Firebase Auth để quản lý đăng nhập/đăng ký.
-- **Trạng thái**: Dashboard sử dụng hook `onAuthStateChanged` để theo dõi trạng thái người dùng. Nếu chưa đăng nhập, người dùng sẽ được chuyển hướng đến trang Auth (Login/Signup).
-- **Phân quyền**: Mỗi API Key được gắn với `uid` của người dùng trong Firestore theo schema: `users/{uid}/keys/{keyId}`.
+### 1. Authentication flow
 
-### 2. Xác thực MCP Server qua Firestore
-- **Cơ chế**: Thay vì sử dụng biến môi trường tĩnh, MCP Server hiện tại sử dụng `firebase-admin` để truy vấn trực tiếp vào Firestore.
-- **Logic**: Khi một request đến (qua SSE hoặc Stdio), server sẽ lấy API Key và thực hiện một `collectionGroup` query trên bộ sưu tập `keys`.
-- **Kiểm tra**: Nếu tìm thấy document có field `key` khớp với key được gửi đến, server sẽ cho phép truy cập và đồng thời cập nhật timestamp `lastUsed` cho key đó.
-- **Bảo mật**: Điều này cho phép thu hồi key ngay lập tức bằng cách xóa chúng khỏi Dashboard mà không cần khởi động lại MCP Server.
+- **Frontend**: Uses Firebase Auth for login/registration.
+- **State**: The dashboard uses the `onAuthStateChanged` hook to track user state. If not logged in, the user is redirected to the Auth page (Login/Signup).
+- **Authorization**: Each API key is attached to the user's `uid` in Firestore under the schema `users/{uid}/keys/{keyId}`.
 
-## Hướng dẫn Setup
+### 2. MCP Server authentication via Firestore
 
-### Bước 1: Cấu hình Firebase Project
-1. Truy cập [Firebase Console](https://console.firebase.google.com/).
-2. Tạo dự án mới hoặc chọn dự án hiện có.
-3. Bật **Authentication** (Email/Password).
-4. Tạo **Cloud Firestore** database.
-5. Tạo một Web App và copy object config vào file `dashboard/src/lib/firebase.ts`.
+- **Mechanism**: Instead of using a static environment variable, the MCP Server uses `firebase-admin` to query Firestore directly.
+- **Logic**: When a request arrives (via SSE or stdio), the server takes the API key and runs a `collectionGroup` query on the `keys` collection.
+- **Validation**: If a document is found with a `key` field matching the submitted key, access is granted and the `lastUsed` timestamp is updated for that key.
+- **Security**: This allows revoking a key immediately by deleting it from the dashboard without restarting the MCP Server.
 
-### Bước 2: Thiết lập Firestore Security Rules
-Đảm bảo rules cho phép người dùng quản lý key của chính mình:
+## Setup
+
+### Step 1: Configure Firebase project
+
+1. Visit the [Firebase Console](https://console.firebase.google.com/).
+2. Create a new project or select an existing one.
+3. Enable **Authentication** (Email/Password).
+4. Create a **Cloud Firestore** database.
+5. Create a Web App and copy the config object into `dashboard/src/lib/firebase.ts`.
+
+### Step 2: Set up Firestore security rules
+
+Ensure the rules allow users to manage their own keys:
+
 ```javascript
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId}/keys/{keyId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    // Cho phép MCP Server (Admin) truy vấn qua collectionGroup
+    // Allow MCP Server (Admin SDK) to query via collectionGroup
     match /{path=**}/keys/{keyId} {
-      allow read: if false; // Chỉ Admin SDK mới có quyền truy cập global
+      allow read: if false; // Only Admin SDK has global access
     }
   }
 }
 ```
 
-### Bước 3: Cấu hình MCP Server (Admin SDK)
-1. Trong Firebase Console, vào **Project Settings > Service Accounts**.
-2. Bấm **Generate new private key** để tải file JSON về.
-3. Thiết lập biến môi trường `GOOGLE_APPLICATION_CREDENTIALS` trỏ đến đường dẫn file JSON này trên máy chạy MCP Server.
+### Step 3: Configure MCP Server (Admin SDK)
 
-### Bước 4: Chạy Dashboard
+1. In the Firebase Console, go to **Project Settings > Service Accounts**.
+2. Click **Generate new private key** to download the JSON file.
+3. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of this JSON file on the machine running the MCP Server.
+
+### Step 4: Run the dashboard
+
 ```bash
 cd dashboard
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
-## Tính năng chính
-- **UI Premium Modern Dark Mode**: Giao diện tối hiện đại, sử dụng Framer Motion cho hiệu ứng mượt mà.
-- **Key Management**: Tạo, đặt tên và xóa API Keys dễ dàng.
-- **Usage Tracking**: Theo dõi thời gian cuối cùng key được sử dụng (Last Used).
-- **Responsive**: Hoạt động tốt trên nhiều thiết bị.
+## Features
+
+- **Premium modern dark mode UI**: Modern dark interface using Framer Motion for smooth animations.
+- **Key management**: Create, name, and delete API keys easily.
+- **Usage tracking**: Track when each key was last used (Last Used).
+- **Responsive**: Works well across multiple devices.
