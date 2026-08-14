@@ -57,7 +57,7 @@ If CodeAtlas MCP is not configured, add it:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-ai", "codeatlas-mcp"]
     }
   }
 }
@@ -69,7 +69,7 @@ If CodeAtlas MCP is not configured, add it:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-ai", "codeatlas-mcp"]
     }
   }
 }
@@ -77,7 +77,7 @@ If CodeAtlas MCP is not configured, add it:
 
 **Claude Code CLI**:
 ```bash
-claude mcp add codeatlas -- npx -y -p codeatlas-enterprise codeatlas-mcp
+claude mcp add codeatlas -- npx -y -p codeatlas-ai codeatlas-mcp
 ```
 
 ### Important

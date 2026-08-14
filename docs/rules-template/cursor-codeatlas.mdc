@@ -18,7 +18,7 @@ Add to `.cursor/mcp.json`:
   "mcpServers": {
     "codeatlas": {
       "command": "npx",
-      "args": ["-y", "-p", "codeatlas-enterprise", "codeatlas-mcp"]
+      "args": ["-y", "-p", "codeatlas-ai", "codeatlas-mcp"]
     }
   }
 }

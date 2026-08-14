@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/giauphan/codeatlas-platform/discussions
+    about: Ask usage questions and share early-stage ideas in Discussions.
+  - name: Security report
+    url: https://github.com/giauphan/codeatlas-platform/security/advisories/new
+    about: Report security vulnerabilities privately. Do not open public issues for security reports.

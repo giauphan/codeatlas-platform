@@ -1,0 +1,39 @@
+# CodeAtlas Platform CODEOWNERS
+# Each line: pattern  @owner1 @owner2
+# Reviewers are auto-requested when their owned paths change.
+
+# Default owner — fallback for any file not matched below
+*                           @giauphan
+
+# Core platform
+/src/                       @giauphan
+/package.json               @giauphan
+/tsconfig.json              @giauphan
+/scripts/                   @giauphan
+
+# Database layer (Oracle 26ai) — high blast radius
+/src/database/              @giauphan
+/scripts/db-init.ts         @giauphan
+
+# MCP tools and presentation — public API surface
+/src/presentation/          @giauphan
+
+# Security-sensitive paths
+/src/services/authService.ts        @giauphan
+/src/middleware/                    @giauphan
+SECURITY.md                @giauphan
+.env.example               @giauphan
+
+# Dashboard
+/dashboard/                @giauphan
+
+# Documentation
+/docs/                     @giauphan
+/README.md                 @giauphan
+/CONTRIBUTING.md           @giauphan
+/CHANGELOG.md              @giauphan
+
+# CI / infra
+/.github/                  @giauphan
+/Dockerfile                @giauphan
+/docker-compose.yml        @giauphan

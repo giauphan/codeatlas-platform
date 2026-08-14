@@ -168,7 +168,7 @@ Full tool reference: [`docs/architecture/mcp.md`](docs/architecture/mcp.md).
 - **Oracle dependency**: Requires Oracle 26ai with VECTOR support. Not portable to PostgreSQL/MySQL without migration.
 - **Firebase auth**: Multi-tenant mode requires Firebase Admin SDK + service account. API-key-only mode supported for single-tenant.
 - **NVIDIA embeddings**: Vector search depends on NVIDIA NIM API. Without `NVIDIA_API_KEY`, queries fall back to date-ordered results.
-- **Local indexing**: Pure cloud deployments cannot index local code — run the `codeatlas-enterprise` client locally to sync AST data.
+- **Local indexing**: Pure cloud deployments cannot index local code — run the `codeatlas-ai` client locally to sync AST data.
 - **Oracle Instant Client**: Thick mode requires downloading Oracle Instant Client separately (not bundled due to license).
 - **Dashboard**: Management UI ships separately in `dashboard/` — build and deploy independently.
 

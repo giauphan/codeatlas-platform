@@ -1,0 +1,54 @@
+version: 2
+updates:
+  # Root platform — pnpm
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "giauphan"
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      typescript:
+        patterns:
+          - "typescript"
+          - "tsx"
+          - "@types/*"
+      oracle:
+        patterns:
+          - "oracledb"
+      mcp:
+        patterns:
+          - "@modelcontextprotocol/*"
+
+  # Dashboard — pnpm
+  - package-ecosystem: "npm"
+    directory: "/dashboard"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "giauphan"
+    labels:
+      - "dependencies"
+      - "dashboard"
+    commit-message:
+      prefix: "chore(deps-dashboard)"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci-deps)"

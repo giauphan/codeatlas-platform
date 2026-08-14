@@ -110,7 +110,7 @@ Use the SSE endpoint directly via the MCP protocol.
 
 ```bash
 npm install -g pm2
-pm2 start dist/src/index.js --name codeatlas-enterprise
+pm2 start dist/src/index.js --name codeatlas-ai
 pm2 save
 pm2 startup
 ```

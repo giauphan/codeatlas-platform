@@ -742,7 +742,7 @@ app.get("/api/analysis", authMiddleware, async (req, res) => {
 // REST API: Trigger re-index
 app.post("/api/reindex", authMiddleware, async (req, res) => {
   res.status(400).json({
-    error: "Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-enterprise client to synchronize AST data."
+    error: "Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-ai client to synchronize AST data."
   });
 });
 

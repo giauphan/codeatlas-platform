@@ -1,0 +1,54 @@
+# Docker Compose stack for CodeAtlas Platform — local development and evaluation.
+# Not intended for production scheduling. Adapt for your orchestration platform.
+
+services:
+  codeatlas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: codeatlas-platform:latest
+    container_name: codeatlas-platform
+    restart: unless-stopped
+    ports:
+      - "3381:3381"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3381
+    volumes:
+      # Mount service account + wallet read-only (secrets not baked into image)
+      - ./serviceAccountKey.json:/app/serviceAccountKey.json:ro
+      - ./wallet:/app/wallet:ro
+      # Persistent tenant project sandboxes
+      - codeatlas-tenants:/app/tenants
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3381/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    networks:
+      - codeatlas-net
+
+  # Dashboard (optional — build and serve separately in production)
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: ../dashboard.Dockerfile
+    image: codeatlas-dashboard:latest
+    container_name: codeatlas-dashboard
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - codeatlas
+    networks:
+      - codeatlas-net
+
+volumes:
+  codeatlas-tenants:
+
+networks:
+  codeatlas-net:
+    driver: bridge
