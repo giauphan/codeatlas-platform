@@ -4,6 +4,16 @@ import * as path from "path";
 import { logger } from "../utils/logger.js";
 import pLimit from "p-limit";
 
+const ALLOWED_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".php", ".phtml", ".ctp", ".rs", ".java", ".rb", ".swift", ".kt"]);
+const EXT_COLORS: Record<string, string> = {
+  ".ts": "#3178c6", ".tsx": "#3178c6",
+  ".js": "#f7df1e", ".jsx": "#f7df1e",
+  ".py": "#3776ab", ".go": "#00add8",
+  ".php": "#777bb4", ".rs": "#dea584",
+  ".java": "#b07219", ".rb": "#cc342d",
+  ".swift": "#f05138", ".kt": "#7f52ff",
+};
+
 // Types matching the parser output
 export interface GraphNode {
   id: string;
@@ -206,17 +216,31 @@ export class IndexingService {
       }
     };
 
-    const funcCount = nodes.filter(n => n.type === "function").length;
-    const classCount = nodes.filter(n => n.type === "class").length;
-    const varCount = nodes.filter(n => n.type === "variable").length;
-    const depCount = links.filter(l => l.type === "import" || l.type === "call").length;
+    let moduleCount = 0;
+    let funcCount = 0;
+    let classCount = 0;
+    let varCount = 0;
+    for (let i = 0; i < nodes.length; i++) {
+      const type = nodes[i].type;
+      if (type === "module") moduleCount++;
+      else if (type === "function") funcCount++;
+      else if (type === "class") classCount++;
+      else if (type === "variable") varCount++;
+    }
+
+    let depCount = 0;
+    for (let i = 0; i < links.length; i++) {
+      const type = links[i].type;
+      if (type === "import" || type === "call") depCount++;
+    }
+
     const circularDeps = this.detectCircularDeps(nodes, links);
 
     return {
       graph: { nodes, links },
       insights: [],
       entityCounts: {
-        modules: nodes.filter(n => n.type === "module").length,
+        modules: moduleCount,
         functions: funcCount,
         classes: classCount,
         variables: varCount,
@@ -354,7 +378,7 @@ export class IndexingService {
             await walk(fullPath, localPatterns);
           } else if (entry.isFile()) {
             const ext = path.extname(entry.name).toLowerCase();
-            if ([".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".php", ".phtml", ".ctp", ".rs", ".java", ".rb", ".swift", ".kt"].includes(ext)) {
+            if (ALLOWED_EXTENSIONS.has(ext)) {
               const stat = await fs.promises.stat(fullPath);
               if (stat.size > 0 && stat.size < 500000) files.push(fullPath);
             }
@@ -469,15 +493,7 @@ export class IndexingService {
   }
 
   private getColorForExt(ext: string): string {
-    const colors: Record<string, string> = {
-      ".ts": "#3178c6", ".tsx": "#3178c6",
-      ".js": "#f7df1e", ".jsx": "#f7df1e",
-      ".py": "#3776ab", ".go": "#00add8",
-      ".php": "#777bb4", ".rs": "#dea584",
-      ".java": "#b07219", ".rb": "#cc342d",
-      ".swift": "#f05138", ".kt": "#7f52ff",
-    };
-    return colors[ext] || "#94a3b8";
+    return EXT_COLORS[ext] || "#94a3b8";
   }
 
   private resolveImportPath(currentFile: string, importTarget: string): string {
