@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
+import { FOCUS_RING_CLASS } from '../lib/constants';
 
 interface DreamConfig {
   dreams_schedule: string;
@@ -301,7 +302,7 @@ export function DreamMemoryView() {
           }}
           aria-expanded={showConfig}
           aria-controls="dream-config-panel"
-          className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
+          className={FOCUS_RING_CLASS}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)',
             background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer', outline: 'none'
@@ -355,7 +356,7 @@ export function DreamMemoryView() {
               color: selectedTypes.includes(type) ? typeColors[type] : 'var(--text-muted)',
               outline: 'none'
             }}
-            className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
+            className={FOCUS_RING_CLASS}
           >
             {type}
           </button>

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
-
+import { FOCUS_RING_CLASS } from '../lib/constants';
 
 interface Concept {
   id: string;
@@ -144,7 +144,7 @@ export function SecondBrainView() {
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               aria-pressed={selectedCategory === cat}
-              className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
+              className={FOCUS_RING_CLASS}
               style={{
                 padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
                 background: selectedCategory === cat ? 'rgba(0,240,255,0.15)' : 'rgba(0,0,0,0.2)',
