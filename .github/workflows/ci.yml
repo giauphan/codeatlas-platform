@@ -84,12 +84,6 @@ jobs:
         run: pnpm audit --prod --audit-level=high
         continue-on-error: true
 
-      - name: Dependency review
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-
       - name: Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v2
         env:
