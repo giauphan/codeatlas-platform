@@ -492,7 +492,9 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const mermaid = lines.join("\n");
 
       // Single-pass counter
-      let moduleCount = 0, classCount = 0, functionCount = 0;
+      let moduleCount = 0;
+      let classCount = 0;
+      let functionCount = 0;
       for (const n of nodes) {
         const type = n.type;
         if (type === "module") moduleCount++;
