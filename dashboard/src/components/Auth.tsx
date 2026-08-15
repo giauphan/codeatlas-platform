@@ -145,14 +145,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   <label htmlFor="email" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
                   <div style={{ position: 'relative' }}>
                     <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                    <input id="email" type="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                    <input id="email" type="email" autoComplete="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required />
                   </div>
                 </div>
                 <div>
                   <label htmlFor="password" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>PASSWORD</label>
                   <div style={{ position: 'relative' }}>
                     <Lock size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                    <input id="password" type="password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <input id="password" type="password" autoComplete="current-password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
                   </div>
                 </div>
               </div>
