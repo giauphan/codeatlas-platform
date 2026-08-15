@@ -23,3 +23,8 @@
 **Vulnerability:** Weak coverage for detecting hardcoded API keys and common SQL statements.
 **Learning:** The internal `SecurityScanner` relies on hardcoded string matching. It previously missed terms like "apikey", "credential", and SQL commands "select", "insert", "update".
 **Prevention:** Regularly review and update static analysis keyword lists to include modern token patterns and complete sets of risky commands.
+
+## 2024-08-15 - Arbitrary Origin Reflection in CORS Wildcard Configuration
+**Vulnerability:** The CORS configuration in `src/presentation/httpServer.ts` reflected arbitrary origins by returning `true` to the origin callback when a wildcard (`*`) was in the `ALLOWED_ORIGINS` configuration, while simultaneously setting `credentials: true`. This completely circumvents browser restrictions on cross-origin credentialed requests, allowing any external site to make authenticated requests.
+**Learning:** Returning `true` to a CORS origin callback instructs the CORS middleware to echo back the requester's `Origin` header in the `Access-Control-Allow-Origin` response header. When combined with `Access-Control-Allow-Credentials: true`, this creates a severe vulnerability where credentials (like cookies or HTTP auth) are sent and accepted from any origin.
+**Prevention:** When securing CORS configurations in the Express HTTP server against arbitrary origin reflection, return the static string `'*'` instead of boolean `true` when a wildcard origin is configured. This correctly sets `Access-Control-Allow-Origin: *` while allowing the browser to properly enforce credential restrictions (browsers inherently block credentialed requests to a wildcard origin), rather than breaking public non-credentialed APIs by outright rejecting them.
