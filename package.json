@@ -50,11 +50,11 @@
   "devDependencies": {
     "@types/cors": "2.8.19",
     "@types/express": "^4.17.21",
-    "@types/node": "^20.0.0",
+    "@types/node": "^26.2.0",
     "@types/oracledb": "^7.0.2",
     "playwright": "^1.61.1",
     "tsx": "^4.22.1",
-    "typescript": "^5.4.0"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
