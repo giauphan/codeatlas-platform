@@ -151,6 +151,9 @@ export class ConsolidationEngine {
               const keepIdx = Number(group[i][R_IDX.IMPORTANCE]) >= Number(group[j][R_IDX.IMPORTANCE]) ? i : j;
               const removeIdx = keepIdx === i ? j : i;
               toRemove.add(String(group[removeIdx][R_IDX.ID]));
+
+              // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked for removal
+              if (removeIdx === i) break;
             }
           }
         }
@@ -490,7 +493,9 @@ export class ConsolidationEngine {
         for (const [, group] of groups) {
           if (group.length < 2) continue;
           for (let i = 0; i < group.length; i++) {
+            if (toSupersede.has(String(group[i][0]))) continue;
             for (let j = i + 1; j < group.length; j++) {
+              if (toSupersede.has(String(group[j][0]))) continue;
               const older = group[i];
               const newer = group[j];
               const embO = older[3]; // embedding
@@ -505,6 +510,8 @@ export class ConsolidationEngine {
               // If similarity > 0.85 and newer has higher confidence → supersede older
               if (similarity > 0.85 && Number(newer[4]) > Number(older[4])) {
                 toSupersede.add(String(older[0]));  // older's id
+                // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked to be superseded
+                break;
               }
             }
           }
