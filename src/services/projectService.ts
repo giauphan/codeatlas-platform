@@ -13,6 +13,17 @@ export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
 }
 
+/** Helper to format error messages robustly */
+function extractErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** Helper to check if an error is a recoverable/expected filesystem error */
+function isRecoverableError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return code === 'EACCES' || code === 'ENOENT';
+}
+
 /** Unified stats helper */
 export function getStats(analysis: AnalysisResultLocal) {
   const ec = analysis.entityCounts;
@@ -358,10 +369,16 @@ export function scanForCodeatlasProjects(parentDir: string): string[] {
       }
     }
   } catch (err) {
-    logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${err}`);
+    logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${extractErrorMessage(err)}`);
   }
   return discovered;
 }
+
+/**
+ * Scans a directory 2-levels deep to discover '.codeatlas' projects.
+ * Uses a manual chunked concurrency strategy to avoid EMFILE limits.
+ */
+const isScanableDirectory = (entry: fs.Dirent) => entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".");
 
 export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<string[]> {
   const discovered: string[] = [];
@@ -385,29 +402,69 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     }
     
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
-        const subPath = path.join(parentDir, entry.name);
-        if (await fileExists(path.join(subPath, ".codeatlas"))) {
-          discovered.push(path.resolve(subPath));
-        } else {
-          // Check 2nd level
-          try {
-            const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
-            for (const subEntry of subEntries) {
-              if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
-                const subSubPath = path.join(subPath, subEntry.name);
-                if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
-                  discovered.push(path.resolve(subSubPath));
-                }
-              }
-            }
-          } catch { /* skip */ }
-        }
+
+    /** Default limits for parallel fs checks */
+    const DEFAULT_CONCURRENCY_LIMIT = 50;
+    /** Safe max ceiling on concurrency to protect OS resources against misconfiguration */
+    const MAX_CONCURRENCY_CAP = 1000;
+
+    let concurrencyLimit = DEFAULT_CONCURRENCY_LIMIT;
+    if (process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE) {
+      const parsed = Number.parseInt(process.env.CODEATLAS_PROJECT_SCAN_CHUNK_SIZE, 10);
+      if (!Number.isNaN(parsed) && parsed >= 1) {
+        concurrencyLimit = Math.min(parsed, MAX_CONCURRENCY_CAP);
       }
     }
+
+    // Process directory entries sequentially via chunks to naturally limit concurrency
+    // and avoid EMFILE without requiring external dependencies or nested deadlock risks.
+    const processDirEntry = async (entry: fs.Dirent, currentParentDir: string, currentDiscovered: string[]): Promise<void> => {
+      try {
+        if (!isScanableDirectory(entry)) return;
+
+        const subPath = path.join(currentParentDir, entry.name);
+        if (await fileExists(path.join(subPath, ".codeatlas"))) {
+          currentDiscovered.push(path.resolve(subPath));
+        } else {
+          // checkSecondLevel inlined
+          try {
+            const subEntries = await fs.promises.readdir(subPath, { withFileTypes: true });
+            // We chunk the sub entries to strictly bound deeply nested directories
+            // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
+            for (let i = 0; i < subEntries.length; i += concurrencyLimit) {
+              const chunk = subEntries.slice(i, i + concurrencyLimit);
+              await Promise.all(chunk.map(async (subEntry) => {
+                if (isScanableDirectory(subEntry)) {
+                  const subSubPath = path.join(subPath, subEntry.name);
+                  if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
+                    currentDiscovered.push(path.resolve(subSubPath));
+                  }
+                }
+              }));
+            }
+          } catch (err: unknown) {
+            if (isRecoverableError(err)) {
+              logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible sub-directory: ${subPath}`);
+              return;
+            }
+            logger.warn(`[Project-Discovery] ⚠️ Skipped sub-directory read for ${subPath}: ${extractErrorMessage(err)}`);
+          }
+        }
+      } catch (err: unknown) {
+        if (isRecoverableError(err)) {
+          logger.debug(`[Project-Discovery] 🛡️ Ignored inaccessible directory entry: ${entry.name}`);
+          return;
+        }
+        logger.warn(`[Project-Discovery] ⚠️ Skipped processing entry ${entry.name}: ${extractErrorMessage(err)}`);
+      }
+    };
+
+    for (let i = 0; i < entries.length; i += concurrencyLimit) {
+      const chunk = entries.slice(i, i + concurrencyLimit);
+      await Promise.all(chunk.map(entry => processDirEntry(entry, parentDir, discovered)));
+    }
   } catch (err) {
-    logger.error(`[Project-Discovery] ❌ Failed async scan for .codeatlas projects: ${err}`);
+    logger.error(`[Project-Discovery] ❌ Failed to read parent directory during scan: ${extractErrorMessage(err)}`);
   }
   return discovered;
 }
