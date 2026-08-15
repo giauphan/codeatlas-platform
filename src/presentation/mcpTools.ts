@@ -27,7 +27,7 @@ import { randomUUID } from "node:crypto";
 import { isToolEnabled } from "../config/env.js";
 import { GraphNode } from "../types/index.js";
 
-function countByType(nodes: GraphNode[], type: GraphNode['type']): number {
+function countByType<T extends GraphNode['type']>(nodes: GraphNode[], type: T): number {
   let count = 0;
   for (const n of nodes) {
     if (n.type === type) count++;
