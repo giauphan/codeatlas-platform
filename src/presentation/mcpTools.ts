@@ -27,12 +27,13 @@ import { randomUUID } from "node:crypto";
 import { isToolEnabled } from "../config/env.js";
 import { GraphNode } from "../types/index.js";
 
-function countByType<T extends GraphNode['type']>(nodes: GraphNode[], type: T): number {
-  let count = 0;
+function countByTypes<T extends GraphNode['type']>(nodes: GraphNode[], types: T[]): Record<T, number> {
+  const counts = Object.fromEntries(types.map(t => [t, 0])) as Record<T, number>;
   for (const n of nodes) {
-    if (n.type === type) count++;
+    const type = n.type as T;
+    if (counts[type] !== undefined) counts[type]++;
   }
-  return count;
+  return counts;
 }
 
 /** Auto-register tool metadata for A2A Agent Card AND register handler on executor (Stub) */
@@ -500,6 +501,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       const mermaid = lines.join("\n");
 
+      const typeCounts = countByTypes(nodes, ["module", "class", "function"]);
       const result = {
         project: loaded.projectName,
         scope: diagramScope,
@@ -508,7 +510,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         linkCount: links.length,
         truncated: loaded.analysis.graph.nodes.length > max,
         mermaidDiagram: mermaid,
-        summary: `System flow for ${loaded.projectName}: ${countByType(nodes, "module")} modules, ${countByType(nodes, "class")} classes, ${countByType(nodes, "function")} functions connected by ${links.length} relationships.`,
+        summary: `System flow for ${loaded.projectName}: ${typeCounts.module} modules, ${typeCounts.class} classes, ${typeCounts.function} functions connected by ${links.length} relationships.`,
       };
 
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
@@ -576,7 +578,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         success: syncSuccess,
         project: loaded.projectName,
         stats: {
-          modules: countByType(nodes, "module"),
+          modules: countByTypes(nodes, ["module"]).module,
           totalEntities: nodes.length,
           totalLinks: links.length,
           businessRuleSaved,
