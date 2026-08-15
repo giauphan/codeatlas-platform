@@ -491,7 +491,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       const mermaid = lines.join("\n");
 
-      // ⚡ Bolt: Use a single O(N) pass to count nodes instead of multiple O(N) filter.length chains
+      // PERF: Use a single O(N) pass to count nodes instead of multiple O(N) filter.length chains
       // to avoid redundant linear scans and intermediary array allocations.
       let moduleCount = 0, classCount = 0, functionCount = 0;
       for (const n of nodes) {
@@ -572,7 +572,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         }
       }
 
-      // ⚡ Bolt: Use a single O(N) loop to count module types to eliminate redundant array allocation
+      // PERF: Use a single O(N) loop to count module types to eliminate redundant array allocation
       let moduleCount = 0;
       for (const n of nodes) {
         if (n.type === "module") moduleCount++;
