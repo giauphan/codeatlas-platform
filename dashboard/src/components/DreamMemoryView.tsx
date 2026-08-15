@@ -301,9 +301,10 @@ export function DreamMemoryView() {
           }}
           aria-expanded={showConfig}
           aria-controls="dream-config-panel"
+          className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)',
-            background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
+            background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer', outline: 'none'
           }}>
           <Settings size={18} style={{ marginRight: '0.5rem' }} /> Config
         </button>
@@ -354,7 +355,7 @@ export function DreamMemoryView() {
               color: selectedTypes.includes(type) ? typeColors[type] : 'var(--text-muted)',
               outline: 'none'
             }}
-            className="focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-50"
+            className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
           >
             {type}
           </button>

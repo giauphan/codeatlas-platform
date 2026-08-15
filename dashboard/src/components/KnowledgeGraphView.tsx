@@ -136,6 +136,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               key={f.id}
               onClick={() => toggleFilter(f.id)}
               aria-pressed={activeFilters.includes(f.id)}
+              className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.8rem',
                 borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600,
@@ -143,6 +144,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                 border: `1px solid ${activeFilters.includes(f.id) ? f.color : 'transparent'}`,
                 color: activeFilters.includes(f.id) ? f.color : 'var(--text-muted)',
                 transition: 'all 0.2s',
+                outline: 'none'
               }}
             >
               {f.icon} {f.label}
@@ -156,10 +158,12 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             onClick={() => setIsFullscreen(!isFullscreen)}
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            className="focus-visible:ring-2 focus-visible:ring-[var(--primary-neon)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background-dark)]"
             style={{
               padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)',
               background: 'rgba(0,0,0,0.7)', color: '#fff', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              outline: 'none'
             }}
           >
             {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
