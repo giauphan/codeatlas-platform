@@ -494,9 +494,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       // Single-pass counter
       let moduleCount = 0, classCount = 0, functionCount = 0;
       for (const n of nodes) {
-        if (n.type === "module") moduleCount++;
-        else if (n.type === "class") classCount++;
-        else if (n.type === "function") functionCount++;
+        const type = n.type;
+        if (type === "module") moduleCount++;
+        else if (type === "class") classCount++;
+        else if (type === "function") functionCount++;
       }
 
       const result = {
