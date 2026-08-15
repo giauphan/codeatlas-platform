@@ -101,19 +101,19 @@ importers:
         version: 1.51.4
       framer-motion:
         specifier: ^13.1.0
-        version: 13.1.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 13.1.0(react-dom@18.3.1(react@19.2.8))(react@19.2.8)
       idb:
         specifier: ^8.0.3
         version: 8.0.3
       lucide-react:
         specifier: ^0.268.0
-        version: 0.268.0(react@18.3.1)
+        version: 0.268.0(react@19.2.8)
       react:
-        specifier: ^18.2.0
-        version: 18.3.1
+        specifier: ^19.2.8
+        version: 19.2.8
       react-dom:
         specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
+        version: 18.3.1(react@19.2.8)
       tailwind-merge:
         specifier: ^2.3.0
         version: 2.6.1
@@ -126,16 +126,16 @@ importers:
         version: 6.9.1
       '@testing-library/react':
         specifier: ^16.3.2
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@18.3.1(react@19.2.8))(react@19.2.8)
       '@testing-library/user-event':
         specifier: ^14.6.1
         version: 14.6.1(@testing-library/dom@10.4.1)
       '@types/react':
-        specifier: ^18.2.0
-        version: 18.3.28
+        specifier: ^19.2.18
+        version: 19.2.18
       '@types/react-dom':
         specifier: ^18.2.0
-        version: 18.3.7(@types/react@18.3.28)
+        version: 18.3.7(@types/react@19.2.18)
       '@types/three':
         specifier: ^0.185.4
         version: 0.185.4
@@ -1236,9 +1236,6 @@ packages:
   '@types/oracledb@7.0.2':
     resolution: {integrity: sha512-yAMn1N+yTyKpJpJ4EDf5Mfgas81dF3pchxZXlK0A4FG6+Jhvv5jaXdl0KmHbdg1ookCqPEYjzLo+7UBmsz9QWg==}
 
-  '@types/prop-types@15.7.15':
-    resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
-
   '@types/qs@6.15.1':
     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
 
@@ -1250,8 +1247,8 @@ packages:
     peerDependencies:
       '@types/react': ^18.0.0
 
-  '@types/react@18.3.28':
-    resolution: {integrity: sha512-z9VXpC7MWrhfWipitjNdgCauoMLRdIILQsAEV+ZesIzBq/oUlxk0m3ApZuMFCXdnS4U7KrI+l3WRUEGQ8K1QKw==}
+  '@types/react@19.2.18':
+    resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
 
   '@types/request@2.48.13':
     resolution: {integrity: sha512-FGJ6udDNUCjd19pp0Q3iTiDkwhYup7J8hpMW9c4k53NrccQFFWKRho6hvtPPEhnXWKvukfwAlB6DbDz4yhH5Gg==}
@@ -2794,8 +2791,8 @@ packages:
     resolution: {integrity: sha512-z6F7K9bV85EfseRCp2bzrpyQ0Gkw1uLoCel9XBVWPg/TjRj94SkJzUTGfOa4bs7iJvBWtQG0Wq7wnI0syw3EBQ==}
     engines: {node: '>=0.10.0'}
 
-  react@18.3.1:
-    resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
+  react@19.2.8:
+    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
     engines: {node: '>=0.10.0'}
 
   readable-stream@3.6.2:
@@ -4270,15 +4267,15 @@ snapshots:
       picocolors: 1.1.1
       redent: 3.0.0
 
-  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@18.3.1(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@babel/runtime': 7.29.2
       '@testing-library/dom': 10.4.1
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
+      react: 19.2.8
+      react-dom: 18.3.1(react@19.2.8)
     optionalDependencies:
-      '@types/react': 18.3.28
-      '@types/react-dom': 18.3.7(@types/react@18.3.28)
+      '@types/react': 19.2.18
+      '@types/react-dom': 18.3.7(@types/react@19.2.18)
 
   '@testing-library/user-event@14.6.1(@testing-library/dom@10.4.1)':
     dependencies:
@@ -4373,19 +4370,16 @@ snapshots:
     dependencies:
       '@types/node': 26.2.0
 
-  '@types/prop-types@15.7.15': {}
-
   '@types/qs@6.15.1': {}
 
   '@types/range-parser@1.2.7': {}
 
-  '@types/react-dom@18.3.7(@types/react@18.3.28)':
+  '@types/react-dom@18.3.7(@types/react@19.2.18)':
     dependencies:
-      '@types/react': 18.3.28
+      '@types/react': 19.2.18
 
-  '@types/react@18.3.28':
+  '@types/react@19.2.18':
     dependencies:
-      '@types/prop-types': 15.7.15
       csstype: 3.2.3
 
   '@types/request@2.48.13':
@@ -5368,14 +5362,14 @@ snapshots:
 
   forwarded@0.2.0: {}
 
-  framer-motion@13.1.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  framer-motion@13.1.0(react-dom@18.3.1(react@19.2.8))(react@19.2.8):
     dependencies:
       motion-dom: 13.0.0
       motion-utils: 13.0.0
       tslib: 2.8.1
     optionalDependencies:
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
+      react: 19.2.8
+      react-dom: 18.3.1(react@19.2.8)
 
   fresh@0.5.2: {}
 
@@ -5802,9 +5796,9 @@ snapshots:
       lodash.clonedeep: 4.5.0
       lru-cache: 6.0.0
 
-  lucide-react@0.268.0(react@18.3.1):
+  lucide-react@0.268.0(react@19.2.8):
     dependencies:
-      react: 18.3.1
+      react: 19.2.8
 
   lz-string@1.5.0: {}
 
@@ -6102,10 +6096,10 @@ snapshots:
       iconv-lite: 0.7.3
       unpipe: 1.0.0
 
-  react-dom@18.3.1(react@18.3.1):
+  react-dom@18.3.1(react@19.2.8):
     dependencies:
       loose-envify: 1.4.0
-      react: 18.3.1
+      react: 19.2.8
       scheduler: 0.23.2
 
   react-is@17.0.2: {}
@@ -6114,9 +6108,7 @@ snapshots:
 
   react-refresh@0.17.0: {}
 
-  react@18.3.1:
-    dependencies:
-      loose-envify: 1.4.0
+  react@19.2.8: {}
 
   readable-stream@3.6.2:
     dependencies:
