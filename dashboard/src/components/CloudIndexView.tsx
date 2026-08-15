@@ -66,7 +66,8 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
                   cursor: isUpdatingSettings ? 'not-allowed' : 'pointer',
                   opacity: isUpdatingSettings ? 0.6 : 1,
                   background: isIndexingEnabled ? 'var(--primary-neon)' : 'transparent',
-                  padding: 0
+                  padding: 0,
+                  outline: 'none'
                 }}
                 onClick={handleToggleClick}
               >
