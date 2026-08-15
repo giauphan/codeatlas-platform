@@ -27,6 +27,10 @@ import { randomUUID } from "node:crypto";
 import { isToolEnabled } from "../config/env.js";
 import { GraphNode } from "../types/index.js";
 
+/**
+ * Processes an array of GraphNodes in a single pass and returns the counts
+ * for the requested node types as an object indexed by those types.
+ */
 function countByTypes<T extends GraphNode['type']>(nodes: GraphNode[], types: T[]): Record<T, number> {
   const counts = Object.fromEntries(types.map(t => [t, 0])) as Record<T, number>;
   for (const n of nodes) {
