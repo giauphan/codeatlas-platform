@@ -25,6 +25,15 @@ import { indexingService } from "../services/indexingService.js";
 import { authStorage } from "../utils/context.js";
 import { randomUUID } from "node:crypto";
 import { isToolEnabled } from "../config/env.js";
+import { GraphNode } from "../types/index.js";
+
+function countByType(nodes: GraphNode[], type: GraphNode['type']): number {
+  let count = 0;
+  for (const n of nodes) {
+    if (n.type === type) count++;
+  }
+  return count;
+}
 
 /** Auto-register tool metadata for A2A Agent Card AND register handler on executor (Stub) */
 function a2a(name: string, description: string, params: string[]) {
@@ -491,17 +500,6 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       const mermaid = lines.join("\n");
 
-      // Single-pass counter
-      let moduleCount = 0;
-      let classCount = 0;
-      let functionCount = 0;
-      for (const n of nodes) {
-        const type = n.type;
-        if (type === "module") moduleCount++;
-        else if (type === "class") classCount++;
-        else if (type === "function") functionCount++;
-      }
-
       const result = {
         project: loaded.projectName,
         scope: diagramScope,
@@ -510,7 +508,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         linkCount: links.length,
         truncated: loaded.analysis.graph.nodes.length > max,
         mermaidDiagram: mermaid,
-        summary: `System flow for ${loaded.projectName}: ${moduleCount} modules, ${classCount} classes, ${functionCount} functions connected by ${links.length} relationships.`,
+        summary: `System flow for ${loaded.projectName}: ${countByType(nodes, "module")} modules, ${countByType(nodes, "class")} classes, ${countByType(nodes, "function")} functions connected by ${links.length} relationships.`,
       };
 
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
@@ -574,17 +572,11 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         }
       }
 
-      // Single-pass counter
-      let moduleCount = 0;
-      for (const n of nodes) {
-        if (n.type === "module") moduleCount++;
-      }
-
       const result = {
         success: syncSuccess,
         project: loaded.projectName,
         stats: {
-          modules: moduleCount,
+          modules: countByType(nodes, "module"),
           totalEntities: nodes.length,
           totalLinks: links.length,
           businessRuleSaved,
