@@ -101,7 +101,7 @@ export function OrchestrationTasksView() {
             opacity: loading ? 0.6 : 1,
           }}
         >
-          {loading ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
+          {loading ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
           {loading ? 'Refreshing…' : 'Refresh Tasks'}
         </motion.button>
       </div>
@@ -145,7 +145,7 @@ export function OrchestrationTasksView() {
       {/* Loading */}
       {loading && (
         <div style={{ textAlign: 'center', padding: '3rem' }}>
-          <Loader2 size={32} className="spin" style={{ color: 'var(--primary-neon)' }} />
+          <Loader2 size={32} className="animate-spin" style={{ color: 'var(--primary-neon)' }} />
         </div>
       )}
 
