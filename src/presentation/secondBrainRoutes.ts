@@ -5,10 +5,18 @@ import express from "express";
 import { secondBrain, type TaskOutcome } from "../services/secondBrainService.js";
 import { authMiddleware } from "../services/authService.js";
 import { logger } from "../utils/logger.js";
+import rateLimit from "express-rate-limit";
+
+const secondBrainRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120, // limit each IP to 120 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export function mountSecondBrainRoutes(app: express.Application): void {
   // POST /api/memory/outcome — Record task outcome
-  app.post("/api/memory/outcome", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/memory/outcome", secondBrainRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const outcome = req.body as TaskOutcome;
       if (!outcome.task || !outcome.result) {
@@ -24,7 +32,7 @@ export function mountSecondBrainRoutes(app: express.Application): void {
   });
 
   // POST /api/memory/inject — Build context block from relevant memories
-  app.post("/api/memory/inject", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/memory/inject", secondBrainRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { task, project, limit } = req.body as {
         task: string;

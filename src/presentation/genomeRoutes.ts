@@ -5,10 +5,18 @@ import express from "express";
 import { GenomeService } from "../services/genomeService.js";
 import { authMiddleware } from "../services/authService.js";
 import { logger } from "../utils/logger.js";
+import rateLimit from "express-rate-limit";
+
+const genomeRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120, // limit each IP to 120 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export function mountGenomeRoutes(app: express.Application): void {
   // POST /api/genome/gene — Create or update a gene
-  app.post("/api/genome/gene", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/genome/gene", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const input = req.body;
       if (!input.name || !input.problem || !input.solution || !input.category || !input.project) {
@@ -24,7 +32,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // GET /api/genome/gene/:id — Get single gene
-  app.get("/api/genome/gene/:id", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/genome/gene/:id", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const gene = await GenomeService.getGene(req.params.id);
       if (!gene) {
@@ -39,7 +47,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // GET /api/genome/search — Semantic search genes
-  app.get("/api/genome/search", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/genome/search", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const query = String(req.query.query || "");
       if (!query) {
@@ -59,7 +67,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // POST /api/genome/extract — Extract gene from dream or concept
-  app.post("/api/genome/extract", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/genome/extract", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { sourceType, sourceId, project } = req.body;
       if (!sourceType || !sourceId) {
@@ -75,7 +83,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // GET /api/genome/list — List genes (paginated, no vector search)
-  app.get("/api/genome/list", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/genome/list", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { initPool, setSessionContext } = await import("../database/connection.js");
       const connection = await (await initPool()).getConnection();
@@ -128,7 +136,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   // ════════════════════════════════════════════════════════
 
   // POST /api/genome/merge — Merge multiple genes into one
-  app.post("/api/genome/merge", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/genome/merge", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { geneIds, targetName, project } = req.body;
       if (!geneIds || geneIds.length < 2 || !targetName || !project) {
@@ -144,7 +152,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // POST /api/genome/split — Split a gene into specialized children
-  app.post("/api/genome/split", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/genome/split", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { sourceGeneId, childNames, project } = req.body;
       if (!sourceGeneId || !childNames || childNames.length < 2 || !project) {
@@ -160,7 +168,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // POST /api/genome/mutate — Mutate a gene (improve via feedback)
-  app.post("/api/genome/mutate", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/genome/mutate", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { geneId, improvements, project } = req.body;
       if (!geneId || !project) {
@@ -176,7 +184,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // POST /api/genome/retire — Retire genes
-  app.post("/api/genome/retire", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/genome/retire", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { geneIds } = req.body;
       if (!geneIds || geneIds.length === 0) {
@@ -193,7 +201,7 @@ export function mountGenomeRoutes(app: express.Application): void {
 
 
   // ── Auto-Sync: Hermes Skills -> Genome ───────────────────────
-  app.post("/api/genome/sync-skills", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/genome/sync-skills", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const fs = await import("node:fs");
       const path = await import("node:path");
@@ -220,7 +228,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   // ════════════════════════════════════════════════════════
 
   // GET /api/genome/immune?problem=...&project=... — Scan immune genes
-  app.get("/api/genome/immune", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/genome/immune", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const problem = String(req.query.problem || "");
       if (!problem) {
@@ -236,7 +244,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // POST /api/genome/immune — Create immune gene from failure
-  app.post("/api/genome/immune", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/genome/immune", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { problem, failure, prevention, project } = req.body;
       if (!problem || !failure || !prevention || !project) {
@@ -252,7 +260,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // GET /api/genome/immune/context — Build prevention context for injection
-  app.get("/api/genome/immune/context", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/genome/immune/context", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const problem = String(req.query.problem || "");
       if (!problem) {

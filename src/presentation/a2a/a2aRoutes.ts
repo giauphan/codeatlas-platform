@@ -13,6 +13,14 @@ import type { JsonRpcRequest, JsonRpcResponse } from "../../types/a2a.js";
 import { randomUUID } from "node:crypto";
 import { logger } from "../../utils/logger.js";
 import { authMiddleware } from "../../middleware/auth.js";
+import rateLimit from "express-rate-limit";
+
+const a2aRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120, // limit each IP to 120 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, baseUrl: string): void {
   // === Agent Discovery ===
@@ -26,7 +34,7 @@ export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, base
   });
 
   // Also serve at alternate path for compatibility
-  app.get("/a2a/agent-card", authMiddleware, async (_req, res, next) => {
+  app.get("/a2a/agent-card", a2aRateLimiter, authMiddleware, async (_req, res, next) => {
     try {
       const card = await buildAgentCard(baseUrl);
       res.json(card);
@@ -36,7 +44,7 @@ export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, base
   });
 
   // === JSON-RPC 2.0 Endpoint ===
-  app.post("/a2a/jsonrpc", authMiddleware, async (req, res) => {
+  app.post("/a2a/jsonrpc", a2aRateLimiter, authMiddleware, async (req, res) => {
     const body = req.body as JsonRpcRequest;
 
     // Validate JSON-RPC envelope
@@ -73,7 +81,7 @@ export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, base
   });
 
   // === REST Convenience Endpoint ===
-  app.post("/a2a/rest/message", authMiddleware, async (req, res) => {
+  app.post("/a2a/rest/message", a2aRateLimiter, authMiddleware, async (req, res) => {
     const { message, taskId } = req.body || {};
 
     if (!message || !message.parts) {

@@ -217,7 +217,7 @@ app.use(authProxyRouter);
 registerDreamingRoutes(app);
 
 // REST API: Get all discovered projects
-app.get("/api/projects", authMiddleware, async (req, res) => {
+app.get("/api/projects", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -261,7 +261,7 @@ async function cleanUpEmptyTenantProjectFolder(
 }
 
 // REST API: Remove project and its associated data
-app.delete("/api/projects", authMiddleware, async (req, res) => {
+app.delete("/api/projects", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -445,7 +445,7 @@ app.delete("/api/projects", authMiddleware, async (req, res) => {
 });
 
 // REST API: Get episodic memory (business rules / change logs) for a project
-app.get("/api/projects/memory", authMiddleware, async (req, res) => {
+app.get("/api/projects/memory", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     if (!auth) {
@@ -493,7 +493,7 @@ app.get("/api/projects/memory", authMiddleware, async (req, res) => {
 });
 
 // REST API: Get indexing settings for a project
-app.get("/api/projects/settings", authMiddleware, async (req, res) => {
+app.get("/api/projects/settings", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -576,7 +576,7 @@ app.get("/api/projects/settings", authMiddleware, async (req, res) => {
 });
 
 // REST API: Update indexing settings for a project
-app.post("/api/projects/settings", authMiddleware, async (req, res) => {
+app.post("/api/projects/settings", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -646,12 +646,12 @@ app.post("/api/projects/settings", authMiddleware, async (req, res) => {
 });
 
 // ── Health endpoint — quick liveness check, no auth required ──
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", localRateLimiter, (_req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
 });
 
 // ── Version endpoint — returns current deployed version for cache busting ──
-app.get("/api/version", async (_req, res) => {
+app.get("/api/version", localRateLimiter, async (_req, res) => {
   let version = "unknown";
   try {
     const pkg = JSON.parse(await fs.promises.readFile(path.join(process.cwd(), "package.json"), "utf-8"));
@@ -661,7 +661,7 @@ app.get("/api/version", async (_req, res) => {
 });
 
 // REST API: Manage API Keys (backend-proxied)
-app.get("/api/keys", authMiddleware, async (req, res) => {
+app.get("/api/keys", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
@@ -681,7 +681,7 @@ app.get("/api/keys", authMiddleware, async (req, res) => {
   }
 });
 
-app.post("/api/keys", authMiddleware, async (req, res) => {
+app.post("/api/keys", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
@@ -708,7 +708,7 @@ app.post("/api/keys", authMiddleware, async (req, res) => {
   }
 });
 
-app.delete("/api/keys/:id", authMiddleware, async (req, res) => {
+app.delete("/api/keys/:id", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
@@ -730,7 +730,7 @@ app.delete("/api/keys/:id", authMiddleware, async (req, res) => {
 });
 
 // REST API: Get analysis data
-app.get("/api/analysis", authMiddleware, async (req, res) => {
+app.get("/api/analysis", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const projectDir = (req.query.projectDir as string) || (req.query.project as string);
     const loaded = await loadAnalysisAsync(projectDir);
@@ -751,14 +751,14 @@ app.get("/api/analysis", authMiddleware, async (req, res) => {
 });
 
 // REST API: Trigger re-index
-app.post("/api/reindex", authMiddleware, async (req, res) => {
+app.post("/api/reindex", localRateLimiter, authMiddleware, async (req, res) => {
   res.status(400).json({
     error: "Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-ai client to synchronize AST data."
   });
 });
 
 // REST API: List A2A orchestration tasks (tenant-scoped)
-app.get("/api/orchestration/tasks", authMiddleware, async (req, res) => {
+app.get("/api/orchestration/tasks", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const tasks = await a2aOrchestrationService.listTasks();
     res.json({ success: true, tasks });
@@ -768,7 +768,7 @@ app.get("/api/orchestration/tasks", authMiddleware, async (req, res) => {
 });
 
 // REST API: Securely sync local AST analysis from Local-First gateway and sync telemetry
-app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res) => {
+app.post("/api/projects/sync", localRateLimiter, authMiddleware, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -1124,7 +1124,7 @@ app.post("/messages", async (req, res) => {
 });
 
 // Secure endpoint to serve markdown documentation
-app.get("/api/docs/quick-setup", authMiddleware, (req, res) => {
+app.get("/api/docs/quick-setup", localRateLimiter, authMiddleware, (req, res) => {
   try {
     const docPath = path.join(process.cwd(), "docs", "QUICK_SETUP.md");
     if (!fs.existsSync(docPath)) {
@@ -1138,7 +1138,7 @@ app.get("/api/docs/quick-setup", authMiddleware, (req, res) => {
   }
 });
 
-app.get("/api/docs/memory-setup", authMiddleware, (req, res) => {
+app.get("/api/docs/memory-setup", localRateLimiter, authMiddleware, (req, res) => {
   try {
     const docPath = path.join(process.cwd(), "docs", "AI-MEMORY-SETUP.md");
     if (!fs.existsSync(docPath)) {

@@ -5,10 +5,18 @@ import express from "express";
 import { consolidationEngine, type ConsolidationJob } from "../services/consolidationEngine.js";
 import { authMiddleware } from "../services/authService.js";
 import { logger } from "../utils/logger.js";
+import rateLimit from "express-rate-limit";
+
+const consolidationRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120, // limit each IP to 120 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export function mountConsolidationRoutes(app: express.Application): void {
   // POST /api/consolidation/run — Run consolidation job manually
-  app.post("/api/consolidation/run", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.post("/api/consolidation/run", consolidationRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const job: ConsolidationJob = req.body;
       if (!job.operations || job.operations.length === 0) {
@@ -24,7 +32,7 @@ export function mountConsolidationRoutes(app: express.Application): void {
   });
 
   // GET /api/concepts/search — Search concepts by text
-  app.get("/api/concepts/search", authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/concepts/search", consolidationRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const query = String(req.query.query || "");
       const project = req.query.project as string | undefined;

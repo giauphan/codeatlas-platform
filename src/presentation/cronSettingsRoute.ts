@@ -3,6 +3,14 @@ import { logger } from "../utils/logger.js";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { authMiddleware } from "../middleware/auth.js";
+import rateLimit from "express-rate-limit";
+
+const cronRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120, // limit each IP to 120 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const SETTINGS_PATH = process.env.CRON_SETTINGS_PATH || join(process.env.HOME || "/home/ubuntu", ".hermes", "cron-settings.json");
 
@@ -48,7 +56,7 @@ async function saveSettings(s: CronSettings): Promise<void> {
 
 export function mountCronSettingsRoutes(app: express.Application): void {
   // GET /api/settings/cron — read current schedule
-  app.get("/api/settings/cron", authMiddleware, async (_req, res, next) => {
+  app.get("/api/settings/cron", cronRateLimiter, authMiddleware, async (_req, res, next) => {
     try {
       res.json(await loadSettings());
     } catch (err) {
@@ -57,7 +65,7 @@ export function mountCronSettingsRoutes(app: express.Application): void {
   });
 
   // PUT /api/settings/cron — update schedule; validates 5-field cron expression
-  app.put("/api/settings/cron", authMiddleware, async (req, res, next) => {
+  app.put("/api/settings/cron", cronRateLimiter, authMiddleware, async (req, res, next) => {
     try {
       const { dreams_schedule, dreams_enabled, dreams_provider } = req.body as {
         dreams_schedule?: string;
