@@ -142,14 +142,12 @@ export class ConsolidationEngine {
         for (let i = 0; i < group.length; i++) {
           if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
           const embI = group[i][R_IDX.EMBEDDING];
-          if (!embI || embI.length === 0) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             if (toRemove.has(String(group[j][R_IDX.ID]))) continue;
 
             // Cosine similarity on embeddings
             const embJ = group[j][R_IDX.EMBEDDING];
-            if (!embJ || embJ.length === 0) continue;
 
             const similarity = this.cosineSimilarity(embI, embJ);
 
@@ -492,7 +490,7 @@ export class ConsolidationEngine {
         const groups = new Map<string, any[]>();
         for (const row of rows) {
           const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
-          // Extract arrays, dropping rows without embeddings entirely to ensure grouping logic only compares valid records
+          // Extract embeddings before grouping
           const rowToPush = this.validateRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring");
           if (!rowToPush) continue;
 
@@ -507,14 +505,12 @@ export class ConsolidationEngine {
             if (toSupersede.has(String(group[i][SCORE_IDX.ID]))) continue;
             const older = group[i];
             const embO = older[SCORE_IDX.EMBEDDING]; // embedding
-            if (!embO || embO.length === 0) continue;
 
             let isSuperseded = false;
             for (let j = i + 1; j < group.length; j++) {
               if (toSupersede.has(String(group[j][SCORE_IDX.ID]))) continue;
               const newer = group[j];
               const embN = newer[SCORE_IDX.EMBEDDING];
-              if (!embN || embN.length === 0) continue;
 
               const similarity = this.cosineSimilarity(embO, embN);
 
