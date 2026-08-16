@@ -126,6 +126,7 @@ export class ConsolidationEngine {
         const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
         if (safeEmb.length === 0 && rawEmb) {
            logger.warn(`[Consolidation] Dedup encountered unexpected embedding type for ID ${row[R_IDX.ID]}`);
+           continue; // Skip appending invalid entries
         }
 
         let rowToPush = row;
@@ -155,8 +156,7 @@ export class ConsolidationEngine {
             const embJ = group[j][R_IDX.EMBEDDING];
             if (!embJ || embJ.length === 0) continue;
 
-            // Note: Pass Float32Array directly instead of Array.from to avoid GC overhead in nested loops.
-            // Embeddings are pre-coerced during grouping.
+            // Embeddings are pre-coerced during grouping to avoid GC overhead in nested loops.
             const similarity = this.cosineSimilarity(embI, embJ);
 
             if (similarity > 0.85) {
@@ -508,6 +508,7 @@ export class ConsolidationEngine {
           const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
           if (safeEmb.length === 0 && rawEmb) {
              logger.warn(`[Consolidation] Scoring encountered unexpected embedding type for ID ${row[SCORE_IDX.ID]}`);
+             continue; // Skip appending invalid entries
           }
 
           let rowToPush = row;
