@@ -16,6 +16,8 @@ import { authStorage } from "../utils/context.js";
 import { OracleDreamingService } from "./dreamingService.js";
 
 // Row index helpers for Oracle queries
+const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.85;
+
 const R_IDX = Object.freeze({
   ID: 0, CONTENT: 1, EMBEDDING: 2, IMPORTANCE: 3,
   MEMORY_TYPE: 4, PROJECT: 5, LABEL: 6, DESCRIPTION: 7,
@@ -89,7 +91,7 @@ export class ConsolidationEngine {
   }
 
   /**
-   * Find and merge duplicate dreams (cosine similarity > 0.85).
+   * Find and merge duplicate dreams based on high cosine similarity.
    * Keeps the dream with higher importance, merges metadata.
    */
   private async dedupDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
@@ -149,10 +151,9 @@ export class ConsolidationEngine {
             const embJ = group[j][R_IDX.EMBEDDING];
             if (!embJ || embJ.length === 0) continue;
 
-            // Embeddings are pre-validated during grouping to avoid GC overhead in nested loops.
             const similarity = this.cosineSimilarity(embI, embJ);
 
-            if (similarity > 0.85) {
+            if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD) {
               // Merge: keep the one with higher importance
               const keepIdx = Number(group[i][R_IDX.IMPORTANCE]) >= Number(group[j][R_IDX.IMPORTANCE]) ? i : j;
               const removeIdx = keepIdx === i ? j : i;
@@ -489,7 +490,6 @@ export class ConsolidationEngine {
       if (rows.length > 1) {
         // Group by project+memory_type and find pairs where newer dominates older
         const groups = new Map<string, any[]>();
-
         for (const row of rows) {
           const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
           // Extract arrays, dropping rows without embeddings entirely to ensure grouping logic only compares valid records
@@ -518,8 +518,8 @@ export class ConsolidationEngine {
 
               const similarity = this.cosineSimilarity(embO, embN);
 
-              // If similarity > 0.85 and newer has higher confidence → supersede older
-              if (similarity > 0.85 && Number(newer[SCORE_IDX.CONFIDENCE]) > Number(older[SCORE_IDX.CONFIDENCE])) {
+              // If similarity is high and newer has higher confidence → supersede older
+              if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && Number(newer[SCORE_IDX.CONFIDENCE]) > Number(older[SCORE_IDX.CONFIDENCE])) {
                 toSupersede.add(String(older[SCORE_IDX.ID]));  // older's id
                 break;
               }
