@@ -12,7 +12,7 @@
   "dependencies": {
     "3d-force-graph": "^1.80.0",
     "clsx": "^2.1.1",
-    "firebase": "^10.11.1",
+    "firebase": "^12.17.1",
     "force-graph": "^1.51.4",
     "framer-motion": "^13.1.0",
     "idb": "^8.0.3",
@@ -29,11 +29,11 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/three": "^0.185.4",
-    "@vitejs/plugin-react": "^4.2.1",
+    "@vitejs/plugin-react": "^6.0.5",
     "@vitest/ui": "4.1.10",
     "jsdom": "^29.1.1",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
-    "vitest": "^3.2.6"
+    "vitest": "^4.1.10"
   }
 }
