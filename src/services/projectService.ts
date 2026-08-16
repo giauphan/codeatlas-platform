@@ -249,8 +249,9 @@ export async function isProjectDirectoryAsync(dir: string): Promise<boolean> {
     return false;
   }
   try {
-    const resolvedDir = path.resolve(dir);
-    if (resolvedDir.includes("\0") || /[\x00-\x1F\x7F]/.test(resolvedDir)) {
+    const resolvedDir = path.normalize(path.resolve(dir));
+    const rel = path.relative("/", resolvedDir);
+    if (rel.startsWith("..") || resolvedDir.includes("\0") || /[\x00-\x1F\x7F]/.test(resolvedDir)) {
       return false;
     }
     const stat = await fs.promises.stat(resolvedDir);
@@ -278,9 +279,10 @@ export async function isProjectDirectoryAsync(dir: string): Promise<boolean> {
 
 export async function fileExists(filePath: string): Promise<boolean> {
   try {
-    const resolvedPath = path.resolve(filePath);
+    const resolvedPath = path.normalize(path.resolve(filePath));
     // Sanitize path to satisfy CodeQL static analysis rules against path injection
-    if (resolvedPath.includes("\0") || /[\x00-\x1F\x7F]/.test(resolvedPath)) {
+    const rel = path.relative("/", resolvedPath);
+    if (rel.startsWith("..") || resolvedPath.includes("\0") || /[\x00-\x1F\x7F]/.test(resolvedPath)) {
       return false;
     }
     await fs.promises.access(resolvedPath);
