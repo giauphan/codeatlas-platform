@@ -126,7 +126,7 @@ export class ConsolidationEngine {
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
-        const rowToPush = this.coerceRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup");
+        const rowToPush = this.validateRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup");
         if (!rowToPush) continue;
 
         if (!byProject.has(proj)) byProject.set(proj, []);
@@ -149,7 +149,7 @@ export class ConsolidationEngine {
             const embJ = group[j][R_IDX.EMBEDDING];
             if (!embJ || embJ.length === 0) continue;
 
-            // Embeddings are pre-coerced during grouping to avoid GC overhead in nested loops.
+            // Embeddings are pre-validated during grouping to avoid GC overhead in nested loops.
             const similarity = this.cosineSimilarity(embI, embJ);
 
             if (similarity > 0.85) {
@@ -493,7 +493,7 @@ export class ConsolidationEngine {
         for (const row of rows) {
           const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
           // Extract arrays, dropping rows without embeddings entirely to ensure grouping logic only compares valid records
-          const rowToPush = this.coerceRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring");
+          const rowToPush = this.validateRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring");
           if (!rowToPush) continue;
 
           if (!groups.has(key)) groups.set(key, []);
@@ -628,13 +628,13 @@ export class ConsolidationEngine {
   }
 
   /**
-   * Coerces a row's embedding column to avoid O(N^2) type checking later.
-   * Returns the original row reference natively if matching valid non-empty lengths, or null if invalid/empty.
+   * Validates a row's embedding column to ensure downstream processing runs on correctly typed arrays without O(N^2) checks later.
+   * Returns the original array reference natively if matching valid lengths.
    */
-  private coerceRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): any[] | null {
+  private validateRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): any[] | null {
     const rawEmb = row[embIdx];
     if (!rawEmb) {
-      logger.debug(`[Consolidation] ${contextLabel} encountered missing embedding for ID ${row[idIdx]}`);
+      logger.warn(`[Consolidation] ${contextLabel} encountered missing embedding for ID ${row[idIdx]}`);
       return null;
     }
 
@@ -644,12 +644,12 @@ export class ConsolidationEngine {
     } else if (Array.isArray(rawEmb)) {
       safeEmb = rawEmb;
     } else {
-      logger.debug(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
+      logger.warn(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
       return null;
     }
 
     if (safeEmb.length === 0) {
-      logger.debug(`[Consolidation] ${contextLabel} encountered empty embedding for ID ${row[idIdx]}`);
+      logger.warn(`[Consolidation] ${contextLabel} encountered empty embedding for ID ${row[idIdx]}`);
       return null;
     }
 
