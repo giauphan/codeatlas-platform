@@ -127,10 +127,9 @@ export class ConsolidationEngine {
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
         const rowToPush = this.coerceRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup");
-        if (!rowToPush) continue;
 
         if (!byProject.has(proj)) byProject.set(proj, []);
-        byProject.get(proj)!.push(rowToPush);
+        byProject.get(proj)!.push(rowToPush || row);
       }
 
       let merged = 0;
@@ -140,12 +139,14 @@ export class ConsolidationEngine {
         for (let i = 0; i < group.length; i++) {
           if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
           const embI = group[i][R_IDX.EMBEDDING];
+          if (!embI || embI.length === 0) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             if (toRemove.has(String(group[j][R_IDX.ID]))) continue;
 
             // Cosine similarity on embeddings
             const embJ = group[j][R_IDX.EMBEDDING];
+            if (!embJ || embJ.length === 0) continue;
 
             // Embeddings are pre-coerced during grouping to avoid GC overhead in nested loops.
             const similarity = this.cosineSimilarity(embI, embJ);
@@ -156,7 +157,7 @@ export class ConsolidationEngine {
               const removeIdx = keepIdx === i ? j : i;
               toRemove.add(String(group[removeIdx][R_IDX.ID]));
 
-              // Early exit if the outer loop element was just marked for removal
+              // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked for removal
               if (removeIdx === i) break;
             }
           }
@@ -490,11 +491,11 @@ export class ConsolidationEngine {
 
         for (const row of rows) {
           const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
+          // Extract arrays, returning original row if empty/missing to maintain index positioning grouping logic matches
           const rowToPush = this.coerceRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring");
-          if (!rowToPush) continue;
 
           if (!groups.has(key)) groups.set(key, []);
-          groups.get(key)!.push(rowToPush);
+          groups.get(key)!.push(rowToPush || row);
         }
 
         const toSupersede = new Set<string>();
@@ -504,12 +505,14 @@ export class ConsolidationEngine {
             if (toSupersede.has(String(group[i][SCORE_IDX.ID]))) continue;
             const older = group[i];
             const embO = older[SCORE_IDX.EMBEDDING]; // embedding
+            if (!embO || embO.length === 0) continue;
 
             let isSuperseded = false;
             for (let j = i + 1; j < group.length; j++) {
               if (toSupersede.has(String(group[j][SCORE_IDX.ID]))) continue;
               const newer = group[j];
               const embN = newer[SCORE_IDX.EMBEDDING];
+              if (!embN || embN.length === 0) continue;
 
               const similarity = this.cosineSimilarity(embO, embN);
 
@@ -521,7 +524,7 @@ export class ConsolidationEngine {
               }
             }
 
-            // Early exit if the outer loop element was just marked to be superseded
+            // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked to be superseded
             if (isSuperseded) continue;
           }
         }
