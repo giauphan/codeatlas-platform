@@ -31,7 +31,9 @@ async function migrateTenant() {
 
   // 1. Resolve uid from API key
   const API_KEY_PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
-  const keyHash = crypto.createHmac('sha256', API_KEY_PEPPER).update(apiKey).digest('hex');
+  const salt = Buffer.from(API_KEY_PEPPER, 'utf8');
+  const keyHash = crypto.pbkdf2Sync(apiKey, salt, 100000, 64, 'sha256').toString('hex');
+  const hmacKeyHash = crypto.createHmac('sha256', API_KEY_PEPPER).update(apiKey).digest('hex');
   const legacyKeyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
   const db = getFirestore();
 
@@ -39,6 +41,13 @@ async function migrateTenant() {
     .where("keyHash", "==", keyHash)
     .limit(1)
     .get();
+
+  if (keysSnapshot.empty) {
+    keysSnapshot = await db.collectionGroup("keys")
+      .where("keyHash", "==", hmacKeyHash)
+      .limit(1)
+      .get();
+  }
 
   if (keysSnapshot.empty) {
     keysSnapshot = await db.collectionGroup("keys")
