@@ -127,9 +127,10 @@ export class ConsolidationEngine {
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
         const rowToPush = this.coerceRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup");
+        if (!rowToPush) continue;
 
         if (!byProject.has(proj)) byProject.set(proj, []);
-        byProject.get(proj)!.push(rowToPush || row);
+        byProject.get(proj)!.push(rowToPush);
       }
 
       let merged = 0;
@@ -157,7 +158,7 @@ export class ConsolidationEngine {
               const removeIdx = keepIdx === i ? j : i;
               toRemove.add(String(group[removeIdx][R_IDX.ID]));
 
-              // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked for removal
+              // Early exit if the outer loop element was just marked for removal
               if (removeIdx === i) break;
             }
           }
@@ -491,11 +492,12 @@ export class ConsolidationEngine {
 
         for (const row of rows) {
           const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
-          // Extract arrays, returning original row if empty/missing to maintain index positioning grouping logic matches
+          // Extract arrays, dropping rows without embeddings entirely to ensure grouping logic only compares valid records
           const rowToPush = this.coerceRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring");
+          if (!rowToPush) continue;
 
           if (!groups.has(key)) groups.set(key, []);
-          groups.get(key)!.push(rowToPush || row);
+          groups.get(key)!.push(rowToPush);
         }
 
         const toSupersede = new Set<string>();
@@ -519,13 +521,10 @@ export class ConsolidationEngine {
               // If similarity > 0.85 and newer has higher confidence → supersede older
               if (similarity > 0.85 && Number(newer[SCORE_IDX.CONFIDENCE]) > Number(older[SCORE_IDX.CONFIDENCE])) {
                 toSupersede.add(String(older[SCORE_IDX.ID]));  // older's id
-                isSuperseded = true;
                 break;
               }
             }
 
-            // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked to be superseded
-            if (isSuperseded) continue;
           }
         }
 
