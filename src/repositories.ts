@@ -42,14 +42,23 @@ export class FirestoreAuthRepository implements IAuthRepository {
     try {
       const db = this.getDb();
 
-      // Hash the key using SHA-256 to compare with stored keyHash
-      const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+      // Hash the API key using HMAC-SHA256 with a pepper to query Firestore safely
+      const API_KEY_PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
+      const keyHash = crypto.createHmac('sha256', API_KEY_PEPPER).update(apiKey).digest('hex');
+      const legacyKeyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
 
-      // First try to find by keyHash
+      // First try to find by HMAC keyHash, then legacy SHA-256 keyHash
       let keysSnapshot = await db.collectionGroup('keys')
         .where('keyHash', '==', keyHash)
         .limit(1)
         .get();
+
+      if (keysSnapshot.empty) {
+        keysSnapshot = await db.collectionGroup('keys')
+          .where('keyHash', '==', legacyKeyHash)
+          .limit(1)
+          .get();
+      }
 
       // Fallback for backwards compatibility with unhashed keys
       if (keysSnapshot.empty) {
