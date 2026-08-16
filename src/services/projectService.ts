@@ -118,8 +118,14 @@ export function isSystemIdeDirectory(dir: string): boolean {
       if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas')) {
         isIde = true;
       } else if (
-        isSafeSubPath(absPath, path.join("resources", "app", "extensions")) && fs.existsSync(path.join(absPath, "resources", "app", "extensions")) ||
-        isSafeSubPath(absPath, path.join("resources", "app", "out", "vs")) && fs.existsSync(path.join(absPath, "resources", "app", "out", "vs"))
+        (() => {
+          const extPath = path.join(absPath, "resources", "app", "extensions");
+          const relExt = path.relative(absPath, extPath);
+          const vsPath = path.join(absPath, "resources", "app", "out", "vs");
+          const relVs = path.relative(absPath, vsPath);
+          return (!relExt.startsWith("..") && !path.isAbsolute(relExt) && fs.existsSync(extPath)) ||
+                 (!relVs.startsWith("..") && !path.isAbsolute(relVs) && fs.existsSync(vsPath));
+        })()
       ) {
         isIde = true;
       }
