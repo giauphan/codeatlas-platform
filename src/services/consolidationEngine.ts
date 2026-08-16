@@ -120,6 +120,10 @@ export class ConsolidationEngine {
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
+        // Pre-normalize embedding to avoid O(N^2) type checking
+        const rawEmb = row[R_IDX.EMBEDDING];
+        row[R_IDX.EMBEDDING] = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
+
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push(row);
       }
@@ -130,21 +134,19 @@ export class ConsolidationEngine {
 
         for (let i = 0; i < group.length; i++) {
           if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
+          const embI = group[i][R_IDX.EMBEDDING];
+          if (!embI || embI.length === 0) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             if (toRemove.has(String(group[j][R_IDX.ID]))) continue;
 
             // Cosine similarity on embeddings (both must exist)
-            const embI = group[i][R_IDX.EMBEDDING];
             const embJ = group[j][R_IDX.EMBEDDING];
-            if (!embI || !embJ) continue;
+            if (!embJ || embJ.length === 0) continue;
 
             // Note: Pass Float32Array directly instead of Array.from to avoid GC overhead in nested loops.
-            // If embedding is not a Float32Array, pass original value to preserve behavior.
-            const similarity = this.cosineSimilarity(
-              embI instanceof Float32Array ? embI : (Array.isArray(embI) ? embI : []),
-              embJ instanceof Float32Array ? embJ : (Array.isArray(embJ) ? embJ : [])
-            );
+            // Embeddings are pre-normalized during grouping.
+            const similarity = this.cosineSimilarity(embI, embJ);
 
             if (similarity > 0.85) {
               // Merge: keep the one with higher importance
@@ -485,6 +487,10 @@ export class ConsolidationEngine {
         const groups = new Map<string, any[]>();
         for (const row of rows) {
           const key = `${row[1]}:${row[2]}`; // project:memory_type
+          // Pre-normalize embedding to avoid O(N^2) type checking
+          const rawEmb = row[3];
+          row[3] = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
+
           if (!groups.has(key)) groups.set(key, []);
           groups.get(key)!.push(row);
         }
@@ -494,18 +500,17 @@ export class ConsolidationEngine {
           if (group.length < 2) continue;
           for (let i = 0; i < group.length; i++) {
             if (toSupersede.has(String(group[i][0]))) continue;
+            const older = group[i];
+            const embO = older[3]; // embedding
+            if (!embO || embO.length === 0) continue;
+
             for (let j = i + 1; j < group.length; j++) {
               if (toSupersede.has(String(group[j][0]))) continue;
-              const older = group[i];
               const newer = group[j];
-              const embO = older[3]; // embedding
               const embN = newer[3];
-              if (!embO || !embN) continue;
+              if (!embN || embN.length === 0) continue;
 
-              const similarity = this.cosineSimilarity(
-                embO instanceof Float32Array ? embO : (Array.isArray(embO) ? embO : []),
-                embN instanceof Float32Array ? embN : (Array.isArray(embN) ? embN : [])
-              );
+              const similarity = this.cosineSimilarity(embO, embN);
 
               // If similarity > 0.85 and newer has higher confidence → supersede older
               if (similarity > 0.85 && Number(newer[4]) > Number(older[4])) {
