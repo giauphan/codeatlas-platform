@@ -623,22 +623,34 @@ export class ConsolidationEngine {
 
   /**
    * Coerces a row's embedding column to avoid O(N^2) type checking later.
-   * Returns a shallow copy of the row if valid, or null if invalid.
+   * Returns a shallow copy of the row if non-empty, or null if invalid/empty.
    */
   private coerceRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): any[] | null {
     const rawEmb = row[embIdx];
-    const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
-
-    if (!rawEmb || safeEmb.length === 0) {
-       logger.warn(`[Consolidation] ${contextLabel} encountered unexpected or empty embedding type for ID ${row[idIdx]}`);
-       return null;
+    if (!rawEmb) {
+      logger.warn(`[Consolidation] ${contextLabel} encountered missing embedding for ID ${row[idIdx]}`);
+      return null;
     }
 
-    const needsCoercion = !(safeEmb instanceof Float32Array || Array.isArray(safeEmb));
-    if (needsCoercion) {
-      const rowToPush = [...row];
-      rowToPush[embIdx] = safeEmb;
-      return rowToPush;
+    let safeEmb: number[] | Float32Array;
+    if (rawEmb instanceof Float32Array) {
+      safeEmb = rawEmb;
+    } else if (Array.isArray(rawEmb)) {
+      safeEmb = rawEmb;
+    } else {
+      logger.warn(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
+      return null;
+    }
+
+    if (safeEmb.length === 0) {
+      logger.warn(`[Consolidation] ${contextLabel} encountered empty embedding for ID ${row[idIdx]}`);
+      return null;
+    }
+
+    if (rawEmb !== safeEmb) {
+      const modifiedRow = [...row];
+      modifiedRow[embIdx] = safeEmb;
+      return modifiedRow;
     }
 
     return row;
