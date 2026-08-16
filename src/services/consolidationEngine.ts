@@ -633,11 +633,14 @@ export class ConsolidationEngine {
        return null;
     }
 
-    // Always return a copy to prevent mutating the original row array which may be accessed elsewhere.
-    const rowToPush = [...row];
-    rowToPush[embIdx] = safeEmb;
+    const needsCoercion = !(safeEmb instanceof Float32Array || Array.isArray(safeEmb));
+    if (needsCoercion || safeEmb !== rawEmb) {
+      const rowToPush = [...row];
+      rowToPush[embIdx] = safeEmb;
+      return rowToPush;
+    }
 
-    return rowToPush;
+    return row;
   }
 
   /**
