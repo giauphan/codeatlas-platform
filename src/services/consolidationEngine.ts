@@ -651,12 +651,6 @@ export class ConsolidationEngine {
       return null;
     }
 
-    if (rawEmb !== safeEmb) {
-      const modifiedRow = [...row];
-      modifiedRow[embIdx] = safeEmb;
-      return modifiedRow;
-    }
-
     return row;
   }
 
