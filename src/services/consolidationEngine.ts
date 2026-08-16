@@ -128,11 +128,14 @@ export class ConsolidationEngine {
            logger.warn(`[Consolidation] Dedup encountered unexpected embedding type for ID ${row[R_IDX.ID]}`);
         }
 
-        const rowCopy = [...row];
-        rowCopy[R_IDX.EMBEDDING] = safeEmb;
+        let rowToPush = row;
+        if (safeEmb !== rawEmb) {
+          rowToPush = [...row];
+          rowToPush[R_IDX.EMBEDDING] = safeEmb;
+        }
 
         if (!byProject.has(proj)) byProject.set(proj, []);
-        byProject.get(proj)!.push(rowCopy);
+        byProject.get(proj)!.push(rowToPush);
       }
 
       let merged = 0;
@@ -502,11 +505,14 @@ export class ConsolidationEngine {
              logger.warn(`[Consolidation] Scoring encountered unexpected embedding type for ID ${row[0]}`);
           }
 
-          const rowCopy = [...row];
-          rowCopy[3] = safeEmb;
+          let rowToPush = row;
+          if (safeEmb !== rawEmb) {
+            rowToPush = [...row];
+            rowToPush[3] = safeEmb;
+          }
 
           if (!groups.has(key)) groups.set(key, []);
-          groups.get(key)!.push(rowCopy);
+          groups.get(key)!.push(rowToPush);
         }
 
         const toSupersede = new Set<string>();
