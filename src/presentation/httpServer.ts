@@ -679,7 +679,8 @@ app.post("/api/keys", authMiddleware, async (req, res) => {
 
     const newKey = `ca_${crypto.randomBytes(16).toString('hex')}`;
     const API_KEY_PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
-    const newKeyHash = crypto.createHmac('sha256', API_KEY_PEPPER).update(newKey).digest('hex');
+    const salt = Buffer.from(API_KEY_PEPPER, 'utf8');
+    const newKeyHash = crypto.pbkdf2Sync(newKey, salt, 100000, 64, 'sha256').toString('hex');
 
     const db = firebaseClient.getFirestore();
     const keyRef = db.collection('users').doc(auth.uid).collection('keys').doc();
