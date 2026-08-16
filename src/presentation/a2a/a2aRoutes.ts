@@ -24,7 +24,7 @@ const a2aRateLimiter = rateLimit({
 
 export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, baseUrl: string): void {
   // === Agent Discovery ===
-  app.get("/.well-known/agent-card.json", authMiddleware, async (_req, res, next) => {
+  app.get("/.well-known/agent-card.json", a2aRateLimiter, authMiddleware, async (_req, res, next) => {
     try {
       const card = await buildAgentCard(baseUrl);
       res.json(card);
