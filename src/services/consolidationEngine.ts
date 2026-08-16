@@ -164,6 +164,7 @@ export class ConsolidationEngine {
               toRemove.add(String(group[removeIdx][R_IDX.ID]));
 
               // Early exit if the outer loop element was just marked for removal
+              // (This is safe because the outer loop guarantees skipping over removed indices on subsequent iterations)
               if (removeIdx === i) break;
             }
           }
