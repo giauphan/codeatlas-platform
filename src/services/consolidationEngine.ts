@@ -505,6 +505,7 @@ export class ConsolidationEngine {
             const older = group[i];
             const embO = older[SCORE_IDX.EMBEDDING]; // embedding
 
+            let isSuperseded = false;
             for (let j = i + 1; j < group.length; j++) {
               if (toSupersede.has(String(group[j][SCORE_IDX.ID]))) continue;
               const newer = group[j];
@@ -515,10 +516,13 @@ export class ConsolidationEngine {
               // If similarity > 0.85 and newer has higher confidence → supersede older
               if (similarity > 0.85 && Number(newer[SCORE_IDX.CONFIDENCE]) > Number(older[SCORE_IDX.CONFIDENCE])) {
                 toSupersede.add(String(older[SCORE_IDX.ID]));  // older's id
-                // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked to be superseded
+                isSuperseded = true;
                 break;
               }
             }
+
+            // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked to be superseded
+            if (isSuperseded) continue;
           }
         }
 
@@ -645,12 +649,6 @@ export class ConsolidationEngine {
     if (safeEmb.length === 0) {
       logger.warn(`[Consolidation] ${contextLabel} encountered empty embedding for ID ${row[idIdx]}`);
       return null;
-    }
-
-    if (rawEmb !== safeEmb) {
-      const modifiedRow = [...row];
-      modifiedRow[embIdx] = safeEmb;
-      return modifiedRow;
     }
 
     return row;
