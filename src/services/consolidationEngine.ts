@@ -120,7 +120,8 @@ export class ConsolidationEngine {
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
-        // Pre-coerce embedding type to avoid O(N^2) type checking
+        // Pre-coerce embedding type to avoid O(N^2) type checking in cosineSimilarity.
+        // If type is unrecognised, defaults to [] which is skipped by later length checks.
         const rawEmb = row[R_IDX.EMBEDDING];
         row[R_IDX.EMBEDDING] = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
 
@@ -145,7 +146,7 @@ export class ConsolidationEngine {
             if (!embJ || embJ.length === 0) continue;
 
             // Note: Pass Float32Array directly instead of Array.from to avoid GC overhead in nested loops.
-            // Embeddings are pre-normalized during grouping.
+            // Embeddings are pre-coerced during grouping.
             const similarity = this.cosineSimilarity(embI, embJ);
 
             if (similarity > 0.85) {
@@ -487,7 +488,8 @@ export class ConsolidationEngine {
         const groups = new Map<string, any[]>();
         for (const row of rows) {
           const key = `${row[1]}:${row[2]}`; // project:memory_type
-          // Pre-coerce embedding type to avoid O(N^2) type checking
+          // Pre-coerce embedding type to avoid O(N^2) type checking in cosineSimilarity.
+          // If type is unrecognised, defaults to [] which is skipped by later length checks.
           const rawEmb = row[3];
           row[3] = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
 
