@@ -457,6 +457,7 @@ export class GenomeService {
     project: string
   ): Promise<string[]> {
     if (childNames.length < 2) throw new Error("Need at least 2 child gene names");
+    if (childNames.length > 20) throw new Error("Cannot split gene into more than 20 child genes");
 
     const connection = await (await initPool()).getConnection();
     try {
