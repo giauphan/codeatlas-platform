@@ -121,12 +121,18 @@ export class ConsolidationEngine {
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
         // Pre-coerce embedding type to avoid O(N^2) type checking in cosineSimilarity.
-        // If type is unrecognised, defaults to [] which is skipped by later length checks.
+        // We create a shallow copy to avoid mutating the original row array which may be accessed elsewhere.
         const rawEmb = row[R_IDX.EMBEDDING];
-        row[R_IDX.EMBEDDING] = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
+        const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
+        if (safeEmb.length === 0 && rawEmb) {
+           logger.warn(`[Consolidation] Dedup encountered unexpected embedding type for ID ${row[R_IDX.ID]}`);
+        }
+
+        const rowCopy = [...row];
+        rowCopy[R_IDX.EMBEDDING] = safeEmb;
 
         if (!byProject.has(proj)) byProject.set(proj, []);
-        byProject.get(proj)!.push(row);
+        byProject.get(proj)!.push(rowCopy);
       }
 
       let merged = 0;
@@ -136,14 +142,14 @@ export class ConsolidationEngine {
         for (let i = 0; i < group.length; i++) {
           if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
           const embI = group[i][R_IDX.EMBEDDING];
-          if (!embI || embI.length === 0) continue;
+          if (embI.length === 0) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             if (toRemove.has(String(group[j][R_IDX.ID]))) continue;
 
             // Cosine similarity on embeddings (both must exist)
             const embJ = group[j][R_IDX.EMBEDDING];
-            if (!embJ || embJ.length === 0) continue;
+            if (embJ.length === 0) continue;
 
             // Note: Pass Float32Array directly instead of Array.from to avoid GC overhead in nested loops.
             // Embeddings are pre-coerced during grouping.
@@ -489,12 +495,18 @@ export class ConsolidationEngine {
         for (const row of rows) {
           const key = `${row[1]}:${row[2]}`; // project:memory_type
           // Pre-coerce embedding type to avoid O(N^2) type checking in cosineSimilarity.
-          // If type is unrecognised, defaults to [] which is skipped by later length checks.
+          // We create a shallow copy to avoid mutating the original row array which may be accessed elsewhere.
           const rawEmb = row[3];
-          row[3] = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
+          const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
+          if (safeEmb.length === 0 && rawEmb) {
+             logger.warn(`[Consolidation] Scoring encountered unexpected embedding type for ID ${row[0]}`);
+          }
+
+          const rowCopy = [...row];
+          rowCopy[3] = safeEmb;
 
           if (!groups.has(key)) groups.set(key, []);
-          groups.get(key)!.push(row);
+          groups.get(key)!.push(rowCopy);
         }
 
         const toSupersede = new Set<string>();
@@ -504,13 +516,13 @@ export class ConsolidationEngine {
             if (toSupersede.has(String(group[i][0]))) continue;
             const older = group[i];
             const embO = older[3]; // embedding
-            if (!embO || embO.length === 0) continue;
+            if (embO.length === 0) continue;
 
             for (let j = i + 1; j < group.length; j++) {
               if (toSupersede.has(String(group[j][0]))) continue;
               const newer = group[j];
               const embN = newer[3];
-              if (!embN || embN.length === 0) continue;
+              if (embN.length === 0) continue;
 
               const similarity = this.cosineSimilarity(embO, embN);
 
