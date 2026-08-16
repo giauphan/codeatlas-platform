@@ -4,6 +4,10 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  websocket-driver: ^0.7.5
+  undici: ^6.28.0
+
 importers:
 
   .:
@@ -3213,13 +3217,9 @@ packages:
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
-  undici@6.19.7:
-    resolution: {integrity: sha512-HR3W/bMGPSr90i8AAp2C4DM3wChFdJPLrWYpIS++LxS8K+W535qftjt+4MyjNYHeWabMj1nvtmLIi7l++iq91A==}
+  undici@6.28.0:
+    resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
     engines: {node: '>=18.17'}
-
-  undici@7.25.0:
-    resolution: {integrity: sha512-xXnp4kTyor2Zq+J1FfPI6Eq3ew5h6Vl0F/8d9XU5zZQf1tX9s2Su1/3PiMmUANFULpmksxkClamIZcaUqryHsQ==}
-    engines: {node: '>=20.18.1'}
 
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
@@ -3383,8 +3383,8 @@ packages:
     resolution: {integrity: sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==}
     engines: {node: '>=20'}
 
-  websocket-driver@0.7.4:
-    resolution: {integrity: sha512-b17KeDIQVjvb0ssuSDF2cYXSg2iztliJ4B9WdsuB6J952qCPKmnVq4DyW5motImXHDC1cBT/1UezrJVsKw5zjg==}
+  websocket-driver@0.7.5:
+    resolution: {integrity: sha512-ZL2+3c7kMBdIRCMz6l8jQMHyGVxj+UL+xVk74Ombiciboca8rHa15L86B19E5oh1pL9Ii/uj54gtsIrZGMo6zA==}
     engines: {node: '>=0.8.0'}
 
   websocket-extensions@0.1.4:
@@ -3892,7 +3892,7 @@ snapshots:
       '@firebase/component': 0.6.9
       '@firebase/util': 1.10.0
       tslib: 2.8.1
-      undici: 6.19.7
+      undici: 6.28.0
     transitivePeerDependencies:
       - '@firebase/app'
       - '@firebase/app-types'
@@ -3914,7 +3914,7 @@ snapshots:
       '@firebase/logger': 0.4.2
       '@firebase/util': 1.10.0
       tslib: 2.8.1
-      undici: 6.19.7
+      undici: 6.28.0
 
   '@firebase/component@0.6.9':
     dependencies:
@@ -4010,7 +4010,7 @@ snapshots:
       '@grpc/grpc-js': 1.9.15
       '@grpc/proto-loader': 0.7.15
       tslib: 2.8.1
-      undici: 6.19.7
+      undici: 6.28.0
 
   '@firebase/functions-compat@0.3.14(@firebase/app-compat@0.2.43)(@firebase/app@0.10.13)':
     dependencies:
@@ -4034,7 +4034,7 @@ snapshots:
       '@firebase/messaging-interop-types': 0.2.2
       '@firebase/util': 1.10.0
       tslib: 2.8.1
-      undici: 6.19.7
+      undici: 6.28.0
 
   '@firebase/installations-compat@0.2.9(@firebase/app-compat@0.2.43)(@firebase/app-types@0.9.2)(@firebase/app@0.10.13)':
     dependencies:
@@ -4159,7 +4159,7 @@ snapshots:
       '@firebase/component': 0.6.9
       '@firebase/util': 1.10.0
       tslib: 2.8.1
-      undici: 6.19.7
+      undici: 6.28.0
 
   '@firebase/util@1.10.0':
     dependencies:
@@ -5454,7 +5454,7 @@ snapshots:
 
   faye-websocket@0.11.4:
     dependencies:
-      websocket-driver: 0.7.4
+      websocket-driver: 0.7.5
 
   fdir@6.5.0(picomatch@4.0.5):
     optionalDependencies:
@@ -5904,7 +5904,7 @@ snapshots:
       saxes: 6.0.0
       symbol-tree: 3.2.4
       tough-cookie: 6.0.1
-      undici: 7.25.0
+      undici: 6.28.0
       w3c-xmlserializer: 5.0.0
       webidl-conversions: 8.0.1
       whatwg-mimetype: 5.0.0
@@ -6735,9 +6735,7 @@ snapshots:
 
   undici-types@8.3.0: {}
 
-  undici@6.19.7: {}
-
-  undici@7.25.0: {}
+  undici@6.28.0: {}
 
   unpipe@1.0.0: {}
 
@@ -6862,7 +6860,7 @@ snapshots:
 
   webidl-conversions@8.0.1: {}
 
-  websocket-driver@0.7.4:
+  websocket-driver@0.7.5:
     dependencies:
       http-parser-js: 0.5.10
       safe-buffer: 5.2.1
