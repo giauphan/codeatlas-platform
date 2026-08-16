@@ -34,7 +34,6 @@ async function migrateTenant() {
   const salt = Buffer.from(API_KEY_PEPPER, 'utf8');
   const keyHash = crypto.pbkdf2Sync(apiKey, salt, 100000, 64, 'sha256').toString('hex');
   const hmacKeyHash = crypto.createHmac('sha256', API_KEY_PEPPER).update(apiKey).digest('hex');
-  const legacyKeyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
   const db = getFirestore();
 
   let keysSnapshot = await db.collectionGroup("keys")
@@ -45,13 +44,6 @@ async function migrateTenant() {
   if (keysSnapshot.empty) {
     keysSnapshot = await db.collectionGroup("keys")
       .where("keyHash", "==", hmacKeyHash)
-      .limit(1)
-      .get();
-  }
-
-  if (keysSnapshot.empty) {
-    keysSnapshot = await db.collectionGroup("keys")
-      .where("keyHash", "==", legacyKeyHash)
       .limit(1)
       .get();
   }

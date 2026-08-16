@@ -47,9 +47,8 @@ export class FirestoreAuthRepository implements IAuthRepository {
       const salt = Buffer.from(API_KEY_PEPPER, 'utf8');
       const keyHash = crypto.pbkdf2Sync(apiKey, salt, 100000, 64, 'sha256').toString('hex');
       const hmacKeyHash = crypto.createHmac('sha256', API_KEY_PEPPER).update(apiKey).digest('hex');
-      const legacyKeyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
 
-      // Try PBKDF2 -> HMAC -> SHA256
+      // Try PBKDF2 -> HMAC
       let keysSnapshot = await db.collectionGroup('keys')
         .where('keyHash', '==', keyHash)
         .limit(1)
@@ -58,13 +57,6 @@ export class FirestoreAuthRepository implements IAuthRepository {
       if (keysSnapshot.empty) {
         keysSnapshot = await db.collectionGroup('keys')
           .where('keyHash', '==', hmacKeyHash)
-          .limit(1)
-          .get();
-      }
-
-      if (keysSnapshot.empty) {
-        keysSnapshot = await db.collectionGroup('keys')
-          .where('keyHash', '==', legacyKeyHash)
           .limit(1)
           .get();
       }
