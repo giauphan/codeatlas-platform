@@ -218,16 +218,16 @@ export class A2AExecutor {
    * Dispatch to an MCP tool by name.
    */
   private async callTool(name: string, params: Record<string, unknown>): Promise<unknown> {
-    const handler = this.toolHandlers.get(name);
-    if (!handler) {
-      // Return available tools as helpful error
+    // Sanitize and validate tool name against allowlist of registered tools
+    if (typeof name !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(name) || !this.toolHandlers.has(name)) {
       const available = Array.from(this.toolHandlers.keys()).join(", ");
       return {
-        error: `Tool '${name}' not found. Available tools: ${available}`,
+        error: `Invalid or unknown tool '${String(name)}'. Available tools: ${available}`,
         availableTools: Array.from(this.toolHandlers.keys()),
       };
     }
 
+    const handler = this.toolHandlers.get(name)!;
     return handler(params);
   }
 
