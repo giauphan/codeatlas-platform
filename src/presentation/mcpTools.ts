@@ -25,6 +25,20 @@ import { indexingService } from "../services/indexingService.js";
 import { authStorage } from "../utils/context.js";
 import { randomUUID } from "node:crypto";
 import { isToolEnabled } from "../config/env.js";
+import { GraphNode } from "../types/index.js";
+
+/**
+ * Processes an array of GraphNodes in a single pass and returns the counts
+ * for the requested node types as an object indexed by those types.
+ */
+function countByTypes<T extends GraphNode['type']>(nodes: GraphNode[], types: T[]): Record<T, number> {
+  const counts = Object.fromEntries(types.map(t => [t, 0])) as Record<T, number>;
+  for (const n of nodes) {
+    const type = n.type as T;
+    if (counts[type] !== undefined) counts[type]++;
+  }
+  return counts;
+}
 
 /** Auto-register tool metadata for A2A Agent Card AND register handler on executor (Stub) */
 function a2a(name: string, description: string, params: string[]) {
@@ -491,6 +505,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       const mermaid = lines.join("\n");
 
+      const typeCounts = countByTypes(nodes, ["module", "class", "function"]);
       const result = {
         project: loaded.projectName,
         scope: diagramScope,
@@ -499,7 +514,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         linkCount: links.length,
         truncated: loaded.analysis.graph.nodes.length > max,
         mermaidDiagram: mermaid,
-        summary: `System flow for ${loaded.projectName}: ${nodes.filter((n) => n.type === "module").length} modules, ${nodes.filter((n) => n.type === "class").length} classes, ${nodes.filter((n) => n.type === "function").length} functions connected by ${links.length} relationships.`,
+        summary: `System flow for ${loaded.projectName}: ${typeCounts.module} modules, ${typeCounts.class} classes, ${typeCounts.function} functions connected by ${links.length} relationships.`,
       };
 
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
@@ -567,7 +582,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         success: syncSuccess,
         project: loaded.projectName,
         stats: {
-          modules: nodes.filter((n) => n.type === "module").length,
+          modules: countByTypes(nodes, ["module"]).module,
           totalEntities: nodes.length,
           totalLinks: links.length,
           businessRuleSaved,
