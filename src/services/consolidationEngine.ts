@@ -130,8 +130,8 @@ export class ConsolidationEngine {
         }
 
         let rowToPush = row;
-        const needsCoercion = safeEmb !== rawEmb;
-        if (needsCoercion) {
+        const needsCoercion = !(safeEmb instanceof Float32Array || Array.isArray(safeEmb));
+        if (needsCoercion || safeEmb !== rawEmb) {
           rowToPush = [...row];
           rowToPush[R_IDX.EMBEDDING] = safeEmb;
         }
@@ -512,8 +512,8 @@ export class ConsolidationEngine {
           }
 
           let rowToPush = row;
-          const needsCoercion = safeEmb !== rawEmb;
-          if (needsCoercion) {
+          const needsCoercion = !(safeEmb instanceof Float32Array || Array.isArray(safeEmb));
+          if (needsCoercion || safeEmb !== rawEmb) {
             rowToPush = [...row];
             rowToPush[SCORE_IDX.EMBEDDING] = safeEmb;
           }
