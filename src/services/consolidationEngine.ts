@@ -629,7 +629,7 @@ export class ConsolidationEngine {
   private validateRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): boolean {
     const rawEmb = row[embIdx];
     if (!rawEmb) {
-      logger.warn(`[Consolidation] ${contextLabel} encountered missing embedding for ID ${row[idIdx]}`);
+      logger.debug(`[Consolidation] ${contextLabel} skipping missing embedding for ID ${row[idIdx]}`);
       return false;
     }
 
@@ -644,7 +644,7 @@ export class ConsolidationEngine {
     }
 
     if (safeEmb.length === 0) {
-      logger.warn(`[Consolidation] ${contextLabel} encountered empty embedding for ID ${row[idIdx]}`);
+      logger.debug(`[Consolidation] ${contextLabel} skipping empty embedding for ID ${row[idIdx]}`);
       return false;
     }
 
@@ -658,7 +658,8 @@ export class ConsolidationEngine {
     // Optimization: Cache array length
     const len = a.length;
     if (len !== b.length || len === 0) {
-      logger.warn(`[Consolidation] cosineSimilarity encountered dimension mismatch: ${len} vs ${b.length}`);
+      // Use debug rather than warn to prevent O(N^2) log spam in production
+      logger.debug(`[Consolidation] cosineSimilarity encountered dimension mismatch: ${len} vs ${b.length}`);
       return 0;
     }
     let dot = 0, normA = 0, normB = 0;
