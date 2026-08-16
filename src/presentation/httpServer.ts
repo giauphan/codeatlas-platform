@@ -678,7 +678,8 @@ app.post("/api/keys", authMiddleware, async (req, res) => {
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
 
     const newKey = `ca_${crypto.randomBytes(16).toString('hex')}`;
-    const newKeyHash = crypto.createHash('sha256').update(newKey).digest('hex');
+    const API_KEY_PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
+    const newKeyHash = crypto.createHmac('sha256', API_KEY_PEPPER).update(newKey).digest('hex');
 
     const db = firebaseClient.getFirestore();
     const keyRef = db.collection('users').doc(auth.uid).collection('keys').doc();
@@ -1122,7 +1123,8 @@ app.get("/api/docs/quick-setup", authMiddleware, (req, res) => {
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.sendFile(docPath);
   } catch (e: unknown) {
-    res.status(500).send((e instanceof Error ? e.message : String(e)));
+    logger.error("[Docs] Failed to serve quick-setup doc:", e);
+    res.status(500).send("Internal server error loading documentation");
   }
 });
 
@@ -1135,7 +1137,8 @@ app.get("/api/docs/memory-setup", authMiddleware, (req, res) => {
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.sendFile(docPath);
   } catch (e: unknown) {
-    res.status(500).send((e instanceof Error ? e.message : String(e)));
+    logger.error("[Docs] Failed to serve memory-setup doc:", e);
+    res.status(500).send("Internal server error loading documentation");
   }
 });
 
