@@ -141,6 +141,7 @@ export class ConsolidationEngine {
 
         for (let i = 0; i < group.length; i++) {
           if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
+          // Embeddings validated above during preprocessing
           const embI = group[i][R_IDX.EMBEDDING];
 
           for (let j = i + 1; j < group.length; j++) {
@@ -503,6 +504,7 @@ export class ConsolidationEngine {
           for (let i = 0; i < group.length; i++) {
             if (toSupersede.has(String(group[i][SCORE_IDX.ID]))) continue;
             const older = group[i];
+            // Embeddings validated above during preprocessing
             const embO = older[SCORE_IDX.EMBEDDING]; // embedding
 
             let isSuperseded = false;
@@ -644,7 +646,7 @@ export class ConsolidationEngine {
       return false;
     }
 
-    if (safeEmb.length === 0) {
+    if (!Number.isFinite(safeEmb.length) || safeEmb.length === 0) {
       logger.debug(`[Consolidation] ${contextLabel} skipping empty embedding for ID ${row[idIdx]}`);
       return false;
     }
@@ -654,6 +656,7 @@ export class ConsolidationEngine {
 
   /**
    * Cosine similarity between two vectors (either standard arrays or Float32Array).
+   * Note: passing Float32Array arrays directly via Oracle DB driver enables peak V8 mathematical loop optimizations natively.
    */
   private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
     // Defense in depth: Verify inputs are valid array structures before accessing lengths
