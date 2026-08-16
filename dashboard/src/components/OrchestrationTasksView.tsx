@@ -3,6 +3,7 @@ import { Network, Search, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBran
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth'; // Reusing auth headers utility
 import type { A2AOrchestrationTask, OrchestrationState } from '../../../src/types/a2a'; // Importing types
+import { FOCUS_RING_CLASS } from '../lib/constants';
 
 export function OrchestrationTasksView() {
   const [tasks, setTasks] = useState<A2AOrchestrationTask[]>([]);
@@ -129,11 +130,13 @@ export function OrchestrationTasksView() {
               key={state}
               onClick={() => setFilterState(state)}
               aria-pressed={filterState === state}
+              className={FOCUS_RING_CLASS}
               style={{
                 padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
                 background: filterState === state ? 'rgba(0,240,255,0.15)' : 'rgba(0,0,0,0.2)',
                 color: filterState === state ? 'var(--primary-neon)' : 'var(--text-muted)',
                 cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s',
+                outline: 'none'
               }}
             >
               {state.charAt(0).toUpperCase() + state.slice(1).replace('_', ' ')}
