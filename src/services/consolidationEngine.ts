@@ -16,10 +16,18 @@ import { authStorage } from "../utils/context.js";
 import { OracleDreamingService } from "./dreamingService.js";
 
 // Row index helpers for Oracle queries
+const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.85;
+
 const R_IDX = Object.freeze({
   ID: 0, CONTENT: 1, EMBEDDING: 2, IMPORTANCE: 3,
   MEMORY_TYPE: 4, PROJECT: 5, LABEL: 6, DESCRIPTION: 7,
   CATEGORY: 8, CONFIDENCE: 9, EVIDENCE_COUNT: 10, STATUS: 11,
+});
+
+// Row index helpers for scoreDreams Oracle queries
+// Query: SELECT id, project, memory_type, embedding, confidence, created_at FROM ai_dreaming_memory
+const SCORE_IDX = Object.freeze({
+  ID: 0, PROJECT: 1, MEMORY_TYPE: 2, EMBEDDING: 3, CONFIDENCE: 4, CREATED_AT: 5
 });
 
 export interface ConsolidationJob {
@@ -36,6 +44,7 @@ export interface ConsolidationReport {
   conceptsCreated: number;
   dreamsArchived: number;
   dreamsSuperseded: number;
+  invalidEmbeddingsSkipped: number;
   errors: string[];
 }
 
@@ -52,6 +61,7 @@ export class ConsolidationEngine {
       conceptsCreated: 0,
       dreamsArchived: 0,
       dreamsSuperseded: 0,
+      invalidEmbeddingsSkipped: 0,
       errors: [],
     };
 
@@ -77,13 +87,13 @@ export class ConsolidationEngine {
     }
 
     logger.info(
-      `[Consolidation] Done: ${report.dreamsMerged} merged, ${report.conceptsCreated} concepts created`
+      `[Consolidation] Done: ${report.dreamsMerged} merged, ${report.conceptsCreated} concepts created, ${report.invalidEmbeddingsSkipped} embeddings skipped`
     );
     return report;
   }
 
   /**
-   * Find and merge duplicate dreams (cosine similarity > 0.85).
+   * Find and merge duplicate dreams based on high cosine similarity.
    * Keeps the dream with higher importance, merges metadata.
    */
   private async dedupDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
@@ -120,6 +130,12 @@ export class ConsolidationEngine {
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
+
+        if (!this.validateRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup")) {
+          if (report) report.invalidEmbeddingsSkipped++;
+          continue;
+        }
+
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push(row);
       }
@@ -130,29 +146,25 @@ export class ConsolidationEngine {
 
         for (let i = 0; i < group.length; i++) {
           if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
+          // Embeddings validated above during preprocessing
+          const embI = group[i][R_IDX.EMBEDDING];
 
           for (let j = i + 1; j < group.length; j++) {
             if (toRemove.has(String(group[j][R_IDX.ID]))) continue;
 
-            // Cosine similarity on embeddings (both must exist)
-            const embI = group[i][R_IDX.EMBEDDING];
+            // Cosine similarity on embeddings
             const embJ = group[j][R_IDX.EMBEDDING];
-            if (!embI || !embJ) continue;
 
-            // Note: Pass Float32Array directly instead of Array.from to avoid GC overhead in nested loops.
-            // If embedding is not a Float32Array, pass original value to preserve behavior.
-            const similarity = this.cosineSimilarity(
-              embI instanceof Float32Array ? embI : (Array.isArray(embI) ? embI : []),
-              embJ instanceof Float32Array ? embJ : (Array.isArray(embJ) ? embJ : [])
-            );
+            const similarity = this.cosineSimilarity(embI, embJ);
 
-            if (similarity > 0.85) {
+            if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD) {
               // Merge: keep the one with higher importance
               const keepIdx = Number(group[i][R_IDX.IMPORTANCE]) >= Number(group[j][R_IDX.IMPORTANCE]) ? i : j;
               const removeIdx = keepIdx === i ? j : i;
               toRemove.add(String(group[removeIdx][R_IDX.ID]));
 
-              // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked for removal
+              // Early exit if the outer loop element was just marked for removal
+              // (This is safe because the outer loop guarantees skipping over removed indices on subsequent iterations)
               if (removeIdx === i) break;
             }
           }
@@ -268,7 +280,7 @@ export class ConsolidationEngine {
       }
 
       const descriptions = intermediateData.map(d => d.conceptDescription);
-      // ⚡ Bolt Optimization: Batch embedding generation to avoid N+1 API calls.
+      // Batch embedding generation to avoid N+1 API calls.
       let batchEmbeddings: number[][] | null = null;
       if (descriptions.length > 0) {
         batchEmbeddings = await generateEmbeddingsBatch(descriptions, "passage");
@@ -484,7 +496,13 @@ export class ConsolidationEngine {
         // Group by project+memory_type and find pairs where newer dominates older
         const groups = new Map<string, any[]>();
         for (const row of rows) {
-          const key = `${row[1]}:${row[2]}`; // project:memory_type
+          const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
+          // Extract embeddings before grouping
+          if (!this.validateRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring")) {
+            if (report) report.invalidEmbeddingsSkipped++;
+            continue;
+          }
+
           if (!groups.has(key)) groups.set(key, []);
           groups.get(key)!.push(row);
         }
@@ -493,27 +511,26 @@ export class ConsolidationEngine {
         for (const [, group] of groups) {
           if (group.length < 2) continue;
           for (let i = 0; i < group.length; i++) {
-            if (toSupersede.has(String(group[i][0]))) continue;
+            if (toSupersede.has(String(group[i][SCORE_IDX.ID]))) continue;
+            const older = group[i];
+            // Embeddings validated above during preprocessing
+            const embO = older[SCORE_IDX.EMBEDDING]; // embedding
+
+            let isSuperseded = false;
             for (let j = i + 1; j < group.length; j++) {
-              if (toSupersede.has(String(group[j][0]))) continue;
-              const older = group[i];
+              if (toSupersede.has(String(group[j][SCORE_IDX.ID]))) continue;
               const newer = group[j];
-              const embO = older[3]; // embedding
-              const embN = newer[3];
-              if (!embO || !embN) continue;
+              const embN = newer[SCORE_IDX.EMBEDDING];
 
-              const similarity = this.cosineSimilarity(
-                embO instanceof Float32Array ? embO : (Array.isArray(embO) ? embO : []),
-                embN instanceof Float32Array ? embN : (Array.isArray(embN) ? embN : [])
-              );
+              const similarity = this.cosineSimilarity(embO, embN);
 
-              // If similarity > 0.85 and newer has higher confidence → supersede older
-              if (similarity > 0.85 && Number(newer[4]) > Number(older[4])) {
-                toSupersede.add(String(older[0]));  // older's id
-                // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked to be superseded
+              // If similarity is high and newer has higher confidence → supersede older
+              if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && Number(newer[SCORE_IDX.CONFIDENCE]) > Number(older[SCORE_IDX.CONFIDENCE])) {
+                toSupersede.add(String(older[SCORE_IDX.ID]));  // older's id
                 break;
               }
             }
+
           }
         }
 
@@ -617,12 +634,52 @@ export class ConsolidationEngine {
   }
 
   /**
+   * Validates a row's embedding column to ensure downstream processing runs on correctly typed arrays without O(N^2) checks later.
+   * Returns true if valid, false otherwise.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private validateRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): boolean {
+    const rawEmb = row[embIdx];
+    if (!rawEmb) {
+      logger.debug(`[Consolidation] ${contextLabel} skipping missing embedding for ID ${row[idIdx]}`);
+      return false;
+    }
+
+    let safeEmb: number[] | Float32Array;
+    if (rawEmb instanceof Float32Array) {
+      safeEmb = rawEmb;
+    } else if (Array.isArray(rawEmb)) {
+      safeEmb = rawEmb;
+    } else {
+      logger.debug(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
+      return false;
+    }
+
+    if (!Number.isFinite(safeEmb.length) || safeEmb.length === 0) {
+      logger.debug(`[Consolidation] ${contextLabel} skipping empty embedding for ID ${row[idIdx]}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * Cosine similarity between two vectors (either standard arrays or Float32Array).
+   * Note: passing Float32Array arrays directly via Oracle DB driver enables peak V8 mathematical loop optimizations natively.
    */
   private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
+    // Defense in depth: Verify inputs are valid array structures before accessing lengths
+    // (primarily safety for non-loop external callers who may bypass validateRowEmbedding)
+    if (!Array.isArray(a) && !(a instanceof Float32Array)) return 0;
+    if (!Array.isArray(b) && !(b instanceof Float32Array)) return 0;
+
     // Optimization: Cache array length
     const len = a.length;
-    if (len !== b.length || len === 0) return 0;
+    if (len !== b.length || len === 0) {
+      // Use debug rather than warn to prevent O(N^2) log spam in production
+      logger.debug(`[Consolidation] cosineSimilarity encountered dimension mismatch: ${len} vs ${b.length}`);
+      return 0;
+    }
     let dot = 0, normA = 0, normB = 0;
     for (let i = 0; i < len; i++) {
       // Optimization: Extract to local variables to avoid multiple array lookups
