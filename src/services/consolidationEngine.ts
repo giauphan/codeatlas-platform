@@ -140,14 +140,12 @@ export class ConsolidationEngine {
         for (let i = 0; i < group.length; i++) {
           if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
           const embI = group[i][R_IDX.EMBEDDING];
-          if (!embI || embI.length === 0) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             if (toRemove.has(String(group[j][R_IDX.ID]))) continue;
 
-            // Cosine similarity on embeddings (both must exist)
+            // Cosine similarity on embeddings
             const embJ = group[j][R_IDX.EMBEDDING];
-            if (!embJ || embJ.length === 0) continue;
 
             // Embeddings are pre-coerced during grouping to avoid GC overhead in nested loops.
             const similarity = this.cosineSimilarity(embI, embJ);
@@ -505,13 +503,11 @@ export class ConsolidationEngine {
             if (toSupersede.has(String(group[i][SCORE_IDX.ID]))) continue;
             const older = group[i];
             const embO = older[SCORE_IDX.EMBEDDING]; // embedding
-            if (!embO || embO.length === 0) continue;
 
             for (let j = i + 1; j < group.length; j++) {
               if (toSupersede.has(String(group[j][SCORE_IDX.ID]))) continue;
               const newer = group[j];
               const embN = newer[SCORE_IDX.EMBEDDING];
-              if (!embN || embN.length === 0) continue;
 
               const similarity = this.cosineSimilarity(embO, embN);
 
@@ -626,23 +622,21 @@ export class ConsolidationEngine {
 
   /**
    * Coerces a row's embedding column to avoid O(N^2) type checking later.
-   * Returns a shallow copy if coerced, the original row if valid, or null if invalid.
+   * Returns a shallow copy of the row if valid, or null if invalid.
    */
   private coerceRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): any[] | null {
     const rawEmb = row[embIdx];
     const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
 
-    if (safeEmb.length === 0 && rawEmb) {
-       logger.warn(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
+    if (!rawEmb || safeEmb.length === 0) {
+       logger.warn(`[Consolidation] ${contextLabel} encountered unexpected or empty embedding type for ID ${row[idIdx]}`);
        return null;
     }
 
-    let rowToPush = row;
-    const needsCoercion = !(safeEmb instanceof Float32Array || Array.isArray(safeEmb));
-    if (needsCoercion || safeEmb !== rawEmb) {
-      rowToPush = [...row];
-      rowToPush[embIdx] = safeEmb;
-    }
+    // Always return a copy to prevent mutating the original row array which may be accessed elsewhere.
+    const rowToPush = [...row];
+    rowToPush[embIdx] = safeEmb;
+
     return rowToPush;
   }
 
