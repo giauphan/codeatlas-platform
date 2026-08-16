@@ -635,7 +635,7 @@ export class ConsolidationEngine {
     }
 
     const needsCoercion = !(safeEmb instanceof Float32Array || Array.isArray(safeEmb));
-    if (needsCoercion || safeEmb !== rawEmb) {
+    if (needsCoercion) {
       const rowToPush = [...row];
       rowToPush[embIdx] = safeEmb;
       return rowToPush;
