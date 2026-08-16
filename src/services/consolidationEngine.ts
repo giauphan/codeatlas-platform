@@ -22,11 +22,6 @@ const R_IDX = Object.freeze({
   CATEGORY: 8, CONFIDENCE: 9, EVIDENCE_COUNT: 10, STATUS: 11,
 });
 
-// Row index helpers for scoreDreams Oracle queries
-// SELECT id (0), project (1), memory_type (2), embedding (3), confidence (4), created_at (5)
-const SCORE_IDX = Object.freeze({
-  ID: 0, PROJECT: 1, MEMORY_TYPE: 2, EMBEDDING: 3, CONFIDENCE: 4, CREATED_AT: 5
-});
 
 export interface ConsolidationJob {
   project?: string;
@@ -487,6 +482,10 @@ export class ConsolidationEngine {
       if (rows.length > 1) {
         // Group by project+memory_type and find pairs where newer dominates older
         const groups = new Map<string, any[]>();
+        // Local index helpers for scoreDreams Oracle queries
+        // SELECT id (0), project (1), memory_type (2), embedding (3), confidence (4), created_at (5)
+        const SCORE_IDX = { ID: 0, PROJECT: 1, MEMORY_TYPE: 2, EMBEDDING: 3, CONFIDENCE: 4, CREATED_AT: 5 };
+
         for (const row of rows) {
           const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
           const rowToPush = this.coerceRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring");
