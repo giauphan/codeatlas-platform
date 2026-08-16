@@ -18,6 +18,38 @@ function extractErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Check if a path segment is safe to use in path.join — no path traversal,
+ * no path separators, no control characters, no leading/trailing whitespace.
+ */
+function isSafePathSegment(segment: string): boolean {
+  if (segment === '' || segment === '.' || segment === '..') return false;
+  if (segment.includes(path.sep) || segment.includes('/')) return false;
+  if (segment.includes('\\')) return false;
+  if (/[\x00-\x1F\x7F]/.test(segment)) return false;
+  if (segment.trim() !== segment) return false;
+  return true;
+}
+
+/**
+ * Check if a sub-path is safe to join to a base path — no traversal,
+ * no absolute paths, no control characters.
+ */
+function isSafeSubPath(base: string, subPath: string): boolean {
+  if (path.isAbsolute(subPath)) return false;
+  const parts = subPath.split(path.sep);
+  if (!parts.every(isSafePathSegment)) return false;
+  // Ensure the joined path resolves to a sub-path of base (no traversal)
+  try {
+    const joined = path.join(base, subPath);
+    const resolved = path.resolve(joined);
+    const baseResolved = path.resolve(base);
+    return resolved.startsWith(baseResolved + path.sep) || resolved === baseResolved;
+  } catch {
+    return false;
+  }
+}
+
 /** Helper to check if an error is a recoverable/expected filesystem error */
 function isRecoverableError(err: unknown): boolean {
   const code = (err as { code?: string })?.code;
@@ -82,8 +114,8 @@ export function isSystemIdeDirectory(dir: string): boolean {
       if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas')) {
         isIde = true;
       } else if (
-        fs.existsSync(path.join(absPath, "resources", "app", "extensions")) ||
-        fs.existsSync(path.join(absPath, "resources", "app", "out", "vs"))
+        isSafeSubPath(absPath, path.join("resources", "app", "extensions")) && fs.existsSync(path.join(absPath, "resources", "app", "extensions")) ||
+        isSafeSubPath(absPath, path.join("resources", "app", "out", "vs")) && fs.existsSync(path.join(absPath, "resources", "app", "out", "vs"))
       ) {
         isIde = true;
       }
@@ -208,15 +240,15 @@ export async function isProjectDirectoryAsync(dir: string): Promise<boolean> {
       return false;
     }
     const gitPath = path.join(dir, ".git");
-    if (await fileExists(gitPath)) {
+    if (isSafeSubPath(dir, ".git") && await fileExists(gitPath)) {
       return true;
     }
     const codeatlasPath = path.join(dir, ".codeatlas");
-    if (await fileExists(codeatlasPath)) {
+    if (isSafeSubPath(dir, ".codeatlas") && await fileExists(codeatlasPath)) {
       // Must be a project .codeatlas (has analysis.json or settings.json),
       // not the global config directory at ~/.codeatlas/
-      if (await fileExists(path.join(codeatlasPath, "analysis.json")) ||
-          await fileExists(path.join(codeatlasPath, "settings.json"))) {
+      if (isSafeSubPath(codeatlasPath, "analysis.json") && await fileExists(path.join(codeatlasPath, "analysis.json")) ||
+          isSafeSubPath(codeatlasPath, "settings.json") && await fileExists(path.join(codeatlasPath, "settings.json"))) {
         return true;
       }
     }
