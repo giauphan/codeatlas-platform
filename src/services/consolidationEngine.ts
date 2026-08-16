@@ -496,21 +496,25 @@ export class ConsolidationEngine {
       if (rows.length > 1) {
         // Group by project+memory_type and find pairs where newer dominates older
         const groups = new Map<string, any[]>();
+        // Note: The SELECT statement for scoreDreams is different from dedupDreams.
+        // SELECT id (0), project (1), memory_type (2), embedding (3), confidence (4), created_at (5)
+        const SCORE_IDX = { ID: 0, PROJECT: 1, MEMORY_TYPE: 2, EMBEDDING: 3, CONFIDENCE: 4, CREATED_AT: 5 };
+
         for (const row of rows) {
-          const key = `${row[R_IDX.CONTENT]}:${row[R_IDX.EMBEDDING]}`; // project:memory_type
+          const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
           // Pre-coerce embedding type to avoid O(N^2) type checking in cosineSimilarity.
           // We create a shallow copy to avoid mutating the original row array which may be accessed elsewhere.
-          const rawEmb = row[R_IDX.IMPORTANCE];
+          const rawEmb = row[SCORE_IDX.EMBEDDING];
           const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
           if (safeEmb.length === 0 && rawEmb) {
-             logger.warn(`[Consolidation] Scoring encountered unexpected embedding type for ID ${row[R_IDX.ID]}`);
+             logger.warn(`[Consolidation] Scoring encountered unexpected embedding type for ID ${row[SCORE_IDX.ID]}`);
           }
 
           let rowToPush = row;
           const needsCoercion = safeEmb !== rawEmb;
           if (needsCoercion) {
             rowToPush = [...row];
-            rowToPush[R_IDX.IMPORTANCE] = safeEmb;
+            rowToPush[SCORE_IDX.EMBEDDING] = safeEmb;
           }
 
           if (!groups.has(key)) groups.set(key, []);
@@ -521,22 +525,22 @@ export class ConsolidationEngine {
         for (const [, group] of groups) {
           if (group.length < 2) continue;
           for (let i = 0; i < group.length; i++) {
-            if (toSupersede.has(String(group[i][R_IDX.ID]))) continue;
+            if (toSupersede.has(String(group[i][SCORE_IDX.ID]))) continue;
             const older = group[i];
-            const embO = older[R_IDX.IMPORTANCE]; // embedding
+            const embO = older[SCORE_IDX.EMBEDDING]; // embedding
             if (!embO || embO.length === 0) continue;
 
             for (let j = i + 1; j < group.length; j++) {
-              if (toSupersede.has(String(group[j][R_IDX.ID]))) continue;
+              if (toSupersede.has(String(group[j][SCORE_IDX.ID]))) continue;
               const newer = group[j];
-              const embN = newer[R_IDX.IMPORTANCE];
+              const embN = newer[SCORE_IDX.EMBEDDING];
               if (!embN || embN.length === 0) continue;
 
               const similarity = this.cosineSimilarity(embO, embN);
 
               // If similarity > 0.85 and newer has higher confidence → supersede older
-              if (similarity > 0.85 && Number(newer[R_IDX.MEMORY_TYPE]) > Number(older[R_IDX.MEMORY_TYPE])) {
-                toSupersede.add(String(older[R_IDX.ID]));  // older's id
+              if (similarity > 0.85 && Number(newer[SCORE_IDX.CONFIDENCE]) > Number(older[SCORE_IDX.CONFIDENCE])) {
+                toSupersede.add(String(older[SCORE_IDX.ID]));  // older's id
                 // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked to be superseded
                 break;
               }
