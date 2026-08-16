@@ -156,7 +156,7 @@ export class ConsolidationEngine {
               const removeIdx = keepIdx === i ? j : i;
               toRemove.add(String(group[removeIdx][R_IDX.ID]));
 
-              // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked for removal
+              // Early exit if the outer loop element was just marked for removal
               if (removeIdx === i) break;
             }
           }
@@ -272,7 +272,7 @@ export class ConsolidationEngine {
       }
 
       const descriptions = intermediateData.map(d => d.conceptDescription);
-      // ⚡ Bolt Optimization: Batch embedding generation to avoid N+1 API calls.
+      // Batch embedding generation to avoid N+1 API calls.
       let batchEmbeddings: number[][] | null = null;
       if (descriptions.length > 0) {
         batchEmbeddings = await generateEmbeddingsBatch(descriptions, "passage");
@@ -521,7 +521,7 @@ export class ConsolidationEngine {
               }
             }
 
-            // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked to be superseded
+            // Early exit if the outer loop element was just marked to be superseded
             if (isSuperseded) continue;
           }
         }
@@ -649,6 +649,12 @@ export class ConsolidationEngine {
     if (safeEmb.length === 0) {
       logger.warn(`[Consolidation] ${contextLabel} encountered empty embedding for ID ${row[idIdx]}`);
       return null;
+    }
+
+    if (rawEmb !== safeEmb) {
+      const modifiedRow = [...row];
+      modifiedRow[embIdx] = safeEmb;
+      return modifiedRow;
     }
 
     return row;
