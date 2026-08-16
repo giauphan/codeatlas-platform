@@ -120,7 +120,7 @@ export class ConsolidationEngine {
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
-        // Pre-normalize embedding to avoid O(N^2) type checking
+        // Pre-coerce embedding type to avoid O(N^2) type checking
         const rawEmb = row[R_IDX.EMBEDDING];
         row[R_IDX.EMBEDDING] = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
 
@@ -487,7 +487,7 @@ export class ConsolidationEngine {
         const groups = new Map<string, any[]>();
         for (const row of rows) {
           const key = `${row[1]}:${row[2]}`; // project:memory_type
-          // Pre-normalize embedding to avoid O(N^2) type checking
+          // Pre-coerce embedding type to avoid O(N^2) type checking
           const rawEmb = row[3];
           row[3] = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
 
