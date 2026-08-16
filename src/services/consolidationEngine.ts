@@ -44,6 +44,7 @@ export interface ConsolidationReport {
   conceptsCreated: number;
   dreamsArchived: number;
   dreamsSuperseded: number;
+  invalidEmbeddingsSkipped: number;
   errors: string[];
 }
 
@@ -60,6 +61,7 @@ export class ConsolidationEngine {
       conceptsCreated: 0,
       dreamsArchived: 0,
       dreamsSuperseded: 0,
+      invalidEmbeddingsSkipped: 0,
       errors: [],
     };
 
@@ -85,7 +87,7 @@ export class ConsolidationEngine {
     }
 
     logger.info(
-      `[Consolidation] Done: ${report.dreamsMerged} merged, ${report.conceptsCreated} concepts created`
+      `[Consolidation] Done: ${report.dreamsMerged} merged, ${report.conceptsCreated} concepts created, ${report.invalidEmbeddingsSkipped} embeddings skipped`
     );
     return report;
   }
@@ -129,7 +131,10 @@ export class ConsolidationEngine {
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
 
-        if (!this.validateRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup")) continue;
+        if (!this.validateRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup")) {
+          if (report) report.invalidEmbeddingsSkipped++;
+          continue;
+        }
 
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push(row);
@@ -492,7 +497,10 @@ export class ConsolidationEngine {
         for (const row of rows) {
           const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
           // Extract embeddings before grouping
-          if (!this.validateRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring")) continue;
+          if (!this.validateRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring")) {
+            if (report) report.invalidEmbeddingsSkipped++;
+            continue;
+          }
 
           if (!groups.has(key)) groups.set(key, []);
           groups.get(key)!.push(row);
