@@ -2,6 +2,7 @@ import express from "express";
 import helmet from "helmet";
 import compression from "compression";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { IncomingMessage, Server } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -161,6 +162,14 @@ app.use(compression({
 }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// Global rate limiting using express-rate-limit
+app.use(rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120, // limit each IP to 120 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
