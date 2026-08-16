@@ -634,7 +634,7 @@ export class ConsolidationEngine {
   private coerceRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): any[] | null {
     const rawEmb = row[embIdx];
     if (!rawEmb) {
-      logger.debug(`[Consolidation] ${contextLabel} encountered missing embedding for ID ${row[idIdx]}`);
+      logger.warn(`[Consolidation] ${contextLabel} encountered missing embedding for ID ${row[idIdx]}`);
       return null;
     }
 
@@ -644,12 +644,12 @@ export class ConsolidationEngine {
     } else if (Array.isArray(rawEmb)) {
       safeEmb = rawEmb;
     } else {
-      logger.debug(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
+      logger.warn(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
       return null;
     }
 
     if (safeEmb.length === 0) {
-      logger.debug(`[Consolidation] ${contextLabel} encountered empty embedding for ID ${row[idIdx]}`);
+      logger.warn(`[Consolidation] ${contextLabel} encountered empty embedding for ID ${row[idIdx]}`);
       return null;
     }
 
