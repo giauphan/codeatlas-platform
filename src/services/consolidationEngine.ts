@@ -22,6 +22,12 @@ const R_IDX = Object.freeze({
   CATEGORY: 8, CONFIDENCE: 9, EVIDENCE_COUNT: 10, STATUS: 11,
 });
 
+// Row index helpers for scoreDreams Oracle queries
+// SELECT id (0), project (1), memory_type (2), embedding (3), confidence (4), created_at (5)
+const SCORE_IDX = Object.freeze({
+  ID: 0, PROJECT: 1, MEMORY_TYPE: 2, EMBEDDING: 3, CONFIDENCE: 4, CREATED_AT: 5
+});
+
 export interface ConsolidationJob {
   project?: string;
   provider?: string;
@@ -120,21 +126,8 @@ export class ConsolidationEngine {
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
-        // Pre-coerce embedding type to avoid O(N^2) type checking in cosineSimilarity.
-        // We create a shallow copy to avoid mutating the original row array which may be accessed elsewhere.
-        const rawEmb = row[R_IDX.EMBEDDING];
-        const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
-        if (safeEmb.length === 0 && rawEmb) {
-           logger.warn(`[Consolidation] Dedup encountered unexpected embedding type for ID ${row[R_IDX.ID]}`);
-           continue; // Skip appending invalid entries
-        }
-
-        let rowToPush = row;
-        const needsCoercion = !(safeEmb instanceof Float32Array || Array.isArray(safeEmb));
-        if (needsCoercion || safeEmb !== rawEmb) {
-          rowToPush = [...row];
-          rowToPush[R_IDX.EMBEDDING] = safeEmb;
-        }
+        const rowToPush = this.coerceRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup");
+        if (!rowToPush) continue;
 
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push(rowToPush);
@@ -496,27 +489,10 @@ export class ConsolidationEngine {
       if (rows.length > 1) {
         // Group by project+memory_type and find pairs where newer dominates older
         const groups = new Map<string, any[]>();
-        // Note: The SELECT statement for scoreDreams is different from dedupDreams.
-        // SELECT id (0), project (1), memory_type (2), embedding (3), confidence (4), created_at (5)
-        const SCORE_IDX = { ID: 0, PROJECT: 1, MEMORY_TYPE: 2, EMBEDDING: 3, CONFIDENCE: 4, CREATED_AT: 5 };
-
         for (const row of rows) {
           const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
-          // Pre-coerce embedding type to avoid O(N^2) type checking in cosineSimilarity.
-          // We create a shallow copy to avoid mutating the original row array which may be accessed elsewhere.
-          const rawEmb = row[SCORE_IDX.EMBEDDING];
-          const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
-          if (safeEmb.length === 0 && rawEmb) {
-             logger.warn(`[Consolidation] Scoring encountered unexpected embedding type for ID ${row[SCORE_IDX.ID]}`);
-             continue; // Skip appending invalid entries
-          }
-
-          let rowToPush = row;
-          const needsCoercion = !(safeEmb instanceof Float32Array || Array.isArray(safeEmb));
-          if (needsCoercion || safeEmb !== rawEmb) {
-            rowToPush = [...row];
-            rowToPush[SCORE_IDX.EMBEDDING] = safeEmb;
-          }
+          const rowToPush = this.coerceRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring");
+          if (!rowToPush) continue;
 
           if (!groups.has(key)) groups.set(key, []);
           groups.get(key)!.push(rowToPush);
@@ -646,6 +622,28 @@ export class ConsolidationEngine {
         } catch { /* ignore */ }
       }
     }
+  }
+
+  /**
+   * Coerces a row's embedding column to avoid O(N^2) type checking later.
+   * Returns a shallow copy if coerced, the original row if valid, or null if invalid.
+   */
+  private coerceRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): any[] | null {
+    const rawEmb = row[embIdx];
+    const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
+
+    if (safeEmb.length === 0 && rawEmb) {
+       logger.warn(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
+       return null;
+    }
+
+    let rowToPush = row;
+    const needsCoercion = !(safeEmb instanceof Float32Array || Array.isArray(safeEmb));
+    if (needsCoercion || safeEmb !== rawEmb) {
+      rowToPush = [...row];
+      rowToPush[embIdx] = safeEmb;
+    }
+    return rowToPush;
   }
 
   /**
