@@ -22,7 +22,6 @@ const R_IDX = Object.freeze({
   CATEGORY: 8, CONFIDENCE: 9, EVIDENCE_COUNT: 10, STATUS: 11,
 });
 
-
 export interface ConsolidationJob {
   project?: string;
   provider?: string;
