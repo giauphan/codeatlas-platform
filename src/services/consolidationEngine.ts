@@ -626,6 +626,7 @@ export class ConsolidationEngine {
    * Validates a row's embedding column to ensure downstream processing runs on correctly typed arrays without O(N^2) checks later.
    * Returns true if valid, false otherwise.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private validateRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): boolean {
     const rawEmb = row[embIdx];
     if (!rawEmb) {
@@ -639,7 +640,7 @@ export class ConsolidationEngine {
     } else if (Array.isArray(rawEmb)) {
       safeEmb = rawEmb;
     } else {
-      logger.warn(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
+      logger.debug(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
       return false;
     }
 
@@ -655,6 +656,10 @@ export class ConsolidationEngine {
    * Cosine similarity between two vectors (either standard arrays or Float32Array).
    */
   private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
+    // Defense in depth: Verify inputs are valid array structures before accessing lengths
+    if (!Array.isArray(a) && !(a instanceof Float32Array)) return 0;
+    if (!Array.isArray(b) && !(b instanceof Float32Array)) return 0;
+
     // Optimization: Cache array length
     const len = a.length;
     if (len !== b.length || len === 0) {
