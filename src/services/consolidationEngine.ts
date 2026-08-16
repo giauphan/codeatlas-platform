@@ -129,7 +129,8 @@ export class ConsolidationEngine {
         }
 
         let rowToPush = row;
-        if (safeEmb !== rawEmb) {
+        const needsCoercion = safeEmb !== rawEmb;
+        if (needsCoercion) {
           rowToPush = [...row];
           rowToPush[R_IDX.EMBEDDING] = safeEmb;
         }
@@ -145,14 +146,14 @@ export class ConsolidationEngine {
         for (let i = 0; i < group.length; i++) {
           if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
           const embI = group[i][R_IDX.EMBEDDING];
-          if (embI.length === 0) continue;
+          if (!embI || embI.length === 0) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             if (toRemove.has(String(group[j][R_IDX.ID]))) continue;
 
             // Cosine similarity on embeddings (both must exist)
             const embJ = group[j][R_IDX.EMBEDDING];
-            if (embJ.length === 0) continue;
+            if (!embJ || embJ.length === 0) continue;
 
             // Note: Pass Float32Array directly instead of Array.from to avoid GC overhead in nested loops.
             // Embeddings are pre-coerced during grouping.
@@ -496,19 +497,20 @@ export class ConsolidationEngine {
         // Group by project+memory_type and find pairs where newer dominates older
         const groups = new Map<string, any[]>();
         for (const row of rows) {
-          const key = `${row[1]}:${row[2]}`; // project:memory_type
+          const key = `${row[R_IDX.CONTENT]}:${row[R_IDX.EMBEDDING]}`; // project:memory_type
           // Pre-coerce embedding type to avoid O(N^2) type checking in cosineSimilarity.
           // We create a shallow copy to avoid mutating the original row array which may be accessed elsewhere.
-          const rawEmb = row[3];
+          const rawEmb = row[R_IDX.IMPORTANCE];
           const safeEmb = rawEmb instanceof Float32Array ? rawEmb : (Array.isArray(rawEmb) ? rawEmb : []);
           if (safeEmb.length === 0 && rawEmb) {
-             logger.warn(`[Consolidation] Scoring encountered unexpected embedding type for ID ${row[0]}`);
+             logger.warn(`[Consolidation] Scoring encountered unexpected embedding type for ID ${row[R_IDX.ID]}`);
           }
 
           let rowToPush = row;
-          if (safeEmb !== rawEmb) {
+          const needsCoercion = safeEmb !== rawEmb;
+          if (needsCoercion) {
             rowToPush = [...row];
-            rowToPush[3] = safeEmb;
+            rowToPush[R_IDX.IMPORTANCE] = safeEmb;
           }
 
           if (!groups.has(key)) groups.set(key, []);
@@ -519,22 +521,22 @@ export class ConsolidationEngine {
         for (const [, group] of groups) {
           if (group.length < 2) continue;
           for (let i = 0; i < group.length; i++) {
-            if (toSupersede.has(String(group[i][0]))) continue;
+            if (toSupersede.has(String(group[i][R_IDX.ID]))) continue;
             const older = group[i];
-            const embO = older[3]; // embedding
-            if (embO.length === 0) continue;
+            const embO = older[R_IDX.IMPORTANCE]; // embedding
+            if (!embO || embO.length === 0) continue;
 
             for (let j = i + 1; j < group.length; j++) {
-              if (toSupersede.has(String(group[j][0]))) continue;
+              if (toSupersede.has(String(group[j][R_IDX.ID]))) continue;
               const newer = group[j];
-              const embN = newer[3];
-              if (embN.length === 0) continue;
+              const embN = newer[R_IDX.IMPORTANCE];
+              if (!embN || embN.length === 0) continue;
 
               const similarity = this.cosineSimilarity(embO, embN);
 
               // If similarity > 0.85 and newer has higher confidence → supersede older
-              if (similarity > 0.85 && Number(newer[4]) > Number(older[4])) {
-                toSupersede.add(String(older[0]));  // older's id
+              if (similarity > 0.85 && Number(newer[R_IDX.MEMORY_TYPE]) > Number(older[R_IDX.MEMORY_TYPE])) {
+                toSupersede.add(String(older[R_IDX.ID]));  // older's id
                 // ⚡ Bolt Optimization: Early exit if the outer loop element was just marked to be superseded
                 break;
               }
