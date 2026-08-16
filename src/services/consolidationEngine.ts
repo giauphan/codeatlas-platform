@@ -657,6 +657,7 @@ export class ConsolidationEngine {
    */
   private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
     // Defense in depth: Verify inputs are valid array structures before accessing lengths
+    // (primarily safety for non-loop external callers who may bypass validateRowEmbedding)
     if (!Array.isArray(a) && !(a instanceof Float32Array)) return 0;
     if (!Array.isArray(b) && !(b instanceof Float32Array)) return 0;
 
