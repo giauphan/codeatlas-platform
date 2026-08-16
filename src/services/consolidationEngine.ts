@@ -128,11 +128,11 @@ export class ConsolidationEngine {
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
         const proj = String(row[R_IDX.PROJECT] || "default");
-        const rowToPush = this.validateRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup");
-        if (!rowToPush) continue;
+
+        if (!this.validateRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup")) continue;
 
         if (!byProject.has(proj)) byProject.set(proj, []);
-        byProject.get(proj)!.push(rowToPush);
+        byProject.get(proj)!.push(row);
       }
 
       let merged = 0;
@@ -491,11 +491,10 @@ export class ConsolidationEngine {
         for (const row of rows) {
           const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
           // Extract embeddings before grouping
-          const rowToPush = this.validateRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring");
-          if (!rowToPush) continue;
+          if (!this.validateRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring")) continue;
 
           if (!groups.has(key)) groups.set(key, []);
-          groups.get(key)!.push(rowToPush);
+          groups.get(key)!.push(row);
         }
 
         const toSupersede = new Set<string>();
@@ -625,13 +624,13 @@ export class ConsolidationEngine {
 
   /**
    * Validates a row's embedding column to ensure downstream processing runs on correctly typed arrays without O(N^2) checks later.
-   * Returns the original array reference natively if matching valid lengths.
+   * Returns true if valid, false otherwise.
    */
-  private validateRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): any[] | null {
+  private validateRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): boolean {
     const rawEmb = row[embIdx];
     if (!rawEmb) {
       logger.warn(`[Consolidation] ${contextLabel} encountered missing embedding for ID ${row[idIdx]}`);
-      return null;
+      return false;
     }
 
     let safeEmb: number[] | Float32Array;
@@ -641,15 +640,15 @@ export class ConsolidationEngine {
       safeEmb = rawEmb;
     } else {
       logger.warn(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
-      return null;
+      return false;
     }
 
     if (safeEmb.length === 0) {
       logger.warn(`[Consolidation] ${contextLabel} encountered empty embedding for ID ${row[idIdx]}`);
-      return null;
+      return false;
     }
 
-    return row;
+    return true;
   }
 
   /**
@@ -658,7 +657,10 @@ export class ConsolidationEngine {
   private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
     // Optimization: Cache array length
     const len = a.length;
-    if (len !== b.length || len === 0) return 0;
+    if (len !== b.length || len === 0) {
+      logger.warn(`[Consolidation] cosineSimilarity encountered dimension mismatch: ${len} vs ${b.length}`);
+      return 0;
+    }
     let dot = 0, normA = 0, normB = 0;
     for (let i = 0; i < len; i++) {
       // Optimization: Extract to local variables to avoid multiple array lookups
