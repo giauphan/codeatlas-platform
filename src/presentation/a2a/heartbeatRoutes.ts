@@ -50,8 +50,7 @@ export function mountHeartbeatRoutes(app: express.Express): void {
   });
 
   // List agents
-  app.get("/a2a/agents", a2aRateLimiter, authMiddleware, async (req, res) => {
-    // If agent listing should respect caller permissions, we use req.auth here
+  app.get("/a2a/agents", a2aRateLimiter, authMiddleware, async (_req, res) => {
     const records = await a2aRegistry.listAll();
     const agents = records.map(r => ({
       agentId: r.agentId,
