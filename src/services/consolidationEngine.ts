@@ -145,7 +145,6 @@ export class ConsolidationEngine {
         const toRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
-          // Hoisted invariant values for outer loop
           const rowI = group[i];
           const idI = String(rowI[R_IDX.ID]);
           if (toRemove.has(idI)) continue;
@@ -155,7 +154,6 @@ export class ConsolidationEngine {
           const importanceI = Number(rowI[R_IDX.IMPORTANCE]);
 
           for (let j = i + 1; j < group.length; j++) {
-            // Hoisted invariant values for inner loop
             const rowJ = group[j];
             const idJ = String(rowJ[R_IDX.ID]);
             if (toRemove.has(idJ)) continue;
@@ -520,7 +518,6 @@ export class ConsolidationEngine {
         for (const [, group] of groups) {
           if (group.length < 2) continue;
           for (let i = 0; i < group.length; i++) {
-            // Hoisted invariant values for outer loop
             const older = group[i];
             const olderId = String(older[SCORE_IDX.ID]);
             if (toSupersede.has(olderId)) continue;
@@ -530,7 +527,6 @@ export class ConsolidationEngine {
             const olderConfidence = Number(older[SCORE_IDX.CONFIDENCE]);
 
             for (let j = i + 1; j < group.length; j++) {
-              // Hoisted invariant values for inner loop
               const newer = group[j];
               const newerId = String(newer[SCORE_IDX.ID]);
               if (toSupersede.has(newerId)) continue;
