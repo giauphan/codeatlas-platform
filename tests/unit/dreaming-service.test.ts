@@ -38,6 +38,19 @@ mock.module(path.join(srcDir, 'database/connection.js'), {
   },
 });
 
+// Mock database/factory.ts
+const mockDbAdapter = {
+  searchVector: mock.fn(() => Promise.resolve([
+    { id: 'memory_1', score: 0.9 },
+    { id: 'memory_2', score: 0.8 },
+  ])),
+};
+mock.module(path.join(srcDir, 'database/factory.js'), {
+  namedExports: {
+    createDatabaseAdapter: mock.fn(() => mockDbAdapter),
+  },
+});
+
 // Mock embeddingService
 const mockGenerateEmbedding = mock.fn(() => Promise.resolve([0.1, 0.2, 0.3]));
 
