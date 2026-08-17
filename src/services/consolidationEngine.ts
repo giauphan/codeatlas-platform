@@ -145,14 +145,17 @@ export class ConsolidationEngine {
         const toRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
+          // hoisted from inner loop
           const idI = String(group[i][R_IDX.ID]);
           if (toRemove.has(idI)) continue;
 
           // Embeddings validated above during preprocessing
           const embI = group[i][R_IDX.EMBEDDING];
+          // hoisted from inner loop
           const importanceI = Number(group[i][R_IDX.IMPORTANCE]);
 
           for (let j = i + 1; j < group.length; j++) {
+            // hoisted from inner loop logic
             const idJ = String(group[j][R_IDX.ID]);
             if (toRemove.has(idJ)) continue;
 
@@ -518,15 +521,18 @@ export class ConsolidationEngine {
           if (group.length < 2) continue;
           for (let i = 0; i < group.length; i++) {
             const older = group[i];
+            // hoisted from inner loop
             const olderId = String(older[SCORE_IDX.ID]);
             if (toSupersede.has(olderId)) continue;
 
             // Embeddings validated above during preprocessing
             const embO = older[SCORE_IDX.EMBEDDING]; // embedding
+            // hoisted from inner loop
             const olderConfidence = Number(older[SCORE_IDX.CONFIDENCE]);
 
             for (let j = i + 1; j < group.length; j++) {
               const newer = group[j];
+              // hoisted from inner loop logic
               const newerId = String(newer[SCORE_IDX.ID]);
               if (toSupersede.has(newerId)) continue;
 
