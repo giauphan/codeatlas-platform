@@ -174,8 +174,8 @@ export class ConsolidationEngine {
               const idToRemove = keepIdx === i ? idJ : idI;
               toRemove.add(idToRemove);
 
-              // Early exit if the outer loop element was just marked for removal
-              // (This is safe because the outer loop guarantees skipping over removed indices on subsequent iterations)
+              // If the outer element 'i' is removed, break the inner loop early.
+              // This is safe because the outer loop skips any removed indices on subsequent iterations.
               if (removeIdx === i) break;
             }
           }
