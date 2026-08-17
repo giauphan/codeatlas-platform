@@ -2,12 +2,24 @@
 import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
 import { logger } from "../../utils/logger.js";
 
-import { createRequire } from "module";
-
 // Lazy-loaded optional dependencies
-const require = createRequire(import.meta.url);
-let Pool: any;
-let pgvector: any;
+let Pool: typeof import("pg").Pool;
+let pgvector: typeof import("pgvector");
+
+const importPg = async () => {
+  if (!Pool) {
+    const pg = await import("pg");
+    Pool = pg.default ? pg.default.Pool || pg.Pool : pg.Pool;
+  }
+};
+
+const importPgvector = async () => {
+  if (!pgvector) {
+    // @ts-ignore: Dynamic import of optional dependency
+    const pgv = await import("pgvector/pg");
+    pgvector = pgv;
+  }
+};
 
 interface PgPool {
   query: (sql: string, params?: any[]) => Promise<{ rows: any[]; rowCount: number }>;
@@ -18,17 +30,19 @@ export class PostgresAdapter implements IDatabaseAdapter {
   private pool: PgPool | null = null;
 
   constructor() {
+    // Dynamic import initialization is handled in connect()
+  }
+
+  async connect(): Promise<void> {
     try {
-      Pool = require("pg").Pool;
-      pgvector = require("pgvector");
+      await importPg();
+      await importPgvector();
     } catch (err) {
       throw new Error(
         "Postgres adapter requires 'pg' and 'pgvector'. Install: pnpm add pg pgvector"
       );
     }
-  }
 
-  async connect(): Promise<void> {
     this.pool = new Pool({
       host: process.env.PGHOST,
       port: parseInt(process.env.PGPORT || "5432"),
