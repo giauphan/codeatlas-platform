@@ -174,6 +174,8 @@ export class ConsolidationEngine {
               const idToRemove = keepIdx === i ? idJ : idI;
               toRemove.add(idToRemove);
 
+              // Early exit if the outer loop element was just marked for removal
+              // (This is safe because the outer loop guarantees skipping over removed indices on subsequent iterations)
               if (removeIdx === i) break;
             }
           }
@@ -541,7 +543,8 @@ export class ConsolidationEngine {
               const similarity = this.cosineSimilarity(embO, embN);
 
               // If similarity is high and newer has higher confidence → supersede older
-              if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && Number(newer[SCORE_IDX.CONFIDENCE]) > olderConfidence) {
+              const newerConfidence = Number(newer[SCORE_IDX.CONFIDENCE]);
+              if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && newerConfidence > olderConfidence) {
                 toSupersede.add(olderId);  // older's id
                 break;
               }
