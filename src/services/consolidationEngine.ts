@@ -162,8 +162,9 @@ export class ConsolidationEngine {
             const similarity = this.cosineSimilarity(embI, embJ);
 
             if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD) {
+              const importanceJ = Number(group[j][R_IDX.IMPORTANCE]);
               // Merge: keep the one with higher importance
-              const keepIdx = importanceI >= Number(group[j][R_IDX.IMPORTANCE]) ? i : j;
+              const keepIdx = importanceI >= importanceJ ? i : j;
               const removeIdx = keepIdx === i ? j : i;
               toRemove.add(removeIdx === i ? idI : idJ);
 
@@ -524,7 +525,8 @@ export class ConsolidationEngine {
             const confO = Number(older[SCORE_IDX.CONFIDENCE]);
 
             for (let j = i + 1; j < group.length; j++) {
-              if (toSupersede.has(String(group[j][SCORE_IDX.ID]))) continue;
+              const idJ = String(group[j][SCORE_IDX.ID]);
+              if (toSupersede.has(idJ)) continue;
               const newer = group[j];
               const embN = newer[SCORE_IDX.EMBEDDING];
 
