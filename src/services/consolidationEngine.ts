@@ -538,6 +538,7 @@ export class ConsolidationEngine {
               const newerId = String(newer[SCORE_IDX.ID]);
               if (toSupersede.has(newerId)) continue;
 
+              // Cosine similarity on embeddings
               const embN = newer[SCORE_IDX.EMBEDDING];
 
               const similarity = this.cosineSimilarity(embO, embN);
