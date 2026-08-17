@@ -10,11 +10,12 @@
 import express from "express";
 import { a2aRegistry } from "../../services/a2aRegistry.js";
 import { logger } from "../../utils/logger.js";
+import { authMiddleware } from "../../middleware/auth.js";
 
 export function mountHeartbeatRoutes(app: express.Express): void {
 
   // Register an agent
-  app.get("/a2a/register", (req, res) => {
+  app.get("/a2a/register", authMiddleware, (req, res) => {
     const agentUrl = req.query.agent_url as string;
     const agentName = req.query.agent_name as string || "Unknown Agent";
     const capabilities = (req.query.capabilities as string || "").split(",").filter(Boolean);
@@ -37,7 +38,7 @@ export function mountHeartbeatRoutes(app: express.Express): void {
   });
 
   // Heartbeat ping
-  app.post("/a2a/heartbeat", (req, res) => {
+  app.post("/a2a/heartbeat", authMiddleware, (req, res) => {
     const { agent_url } = req.body || {};
     if (!agent_url) {
       res.status(400).json({ error: "Missing agent_url" });
@@ -48,7 +49,7 @@ export function mountHeartbeatRoutes(app: express.Express): void {
   });
 
   // List agents
-  app.get("/a2a/agents", async (_req, res) => {
+  app.get("/a2a/agents", authMiddleware, async (_req, res) => {
     const records = await a2aRegistry.listAll();
     const agents = records.map(r => ({
       agentId: r.agentId,
