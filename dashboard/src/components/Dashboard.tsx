@@ -542,7 +542,7 @@ export const Dashboard: React.FC = () => {
                     width: '100%', padding: '0.75rem 1rem', borderRadius: '8px',
                     background: activeTab === tab ? 'var(--button-active-background)' : 'transparent',
                     color: activeTab === tab ? 'var(--primary-neon)' : 'var(--text-muted)',
-                    border: 'none', textAlign: 'left', cursor: 'pointer',
+                    outline: 'none', border: 'none', textAlign: 'left', cursor: 'pointer',
                     fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
                     transition: 'all 0.3s ease',
                     boxShadow: activeTab === tab ? '0 0 15px rgba(0, 240, 255, 0.2)' : 'none'
@@ -575,7 +575,7 @@ export const Dashboard: React.FC = () => {
             style={{
               width: '100%', padding: '0.75rem 1rem', borderRadius: '8px',
               background: 'transparent', color: 'var(--text-muted)',
-              border: 'none', textAlign: 'left', cursor: 'pointer',
+              outline: 'none', border: 'none', textAlign: 'left', cursor: 'pointer',
               fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
               transition: 'all 0.3s ease'
             }}

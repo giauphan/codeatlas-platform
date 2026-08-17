@@ -114,7 +114,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               onClick={() => { setMode(tab.id as 'token' | 'signin'); setError(null); }}
               className={FOCUS_RING_CLASS}
               style={{
-                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', outline: 'none', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
                 background: mode === tab.id ? 'rgba(255,255,255,0.1)' : 'transparent',
                 color: mode === tab.id ? '#fff' : 'var(--text-muted)',
                 opacity: loading ? 0.5 : 1
