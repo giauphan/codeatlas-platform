@@ -4,7 +4,7 @@ import { logger } from "../../utils/logger.js";
 
 // Lazy-loaded optional dependencies
 let Pool: typeof import("pg").Pool;
-let pgvector: typeof import("pgvector");
+let pgvector: any;
 
 const importPg = async () => {
   if (!Pool) {
@@ -15,8 +15,7 @@ const importPg = async () => {
 
 const importPgvector = async () => {
   if (!pgvector) {
-    // @ts-ignore: Dynamic import of optional dependency
-    const pgv = await import("pgvector/pg");
+    const pgv = await import("pgvector/pg" as any);
     pgvector = pgv;
   }
 };
