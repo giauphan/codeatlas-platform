@@ -145,23 +145,21 @@ export class ConsolidationEngine {
         const toRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
+          // Hoisted invariant values for outer loop
           const rowI = group[i];
-          // hoisted from outer loop iteration
           const idI = String(rowI[R_IDX.ID]);
           if (toRemove.has(idI)) continue;
 
           // Embeddings validated above during preprocessing
           const embI = rowI[R_IDX.EMBEDDING];
-          // hoisted from outer loop iteration
           const importanceI = Number(rowI[R_IDX.IMPORTANCE]);
 
           for (let j = i + 1; j < group.length; j++) {
+            // Hoisted invariant values for inner loop
             const rowJ = group[j];
-            // hoisted from outer loop iteration
             const idJ = String(rowJ[R_IDX.ID]);
             if (toRemove.has(idJ)) continue;
 
-            // Cosine similarity on embeddings
             const embJ = rowJ[R_IDX.EMBEDDING];
 
             const similarity = this.cosineSimilarity(embI, embJ);
@@ -522,23 +520,21 @@ export class ConsolidationEngine {
         for (const [, group] of groups) {
           if (group.length < 2) continue;
           for (let i = 0; i < group.length; i++) {
+            // Hoisted invariant values for outer loop
             const older = group[i];
-            // hoisted from outer loop iteration
             const olderId = String(older[SCORE_IDX.ID]);
             if (toSupersede.has(olderId)) continue;
 
             // Embeddings validated above during preprocessing
             const embO = older[SCORE_IDX.EMBEDDING]; // embedding
-            // hoisted from outer loop iteration
             const olderConfidence = Number(older[SCORE_IDX.CONFIDENCE]);
 
             for (let j = i + 1; j < group.length; j++) {
+              // Hoisted invariant values for inner loop
               const newer = group[j];
-              // hoisted from outer loop iteration
               const newerId = String(newer[SCORE_IDX.ID]);
               if (toSupersede.has(newerId)) continue;
 
-              // Cosine similarity on embeddings
               const embN = newer[SCORE_IDX.EMBEDDING];
 
               const similarity = this.cosineSimilarity(embO, embN);
