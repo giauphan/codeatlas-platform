@@ -3,21 +3,24 @@ import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
 import { logger } from "../../utils/logger.js";
 
 // Lazy-loaded optional dependencies
-let Pool: typeof import("pg").Pool;
-let pgvector: any;
+// Ensure TypeScript knows Pool is initialized when we construct it
+let Pool: typeof import("pg").Pool | undefined;
+
+let toSql: (value: number[] | Float32Array) => string;
+
+const importPgvector = async () => {
+  if (!toSql) {
+    const pgv = await import("pgvector/pg" as any);
+    toSql = pgv.toSql;
+  }
+};
 
 const importPg = async () => {
   if (!Pool) {
     const pg = await import("pg");
     Pool = pg.default ? pg.default.Pool || pg.Pool : pg.Pool;
   }
-};
-
-const importPgvector = async () => {
-  if (!pgvector) {
-    const pgv = await import("pgvector/pg" as any);
-    pgvector = pgv;
-  }
+  return Pool;
 };
 
 interface PgPool {
@@ -28,13 +31,10 @@ interface PgPool {
 export class PostgresAdapter implements IDatabaseAdapter {
   private pool: PgPool | null = null;
 
-  constructor() {
-    // Dynamic import initialization is handled in connect()
-  }
-
   async connect(): Promise<void> {
+    let pgPoolConstructor: typeof import("pg").Pool;
     try {
-      await importPg();
+      pgPoolConstructor = (await importPg())!;
       await importPgvector();
     } catch (err) {
       throw new Error(
@@ -42,7 +42,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       );
     }
 
-    this.pool = new Pool({
+    this.pool = new pgPoolConstructor({
       host: process.env.PGHOST,
       port: parseInt(process.env.PGPORT || "5432"),
       user: process.env.PGUSER,
@@ -93,7 +93,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   async searchVector(table: string, embedding: number[], limit: number, tenantId: string): Promise<VectorSearchResult[]> {
     const pool = await this.getConnection();
-    const embeddingVector = pgvector.toSql(embedding);
+    const embeddingVector = toSql(embedding);
     const sql = `
       SELECT id, 1 - (embedding <=> $1) AS score
       FROM ${table}
