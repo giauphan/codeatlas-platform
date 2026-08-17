@@ -655,14 +655,11 @@ export class ConsolidationEngine {
       return false;
     }
 
-    let safeEmb: Float32Array;
+    let safeEmb: number[] | Float32Array;
     if (rawEmb instanceof Float32Array) {
       safeEmb = rawEmb;
     } else if (Array.isArray(rawEmb)) {
-      // Optimization: pre-normalize to Float32Array so that downstream O(N^2)
-      // distance calculations bypass recursive type checking.
-      safeEmb = new Float32Array(rawEmb);
-      row[embIdx] = safeEmb; // Mutate in-place
+      safeEmb = rawEmb;
     } else {
       logger.debug(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
       return false;
