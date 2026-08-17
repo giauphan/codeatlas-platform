@@ -288,6 +288,7 @@ describe('OracleDreamingService', () => {
     });
 
     test('respects limit parameter', async () => {
+      mockGenerateEmbedding.mock.mockImplementationOnce(() => Promise.resolve(null));
       mockConnection.execute.mock.mockImplementation(async () => {
         return { rows: sampleRows };
       });
