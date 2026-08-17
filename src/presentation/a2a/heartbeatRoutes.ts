@@ -50,23 +50,27 @@ export function mountHeartbeatRoutes(app: express.Express): void {
   });
 
   // List agents
-  app.get("/a2a/agents", a2aRateLimiter, authMiddleware, async (_req, res) => {
-    const records = await a2aRegistry.listAll();
-    const agents = records.map(r => ({
-      agentId: r.agentId,
-      name: r.agentName,
-      url: r.agentUrl,
-      capabilities: r.capabilities,
-      status: r.status,
-      lastHeartbeat: r.lastHeartbeat.toISOString(),
-      registeredAt: r.registeredAt.toISOString(),
-    }));
+  app.get("/a2a/agents", a2aRateLimiter, authMiddleware, async (_req, res, next) => {
+    try {
+      const records = await a2aRegistry.listAll();
+      const agents = records.map(r => ({
+        agentId: r.agentId,
+        name: r.agentName,
+        url: r.agentUrl,
+        capabilities: r.capabilities,
+        status: r.status,
+        lastHeartbeat: r.lastHeartbeat.toISOString(),
+        registeredAt: r.registeredAt.toISOString(),
+      }));
 
-    res.json({
-      agentCount: agents.length,
-      onlineCount: agents.filter(a => a.status === "online").length,
-      agents: agents.sort((a, b) => a.status === "online" ? -1 : 1),
-    });
+      res.json({
+        agentCount: agents.length,
+        onlineCount: agents.filter(a => a.status === "online").length,
+        agents: agents.sort((a, b) => a.status === "online" ? -1 : 1),
+      });
+    } catch (err) {
+      next(err);
+    }
   });
 
   logger.info("[A2A Heartbeat] Routes mounted: /a2a/register, /a2a/heartbeat, /a2a/agents");
