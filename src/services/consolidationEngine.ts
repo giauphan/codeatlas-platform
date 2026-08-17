@@ -155,7 +155,7 @@ export class ConsolidationEngine {
           const importanceI = Number(group[i][R_IDX.IMPORTANCE]);
 
           for (let j = i + 1; j < group.length; j++) {
-            // hoisted from outer loop iteration logic
+            // hoisted from outer loop iteration
             const idJ = String(group[j][R_IDX.ID]);
             if (toRemove.has(idJ)) continue;
 
@@ -172,8 +172,6 @@ export class ConsolidationEngine {
               const idToRemove = keepIdx === i ? idJ : idI;
               toRemove.add(idToRemove);
 
-              // Early exit if the outer loop element was just marked for removal
-              // (This is safe because the outer loop guarantees skipping over removed indices on subsequent iterations)
               if (removeIdx === i) break;
             }
           }
@@ -532,7 +530,7 @@ export class ConsolidationEngine {
 
             for (let j = i + 1; j < group.length; j++) {
               const newer = group[j];
-              // hoisted from outer loop iteration logic
+              // hoisted from outer loop iteration
               const newerId = String(newer[SCORE_IDX.ID]);
               if (toSupersede.has(newerId)) continue;
 
