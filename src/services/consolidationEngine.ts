@@ -145,28 +145,30 @@ export class ConsolidationEngine {
         const toRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
+          const rowI = group[i];
           // hoisted from outer loop iteration
-          const idI = String(group[i][R_IDX.ID]);
+          const idI = String(rowI[R_IDX.ID]);
           if (toRemove.has(idI)) continue;
 
           // Embeddings validated above during preprocessing
-          const embI = group[i][R_IDX.EMBEDDING];
+          const embI = rowI[R_IDX.EMBEDDING];
           // hoisted from outer loop iteration
-          const importanceI = Number(group[i][R_IDX.IMPORTANCE]);
+          const importanceI = Number(rowI[R_IDX.IMPORTANCE]);
 
           for (let j = i + 1; j < group.length; j++) {
+            const rowJ = group[j];
             // hoisted from outer loop iteration
-            const idJ = String(group[j][R_IDX.ID]);
+            const idJ = String(rowJ[R_IDX.ID]);
             if (toRemove.has(idJ)) continue;
 
             // Cosine similarity on embeddings
-            const embJ = group[j][R_IDX.EMBEDDING];
+            const embJ = rowJ[R_IDX.EMBEDDING];
 
             const similarity = this.cosineSimilarity(embI, embJ);
 
             if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD) {
               // Merge: keep the one with higher importance
-              const importanceJ = Number(group[j][R_IDX.IMPORTANCE]);
+              const importanceJ = Number(rowJ[R_IDX.IMPORTANCE]);
               const keepIdx = importanceI >= importanceJ ? i : j;
               const removeIdx = keepIdx === i ? j : i;
               const idToRemove = keepIdx === i ? idJ : idI;
