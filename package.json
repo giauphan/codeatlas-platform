@@ -42,7 +42,8 @@
     "start": "node dist/src/index.js",
     "dev": "tsx watch src/index.ts",
     "test": "node --experimental-test-module-mocks --import tsx --test tests/**/*.test.ts",
-    "db-init": "tsx scripts/db-init.ts"
+    "db-init": "tsx scripts/db-init.ts",
+    "db-seed": "tsx scripts/db-seed.ts"
   },
   "overrides": {
     "uuid": "11.1.1"
