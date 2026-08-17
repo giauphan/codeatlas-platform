@@ -3,7 +3,7 @@ import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
 import { logger } from "../../utils/logger.js";
 
 // Lazy-loaded optional dependencies
-let { Pool } = require("pg");
+let Pool: any;
 let pgvector: any;
 
 interface PgPool {
@@ -14,18 +14,18 @@ interface PgPool {
 export class PostgresAdapter implements IDatabaseAdapter {
   private pool: PgPool | null = null;
 
-  constructor() {
+  async connect(): Promise<void> {
+    if (this.pool) return;
     try {
-      Pool = require("pg").Pool;
-      pgvector = require("pgvector");
+      const pgModule = await import("pg");
+      const pgvectorModule = await import("pgvector");
+      Pool = pgModule.default.Pool;
+      pgvector = pgvectorModule.default;
     } catch (err) {
       throw new Error(
         "Postgres adapter requires 'pg' and 'pgvector'. Install: pnpm add pg pgvector"
       );
     }
-  }
-
-  async connect(): Promise<void> {
     this.pool = new Pool({
       host: process.env.PGHOST,
       port: parseInt(process.env.PGPORT || "5432"),

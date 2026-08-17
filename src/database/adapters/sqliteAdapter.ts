@@ -4,8 +4,8 @@ import { authStorage } from "../../utils/context.js";
 import { logger } from "../../utils/logger.js";
 
 // Lazy-loaded optional dependencies to avoid hard require when DB_TYPE != sqlite
-let Database: typeof import("better-sqlite3").default;
-let sqliteVec: (db: unknown) => void;
+let Database: any;
+let sqliteVec: any;
 
 export class SQLiteAdapter implements IDatabaseAdapter {
   private db: any;
@@ -13,17 +13,20 @@ export class SQLiteAdapter implements IDatabaseAdapter {
 
   constructor() {
     this.dbPath = process.env.CODEATLAS_SQLITE_PATH || "./data/codeatlas.db";
+  }
+
+  async connect(): Promise<void> {
+    if (this.db) return;
     try {
-      Database = require("better-sqlite3");
-      sqliteVec = require("sqlite-vec");
+      const DatabaseModule = await import("better-sqlite3");
+      const sqliteVecModule = await import("sqlite-vec");
+      Database = DatabaseModule.default;
+      sqliteVec = sqliteVecModule.load;
     } catch (err) {
       throw new Error(
         "SQLite adapter requires 'better-sqlite3' and 'sqlite-vec'. Install: pnpm add better-sqlite3 sqlite-vec"
       );
     }
-  }
-
-  async connect(): Promise<void> {
     this.db = new Database(this.dbPath);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 5000");
@@ -115,6 +118,57 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       CREATE INDEX IF NOT EXISTS idx_dreaming_tenant_project ON ai_dreaming_memory(tenant_id, project);
       CREATE INDEX IF NOT EXISTS idx_dreaming_hash ON ai_dreaming_memory(content_hash);
       CREATE VIRTUAL TABLE IF NOT EXISTS ai_dreaming_memory_vec USING vec0(embedding float[1024]);
+    `);
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS tenants (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        tier TEXT DEFAULT 'free'
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        email TEXT UNIQUE,
+        name TEXT,
+        role TEXT DEFAULT 'user',
+        tier TEXT DEFAULT 'free',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS keys (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        user_id TEXT,
+        name TEXT,
+        key TEXT NOT NULL UNIQUE,
+        key_hash TEXT,
+        tier TEXT DEFAULT 'free',
+        expires_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_projects_tenant ON projects(tenant_id);
     `);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS codeatlas_genome (
