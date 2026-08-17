@@ -9,6 +9,7 @@
 
 import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
+import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
@@ -185,15 +186,29 @@ export class GenomeService {
     try {
       await setSessionContext(connection);
       const { project, category, limit = 20 } = options;
+      const tenantId = getTenantId();
 
       const embedding = await generateEmbedding(query, "query");
       if (!embedding) return [];
 
-      const projectFilter = project ? "AND project = :project" : "";
-      const catFilter = category ? "AND category = :category" : "";
-      const binds: Record<string, any> = { tenantId: getTenantId(), limit, queryVector: new Float32Array(embedding) };
-      if (project) binds.project = project;
-      if (category) binds.category = category;
+      let filterSql = "status = 'active'";
+      if (project) {
+        filterSql += ` AND project = '${project.replace(/'/g, "''")}'`;
+      }
+      if (category) {
+        filterSql += ` AND category = '${category.replace(/'/g, "''")}'`;
+      }
+
+      const tableSubquery = `(SELECT * FROM codeatlas_genome WHERE ${filterSql}) tbl`;
+      const db = createDatabaseAdapter();
+      await db.connect();
+      const searchResults = await db.searchVector(tableSubquery, embedding, limit, tenantId);
+
+      if (searchResults.length === 0) return [];
+
+      const ids = searchResults.map(r => r.id);
+      const scoreMap = new Map(searchResults.map(r => [r.id, r.score]));
+      const idList = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(",");
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -201,13 +216,12 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter} ${catFilter}
-         ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
-         FETCH FIRST :limit ROWS ONLY`,
-        binds as any
+         WHERE tenant_id = :tenantId AND id IN (${idList})`,
+        { tenantId } as any
       );
 
-      const genes = (result.rows || []).map((r: any[]) => ({
+      const rows = result.rows || [];
+      const genes = rows.map((r: any[]) => ({
         id: String(r[R_IDX.ID]),
         name: String(r[R_IDX.NAME]),
         description: String(r[R_IDX.DESCRIPTION] || ""),
@@ -227,8 +241,11 @@ export class GenomeService {
         dependencies: JSON.parse(String(r[R_IDX.DEPENDENCIES] || "[]")),
         createdAt: String(r[R_IDX.CREATED_AT]),
         updatedAt: String(r[R_IDX.UPDATED_AT]),
-        score: 1 - Number(r[R_IDX.DISTANCE] ?? 0), // dummy score (real from VECTOR_DISTANCE)
+        score: scoreMap.get(String(r[R_IDX.ID])) ?? 0,
       }));
+
+      // Sort by score descending
+      genes.sort((a, b) => b.score - a.score);
 
       // Increment usage count for returned genes
       if (genes.length > 0) {
@@ -650,13 +667,29 @@ export class GenomeService {
     const connection = await (await initPool()).getConnection();
     try {
       await setSessionContext(connection);
+      const tenantId = getTenantId();
 
       const embedding = await generateEmbedding(problem, "query");
       if (!embedding) return [];
 
-      const projectFilter = project ? "AND project = :project" : "";
-      const binds: Record<string, any> = { tenantId: getTenantId(), limit: 5, queryVector: new Float32Array(embedding) };
-      if (project) binds.project = project;
+      let filterSql = "status = 'active'";
+      if (project) {
+        filterSql += ` AND project = '${project.replace(/'/g, "''")}'`;
+      }
+      filterSql += ` AND (category = 'immune' OR category = 'pattern' OR category = 'lesson')`;
+      filterSql += ` AND (confidence > 0.2 OR problem LIKE '%immune%' OR problem LIKE '%prevent%' OR problem LIKE '%failure%')`;
+
+      const tableSubquery = `(SELECT * FROM codeatlas_genome WHERE ${filterSql}) tbl`;
+      const db = createDatabaseAdapter();
+      await db.connect();
+      const limit = 5;
+      const searchResults = await db.searchVector(tableSubquery, embedding, limit, tenantId);
+
+      if (searchResults.length === 0) return [];
+
+      const ids = searchResults.map(r => r.id);
+      const scoreMap = new Map(searchResults.map(r => [r.id, r.score]));
+      const idList = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(",");
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -664,15 +697,12 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter}
-           AND (category = 'immune' OR category = 'pattern' OR category = 'lesson')
-           AND (confidence > 0.2 OR problem LIKE '%immune%' OR problem LIKE '%prevent%' OR problem LIKE '%failure%')
-         ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
-         FETCH FIRST :limit ROWS ONLY`,
-        binds as any
+         WHERE tenant_id = :tenantId AND id IN (${idList})`,
+        { tenantId } as any
       );
 
-      return (result.rows || []).map((r: any[]) => ({
+      const rows = result.rows || [];
+      const genes = rows.map((r: any[]) => ({
         id: String(r[R_IDX.ID]),
         name: String(r[R_IDX.NAME]),
         description: String(r[R_IDX.DESCRIPTION] || ""),
@@ -692,7 +722,17 @@ export class GenomeService {
         dependencies: JSON.parse(String(r[R_IDX.DEPENDENCIES] || "[]")),
         createdAt: String(r[R_IDX.CREATED_AT]),
         updatedAt: String(r[R_IDX.UPDATED_AT]),
+        score: scoreMap.get(String(r[R_IDX.ID])) ?? 0,
       }));
+
+      // Sort by score descending
+      genes.sort((a, b) => b.score - a.score);
+
+      // Return without the injected score field to match GeneRecord exactly
+      return genes.map(g => {
+        const { score, ...rest } = g;
+        return rest as unknown as GeneRecord; // we mapped everything needed
+      });
     } finally {
       try { await connection.close(); } catch { /* ignore */ }
     }
@@ -762,15 +802,21 @@ export class GenomeService {
       const embedding = await generateEmbedding(context, "query");
       if (!embedding) return [];
 
-      const binds: Record<string, any> = { tenantId: getTenantId(), limit, queryVector: new Float32Array(embedding) };
-      let projectFilter = "";
-      let confFilter = "1=1";
+      let filterSql = `status = 'active' AND confidence >= ${minConfidence}`;
       if (project) {
-        projectFilter = "AND project = :project";
-        binds.project = project;
+        filterSql += ` AND project = '${project.replace(/'/g, "''")}'`;
       }
-      confFilter = "confidence >= :minConf";
-      binds.minConf = minConfidence;
+
+      const tableSubquery = `(SELECT * FROM codeatlas_genome WHERE ${filterSql}) tbl`;
+      const db = createDatabaseAdapter();
+      await db.connect();
+      const searchResults = await db.searchVector(tableSubquery, embedding, limit, tenantId);
+
+      if (searchResults.length === 0) return [];
+
+      const ids = searchResults.map(r => r.id);
+      const scoreMap = new Map(searchResults.map(r => [r.id, r.score]));
+      const idList = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(",");
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -778,13 +824,12 @@ export class GenomeService {
                 usage_count, success_rate,embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter} AND ${confFilter}
-         ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
-         FETCH FIRST :limit ROWS ONLY`,
-        binds as any
+         WHERE tenant_id = :tenantId AND id IN (${idList})`,
+        { tenantId } as any
       );
 
-      const genes: GeneSearchResult[] = (result.rows || []).map((r: any[]) => ({
+      const rows = result.rows || [];
+      const genes: GeneSearchResult[] = rows.map((r: any[]) => ({
         id: String(r[R_IDX.ID]),
         name: String(r[R_IDX.NAME]),
         description: String(r[R_IDX.DESCRIPTION] || ""),
@@ -804,8 +849,12 @@ export class GenomeService {
         dependencies: JSON.parse(String(r[R_IDX.DEPENDENCIES] || "[]")),
         createdAt: String(r[R_IDX.CREATED_AT]),
         updatedAt: String(r[R_IDX.UPDATED_AT]),
-        score: 1 - Number(r[R_IDX.DISTANCE] ?? 0),
+        score: scoreMap.get(String(r[R_IDX.ID])) ?? 0,
       }));
+
+      // Sort by score descending
+      genes.sort((a, b) => b.score - a.score);
+
       return genes;
     } finally {
       try { await connection.close(); } catch { }
@@ -881,33 +930,36 @@ Apply this knowledge when encountering similar problems.
       const embedding = await generateEmbedding(context, "query");
       if (!embedding) return { inherited: 0, genes: [] };
 
-      let sql: string;
-      const binds: Record<string, any> = { tenantId: getTenantId(), limit: Math.min(limit, 50) };
-
+      const safeLimit = Math.min(limit, 50);
+      let filterSql = `status = 'active'`;
       if (sourceProjects && sourceProjects.length > 0) {
-        sql = `SELECT id, name, description, problem, solution, architecture,
-                category, project, confidence, version, evolution_score,
-                usage_count, success_rate, embedding, status,
-                source_type, source_id, dependencies, created_at, updated_at
-         FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND status = 'active' AND project IN (${sourceProjects.map((_, i) => `:src${i}`).join(",")})
-         ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
-         FETCH FIRST :limit ROWS ONLY`;
-        sourceProjects.forEach((p, i) => (binds[`src${i}`] = p));
+        const inClause = sourceProjects.map(p => `'${p.replace(/'/g, "''")}'`).join(",");
+        filterSql += ` AND project IN (${inClause})`;
       } else {
-        sql = `SELECT id, name, description, problem, solution, architecture,
+        filterSql += ` AND project != '${newProject.replace(/'/g, "''")}'`;
+      }
+
+      const tableSubquery = `(SELECT * FROM codeatlas_genome WHERE ${filterSql}) tbl`;
+      const db = createDatabaseAdapter();
+      await db.connect();
+      const searchResults = await db.searchVector(tableSubquery, embedding, safeLimit, tenantId);
+
+      if (searchResults.length === 0) return { inherited: 0, genes: [] };
+
+      const ids = searchResults.map(r => r.id);
+      const scoreMap = new Map(searchResults.map(r => [r.id, r.score]));
+      const idList = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(",");
+
+      const result = await connection.execute<any[]>(
+        `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND status = 'active' AND project != :excludeProject
-         ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
-         FETCH FIRST :limit ROWS ONLY`;
-        binds.excludeProject = newProject;
-      }
-      binds.queryVector = new Float32Array(embedding);
+         WHERE tenant_id = :tenantId AND id IN (${idList})`,
+        { tenantId } as any
+      );
 
-      const result = await connection.execute<any[]>(sql, binds as any);
       const rows = result.rows || [];
 
       // Map rows to GeneRecords using R_IDX
@@ -931,8 +983,11 @@ Apply this knowledge when encountering similar problems.
         dependencies: JSON.parse(String(r[R_IDX.DEPENDENCIES] || "[]")),
         createdAt: String(r[R_IDX.CREATED_AT]),
         updatedAt: String(r[R_IDX.UPDATED_AT]),
-        score: 1 - Number(r[R_IDX.DISTANCE] ?? 0),
+        score: scoreMap.get(String(r[R_IDX.ID])) ?? 0,
       }));
+
+      // Sort by score descending
+      genes.sort((a, b) => b.score - a.score);
 
       let inherited = 0;
       if (genes.length > 0) {

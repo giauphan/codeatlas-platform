@@ -3,7 +3,9 @@ import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
 import { logger } from "../../utils/logger.js";
 
 // Lazy-loaded optional dependencies
-let { Pool } = require("pg");
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+let Pool: any;
 let pgvector: any;
 
 interface PgPool {
