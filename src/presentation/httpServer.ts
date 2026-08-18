@@ -176,8 +176,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,htt
 const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
 app.use(cors((req, callback) => {
-  const corsOptions = {
-    origin: false as any,
+  const corsOptions: cors.CorsOptions = {
+    origin: false,
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
     credentials: true,
@@ -198,7 +198,7 @@ app.use(cors((req, callback) => {
   }
 
   if (allowedList.includes('*')) {
-    // With credentials:true, reflect any valid origin dynamically
+    // Static wildcard: allow all origins without credentials
     corsOptions.origin = '*';
     corsOptions.credentials = false;
     return callback(null, corsOptions);
