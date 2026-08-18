@@ -890,7 +890,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     return true;
   });
 
-  const chunkSize = 50; // Batch file system operations to prevent EMFILE
+  const chunkSize = FILE_EXISTS_CONCURRENCY; // Batch file system operations to prevent EMFILE
   for (let i = 0; i < uniqueDirs.length; i += chunkSize) {
     const chunk = uniqueDirs.slice(i, i + chunkSize);
     const results = await Promise.all(
