@@ -855,6 +855,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           if (updated) {
             await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
           }
+
           // ⚡ Bolt: Chunked Promise.all replaces sequential N+1 file system checks.
           // Expected impact: Dramatically improves startup and project discovery time,
           // particularly when dealing with many registered but potentially missing project directories.
