@@ -858,9 +858,9 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           // ⚡ Bolt: Chunked Promise.all replaces sequential N+1 file system checks.
           // Expected impact: Dramatically improves startup and project discovery time,
           // particularly when dealing with many registered but potentially missing project directories.
-          const regChunkSize = 50;
-          for (let i = 0; i < filtered.length; i += regChunkSize) {
-            const chunk = filtered.slice(i, i + regChunkSize);
+          const FILE_EXISTS_CONCURRENCY = 50;
+          for (let i = 0; i < filtered.length; i += FILE_EXISTS_CONCURRENCY) {
+            const chunk = filtered.slice(i, i + FILE_EXISTS_CONCURRENCY);
             const results = await Promise.all(
               chunk.map(async (dir) => {
                 if (await fileExists(dir)) {
@@ -869,11 +869,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
                 return null;
               })
             );
-            for (const dir of results) {
-              if (dir) {
-                searchDirs.push(dir);
-              }
-            }
+            searchDirs.push(...results.filter((dir): dir is string => dir !== null));
           }
         }
       }
