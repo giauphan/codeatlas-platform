@@ -9,6 +9,8 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
 
+const FILE_EXISTS_CONCURRENCY = 50;
+
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
 }
@@ -856,10 +858,9 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
             await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
           }
 
-          // ⚡ Bolt: Chunked Promise.all replaces sequential N+1 file system checks.
+          // Chunked Promise.all replaces sequential N+1 file system checks.
           // Expected impact: Dramatically improves startup and project discovery time,
           // particularly when dealing with many registered but potentially missing project directories.
-          const FILE_EXISTS_CONCURRENCY = 50;
           for (let i = 0; i < filtered.length; i += FILE_EXISTS_CONCURRENCY) {
             const chunk = filtered.slice(i, i + FILE_EXISTS_CONCURRENCY);
             const results = await Promise.all(
