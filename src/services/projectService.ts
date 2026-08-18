@@ -855,9 +855,24 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           if (updated) {
             await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
           }
-          for (const dir of filtered) {
-            if (await fileExists(dir)) {
-              searchDirs.push(dir);
+          // ⚡ Bolt: Chunked Promise.all replaces sequential N+1 file system checks.
+          // Expected impact: Dramatically improves startup and project discovery time,
+          // particularly when dealing with many registered but potentially missing project directories.
+          const regChunkSize = 50;
+          for (let i = 0; i < filtered.length; i += regChunkSize) {
+            const chunk = filtered.slice(i, i + regChunkSize);
+            const results = await Promise.all(
+              chunk.map(async (dir) => {
+                if (await fileExists(dir)) {
+                  return dir;
+                }
+                return null;
+              })
+            );
+            for (const dir of results) {
+              if (dir) {
+                searchDirs.push(dir);
+              }
             }
           }
         }
