@@ -870,7 +870,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
                 return null;
               })
             );
-            searchDirs.push(...results.filter((dir): dir is string => dir !== null));
+            searchDirs.push(...results.filter((result): result is string => result !== null));
           }
         }
       }
