@@ -864,12 +864,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           for (let i = 0; i < filtered.length; i += FILE_EXISTS_CONCURRENCY) {
             const chunk = filtered.slice(i, i + FILE_EXISTS_CONCURRENCY);
             const results = await Promise.all(
-              chunk.map(async (dir) => {
-                if (await fileExists(dir)) {
-                  return dir;
-                }
-                return null;
-              })
+              chunk.map(async (dir) => (await fileExists(dir)) ? dir : null)
             );
             searchDirs.push(...results.filter((result): result is string => result !== null));
           }
