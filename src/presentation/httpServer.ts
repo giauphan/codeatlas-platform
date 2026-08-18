@@ -1217,8 +1217,7 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           logger.info(`[DreamCron] Daily dream generation successful for ${today}.`);
           lastDreamRunDate = today;
         } else {
-          const errorText = await response.text();
-          logger.error(`[DreamCron] Daily dream generation failed: ${response.status} - ${errorText}`);
+          logger.error(`[DreamCron] Daily dream generation failed for ${response.url}: ${response.status} - ${response.statusText}`);
         }
       } catch (err) {
         logger.error("[DreamCron] Error during daily dream generation:", err);
