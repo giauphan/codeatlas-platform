@@ -238,14 +238,14 @@ export function DreamMemoryView() {
               setStartDate(e.target.value);
               setPage(0);
             }}
+            className={FOCUS_RING_CLASS}
             style={{
               padding: '0.5rem',
               borderRadius: '8px',
               border: '1px solid rgba(255,255,255,0.1)',
               background: 'rgba(0,0,0,0.2)',
               color: '#fff',
-              fontSize: '0.85rem',
-              outline: 'none'
+              fontSize: '0.85rem'
             }}
           />
           <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>to</span>
@@ -257,14 +257,14 @@ export function DreamMemoryView() {
               setEndDate(e.target.value);
               setPage(0);
             }}
+            className={FOCUS_RING_CLASS}
             style={{
               padding: '0.5rem',
               borderRadius: '8px',
               border: '1px solid rgba(255,255,255,0.1)',
               background: 'rgba(0,0,0,0.2)',
               color: '#fff',
-              fontSize: '0.85rem',
-              outline: 'none'
+              fontSize: '0.85rem'
             }}
           />
           {(startDate || endDate) && (
