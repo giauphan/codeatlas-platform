@@ -27,8 +27,11 @@ function findExportFn<T>(obj: unknown, prop: string): T | undefined {
   if (rec.default) {
     const def = rec.default as Record<string, unknown>;
     if (typeof def[prop] === "function") return def[prop] as T;
-    if (typeof rec.default === "function") return rec.default as T;
     if (typeof rec.default === "object") return findExportFn<T>(rec.default, prop);
+  }
+
+  if (prop === "default" && typeof rec.default === "function") {
+    return rec.default as T;
   }
 
   return undefined;
@@ -58,25 +61,25 @@ export class PostgresAdapter implements IDatabaseAdapter {
             throw new Error("Postgres adapter requires 'pgvector'. Install: pnpm add pgvector @types/pgvector");
           }
         }
+        this.pool = new PoolClass({
+          user: process.env.POSTGRES_USER || "postgres",
+          password: process.env.POSTGRES_PASSWORD || "postgres",
+          host: process.env.POSTGRES_HOST || "localhost",
+          port: parseInt(process.env.POSTGRES_PORT || "5432", 10),
+          database: process.env.POSTGRES_DB || "codeatlas",
+          max: 10,
+          idleTimeoutMillis: 30000,
+        });
+
+        logger.info("[PostgresAdapter] Connected to PostgreSQL database pool.");
       } catch (err) {
         this.connectPromise = null;
+        if (err instanceof Error && err.message.startsWith("Postgres adapter requires")) {
+          throw err;
+        }
         const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(
-          `Postgres adapter requires 'pg' and 'pgvector'. Details: ${msg}. Install: pnpm add pg pgvector @types/pg`
-        );
+        throw new Error(`Postgres adapter failed to connect: ${msg}`);
       }
-
-      this.pool = new PoolClass({
-        user: process.env.POSTGRES_USER || "postgres",
-        password: process.env.POSTGRES_PASSWORD || "postgres",
-        host: process.env.POSTGRES_HOST || "localhost",
-        port: parseInt(process.env.POSTGRES_PORT || "5432", 10),
-        database: process.env.POSTGRES_DB || "codeatlas",
-        max: 10,
-        idleTimeoutMillis: 30000,
-      });
-
-      logger.info("[PostgresAdapter] Connected to PostgreSQL database pool.");
     })();
 
     return this.connectPromise;
