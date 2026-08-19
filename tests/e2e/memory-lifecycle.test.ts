@@ -16,27 +16,10 @@ import { pathToFileURL } from 'node:url';
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 
 function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
-  const options = { default: mockObj, exports: mockObj };
-  const specs = [specifier];
-  if (specifier.startsWith('/')) {
-    specs.push(pathToFileURL(specifier).href);
-    if (specifier.endsWith('.js')) {
-      const tsPath = specifier.slice(0, -3) + '.ts';
-      specs.push(tsPath);
-      specs.push(pathToFileURL(tsPath).href);
-    }
-    const srcIdx = specifier.indexOf('/src/');
-    if (srcIdx !== -1) {
-      const subPath = specifier.slice(srcIdx + 5);
-      const subTs = subPath.endsWith('.js') ? subPath.slice(0, -3) + '.ts' : subPath;
-      specs.push('../' + subPath, '../' + subTs);
-      specs.push('./' + subPath, './' + subTs);
-      specs.push('../../src/' + subPath, '../../src/' + subTs);
-      specs.push('../src/' + subPath, '../src/' + subTs);
-    }
-  }
-  for (const s of specs) {
-    try { mock.module(s, options); } catch {}
+  const opts = { exports: { default: mockObj, ...mockObj } };
+  try { mock.module(specifier, opts); } catch {}
+  if (specifier.endsWith('.js')) {
+    try { mock.module(specifier.slice(0, -3) + '.ts', opts); } catch {}
   }
 }
 
