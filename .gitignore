@@ -66,3 +66,4 @@ test-all-features.sh
 test-mcp-scenarios.sh
 tests/e2e-a2a-orchestration.sh
 scripts/ssh-sandbox.sh
+data/

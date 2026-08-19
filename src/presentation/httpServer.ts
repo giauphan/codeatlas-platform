@@ -176,14 +176,13 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,htt
 const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
 app.use(cors((req, callback) => {
+  const origin = req.headers.origin;
   const corsOptions: cors.CorsOptions = {
-    origin: false,
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
     credentials: true,
+    origin: false,
   };
-
-  const origin = req.headers.origin;
 
   // Allow requests with no origin (like mobile apps or curl requests)
   if (!origin) {
@@ -1230,8 +1229,7 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           logger.info(`[DreamCron] Daily dream generation successful for ${today}.`);
           lastDreamRunDate = today;
         } else {
-          const errorText = await response.text();
-          logger.error(`[DreamCron] Daily dream generation failed: ${response.status} - ${errorText}`);
+          logger.error(`[DreamCron] Daily dream generation failed for ${response.url}: ${response.status} - ${response.statusText}`);
         }
       } catch (err) {
         logger.error("[DreamCron] Error during daily dream generation:", err);
