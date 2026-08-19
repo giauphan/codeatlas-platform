@@ -7,9 +7,15 @@ import { logger } from "../../utils/logger.js";
 
 export class OracleAdapter implements IDatabaseAdapter {
   private pool: oracledb.Pool | null = null;
+  private connectPromise: Promise<void> | null = null;
 
   async connect(): Promise<void> {
-    this.pool = await initPool();
+    if (this.pool) return;
+    if (this.connectPromise) return this.connectPromise;
+    this.connectPromise = (async () => {
+      this.pool = await initPool();
+    })();
+    return this.connectPromise;
   }
 
   async disconnect(): Promise<void> {
@@ -20,15 +26,16 @@ export class OracleAdapter implements IDatabaseAdapter {
         logger.error("Error closing Oracle pool:", err instanceof Error ? err.message : String(err));
       } finally {
         this.pool = null;
+        this.connectPromise = null;
       }
     }
   }
 
   async getConnection(): Promise<oracledb.Connection> {
     if (!this.pool) {
-      throw new Error("Oracle pool not initialized. Call connect() first.");
+      await this.connect();
     }
-    const conn = await this.pool.getConnection();
+    const conn = await this.pool!.getConnection();
     const auth = authStorage.getStore();
     if (!auth) {
       await conn.close();

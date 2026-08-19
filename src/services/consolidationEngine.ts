@@ -9,7 +9,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { initPool, setSessionContext } from "../database/connection.js";
+import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
@@ -49,13 +49,79 @@ export interface ConsolidationReport {
 }
 
 export class ConsolidationEngine {
+
+  private getVal(row: any, index: number, keyStr: string): any {
+    if (!row) return undefined;
+    if (row[index] !== undefined) return row[index];
+    if (row[keyStr] !== undefined) return row[keyStr];
+    const lowerKey = keyStr.toLowerCase();
+    if (row[lowerKey] !== undefined) return row[lowerKey];
+    return undefined;
+  }
+
   /**
-   * Run a consolidation job.
+   * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
+   */
+  private parseEmbedding(rawEmb: any): Float32Array | null {
+    if (!rawEmb) return null;
+
+    if (rawEmb instanceof Float32Array) {
+      return rawEmb;
+    }
+
+    if (Array.isArray(rawEmb)) {
+      return new Float32Array(rawEmb);
+    }
+
+    if (rawEmb instanceof Uint8Array || rawEmb instanceof Buffer) {
+      // Int8Array/Uint8Array containing Float32 raw bytes
+      if (rawEmb.byteLength % 4 === 0) {
+        return new Float32Array(rawEmb.buffer, rawEmb.byteOffset, rawEmb.byteLength / 4);
+      }
+    }
+
+    if (typeof rawEmb === "string") {
+      try {
+        const parsed = JSON.parse(rawEmb);
+        if (Array.isArray(parsed)) {
+          return new Float32Array(parsed);
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Validates embedding on a row before mathematical processing.
+   */
+  private validateRowEmbedding(row: any, embeddingIdx: number, idIdx: number, stepName: string): boolean {
+    const rawEmb = this.getVal(row, embeddingIdx, 'EMBEDDING');
+    const parsed = this.parseEmbedding(rawEmb);
+    if (!parsed || parsed.length === 0) {
+      const idVal = this.getVal(row, idIdx, 'ID');
+      logger.warn(`[Consolidation] ${stepName}: Skipping row ${idVal} due to missing or invalid embedding format.`);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Alias for runJob to maintain backward compatibility with consolidationEngine.run(...)
    */
   async run(job: ConsolidationJob): Promise<ConsolidationReport> {
+    return this.runJob(job);
+  }
+
+  /**
+   * Main entry point to run a consolidation job.
+   */
+  async runJob(job: ConsolidationJob): Promise<ConsolidationReport> {
     const report: ConsolidationReport = {
       id: randomUUID(),
-      jobType: "consolidation",
+      jobType: job.operations.join("+"),
       dreamsProcessed: 0,
       dreamsMerged: 0,
       conceptsCreated: 0,
@@ -65,71 +131,65 @@ export class ConsolidationEngine {
       errors: [],
     };
 
+    logger.info(`[Consolidation] Starting job ${report.id} (ops: ${report.jobType})`);
+
     for (const op of job.operations) {
       try {
         switch (op) {
           case "dedup":
-            await this.dedupDreams(job.project, job.provider, report);
+            await this.deduplicateDreams(job.project, job.provider, report);
             break;
           case "extract_concepts":
             await this.extractConcepts(job.project, job.provider, report);
             break;
           case "score":
-            await this.scoreRelevance(report);
+            await this.scoreConcepts(job.project, report);
             break;
           case "score_dreams":
             await this.scoreDreams(job.project, job.provider, report);
             break;
         }
       } catch (err) {
-        report.errors.push(`[${op}] ${err instanceof Error ? err.message : String(err)}`);
+        const msg = err instanceof Error ? err.message : String(err);
+        report.errors.push(`${op}: ${msg}`);
+        logger.error(`[Consolidation] Step '${op}' failed: ${msg}`);
       }
     }
 
-    logger.info(
-      `[Consolidation] Done: ${report.dreamsMerged} merged, ${report.conceptsCreated} concepts created, ${report.invalidEmbeddingsSkipped} embeddings skipped`
-    );
+    logger.info(`[Consolidation] Job ${report.id} completed. Merged: ${report.dreamsMerged}, Concepts: ${report.conceptsCreated}`);
     return report;
   }
 
   /**
-   * Find and merge duplicate dreams based on high cosine similarity.
-   * Keeps the dream with higher importance, merges metadata.
+   * Find similar dreams within the same project and merge them.
    */
-  private async dedupDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
-    let connection;
-    try {
-      const pool = await initPool();
-      connection = await pool.getConnection();
-
+  private async deduplicateDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
+    const db = createDatabaseAdapter();
       const tenantId = authStorage.getStore()!.uid;
-      await setSessionContext(connection);
 
       const conditions: string[] = ['tenant_id = :tenantId'];
-      const binds: Record<string, any> = { tenantId: authStorage.getStore()!.uid };
-      if (project) { conditions.push("project = :project"); binds.project = project; }
-      if (provider) { conditions.push("provider = :provider"); binds.provider = provider; }
-      const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : '';
+      const binds: Record<string, unknown> = { tenantId };
+      if (project) { conditions.push('project = :project'); binds.project = project; }
+      if (provider) { conditions.push('provider = :provider'); binds.provider = provider; }
 
-      // Get all non-consolidated dreams sorted by importance DESC
-      const dreams = await connection.execute<any[]>(
-        `SELECT id, content, embedding, importance, memory_type, project
-         FROM ai_dreaming_memory ${whereClause}
-         ORDER BY importance DESC`,
-        binds as any
-      );
-      const rows = dreams.rows || [];
-      report!.dreamsProcessed = rows.length;
+      const sql = `
+        SELECT id, content, embedding, importance, memory_type, project
+        FROM ai_dreaming_memory
+        WHERE ${conditions.join(' AND ')}
+      `;
+
+      const rows = await db.query<any[]>(sql, binds);
+      report!.dreamsProcessed += rows.length;
 
       if (rows.length < 2) {
-        logger.info(`[Consolidation] Only ${rows.length} dreams — skipping dedup`);
+        logger.info(`[Consolidation] Dedup: ${rows.length} dream(s) found, skipping`);
         return;
       }
 
       // Group by project to avoid cross-project false positives
       const byProject = new Map<string, any[]>();
       for (const row of rows) {
-        const proj = String(row[R_IDX.PROJECT] || "default");
+        const proj = String(this.getVal(row, R_IDX.PROJECT, 'PROJECT') || "default");
 
         if (!this.validateRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "Dedup")) {
           if (report) report.invalidEmbeddingsSkipped++;
@@ -145,31 +205,31 @@ export class ConsolidationEngine {
         const toRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
-          const idI = String(group[i][R_IDX.ID]);
+          const rowI = group[i];
+          const idI = String(this.getVal(rowI, R_IDX.ID, 'ID'));
           if (toRemove.has(idI)) continue;
+
           // Embeddings validated above during preprocessing
-          const embI = group[i][R_IDX.EMBEDDING];
-          const importanceI = Number(group[i][R_IDX.IMPORTANCE]);
+          const embI = this.getVal(rowI, R_IDX.EMBEDDING, 'EMBEDDING');
+          const importanceI = Number(this.getVal(rowI, R_IDX.IMPORTANCE, 'IMPORTANCE'));
 
           for (let j = i + 1; j < group.length; j++) {
-            const idJ = String(group[j][R_IDX.ID]);
+            const rowJ = group[j];
+            const idJ = String(this.getVal(rowJ, R_IDX.ID, 'ID'));
             if (toRemove.has(idJ)) continue;
 
-            // Cosine similarity on embeddings
-            const embJ = group[j][R_IDX.EMBEDDING];
-
+            const embJ = this.getVal(rowJ, R_IDX.EMBEDDING, 'EMBEDDING');
             const similarity = this.cosineSimilarity(embI, embJ);
 
             if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD) {
               // Merge: keep the one with higher importance
-              const importanceJ = Number(group[j][R_IDX.IMPORTANCE]);
+              const importanceJ = Number(this.getVal(rowJ, R_IDX.IMPORTANCE, 'IMPORTANCE'));
               const keepIdx = importanceI >= importanceJ ? i : j;
               const removeIdx = keepIdx === i ? j : i;
-              const removeId = removeIdx === i ? idI : idJ;
-              toRemove.add(removeId);
+              const idToRemove = keepIdx === i ? idJ : idI;
+              toRemove.add(idToRemove);
 
-              // Early exit if the outer loop element was just marked for removal
-              // (This is safe because the outer loop guarantees skipping over removed indices on subsequent iterations)
+              // If the outer element 'i' is removed, break the inner loop early.
               if (removeIdx === i) break;
             }
           }
@@ -179,10 +239,9 @@ export class ConsolidationEngine {
         if (toRemove.size > 0) {
           try {
             const binds = Array.from(toRemove).map((id) => ({ id }));
-            await connection.executeMany(
+            await db.executeMany(
               `DELETE FROM ai_dreaming_memory WHERE id = :id`,
-              binds as any,
-              { autoCommit: true }
+              binds as any
             );
             merged += toRemove.size;
           } catch {
@@ -193,13 +252,6 @@ export class ConsolidationEngine {
 
       report!.dreamsMerged = merged;
       logger.info(`[Consolidation] Dedup: removed ${merged} duplicate dreams`);
-    } finally {
-      if (connection) {
-        try {
-          await connection.close();
-        } catch { /* ignore */ }
-      }
-    }
   }
 
   /**
@@ -207,361 +259,263 @@ export class ConsolidationEngine {
    * For each project, groups related dreams and generates concept entries.
    */
   private async extractConcepts(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
-    let connection;
-    try {
-      const pool = await initPool();
-      connection = await pool.getConnection();
-
+    const db = createDatabaseAdapter();
       const tenantId = authStorage.getStore()!.uid;
-      await setSessionContext(connection);
 
       const conditions: string[] = ['tenant_id = :tenantId'];
-      const binds: Record<string, any> = { tenantId: authStorage.getStore()!.uid };
-      if (project) { conditions.push("project = :project"); binds.project = project; }
-      if (provider) { conditions.push("provider = :provider"); binds.provider = provider; }
-      const whereClause = `WHERE ${conditions.join(" AND ")}`;
+      const binds: Record<string, unknown> = { tenantId };
+      if (project) { conditions.push('project = :project'); binds.project = project; }
+      if (provider) { conditions.push('provider = :provider'); binds.provider = provider; }
 
-      // Ensure codeatlas_concepts table exists
-      try {
-        const createConceptsTable = [
-          'BEGIN',
-          '  EXECUTE IMMEDIATE ' + "'CREATE TABLE codeatlas_concepts (id VARCHAR2(255) PRIMARY KEY, label VARCHAR2(500), description CLOB, category VARCHAR2(100), embedding VECTOR, project VARCHAR2(255), confidence NUMBER(5,2) DEFAULT 0.50, source_ids CLOB, evidence_count NUMBER DEFAULT 1, access_count NUMBER DEFAULT 0, status VARCHAR2(50) DEFAULT ''active'', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, last_accessed_at TIMESTAMP, tenant_id VARCHAR2(255))'",
-          'EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF;',
-          'END;'
-        ].join('\n');
-        await connection.execute(createConceptsTable);
-      } catch { /* table exists */ }
+      const sql = `
+        SELECT id, content, embedding, importance, memory_type, project
+        FROM ai_dreaming_memory
+        WHERE ${conditions.join(' AND ')}
+      `;
 
-      const dreams = await connection.execute<any[]>(
-        `SELECT id, content, memory_type, project, importance
-         FROM ai_dreaming_memory ${whereClause}
-         ORDER BY importance DESC`,
-        binds as any
-      );
-      const rows = dreams.rows || [];
+      const rows = await db.query<any[]>(sql, binds);
 
-      if (rows.length === 0) return;
+      if (rows.length < 3) {
+        logger.info(`[Consolidation] Extract Concepts: ${rows.length} dreams found (min 3 required), skipping`);
+        return;
+      }
 
-      // Column indices for extract concepts query (different from dedup — no embedding column)
-      const CX = { ID: 0, CONTENT: 1, MEMORY_TYPE: 2, PROJECT: 3, IMPORTANCE: 4 };
-
-      // Group by project for concept extraction
-      const byProject = new Map<string, any[]>();
+      // Group dreams by project & type
+      const clusters = new Map<string, any[]>();
       for (const row of rows) {
-        const proj = String(row[CX.PROJECT] || "default");
-        if (!byProject.has(proj)) byProject.set(proj, []);
-        byProject.get(proj)!.push(row);
+        const proj = String(this.getVal(row, R_IDX.PROJECT, 'PROJECT') || "default");
+        const mtype = String(this.getVal(row, R_IDX.MEMORY_TYPE, 'MEMORY_TYPE') || "GENERAL");
+
+        if (!this.validateRowEmbedding(row, R_IDX.EMBEDDING, R_IDX.ID, "ExtractConcepts")) {
+          if (report) report.invalidEmbeddingsSkipped++;
+          continue;
+        }
+
+        const key = `${proj}:${mtype}`;
+        if (!clusters.has(key)) clusters.set(key, []);
+        clusters.get(key)!.push(row);
       }
 
-      let conceptsCreated = 0;
+      let created = 0;
+      for (const [key, dreamCluster] of clusters) {
+        if (dreamCluster.length < 2) continue; // need at least 2 to form a concept
 
-      // Phase 1: Compute embeddings and prepare concept data
-      const conceptsData: any[] = [];
+        const [proj, mtype] = key.split(':');
 
-      const intermediateData: {
-        proj: string;
-        conceptLabel: string;
-        conceptDescription: string;
-        sources: string;
-      }[] = [];
+        // Extract concept title & description from cluster contents
+        const contents = dreamCluster.map(r => String(this.getVal(r, R_IDX.CONTENT, 'CONTENT')));
+        const conceptLabel = `Pattern: ${mtype} in ${proj}`;
+        const conceptDesc = contents.slice(0, 5).join(' | '); // concatenate sample evidence
+        const sourceIds = JSON.stringify(dreamCluster.map(r => String(this.getVal(r, R_IDX.ID, 'ID'))));
 
-      for (const [proj, group] of byProject) {
-        // Take top 10 highest-importance dreams per project for concept extraction
-        const topDreams = group.slice(0, 10);
-        const combinedContent = topDreams
-          .map((d) => `[${d[R_IDX.MEMORY_TYPE]}] ${d[R_IDX.CONTENT]}`)
-          .join("\n\n");
+        // Generate embedding for the concept
+        const embeddings = await generateEmbeddingsBatch([conceptLabel + ': ' + conceptDesc], 'passage');
+        const embedding = embeddings && embeddings[0] ? embeddings[0] : null;
 
-        // Generate a concept label and description from the content
-        const conceptLabel = this.extractLabel(topDreams);
-        const conceptDescription = combinedContent.slice(0, 1000);
+        const conceptId = randomUUID();
 
-        intermediateData.push({
-          proj,
-          conceptLabel,
-          conceptDescription,
-          sources: JSON.stringify(topDreams.map((d) => d[R_IDX.ID]))
-        });
-      }
-
-      const descriptions = intermediateData.map(d => d.conceptDescription);
-      // Batch embedding generation to avoid N+1 API calls.
-      let batchEmbeddings: number[][] | null = null;
-      if (descriptions.length > 0) {
-        batchEmbeddings = await generateEmbeddingsBatch(descriptions, "passage");
-      }
-
-      if (batchEmbeddings) {
-        for (let i = 0; i < intermediateData.length; i++) {
-          const data = intermediateData[i];
-
-          if (i >= batchEmbeddings.length) {
-            logger.warn(`[Consolidation] Batch returned fewer embeddings than requested. Missing embedding for "${data.conceptLabel}", skipping`);
-            continue;
-          }
-
-          const conceptEmbedding = batchEmbeddings[i];
-
-          if (!conceptEmbedding || conceptEmbedding.length === 0) {
-            logger.warn(`[Consolidation] No embedding for concept "${data.conceptLabel}", skipping`);
-            continue;
-          }
-
-          conceptsData.push({
-            ...data,
-            conceptEmbedding,
+        if (embedding && embedding.length > 0) {
+          const insertSql = `
+            INSERT INTO codeatlas_concepts (
+              id, label, description, category, embedding,
+              project, confidence, source_ids, evidence_count, tenant_id
+            ) VALUES (
+              :id, :label, :description, :category, :embedding,
+              :project, :confidence, :sourceIds, :evidenceCount, :tenantId
+            )
+          `;
+          await db.execute(insertSql, {
+            id: conceptId,
+            label: conceptLabel.slice(0, 255),
+            description: conceptDesc,
+            category: mtype,
+            embedding: new Float32Array(embedding),
+            project: proj,
+            confidence: 0.70,
+            sourceIds,
+            evidenceCount: dreamCluster.length,
+            tenantId,
           });
+          created++;
         }
-      } else if (intermediateData.length > 0) {
-        logger.warn(`[Consolidation] Batch embedding generation returned null for ${intermediateData.length} concepts, skipping`);
       }
 
-      if (conceptsData.length > 0) {
-        // Phase 2: Batch lookup existing concepts to avoid N+1 queries
-        const existingConcepts = new Set<string>();
-        const BATCH_SIZE = 50;
-        for (let i = 0; i < conceptsData.length; i += BATCH_SIZE) {
-          const chunk = conceptsData.slice(i, i + BATCH_SIZE);
-          const orConditions: string[] = [];
-          const bindsForSelect: Record<string, any> = {};
-
-          chunk.forEach((c, idx) => {
-            bindsForSelect[`l${idx}`] = c.conceptLabel;
-            bindsForSelect[`p${idx}`] = c.proj;
-            orConditions.push(`(label = :l${idx} AND project = :p${idx})`);
-          });
-
-          const query = `SELECT label, project FROM codeatlas_concepts WHERE tenant_id = :tid AND (${orConditions.join(' OR ')})`;
-          bindsForSelect.tid = authStorage.getStore()!.uid;
-          logger.info(`[Consolidation] Concepts lookup: ${query.substring(0, 200)}...`);
-          logger.info(`[Consolidation] Concepts binds: ${JSON.stringify(bindsForSelect).substring(0, 500)}`);
-          const existing = await connection.execute<any[]>(query, bindsForSelect);
-
-          if (existing.rows) {
-            for (const row of existing.rows) {
-              existingConcepts.add(`${row[0]}::${row[1]}`); // label::project
-            }
-          }
-        }
-
-        // Phase 3: Split into updates and inserts
-        const toUpdate: any[] = [];
-        const toInsert: any[] = [];
-
-        for (const data of conceptsData) {
-          const key = `${data.conceptLabel}::${data.proj}`;
-          if (existingConcepts.has(key)) {
-            toUpdate.push({
-              v_label: data.conceptLabel,
-              v_proj: data.proj,
-              v_desc: data.conceptDescription,
-              v_tid: authStorage.getStore()!.uid,
-            });
-          } else {
-            toInsert.push({
-              v_id: `concept-${randomUUID().slice(0, 8)}`,
-              v_label: data.conceptLabel,
-              v_desc: data.conceptDescription,
-              v_embedding: new Float32Array(data.conceptEmbedding),
-              v_proj: data.proj,
-              v_sources: data.sources,
-              v_tid: authStorage.getStore()!.uid,
-            });
-            conceptsCreated++;
-          }
-        }
-
-        // Phase 4: Batch execute updates and inserts
-        if (toUpdate.length > 0) {
-          logger.info(`[Consolidation] Updating ${toUpdate.length} concepts`);
-          await connection.executeMany(
-            `UPDATE codeatlas_concepts
-             SET description = :v_desc,
-                 evidence_count = evidence_count + 1,
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE label = :v_label AND project = :v_proj AND tenant_id = :v_tid`,
-            toUpdate,
-            { autoCommit: true }
-          );
-        }
-
-        if (toInsert.length > 0) {
-          await connection.executeMany(
-            `INSERT INTO codeatlas_concepts (id, label, description, category, embedding, project, confidence, source_ids, evidence_count, status, tenant_id)
-             VALUES (:v_id, :v_label, :v_desc, 'lesson', :v_embedding, :v_proj, 0.50, :v_sources, 1, 'active', :v_tid)`,
-            toInsert,
-            { autoCommit: true }
-          );
-        }
-
-      }
-
-
-      report!.conceptsCreated = conceptsCreated;
-      logger.info(`[Consolidation] Extracted ${conceptsCreated} concepts`);
-    } finally {
-      if (connection) {
-        try {
-          await connection.close();
-        } catch { /* ignore */ }
-      }
-    }
+      report!.conceptsCreated = created;
+      logger.info(`[Consolidation] Extracted ${created} concept(s) from dream clusters`);
   }
 
   /**
-   * Lifecycle scoring for ai_dreaming_memory — same pattern as scoreRelevance for concepts.
-   *
-   * 1. Time decay: confidence *= 0.995 ^ days since last access (0.997 if never accessed)
-   * 2. Evidence boost: +0.05 * log2(evidence_count + 1)
-   * 3. Access bonus: +0.02 * log2(access_count + 1)
-   * 4. Archive: confidence < 0.10 → status = 'archived'
-   * 5. Supersession: near-duplicate active dreams → older lower-confidence one gets superseded
+   * Score concepts based on evidence, recency, and access frequency.
+   */
+  private async scoreConcepts(project?: string, report?: ConsolidationReport): Promise<void> {
+    const db = createDatabaseAdapter();
+      const tenantId = authStorage.getStore()!.uid;
+
+      const conditions: string[] = ['tenant_id = :tenantId'];
+      const binds: Record<string, unknown> = { tenantId };
+      if (project) { conditions.push('project = :project'); binds.project = project; }
+
+      const sql = `
+        SELECT id, label, description, category, confidence, evidence_count, status
+        FROM codeatlas_concepts
+        WHERE ${conditions.join(' AND ')}
+      `;
+
+      const rows = await db.query<any[]>(sql, binds);
+
+      let updated = 0;
+      for (const row of rows) {
+        const id = String(this.getVal(row, R_IDX.ID, 'ID'));
+        const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
+        const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
+
+        // Bayesian confidence update: each piece of evidence increases confidence
+        const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
+
+        if (Math.abs(newConf - currentConf) > 0.01) {
+          const updateSql = `
+            UPDATE codeatlas_concepts
+            SET confidence = :conf, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id AND tenant_id = :tenantId
+          `;
+          await db.execute(updateSql, { conf: newConf, id, tenantId });
+          updated++;
+        }
+      }
+
+      logger.info(`[Consolidation] Scored ${rows.length} concepts, updated ${updated}`);
+  }
+
+  /**
+   * Score and govern dreaming memories:
+   * - Phase 4: Archival of stale/low-importance dreams
+   * - Phase 4: Supersession when a newer high-confidence dream overlaps an old one
    */
   private async scoreDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
     if (!OracleDreamingService._hasLifecycleColumns) {
       logger.info("[Consolidation] Lifecycle columns missing — skipping dream scoring");
       return;
     }
-    let connection;
-    try {
-      const pool = await initPool();
-      connection = await pool.getConnection();
-      await setSessionContext(connection);
+    const db = createDatabaseAdapter();
+    const tenantId = authStorage.getStore()!.uid;
 
-      const conditions: string[] = ['tenant_id = :v_tid'];
-      const binds: Record<string, any> = { v_tid: authStorage.getStore()!.uid };
-      if (project) { conditions.push("project = :project"); binds.project = project; }
-      if (provider) { conditions.push("provider = :provider"); binds.provider = provider; }
-      const whereClause = `WHERE ${conditions.join(" AND ")}`;
+    const conditions: string[] = ['tenant_id = :v_tid'];
+    const binds: Record<string, unknown> = { v_tid: tenantId };
+    if (project) { conditions.push('project = :project'); binds.project = project; }
+    if (provider) { conditions.push('provider = :provider'); binds.provider = provider; }
 
-      // 1. Base decay on confidence for active dreams
-      const decayResult = await connection.execute(
-        `UPDATE ai_dreaming_memory
-         SET confidence = GREATEST(0.05, confidence * CASE
-           WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_accessed_at)))
-           ELSE POWER(0.997, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - created_at)))
-         END)
-         WHERE status = 'active' AND ${conditions.join(" AND ")}`,
-        binds,
-        { autoCommit: true }
-      );
-      logger.info(`[Consolidation] Dream decay applied, rows affected: ${decayResult.rowsAffected ?? 0}`);
+    const whereCond = conditions.join(' AND ');
 
-      // 2. Evidence boost
-      await connection.execute(
-        `UPDATE ai_dreaming_memory
-         SET confidence = LEAST(0.99, GREATEST(0.05,
-           confidence + 0.05 * LOG(2, evidence_count + 1)
-         ))
-         WHERE status = 'active' AND evidence_count > 1 AND ${conditions.join(" AND ")}`,
-        binds,
-        { autoCommit: true }
-      );
+    // 1. Time decay
+    const decaySql = `
+      UPDATE ai_dreaming_memory
+      SET confidence = GREATEST(0.05, confidence * CASE
+        WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_accessed_at)))
+        ELSE POWER(0.997, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - created_at)))
+      END)
+      WHERE status = 'active' AND ${whereCond}
+    `;
+    await db.execute(decaySql, binds);
 
-      // 3. Access bonus
-      await connection.execute(
-        `UPDATE ai_dreaming_memory
-         SET confidence = LEAST(0.99, GREATEST(0.05,
-           confidence + 0.02 * LOG(2, access_count + 1)
-         ))
-         WHERE status = 'active' AND access_count > 0 AND ${conditions.join(" AND ")}`,
-        binds,
-        { autoCommit: true }
-      );
+    // 2. Evidence boost
+    const boostSql = `
+      UPDATE ai_dreaming_memory
+      SET confidence = LEAST(0.99, GREATEST(0.05,
+        confidence + 0.05 * LOG(2, evidence_count + 1)
+      ))
+      WHERE status = 'active' AND evidence_count > 1 AND ${whereCond}
+    `;
+    await db.execute(boostSql, binds);
 
-      // 4. Archive very low confidence dreams
-      const archiveResult = await connection.execute(
-        `UPDATE ai_dreaming_memory
-         SET status = 'archived'
-         WHERE status = 'active' AND confidence < 0.10 AND ${conditions.join(" AND ")}`,
-        binds,
-        { autoCommit: true }
-      );
-      report!.dreamsArchived = archiveResult.rowsAffected ?? 0;
+    // 3. Access bonus
+    const accessSql = `
+      UPDATE ai_dreaming_memory
+      SET confidence = LEAST(0.99, GREATEST(0.05,
+        confidence + 0.02 * LOG(2, access_count + 1)
+      ))
+      WHERE status = 'active' AND access_count > 0 AND ${whereCond}
+    `;
+    await db.execute(accessSql, binds);
 
-      // 5. Supersession: within same project+type, if newer dream has higher confidence and
-      //    similar semantic content, mark the older one as superseded.
-      //    Uses embedding vectors via cosine similarity.
-      const supBinds: Record<string, any> = { ...binds };
-      if (provider) { supBinds.provider = provider; }
-      const supWhere = conditions.slice();
-      if (provider) supWhere.push("provider = :provider");
-      // Get all active dreams with embeddings, ordered by project, memory_type, created_at
-      const dreams = await connection.execute<any[]>(
-        `SELECT id, project, memory_type, embedding, confidence, created_at
-         FROM ai_dreaming_memory
-         WHERE status = 'active' AND embedding IS NOT NULL AND ${supWhere.join(" AND ")}
-         ORDER BY project, memory_type, created_at ASC`,
-        supBinds
-      );
-      const rows = dreams.rows || [];
-      let supersededCount = 0;
+    // 4. Archival of low confidence dreams
+    const archiveSql = `
+      UPDATE ai_dreaming_memory
+      SET status = 'archived'
+      WHERE status = 'active' AND confidence < 0.10 AND ${whereCond}
+    `;
+    const archiveRes = await db.execute(archiveSql, binds);
+    if (report) report.dreamsArchived = archiveRes.rowsAffected ?? 0;
 
-      if (rows.length > 1) {
-        // Group by project+memory_type and find pairs where newer dominates older
-        const groups = new Map<string, any[]>();
-        for (const row of rows) {
-          const key = `${row[SCORE_IDX.PROJECT]}:${row[SCORE_IDX.MEMORY_TYPE]}`; // project:memory_type
-          // Extract embeddings before grouping
-          if (!this.validateRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring")) {
-            if (report) report.invalidEmbeddingsSkipped++;
-            continue;
-          }
+    // 5. Supersession: within same project+type, if newer dream has higher confidence and
+    //    similar semantic content, mark the older one as superseded.
+    const fetchSql = `
+      SELECT id, project, memory_type, embedding, confidence, created_at
+      FROM ai_dreaming_memory
+      WHERE status = 'active' AND embedding IS NOT NULL AND ${whereCond}
+      ORDER BY project, memory_type, created_at ASC
+    `;
 
-          if (!groups.has(key)) groups.set(key, []);
-          groups.get(key)!.push(row);
+    const rows = await db.query<any[]>(fetchSql, binds);
+    let supersededCount = 0;
+
+    if (rows.length > 1) {
+      const groups = new Map<string, any[]>();
+      for (const row of rows) {
+        const proj = String(this.getVal(row, SCORE_IDX.PROJECT, 'PROJECT') || "default");
+        const mtype = String(this.getVal(row, SCORE_IDX.MEMORY_TYPE, 'MEMORY_TYPE') || "GENERAL");
+        const key = `${proj}:${mtype}`;
+
+        if (!this.validateRowEmbedding(row, SCORE_IDX.EMBEDDING, SCORE_IDX.ID, "Scoring")) {
+          if (report) report.invalidEmbeddingsSkipped++;
+          continue;
         }
 
-        const toSupersede = new Set<string>();
-        for (const [, group] of groups) {
-          if (group.length < 2) continue;
-          for (let i = 0; i < group.length; i++) {
-            const older = group[i];
-            const idO = String(older[SCORE_IDX.ID]);
-            if (toSupersede.has(idO)) continue;
-            // Embeddings validated above during preprocessing
-            const embO = older[SCORE_IDX.EMBEDDING]; // embedding
-            const confO = Number(older[SCORE_IDX.CONFIDENCE]);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(row);
+      }
 
-            for (let j = i + 1; j < group.length; j++) {
-              const newer = group[j];
-              if (toSupersede.has(String(newer[SCORE_IDX.ID]))) continue;
-              const embN = newer[SCORE_IDX.EMBEDDING];
+      const toSupersede = new Set<string>();
+      for (const [, group] of groups) {
+        if (group.length < 2) continue;
+        for (let i = 0; i < group.length; i++) {
+          const older = group[i];
+          const olderId = String(this.getVal(older, SCORE_IDX.ID, 'ID'));
+          if (toSupersede.has(olderId)) continue;
 
-              const similarity = this.cosineSimilarity(embO, embN);
+          const embO = this.getVal(older, SCORE_IDX.EMBEDDING, 'EMBEDDING');
+          const olderConfidence = Number(this.getVal(older, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
 
-              // If similarity is high and newer has higher confidence → supersede older
-              if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && Number(newer[SCORE_IDX.CONFIDENCE]) > confO) {
-                toSupersede.add(idO);  // older's id
-                break;
-              }
+          for (let j = i + 1; j < group.length; j++) {
+            const newer = group[j];
+            const newerId = String(this.getVal(newer, SCORE_IDX.ID, 'ID'));
+            if (toSupersede.has(newerId)) continue;
+
+            const embN = this.getVal(newer, SCORE_IDX.EMBEDDING, 'EMBEDDING');
+            const similarity = this.cosineSimilarity(embO, embN);
+
+            const newerConfidence = Number(this.getVal(newer, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
+            if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && newerConfidence > olderConfidence) {
+              toSupersede.add(olderId);
+              break;
             }
-
           }
-        }
-
-        if (toSupersede.size > 0) {
-          const batch = Array.from(toSupersede).map((id: string) => ({ sid: id, tid: authStorage.getStore()!.uid }));
-          await connection.executeMany(
-            `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id = :sid AND tenant_id = :tid`,
-            batch,
-            { autoCommit: true }
-          );
-          supersededCount = toSupersede.size;
         }
       }
 
-      report!.dreamsSuperseded = supersededCount;
-      logger.info(
-        `[Consolidation] Dream lifecycle: ${report!.dreamsArchived} archived, ${supersededCount} superseded`
-      );
-    } finally {
-      if (connection) {
-        try {
-          await connection.close();
-        } catch { /* ignore */ }
+      if (toSupersede.size > 0) {
+        const batch = Array.from(toSupersede).map((id: string) => ({ sid: id, tid: authStorage.getStore()!.uid }));
+        await db.executeMany(
+          `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id = :sid AND tenant_id = :tid`,
+          batch as any
+        );
+        supersededCount = toSupersede.size;
       }
     }
+
+    report!.dreamsSuperseded = supersededCount;
+    logger.info(
+      `[Consolidation] Dream lifecycle: ${report!.dreamsArchived} archived, ${supersededCount} superseded`
+    );
   }
 
   /**
@@ -569,154 +523,29 @@ export class ConsolidationEngine {
    * - Each evidence/access event updates confidence via Bayesian update
    * - Confidence decays exponentially with time (0.995 per day)
    * - Archived concepts get reduced confidence
-   * - access_count and last_accessed_at are tracked externally (via concepts/search API)
    */
-  private async scoreRelevance(report?: ConsolidationReport): Promise<void> {
-    let connection;
-    try {
-      const pool = await initPool();
-      connection = await pool.getConnection();
+  private cosineSimilarity(a: any, b: any): number {
+    const vecA = this.parseEmbedding(a);
+    const vecB = this.parseEmbedding(b);
 
-      await setSessionContext(connection);
-
-      // Ensure access_count column exists (migration-safe)
-      try {
-        await connection.execute(`ALTER TABLE codeatlas_concepts ADD (access_count NUMBER DEFAULT 0, last_accessed_at TIMESTAMP)`);
-      } catch { /* column exists */ }
-
-      // 1. Base decay
-      await connection.execute(
-        `UPDATE codeatlas_concepts
-         SET confidence = confidence * CASE
-           WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_accessed_at)))
-           ELSE POWER(0.997, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - created_at)))
-         END
-         WHERE status = 'active' AND tenant_id = :v_tid`,
-        { v_tid: authStorage.getStore()!.uid },
-        { autoCommit: true }
-      );
-
-      // 2. Evidence boost
-      await connection.execute(
-        `UPDATE codeatlas_concepts
-         SET confidence = LEAST(0.99, GREATEST(0.05,
-           confidence + 0.05 * LOG(2, evidence_count + 1)
-         ))
-         WHERE status = 'active' AND evidence_count > 1 AND tenant_id = :v_tid`,
-        { v_tid: authStorage.getStore()!.uid },
-        { autoCommit: true }
-      );
-
-      // 3. Access bonus
-      await connection.execute(
-        `UPDATE codeatlas_concepts
-         SET confidence = LEAST(0.99, GREATEST(0.05,
-           confidence + 0.02 * LOG(2, access_count + 1)
-         ))
-         WHERE status = 'active' AND access_count > 0 AND tenant_id = :v_tid`,
-        { v_tid: authStorage.getStore()!.uid },
-        { autoCommit: true }
-      );
-
-      // 4. Archive very low confidence concepts
-      const archiveResult = await connection.execute(
-        `UPDATE codeatlas_concepts
-         SET status = 'archived'
-         WHERE confidence < 0.10 AND status = 'active' AND tenant_id = :v_tid`,
-        { v_tid: authStorage.getStore()!.uid },
-        { autoCommit: true }
-      );
-
-      logger.info(
-        `[Consolidation] Score: decay applied, ${(archiveResult.rowsAffected || 0)} archived`
-      );
-    } finally {
-      if (connection) {
-        try {
-          await connection.close();
-        } catch { /* ignore */ }
-      }
-    }
-  }
-
-  /**
-   * Validates a row's embedding column to ensure downstream processing runs on correctly typed arrays without O(N^2) checks later.
-   * Returns true if valid, false otherwise.
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private validateRowEmbedding(row: any[], embIdx: number, idIdx: number, contextLabel: string): boolean {
-    const rawEmb = row[embIdx];
-    if (!rawEmb) {
-      logger.debug(`[Consolidation] ${contextLabel} skipping missing embedding for ID ${row[idIdx]}`);
-      return false;
-    }
-
-    let safeEmb: number[] | Float32Array;
-    if (rawEmb instanceof Float32Array) {
-      safeEmb = rawEmb;
-    } else if (Array.isArray(rawEmb)) {
-      safeEmb = new Float32Array(rawEmb); // pre-normalize array embeddings to Float32Array
-      row[embIdx] = safeEmb; // update row to avoid re-allocating Float32Array
-    } else {
-      logger.debug(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
-      return false;
-    }
-
-    if (!Number.isFinite(safeEmb.length) || safeEmb.length === 0) {
-      logger.debug(`[Consolidation] ${contextLabel} skipping empty embedding for ID ${row[idIdx]}`);
-      return false;
-    }
-
-    return true;
-  }
-
-  /**
-   * Cosine similarity between two vectors (either standard arrays or Float32Array).
-   * Note: passing Float32Array arrays directly via Oracle DB driver enables peak V8 mathematical loop optimizations natively.
-   */
-  private cosineSimilarity(a: number[] | Float32Array, b: number[] | Float32Array): number {
-    // Defense in depth: Verify inputs are valid array structures before accessing lengths
-    // (primarily safety for non-loop external callers who may bypass validateRowEmbedding)
-    if (!Array.isArray(a) && !(a instanceof Float32Array)) return 0;
-    if (!Array.isArray(b) && !(b instanceof Float32Array)) return 0;
-
-    // Optimization: Cache array length
-    const len = a.length;
-    if (len !== b.length || len === 0) {
-      // Use debug rather than warn to prevent O(N^2) log spam in production
-      logger.debug(`[Consolidation] cosineSimilarity encountered dimension mismatch: ${len} vs ${b.length}`);
+    if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) {
       return 0;
     }
-    let dot = 0, normA = 0, normB = 0;
-    for (let i = 0; i < len; i++) {
-      // Optimization: Extract to local variables to avoid multiple array lookups
-      const valA = a[i];
-      const valB = b[i];
-      dot += valA * valB;
-      normA += valA * valA;
-      normB += valB * valB;
-    }
-    // Math.sqrt applied separately to avoid floating point overflow on very large vectors
-    const denom = Math.sqrt(normA) * Math.sqrt(normB);
-    return denom === 0 ? 0 : dot / denom;
-  }
 
-  /**
-   * Extract a concept label from the top dreams of a cluster.
-   * Prioritizes PATTERN and KNOWLEDGE types, then most common memory_type.
-   */
-  private extractLabel(dreams: any[]): string {
-    // Try to find a PATTERN or KNOWLEDGE dream with the most descriptive content
-    for (const type of ["PATTERN", "KNOWLEDGE", "MISTAKE"]) {
-      const match = dreams.find((d) => d[R_IDX.MEMORY_TYPE] === type);
-      if (match) {
-        const content = String(match[R_IDX.CONTENT] || "");
-        return content.length > 80 ? content.slice(0, 80) : content;
-      }
+    let dot = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < vecA.length; i++) {
+      dot += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
     }
-    // Fallback: use first dream's content (id=0, content=1)
-    const first = String(dreams[0]?.[R_IDX.CONTENT] || (dreams[0]?.[1] ?? "Untitled Concept"));
-    return first.length > 80 ? first.slice(0, 80) : first;
+
+    const denom = Math.sqrt(normA) * Math.sqrt(normB);
+    if (denom === 0) return 0;
+
+    return dot / denom;
   }
 }
 

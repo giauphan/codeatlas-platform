@@ -3,6 +3,7 @@ import type { Connection } from "oracledb";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { initPool, setSessionContext } from "../database/connection.js";
+import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbedding, generateEmbeddingsBatch } from "./embeddingService.js";
 import type { GraphEntity, GraphLink, ArchSmells } from "../types/index.js";
 
@@ -263,15 +264,12 @@ export class OracleMemoryService {
 
   /**
    * Graph Analysis: Detect architectural smells (Circular Dependencies, God Objects, Dead Code)
-   * Utilizing SQL Property Graph Queries (Oracle 23ai+)
+   * Utilizing Database Adapters
    */
   static async detectArchitecturalSmells(project: string) {
-    let connection;
+    const adapter = createDatabaseAdapter();
     try {
-      const pool = await initPool();
-      connection = await pool.getConnection();
-      await setSessionContext(connection);
-
+      await adapter.connect();
       const tenantId = authStorage.getStore()!.uid;
 
       const smells: ArchSmells = {
@@ -280,49 +278,14 @@ export class OracleMemoryService {
         deadCode: []
       };
 
-      // 1. Detect Circular Dependencies (Cycles in the dependency graph) using SQL Graph queries
-      const circularSql = `
-          SELECT DISTINCT entity_name, file_path
-          FROM GRAPH_TABLE ( ai_knowledge_graph
-            MATCH (a)-[e IS ai_relational_memory]->{1,5}(a)
-            WHERE a.project_name = :project AND a.tenant_id = :tenantId
-            COLUMNS (a.entity_name, a.file_path)
-          )
-        `;
-      const circularRes = await OracleMemoryService.executeAsync(connection, circularSql, { project, tenantId: authStorage.getStore()!.uid });
-      smells.circularDependencies = (circularRes.rows ?? []) as unknown[];
+      // 1. Detect Circular Dependencies (Cycles in the dependency graph)
+      smells.circularDependencies = await adapter.detectCircularDependencies(project, tenantId) as unknown[];
 
       // 2. Detect God Objects (Entities with excessively high incoming relationships / high in-degree)
-      const godSql = `
-          SELECT entity_name, entity_type, file_path, in_degree
-          FROM (
-            SELECT target_id, count(*) as in_degree
-            FROM ai_relational_memory
-            WHERE project_name = :project AND tenant_id = :tenantId
-            GROUP BY target_id
-          ) r
-          JOIN ai_semantic_memory s ON r.target_id = s.id AND r.tenant_id = s.tenant_id
-          WHERE in_degree > 15
-          ORDER BY in_degree DESC
-          FETCH FIRST 10 ROWS ONLY
-        `;
-      const godRes = await OracleMemoryService.executeAsync(connection, godSql, { project, tenantId: authStorage.getStore()!.uid });
-      smells.godObjects = (godRes.rows ?? []) as unknown[];
+      smells.godObjects = await adapter.detectGodObjects(project, tenantId) as unknown[];
 
       // 3. Detect Dead Code (Entities with zero incoming relationships, and not main entry points)
-      const deadSql = `
-          SELECT entity_name, file_path
-          FROM ai_semantic_memory s
-          WHERE project_name = :project AND tenant_id = :tenantId
-            AND entity_type IN ('function', 'class')
-            AND NOT EXISTS (
-              SELECT 1 FROM ai_relational_memory r 
-              WHERE r.target_id = s.id
-            )
-          FETCH FIRST 20 ROWS ONLY
-        `;
-      const deadRes = await OracleMemoryService.executeAsync(connection, deadSql, { project, tenantId: authStorage.getStore()!.uid });
-      smells.deadCode = (deadRes.rows ?? []) as unknown[];
+      smells.deadCode = await adapter.detectDeadCode(project, tenantId) as unknown[];
 
       return smells;
 
@@ -330,12 +293,10 @@ export class OracleMemoryService {
       logger.error("Error detecting smells:", err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
-      if (connection) {
-        try {
-          await connection.close();
-        } catch (closeErr) {
-          logger.error("Error closing connection:", closeErr);
-        }
+      try {
+        await adapter.disconnect();
+      } catch (closeErr) {
+        logger.error("Error closing database adapter connection:", closeErr);
       }
     }
   }
