@@ -21,3 +21,7 @@
 ## 2026-08-19 - Fast vector similarity loops
 **Learning:** In highly mathematical operations inside $O(N^2)$ loops (like pairwise cosine similarity computations), redundant allocations such as extracting IDs/properties and generating arrays dynamically causes massive garbage collection overhead. Furthermore, ensuring input arrays are always passed directly as `Float32Array` enables the V8 runtime to leverage fast, unboxed vector operations natively.
 **Action:** When calculating similarity matrix distances or comparisons, pre-normalize structural types like raw arrays to `Float32Array` before executing nested loops, and cache invariant lookups out of the inner loop scope.
+
+## 2026-08-19 - Pre-parsing vectors to avoid O(N^2) inner-loop allocations
+**Learning:** When calculating vector similarities or comparisons in $O(N^2)$ nested loops, repeatedly extracting properties (`getVal`) and parsing raw string/arrays into `Float32Array` within the inner loop causes massive, redundant CPU cycles and garbage collection pressure in V8.
+**Action:** When calculating similarity matrix distances or comparisons, pre-parse data structures (like converting raw arrays to `Float32Array`) and extract invariant lookups during an $O(N)$ preprocessing phase, mapping the valid subset to an array of objects to iterate over, effectively eliminating redundant type coercion in the inner loop.
