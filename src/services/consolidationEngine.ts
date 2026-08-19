@@ -49,6 +49,9 @@ export interface ConsolidationReport {
 }
 
 export class ConsolidationEngine {
+  // Cache parsed Float32Arrays for row objects to prevent redundant O(n²)
+  // JSON/array parsing overhead inside similarity loops
+  private parsedEmbeddingCache = new WeakMap<any, Float32Array>();
 
   private getVal(row: any, index: number, keyStr: string): any {
     if (!row) return undefined;
@@ -105,6 +108,7 @@ export class ConsolidationEngine {
       logger.warn(`[Consolidation] ${stepName}: Skipping row ${idVal} due to missing or invalid embedding format.`);
       return false;
     }
+    this.parsedEmbeddingCache.set(row, parsed);
     return true;
   }
 
@@ -210,15 +214,19 @@ export class ConsolidationEngine {
           if (toRemove.has(idI)) continue;
 
           // Embeddings validated above during preprocessing
-          const embI = this.getVal(rowI, R_IDX.EMBEDDING, 'EMBEDDING');
+          const embI = this.parsedEmbeddingCache.get(rowI) || this.parseEmbedding(this.getVal(rowI, R_IDX.EMBEDDING, 'EMBEDDING'));
           const importanceI = Number(this.getVal(rowI, R_IDX.IMPORTANCE, 'IMPORTANCE'));
+
+          if (!embI) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             const rowJ = group[j];
             const idJ = String(this.getVal(rowJ, R_IDX.ID, 'ID'));
             if (toRemove.has(idJ)) continue;
 
-            const embJ = this.getVal(rowJ, R_IDX.EMBEDDING, 'EMBEDDING');
+            const embJ = this.parsedEmbeddingCache.get(rowJ) || this.parseEmbedding(this.getVal(rowJ, R_IDX.EMBEDDING, 'EMBEDDING'));
+            if (!embJ) continue;
+
             const similarity = this.cosineSimilarity(embI, embJ);
 
             if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD) {
@@ -482,15 +490,19 @@ export class ConsolidationEngine {
           const olderId = String(this.getVal(older, SCORE_IDX.ID, 'ID'));
           if (toSupersede.has(olderId)) continue;
 
-          const embO = this.getVal(older, SCORE_IDX.EMBEDDING, 'EMBEDDING');
+          const embO = this.parsedEmbeddingCache.get(older) || this.parseEmbedding(this.getVal(older, SCORE_IDX.EMBEDDING, 'EMBEDDING'));
           const olderConfidence = Number(this.getVal(older, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
+
+          if (!embO) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             const newer = group[j];
             const newerId = String(this.getVal(newer, SCORE_IDX.ID, 'ID'));
             if (toSupersede.has(newerId)) continue;
 
-            const embN = this.getVal(newer, SCORE_IDX.EMBEDDING, 'EMBEDDING');
+            const embN = this.parsedEmbeddingCache.get(newer) || this.parseEmbedding(this.getVal(newer, SCORE_IDX.EMBEDDING, 'EMBEDDING'));
+            if (!embN) continue;
+
             const similarity = this.cosineSimilarity(embO, embN);
 
             const newerConfidence = Number(this.getVal(newer, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
@@ -524,10 +536,7 @@ export class ConsolidationEngine {
    * - Confidence decays exponentially with time (0.995 per day)
    * - Archived concepts get reduced confidence
    */
-  private cosineSimilarity(a: any, b: any): number {
-    const vecA = this.parseEmbedding(a);
-    const vecB = this.parseEmbedding(b);
-
+  private cosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
     if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) {
       return 0;
     }
@@ -535,11 +544,14 @@ export class ConsolidationEngine {
     let dot = 0;
     let normA = 0;
     let normB = 0;
+    const len = vecA.length;
 
-    for (let i = 0; i < vecA.length; i++) {
-      dot += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
+    for (let i = 0; i < len; i++) {
+      const vA = vecA[i];
+      const vB = vecB[i];
+      dot += vA * vB;
+      normA += vA * vA;
+      normB += vB * vB;
     }
 
     const denom = Math.sqrt(normA) * Math.sqrt(normB);

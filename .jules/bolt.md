@@ -21,3 +21,7 @@
 ## 2026-08-19 - Fast vector similarity loops
 **Learning:** In highly mathematical operations inside $O(N^2)$ loops (like pairwise cosine similarity computations), redundant allocations such as extracting IDs/properties and generating arrays dynamically causes massive garbage collection overhead. Furthermore, ensuring input arrays are always passed directly as `Float32Array` enables the V8 runtime to leverage fast, unboxed vector operations natively.
 **Action:** When calculating similarity matrix distances or comparisons, pre-normalize structural types like raw arrays to `Float32Array` before executing nested loops, and cache invariant lookups out of the inner loop scope.
+
+## 2026-08-19 - Safe Caching of Computed Row Values
+**Learning:** When trying to eliminate $O(N^2)$ repetitive operations by caching derived values (like parsing vectors to Float32Array) inside validation preprocessing loops, directly mutating the input data objects (e.g. `row.EMBEDDING = parsed`) creates severe serialization side effects. The data layer typically expects the raw JSON structure, and converting properties to native Object classes unexpectedly will cause API response corruption downstream.
+**Action:** Always use an independent associative store like `WeakMap<any, Float32Array>` using the row object reference as the key to cache computed values without mutating the original object structure.
