@@ -41,7 +41,12 @@ export class PostgresAdapter implements IDatabaseAdapter {
         }
         if (!toSql) {
           const pgv = await import("pgvector/pg" as unknown as string);
-          toSql = pgv.toSql;
+          const pgvObj = pgv as unknown as { toSql?: typeof toSql; default?: { toSql?: typeof toSql } };
+          const ResolvedToSql = pgvObj.toSql ?? pgvObj.default?.toSql;
+          if (!ResolvedToSql) {
+            throw new Error("Postgres adapter requires 'pgvector'. Install: pnpm add pgvector @types/pgvector");
+          }
+          toSql = ResolvedToSql;
         }
       } catch (err) {
         this.connectPromise = null;

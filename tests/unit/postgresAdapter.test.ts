@@ -31,6 +31,7 @@ mock.module('pgvector/pg', {
   default: { toSql: (arr: number[]) => `[${arr.join(',')}]` },
   exports: {
     toSql: (arr: number[]) => `[${arr.join(',')}]`,
+    default: { toSql: (arr: number[]) => `[${arr.join(',')}]` },
   },
 });
 
