@@ -4,6 +4,14 @@ import path from 'node:path';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 
+function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
+  const options = { default: mockObj, exports: mockObj };
+  try { mock.module(specifier, options); } catch {}
+  if (specifier.endsWith('.js')) {
+    try { mock.module(specifier.slice(0, -3) + '.ts', options); } catch {}
+  }
+}
+
 const mockConnection = {
   execute: mock.fn(async () => ({ rows: [], rowsAffected: 1 })),
   executeMany: mock.fn(async () => ({ rowsAffected: 2 })),
@@ -20,20 +28,14 @@ const mockOracledbFn = {
   initOracleClient: mock.fn(),
 };
 
-mock.module('oracledb', {
-  default: mockOracledbFn,
-  exports: mockOracledbFn,
-});
+safeMockModule('oracledb', mockOracledbFn);
 
 const mockConnectionModule = {
   initPool: mock.fn(() => Promise.resolve(mockPool)),
   setSessionContext: mock.fn(() => Promise.resolve()),
 };
 
-mock.module(path.join(srcDir, 'database/connection.js'), {
-  default: mockConnectionModule,
-  exports: mockConnectionModule,
-});
+safeMockModule(path.join(srcDir, 'database/connection.js'), mockConnectionModule);
 
 const mockAuthStore = {
   getStore: mock.fn(() => ({ uid: 'test-user' })),
@@ -41,10 +43,7 @@ const mockAuthStore = {
 
 const contextMock = { authStorage: mockAuthStore };
 
-mock.module(path.join(srcDir, 'utils/context.js'), {
-  default: contextMock,
-  exports: contextMock,
-});
+safeMockModule(path.join(srcDir, 'utils/context.js'), contextMock);
 
 const { OracleAdapter } = await import(path.join(srcDir, 'database/adapters/oracleAdapter.js'));
 

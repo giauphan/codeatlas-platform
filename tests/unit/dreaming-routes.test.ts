@@ -4,6 +4,14 @@ import path from 'node:path';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 
+function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
+  const options = { default: mockObj, exports: mockObj };
+  try { mock.module(specifier, options); } catch {}
+  if (specifier.endsWith('.js')) {
+    try { mock.module(specifier.slice(0, -3) + '.ts', options); } catch {}
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════
 // Mock Dependencies BEFORE importing the module under test
 // ═════════════════════════════════════════════════════════════════════
@@ -16,10 +24,7 @@ const mockQueryDreamMemories = mock.fn();
 
 // Mock authService
 const authServiceMock = { checkAuth: mockCheckAuth, logActivity: mockLogActivity };
-mock.module(path.join(srcDir, 'services/authService.js'), {
-  default: authServiceMock,
-  exports: authServiceMock,
-});
+safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 
 // Mock dreamingService
 const mockDreamingSvc = {
@@ -27,17 +32,11 @@ const mockDreamingSvc = {
   queryDreamMemories: mockQueryDreamMemories,
 };
 const dreamingServiceMock = { OracleDreamingService: mockDreamingSvc };
-mock.module(path.join(srcDir, 'services/dreamingService.js'), {
-  default: dreamingServiceMock,
-  exports: dreamingServiceMock,
-});
+safeMockModule(path.join(srcDir, 'services/dreamingService.js'), dreamingServiceMock);
 
 // Mock projectService
 const projectServiceMock = { loadAnalysisAsync: mockLoadAnalysis };
-mock.module(path.join(srcDir, 'services/projectService.js'), {
-  default: projectServiceMock,
-  exports: projectServiceMock,
-});
+safeMockModule(path.join(srcDir, 'services/projectService.js'), projectServiceMock);
 
 // Mock context
 const mockAuthStore = {
@@ -45,10 +44,7 @@ const mockAuthStore = {
   run: mock.fn((_store: unknown, fn: () => unknown) => fn()),
 };
 const contextMock = { authStorage: mockAuthStore };
-mock.module(path.join(srcDir, 'utils/context.js'), {
-  default: contextMock,
-  exports: contextMock,
-});
+safeMockModule(path.join(srcDir, 'utils/context.js'), contextMock);
 
 // Mock logger
 const mockLogger = {
@@ -57,10 +53,7 @@ const mockLogger = {
   warn: mock.fn(),
 };
 const loggerMock = { logger: mockLogger };
-mock.module(path.join(srcDir, 'utils/logger.js'), {
-  default: loggerMock,
-  exports: loggerMock,
-});
+safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
 
 // ── Import modules under test ────────────────────────────────────────
 const { registerDreamingRoutes } = await import(

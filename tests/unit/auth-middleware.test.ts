@@ -5,13 +5,19 @@ import express from 'express';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 
+function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
+  const options = { default: mockObj, exports: mockObj };
+  try { mock.module(specifier, options); } catch {}
+  if (specifier.endsWith('.js')) {
+    try { mock.module(specifier.slice(0, -3) + '.ts', options); } catch {}
+  }
+}
+
 // 1. Mock firebase-admin/auth
 const mockVerifyIdToken = mock.fn();
 const getAuthMock = () => ({ verifyIdToken: mockVerifyIdToken });
-mock.module('firebase-admin/auth', {
-  default: { getAuth: getAuthMock },
-  exports: { getAuth: getAuthMock },
-});
+const firebaseAuthMock = { getAuth: getAuthMock };
+safeMockModule('firebase-admin/auth', firebaseAuthMock);
 
 // 2. Mock firebase-admin/firestore to prevent side-effects
 const getFirestoreMock = () => ({
@@ -21,26 +27,18 @@ const getFirestoreMock = () => ({
     }),
   }),
 });
-mock.module('firebase-admin/firestore', {
-  default: { getFirestore: getFirestoreMock },
-  exports: { getFirestore: getFirestoreMock },
-});
+const firebaseFirestoreMock = { getFirestore: getFirestoreMock };
+safeMockModule('firebase-admin/firestore', firebaseFirestoreMock);
 
 // 3. Mock authService
 const mockCheckAuth = async () => { throw new Error("Unauthorized"); };
 const authServiceMock = { checkAuth: mockCheckAuth };
-mock.module(path.join(srcDir, 'services/authService.js'), {
-  default: authServiceMock,
-  exports: authServiceMock,
-});
+safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 
 // 4. Mock logger
 const mockLoggerObj = { error: mock.fn(), info: mock.fn(), warn: mock.fn() };
 const loggerMock = { logger: mockLoggerObj };
-mock.module(path.join(srcDir, 'utils/logger.js'), {
-  default: loggerMock,
-  exports: loggerMock,
-});
+safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
 
 // Now import the middleware to test
 // Note: We need to use dynamic import to ensure mocks are applied before the module is evaluated

@@ -4,6 +4,14 @@ import path from 'node:path';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 
+function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
+  const options = { default: mockObj, exports: mockObj };
+  try { mock.module(specifier, options); } catch {}
+  if (specifier.endsWith('.js')) {
+    try { mock.module(specifier.slice(0, -3) + '.ts', options); } catch {}
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════
 // Mock Dependencies BEFORE any import of the module under test
 // ═════════════════════════════════════════════════════════════════════
@@ -27,20 +35,14 @@ const oracleMock = {
   fetchAsString: [] as number[],
   default: {},
 };
-mock.module('oracledb', {
-  default: oracleMock,
-  exports: oracleMock,
-});
+safeMockModule('oracledb', oracleMock);
 
 // Mock database/connection.ts
 const connMock = {
   initPool: mock.fn(() => Promise.resolve(mockPool)),
   setSessionContext: mock.fn(() => Promise.resolve()),
 };
-mock.module(path.join(srcDir, 'database/connection.js'), {
-  default: connMock,
-  exports: connMock,
-});
+safeMockModule(path.join(srcDir, 'database/connection.js'), connMock);
 
 // Mock database/factory.ts
 const mockDbAdapter = {
@@ -54,20 +56,14 @@ const mockDbAdapter = {
 const factoryMock = {
   createDatabaseAdapter: mock.fn(() => mockDbAdapter),
 };
-mock.module(path.join(srcDir, 'database/factory.js'), {
-  default: factoryMock,
-  exports: factoryMock,
-});
+safeMockModule(path.join(srcDir, 'database/factory.js'), factoryMock);
 
 // Mock embeddingService
 const mockGenerateEmbedding = mock.fn(() => Promise.resolve([0.1, 0.2, 0.3]));
 const embeddingMock = {
   generateEmbedding: mockGenerateEmbedding,
 };
-mock.module(path.join(srcDir, 'services/embeddingService.js'), {
-  default: embeddingMock,
-  exports: embeddingMock,
-});
+safeMockModule(path.join(srcDir, 'services/embeddingService.js'), embeddingMock);
 
 // Mock context
 const mockAuthStore = {
@@ -77,10 +73,7 @@ const mockAuthStore = {
 const contextMock = {
   authStorage: mockAuthStore,
 };
-mock.module(path.join(srcDir, 'utils/context.js'), {
-  default: contextMock,
-  exports: contextMock,
-});
+safeMockModule(path.join(srcDir, 'utils/context.js'), contextMock);
 
 // Mock logger
 const mockLogger = {
@@ -91,10 +84,7 @@ const mockLogger = {
 const loggerMock = {
   logger: mockLogger,
 };
-mock.module(path.join(srcDir, 'utils/logger.js'), {
-  default: loggerMock,
-  exports: loggerMock,
-});
+safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
 
 // ── Import module under test ─────────────────────────────────────────
 const { OracleDreamingService } = await import(

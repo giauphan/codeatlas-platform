@@ -10,6 +10,14 @@ import path from 'node:path';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 
+function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
+  const options = { default: mockObj, exports: mockObj };
+  try { mock.module(specifier, options); } catch {}
+  if (specifier.endsWith('.js')) {
+    try { mock.module(specifier.slice(0, -3) + '.ts', options); } catch {}
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════
 // Mock Dependencies
 // ═════════════════════════════════════════════════════════════════════
@@ -33,29 +41,20 @@ const oracleMock = {
   fetchAsString: [] as number[],
   default: {},
 };
-mock.module('oracledb', {
-  default: oracleMock,
-  exports: oracleMock,
-});
+safeMockModule('oracledb', oracleMock);
 
 // Mock generateEmbedding
 const mockGenerateEmbedding = mock.fn(async () => {
   return new Array(1024).fill(0.01);
 });
 const embeddingMock = { generateEmbedding: mockGenerateEmbedding };
-mock.module(path.join(srcDir, 'services/embeddingService.js'), {
-  default: embeddingMock,
-  exports: embeddingMock,
-});
+safeMockModule(path.join(srcDir, 'services/embeddingService.js'), embeddingMock);
 
 // Mock connection
 const mockInitPool = mock.fn(() => Promise.resolve(mockPool as any));
 const mockSetSessionContext = mock.fn(() => Promise.resolve());
 const connMock = { initPool: mockInitPool, setSessionContext: mockSetSessionContext };
-mock.module(path.join(srcDir, 'database/connection.js'), {
-  default: connMock,
-  exports: connMock,
-});
+safeMockModule(path.join(srcDir, 'database/connection.js'), connMock);
 
 // Mock createDatabaseAdapter to return our mock connection
 const factoryMock = {
@@ -74,17 +73,11 @@ const factoryMock = {
     getConnection: mock.fn(() => Promise.resolve(mockConnection))
   })
 };
-mock.module(path.join(srcDir, 'database/factory.js'), {
-  default: factoryMock,
-  exports: factoryMock,
-});
+safeMockModule(path.join(srcDir, 'database/factory.js'), factoryMock);
 
 // Mock logger
 const loggerMock = { logger: { info: mock.fn(), error: mock.fn(), warn: mock.fn() } };
-mock.module(path.join(srcDir, 'utils/logger.js'), {
-  default: loggerMock,
-  exports: loggerMock,
-});
+safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
 
 // ── Import module under test ─────────────────────────────────────────
 const { GenomeService } = await import(
