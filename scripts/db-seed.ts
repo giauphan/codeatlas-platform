@@ -38,12 +38,12 @@ async function seed() {
     );
     if (keyExists.length === 0) {
       await db.execute(
-        "INSERT INTO users (id, tier) VALUES (?, ?) ON CONFLICT(id) DO NOTHING",
-        [tenantId, "enterprise"]
+        "INSERT INTO users (id, tenant_id, tier) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING",
+        [tenantId, tenantId, "enterprise"]
       );
       await db.execute(
-        "INSERT INTO keys (id, user_id, key, key_hash, tier) VALUES (?, ?, ?, ?, ?)",
-        [randomUUID(), tenantId, apiKey, keyHash, "enterprise"]
+        "INSERT INTO keys (id, tenant_id, user_id, key, key_hash, tier) VALUES (?, ?, ?, ?, ?, ?)",
+        [randomUUID(), tenantId, tenantId, apiKey, keyHash, "enterprise"]
       );
       logger.info(`[Seeder] Created API key for tenant: ${tenantId}`);
     }

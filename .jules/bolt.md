@@ -3,3 +3,7 @@
 ## 2026-08-17 - O(N^2) Math GC Overhead
 **Learning:** When executing mathematical loops (e.g. `cosineSimilarity`) inside O(N^2) pairwise comparisons, repeatedly asserting type conversions on plain Javascript arrays causes high hidden object allocation and GC pressure in V8.
 **Action:** When working with nested vector operations, extract type coercions to outer scopes where possible and explicitly cache pre-mapped vectors (like `Float32Array`) directly to the original row objects to bypass repetitive wrapper overhead during inner iterations.
+
+## 2026-08-17 - Hoisting loop invariants in numeric tight loops
+**Learning:** In tight nested N^2 loops (like those doing similarity measurements across large embedding arrays), redundant property access overheads (`group[i][IDX]`) or type coercions (`Number()`, `String()`) are highly penalizing to V8. Evaluating them inside the inner loop creates massive GC pressure and redundant CPU work.
+**Action:** Always extract invariant evaluations (`group[i]`, coercions, and array ID strings) from the outer loop iteration block into local variables before entering the inner $O(N)$ iteration block.
