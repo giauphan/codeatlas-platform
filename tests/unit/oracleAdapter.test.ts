@@ -16,15 +16,16 @@ const mockPool = {
 };
 
 mock.module('oracledb', {
-  namedExports: {
+  default: { createPool: mock.fn(() => Promise.resolve(mockPool)), initOracleClient: mock.fn() },
+  exports: {
     createPool: mock.fn(() => Promise.resolve(mockPool)),
     initOracleClient: mock.fn(),
-    default: {},
   },
 });
 
 mock.module(path.join(srcDir, 'database/connection.js'), {
-  namedExports: {
+  default: { initPool: mock.fn(() => Promise.resolve(mockPool)), setSessionContext: mock.fn(() => Promise.resolve()) },
+  exports: {
     initPool: mock.fn(() => Promise.resolve(mockPool)),
     setSessionContext: mock.fn(() => Promise.resolve()),
   },
@@ -35,7 +36,8 @@ const mockAuthStore = {
 };
 
 mock.module(path.join(srcDir, 'utils/context.js'), {
-  namedExports: {
+  default: { authStorage: mockAuthStore },
+  exports: {
     authStorage: mockAuthStore,
   },
 });

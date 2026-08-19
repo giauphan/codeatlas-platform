@@ -4,45 +4,37 @@ import express from 'express';
 
 // 1. Mock firebase-admin/auth
 const mockVerifyIdToken = mock.fn();
+const getAuthMock = () => ({ verifyIdToken: mockVerifyIdToken });
 mock.module('firebase-admin/auth', {
-  namedExports: {
-    getAuth: () => ({
-      verifyIdToken: mockVerifyIdToken,
-    }),
-  },
+  default: { getAuth: getAuthMock },
+  exports: { getAuth: getAuthMock },
 });
 
 // 2. Mock firebase-admin/firestore to prevent side-effects
-mock.module('firebase-admin/firestore', {
-  namedExports: {
-    getFirestore: () => ({
-      collection: () => ({
-        doc: () => ({
-          get: async () => ({ exists: false, data: () => ({}) }),
-        }),
-      }),
+const getFirestoreMock = () => ({
+  collection: () => ({
+    doc: () => ({
+      get: async () => ({ exists: false, data: () => ({}) }),
     }),
-  },
+  }),
+});
+mock.module('firebase-admin/firestore', {
+  default: { getFirestore: getFirestoreMock },
+  exports: { getFirestore: getFirestoreMock },
 });
 
 // 3. Mock authService
+const mockCheckAuth = async () => { throw new Error("Unauthorized"); };
 mock.module('../../src/services/authService.js', {
-  namedExports: {
-    checkAuth: async () => {
-      throw new Error("Unauthorized");
-    },
-  },
+  default: { checkAuth: mockCheckAuth },
+  exports: { checkAuth: mockCheckAuth },
 });
 
 // 4. Mock logger
+const mockLoggerObj = { error: mock.fn(), info: mock.fn(), warn: mock.fn() };
 mock.module('../../src/utils/logger.js', {
-  namedExports: {
-    logger: {
-      error: mock.fn(),
-      info: mock.fn(),
-      warn: mock.fn(),
-    },
-  },
+  default: { logger: mockLoggerObj },
+  exports: { logger: mockLoggerObj },
 });
 
 // Now import the middleware to test

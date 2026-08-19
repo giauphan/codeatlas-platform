@@ -20,14 +20,15 @@ const MockPool = mock.fn(function () {
 });
 
 mock.module('pg', {
-  namedExports: {
+  default: { Pool: MockPool },
+  exports: {
     Pool: MockPool,
-    default: { Pool: MockPool },
   },
 });
 
 mock.module('pgvector/pg', {
-  namedExports: {
+  default: { toSql: (arr: number[]) => `[${arr.join(',')}]` },
+  exports: {
     toSql: (arr: number[]) => `[${arr.join(',')}]`,
   },
 });

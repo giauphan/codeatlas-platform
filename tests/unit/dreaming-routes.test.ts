@@ -16,27 +16,24 @@ const mockQueryDreamMemories = mock.fn();
 
 // Mock authService
 mock.module(path.join(srcDir, 'services/authService.js'), {
-  namedExports: {
-    checkAuth: mockCheckAuth,
-    logActivity: mockLogActivity,
-  },
+  default: { checkAuth: mockCheckAuth, logActivity: mockLogActivity },
+  exports: { checkAuth: mockCheckAuth, logActivity: mockLogActivity },
 });
 
 // Mock dreamingService
+const mockDreamingSvc = {
+  saveDreamMemory: mockSaveDreamMemory,
+  queryDreamMemories: mockQueryDreamMemories,
+};
 mock.module(path.join(srcDir, 'services/dreamingService.js'), {
-  namedExports: {
-    OracleDreamingService: {
-      saveDreamMemory: mockSaveDreamMemory,
-      queryDreamMemories: mockQueryDreamMemories,
-    },
-  },
+  default: { OracleDreamingService: mockDreamingSvc },
+  exports: { OracleDreamingService: mockDreamingSvc },
 });
 
 // Mock projectService
 mock.module(path.join(srcDir, 'services/projectService.js'), {
-  namedExports: {
-    loadAnalysisAsync: mockLoadAnalysis,
-  },
+  default: { loadAnalysisAsync: mockLoadAnalysis },
+  exports: { loadAnalysisAsync: mockLoadAnalysis },
 });
 
 // Mock context
@@ -46,9 +43,8 @@ const mockAuthStore = {
 };
 
 mock.module(path.join(srcDir, 'utils/context.js'), {
-  namedExports: {
-    authStorage: mockAuthStore,
-  },
+  default: { authStorage: mockAuthStore },
+  exports: { authStorage: mockAuthStore },
 });
 
 // Mock logger
@@ -59,9 +55,8 @@ const mockLogger = {
 };
 
 mock.module(path.join(srcDir, 'utils/logger.js'), {
-  namedExports: {
-    logger: mockLogger,
-  },
+  default: { logger: mockLogger },
+  exports: { logger: mockLogger },
 });
 
 // ── Import modules under test ────────────────────────────────────────
