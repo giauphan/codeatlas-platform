@@ -30,25 +30,29 @@ const mockPool = {
   getConnection: mock.fn(() => Promise.resolve(mockConnection)),
 };
 
+const oracleMock = {
+  OUT_FORMAT_OBJECT: 4001,
+  CLOB: 2011,
+  STRING: 2001,
+  DB_TYPE_JSON: 2007,
+  createPool: mock.fn(() => Promise.resolve(mockPool)),
+  initOracleClient: mock.fn(),
+  outFormat: undefined as unknown,
+  fetchAsString: [] as number[],
+  default: {},
+};
 mock.module('oracledb', {
-  namedExports: {
-    OUT_FORMAT_OBJECT: 4001,
-    CLOB: 2011,
-    STRING: 2001,
-    DB_TYPE_JSON: 2007,
-    createPool: mock.fn(() => Promise.resolve(mockPool)),
-    initOracleClient: mock.fn(),
-    outFormat: undefined as unknown,
-    fetchAsString: [] as number[],
-    default: {},
-  },
+  default: oracleMock,
+  exports: oracleMock,
 });
 
+const connMock = {
+  initPool: mock.fn(() => Promise.resolve(mockPool)),
+  setSessionContext: mock.fn(() => Promise.resolve()),
+};
 mock.module(path.join(srcDir, 'database/connection.js'), {
-  namedExports: {
-    initPool: mock.fn(() => Promise.resolve(mockPool)),
-    setSessionContext: mock.fn(() => Promise.resolve()),
-  },
+  default: connMock,
+  exports: connMock,
 });
 
 const mockDbAdapter = {
@@ -72,30 +76,34 @@ const mockDbAdapter = {
   detectDeadCode: mock.fn(() => Promise.resolve([])),
 };
 
+const factoryMock = {
+  createDatabaseAdapter: mock.fn(() => mockDbAdapter),
+};
 mock.module(path.join(srcDir, 'database/factory.js'), {
-  namedExports: {
-    createDatabaseAdapter: mock.fn(() => mockDbAdapter),
-  },
+  default: factoryMock,
+  exports: factoryMock,
 });
 
 const mockGenerateEmbedding = mock.fn(() => Promise.resolve([0.1, 0.2, 0.3]));
-
+const embeddingMock = {
+  generateEmbedding: mockGenerateEmbedding,
+  generateEmbeddingsBatch: mock.fn(() => Promise.resolve([[0.1, 0.2, 0.3]])),
+};
 mock.module(path.join(srcDir, 'services/embeddingService.js'), {
-  namedExports: {
-    generateEmbedding: mockGenerateEmbedding,
-    generateEmbeddingsBatch: mock.fn(() => Promise.resolve([[0.1, 0.2, 0.3]])),
-  },
+  default: embeddingMock,
+  exports: embeddingMock,
 });
 
 const mockAuthStore = {
   getStore: mock.fn(() => ({ uid: 'test-user', tier: 'enterprise', keyId: 'test-key' })),
   run: mock.fn((_store: unknown, fn: () => unknown) => fn()),
 };
-
+const contextMock = {
+  authStorage: mockAuthStore,
+};
 mock.module(path.join(srcDir, 'utils/context.js'), {
-  namedExports: {
-    authStorage: mockAuthStore,
-  },
+  default: contextMock,
+  exports: contextMock,
 });
 
 const mockLogger = {
@@ -104,11 +112,12 @@ const mockLogger = {
   warn: mock.fn(),
   debug: mock.fn(),
 };
-
+const loggerMock = {
+  logger: mockLogger,
+};
 mock.module(path.join(srcDir, 'utils/logger.js'), {
-  namedExports: {
-    logger: mockLogger,
-  },
+  default: loggerMock,
+  exports: loggerMock,
 });
 
 const { OracleDreamingService } = await import(path.join(srcDir, 'services/dreamingService.js'));

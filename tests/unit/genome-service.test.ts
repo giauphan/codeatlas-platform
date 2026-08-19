@@ -24,56 +24,66 @@ const mockPool = {
   getConnection: mock.fn(() => Promise.resolve(mockConnection)),
 };
 
+const oracleMock = {
+  OUT_FORMAT_OBJECT: 4001,
+  CLOB: 2011,
+  createPool: mock.fn(() => Promise.resolve(mockPool)),
+  initOracleClient: mock.fn(),
+  outFormat: undefined as unknown,
+  fetchAsString: [] as number[],
+  default: {},
+};
 mock.module('oracledb', {
-  namedExports: {
-    OUT_FORMAT_OBJECT: 4001,
-    CLOB: 2011,
-    createPool: mock.fn(() => Promise.resolve(mockPool)),
-    initOracleClient: mock.fn(),
-    outFormat: undefined as unknown,
-    fetchAsString: [] as number[],
-    default: {},
-  },
+  default: oracleMock,
+  exports: oracleMock,
 });
 
 // Mock generateEmbedding
 const mockGenerateEmbedding = mock.fn(async () => {
   return new Array(1024).fill(0.01);
 });
+const embeddingMock = { generateEmbedding: mockGenerateEmbedding };
 mock.module(path.join(srcDir, 'services/embeddingService.js'), {
-  namedExports: { generateEmbedding: mockGenerateEmbedding },
+  default: embeddingMock,
+  exports: embeddingMock,
 });
 
 // Mock connection
 const mockInitPool = mock.fn(() => Promise.resolve(mockPool as any));
 const mockSetSessionContext = mock.fn(() => Promise.resolve());
+const connMock = { initPool: mockInitPool, setSessionContext: mockSetSessionContext };
 mock.module(path.join(srcDir, 'database/connection.js'), {
-  namedExports: { initPool: mockInitPool, setSessionContext: mockSetSessionContext },
+  default: connMock,
+  exports: connMock,
 });
 
 // Mock createDatabaseAdapter to return our mock connection
+const factoryMock = {
+  createDatabaseAdapter: () => ({
+    connect: mock.fn(() => Promise.resolve()),
+    searchVector: mock.fn(async (table, embedding, limit, tenantId) => {
+      return [
+        { id: 'gene-1', score: 0.95 },
+        { id: 'gene-imm-1', score: 0.90 },
+        { id: 'gene-2', score: 0.85 },
+      ].slice(0, limit);
+    }),
+    query: mock.fn(),
+    execute: mock.fn(),
+    executeMany: mock.fn(),
+    getConnection: mock.fn(() => Promise.resolve(mockConnection))
+  })
+};
 mock.module(path.join(srcDir, 'database/factory.js'), {
-  namedExports: {
-    createDatabaseAdapter: () => ({
-      connect: mock.fn(() => Promise.resolve()),
-      searchVector: mock.fn(async (table, embedding, limit, tenantId) => {
-        return [
-          { id: 'gene-1', score: 0.95 },
-          { id: 'gene-imm-1', score: 0.90 },
-          { id: 'gene-2', score: 0.85 },
-        ].slice(0, limit);
-      }),
-      query: mock.fn(),
-      execute: mock.fn(),
-      executeMany: mock.fn(),
-      getConnection: mock.fn(() => Promise.resolve(mockConnection))
-    })
-  }
+  default: factoryMock,
+  exports: factoryMock,
 });
 
 // Mock logger
+const loggerMock = { logger: { info: mock.fn(), error: mock.fn(), warn: mock.fn() } };
 mock.module(path.join(srcDir, 'utils/logger.js'), {
-  namedExports: { logger: { info: mock.fn(), error: mock.fn(), warn: mock.fn() } },
+  default: loggerMock,
+  exports: loggerMock,
 });
 
 // ── Import module under test ─────────────────────────────────────────

@@ -18,24 +18,28 @@ const mockPool = {
 };
 
 // Mock oracledb
+const oracleMock = {
+  OUT_FORMAT_OBJECT: 4001,
+  CLOB: 2011,
+  createPool: mock.fn(() => Promise.resolve(mockPool)),
+  initOracleClient: mock.fn(),
+  outFormat: undefined as unknown,
+  fetchAsString: [] as number[],
+  default: {},
+};
 mock.module('oracledb', {
-  namedExports: {
-    OUT_FORMAT_OBJECT: 4001,
-    CLOB: 2011,
-    createPool: mock.fn(() => Promise.resolve(mockPool)),
-    initOracleClient: mock.fn(),
-    outFormat: undefined as unknown,
-    fetchAsString: [] as number[],
-    default: {},
-  },
+  default: oracleMock,
+  exports: oracleMock,
 });
 
 // Mock database/connection.ts
+const connMock = {
+  initPool: mock.fn(() => Promise.resolve(mockPool)),
+  setSessionContext: mock.fn(() => Promise.resolve()),
+};
 mock.module(path.join(srcDir, 'database/connection.js'), {
-  namedExports: {
-    initPool: mock.fn(() => Promise.resolve(mockPool)),
-    setSessionContext: mock.fn(() => Promise.resolve()),
-  },
+  default: connMock,
+  exports: connMock,
 });
 
 // Mock database/factory.ts
@@ -47,19 +51,22 @@ const mockDbAdapter = {
     { id: 'memory_2', score: 0.8 },
   ])),
 };
+const factoryMock = {
+  createDatabaseAdapter: mock.fn(() => mockDbAdapter),
+};
 mock.module(path.join(srcDir, 'database/factory.js'), {
-  namedExports: {
-    createDatabaseAdapter: mock.fn(() => mockDbAdapter),
-  },
+  default: factoryMock,
+  exports: factoryMock,
 });
 
 // Mock embeddingService
 const mockGenerateEmbedding = mock.fn(() => Promise.resolve([0.1, 0.2, 0.3]));
-
+const embeddingMock = {
+  generateEmbedding: mockGenerateEmbedding,
+};
 mock.module(path.join(srcDir, 'services/embeddingService.js'), {
-  namedExports: {
-    generateEmbedding: mockGenerateEmbedding,
-  },
+  default: embeddingMock,
+  exports: embeddingMock,
 });
 
 // Mock context
@@ -67,11 +74,12 @@ const mockAuthStore = {
   getStore: mock.fn(() => ({ uid: 'test-user', tier: 'enterprise', keyId: 'test-key' })),
   run: mock.fn((_store: unknown, fn: () => unknown) => fn()),
 };
-
+const contextMock = {
+  authStorage: mockAuthStore,
+};
 mock.module(path.join(srcDir, 'utils/context.js'), {
-  namedExports: {
-    authStorage: mockAuthStore,
-  },
+  default: contextMock,
+  exports: contextMock,
 });
 
 // Mock logger
@@ -80,11 +88,12 @@ const mockLogger = {
   error: mock.fn(),
   warn: mock.fn(),
 };
-
+const loggerMock = {
+  logger: mockLogger,
+};
 mock.module(path.join(srcDir, 'utils/logger.js'), {
-  namedExports: {
-    logger: mockLogger,
-  },
+  default: loggerMock,
+  exports: loggerMock,
 });
 
 // ── Import module under test ─────────────────────────────────────────
