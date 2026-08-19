@@ -19,19 +19,22 @@ let PoolClass: PgPoolConstructor | undefined;
 let toSql: ((value: number[] | Float32Array) => string) | undefined;
 
 function findExportFn<T>(obj: unknown, prop: string): T | undefined {
-  if (!obj || typeof obj !== "object") return undefined;
+  if (!obj) return undefined;
+  if (typeof obj === "function") return obj as T;
   const rec = obj as Record<string, unknown>;
 
   if (typeof rec[prop] === "function") return rec[prop] as T;
 
   if (rec.default) {
-    const def = rec.default as Record<string, unknown>;
-    if (typeof def[prop] === "function") return def[prop] as T;
-    if (typeof rec.default === "object") return findExportFn<T>(rec.default, prop);
-  }
-
-  if (prop === "default" && typeof rec.default === "function") {
-    return rec.default as T;
+    if (typeof rec.default === "function") {
+      const defFn = rec.default as unknown as Record<string, unknown>;
+      if (typeof defFn[prop] === "function") return defFn[prop] as T;
+      return rec.default as T;
+    }
+    if (typeof rec.default === "object") {
+      const found = findExportFn<T>(rec.default, prop);
+      if (found) return found;
+    }
   }
 
   return undefined;
