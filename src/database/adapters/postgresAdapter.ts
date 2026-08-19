@@ -50,8 +50,9 @@ export class PostgresAdapter implements IDatabaseAdapter {
         }
       } catch (err) {
         this.connectPromise = null;
+        const msg = err instanceof Error ? err.message : String(err);
         throw new Error(
-          "Postgres adapter requires 'pg' and 'pgvector'. Install: pnpm add pg pgvector @types/pg"
+          `Postgres adapter requires 'pg' and 'pgvector'. Details: ${msg}. Install: pnpm add pg pgvector @types/pg`
         );
       }
 
