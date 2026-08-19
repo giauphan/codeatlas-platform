@@ -20,26 +20,16 @@ let toSql: ((value: number[] | Float32Array) => string) | undefined;
 
 function findExportFn<T>(obj: unknown, prop: string): T | undefined {
   if (!obj) return undefined;
-  if (typeof obj === "function") {
-    const fnObj = obj as unknown as Record<string, unknown>;
-    if (prop === "default" || obj.name === prop || typeof fnObj[prop] === "function") {
-      return (fnObj[prop] || obj) as T;
-    }
-  }
-  if (typeof obj !== "object") return undefined;
+  if (typeof obj === "function") return obj as T;
   const rec = obj as Record<string, unknown>;
 
   if (typeof rec[prop] === "function") return rec[prop] as T;
 
   if (rec.default) {
+    if (typeof rec.default === "function") return rec.default as T;
     if (typeof rec.default === "object") {
       const found = findExportFn<T>(rec.default, prop);
       if (found) return found;
-    }
-    if (typeof rec.default === "function") {
-      const defFn = rec.default as unknown as Record<string, unknown>;
-      if (typeof defFn[prop] === "function") return defFn[prop] as T;
-      if (prop === "default" || rec.default.name === prop) return rec.default as T;
     }
   }
 
