@@ -1,15 +1,33 @@
 import { test, describe, mock } from 'node:test';
 import assert from 'node:assert';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import express from 'express';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 
 function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   const options = { default: mockObj, exports: mockObj };
-  try { mock.module(specifier, options); } catch {}
-  if (specifier.endsWith('.js')) {
-    try { mock.module(specifier.slice(0, -3) + '.ts', options); } catch {}
+  const specs = [specifier];
+  if (specifier.startsWith('/')) {
+    specs.push(pathToFileURL(specifier).href);
+    if (specifier.endsWith('.js')) {
+      const tsPath = specifier.slice(0, -3) + '.ts';
+      specs.push(tsPath);
+      specs.push(pathToFileURL(tsPath).href);
+    }
+    const srcIdx = specifier.indexOf('/src/');
+    if (srcIdx !== -1) {
+      const subPath = specifier.slice(srcIdx + 5);
+      const subTs = subPath.endsWith('.js') ? subPath.slice(0, -3) + '.ts' : subPath;
+      specs.push('../' + subPath, '../' + subTs);
+      specs.push('./' + subPath, './' + subTs);
+      specs.push('../../src/' + subPath, '../../src/' + subTs);
+      specs.push('../src/' + subPath, '../src/' + subTs);
+    }
+  }
+  for (const s of specs) {
+    try { mock.module(s, options); } catch {}
   }
 }
 
@@ -39,6 +57,13 @@ safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 const mockLoggerObj = { error: mock.fn(), info: mock.fn(), warn: mock.fn() };
 const loggerMock = { logger: mockLoggerObj };
 safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
+
+// 5. Mock context
+const mockAuthStore = {
+  getStore: mock.fn(() => ({ uid: 'test-user', tier: 'enterprise', keyId: 'test-key' })),
+  run: mock.fn((_store: unknown, fn: () => unknown) => fn()),
+};
+safeMockModule(path.join(srcDir, 'utils/context.js'), { authStorage: mockAuthStore });
 
 // Now import the middleware to test
 // Note: We need to use dynamic import to ensure mocks are applied before the module is evaluated
