@@ -306,7 +306,7 @@ export function DreamMemoryView() {
           className={FOCUS_RING_CLASS}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)',
-            background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer', outline: 'none'
+            background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
           }}>
           <Settings size={18} style={{ marginRight: '0.5rem' }} /> Config
         </button>
@@ -355,8 +355,7 @@ export function DreamMemoryView() {
               padding: '0.4rem 1rem', borderRadius: '100px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
               background: selectedTypes.includes(type) ? `${typeColors[type]}22` : 'rgba(255,255,255,0.05)',
               border: `1px solid ${selectedTypes.includes(type) ? typeColors[type] : 'rgba(255,255,255,0.1)'}`,
-              color: selectedTypes.includes(type) ? typeColors[type] : 'var(--text-muted)',
-              outline: 'none'
+              color: selectedTypes.includes(type) ? typeColors[type] : 'var(--text-muted)'
             }}
             className={FOCUS_RING_CLASS}
           >

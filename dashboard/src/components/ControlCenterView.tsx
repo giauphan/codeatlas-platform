@@ -196,7 +196,7 @@ const freqLabels: Record<string, string> = {
                     style={{
                       width: '44px', height: '24px', borderRadius: '12px', border: 'none', cursor: 'pointer',
                       background: cronEnabled ? 'var(--primary-neon)' : 'rgba(255,255,255,0.2)',
-                      position: 'relative', transition: '0.2s', outline: 'none'
+                      position: 'relative', transition: '0.2s'
                     }}>
                     <div style={{
                       width: '18px', height: '18px', borderRadius: '50%', background: '#fff',
