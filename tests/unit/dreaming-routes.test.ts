@@ -15,9 +15,10 @@ const mockSaveDreamMemory = mock.fn();
 const mockQueryDreamMemories = mock.fn();
 
 // Mock authService
+const authServiceMock = { checkAuth: mockCheckAuth, logActivity: mockLogActivity };
 mock.module(path.join(srcDir, 'services/authService.js'), {
-  default: { checkAuth: mockCheckAuth, logActivity: mockLogActivity },
-  exports: { checkAuth: mockCheckAuth, logActivity: mockLogActivity },
+  default: authServiceMock,
+  exports: authServiceMock,
 });
 
 // Mock dreamingService
@@ -25,15 +26,17 @@ const mockDreamingSvc = {
   saveDreamMemory: mockSaveDreamMemory,
   queryDreamMemories: mockQueryDreamMemories,
 };
+const dreamingServiceMock = { OracleDreamingService: mockDreamingSvc };
 mock.module(path.join(srcDir, 'services/dreamingService.js'), {
-  default: { OracleDreamingService: mockDreamingSvc },
-  exports: { OracleDreamingService: mockDreamingSvc },
+  default: dreamingServiceMock,
+  exports: dreamingServiceMock,
 });
 
 // Mock projectService
+const projectServiceMock = { loadAnalysisAsync: mockLoadAnalysis };
 mock.module(path.join(srcDir, 'services/projectService.js'), {
-  default: { loadAnalysisAsync: mockLoadAnalysis },
-  exports: { loadAnalysisAsync: mockLoadAnalysis },
+  default: projectServiceMock,
+  exports: projectServiceMock,
 });
 
 // Mock context
@@ -41,10 +44,10 @@ const mockAuthStore = {
   getStore: mock.fn(() => null),
   run: mock.fn((_store: unknown, fn: () => unknown) => fn()),
 };
-
+const contextMock = { authStorage: mockAuthStore };
 mock.module(path.join(srcDir, 'utils/context.js'), {
-  default: { authStorage: mockAuthStore },
-  exports: { authStorage: mockAuthStore },
+  default: contextMock,
+  exports: contextMock,
 });
 
 // Mock logger
@@ -53,10 +56,10 @@ const mockLogger = {
   error: mock.fn(),
   warn: mock.fn(),
 };
-
+const loggerMock = { logger: mockLogger };
 mock.module(path.join(srcDir, 'utils/logger.js'), {
-  default: { logger: mockLogger },
-  exports: { logger: mockLogger },
+  default: loggerMock,
+  exports: loggerMock,
 });
 
 // ── Import modules under test ────────────────────────────────────────

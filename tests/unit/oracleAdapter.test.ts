@@ -15,31 +15,35 @@ const mockPool = {
   close: mock.fn(async () => {}),
 };
 
+const mockOracledbFn = {
+  createPool: mock.fn(() => Promise.resolve(mockPool)),
+  initOracleClient: mock.fn(),
+};
+
 mock.module('oracledb', {
-  default: { createPool: mock.fn(() => Promise.resolve(mockPool)), initOracleClient: mock.fn() },
-  exports: {
-    createPool: mock.fn(() => Promise.resolve(mockPool)),
-    initOracleClient: mock.fn(),
-  },
+  default: mockOracledbFn,
+  exports: mockOracledbFn,
 });
 
+const mockConnectionModule = {
+  initPool: mock.fn(() => Promise.resolve(mockPool)),
+  setSessionContext: mock.fn(() => Promise.resolve()),
+};
+
 mock.module(path.join(srcDir, 'database/connection.js'), {
-  default: { initPool: mock.fn(() => Promise.resolve(mockPool)), setSessionContext: mock.fn(() => Promise.resolve()) },
-  exports: {
-    initPool: mock.fn(() => Promise.resolve(mockPool)),
-    setSessionContext: mock.fn(() => Promise.resolve()),
-  },
+  default: mockConnectionModule,
+  exports: mockConnectionModule,
 });
 
 const mockAuthStore = {
   getStore: mock.fn(() => ({ uid: 'test-user' })),
 };
 
+const contextMock = { authStorage: mockAuthStore };
+
 mock.module(path.join(srcDir, 'utils/context.js'), {
-  default: { authStorage: mockAuthStore },
-  exports: {
-    authStorage: mockAuthStore,
-  },
+  default: contextMock,
+  exports: contextMock,
 });
 
 const { OracleAdapter } = await import(path.join(srcDir, 'database/adapters/oracleAdapter.js'));

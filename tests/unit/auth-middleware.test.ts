@@ -1,6 +1,9 @@
 import { test, describe, mock } from 'node:test';
 import assert from 'node:assert';
+import path from 'node:path';
 import express from 'express';
+
+const srcDir = path.resolve(import.meta.dirname, '../../src');
 
 // 1. Mock firebase-admin/auth
 const mockVerifyIdToken = mock.fn();
@@ -25,16 +28,18 @@ mock.module('firebase-admin/firestore', {
 
 // 3. Mock authService
 const mockCheckAuth = async () => { throw new Error("Unauthorized"); };
-mock.module('../../src/services/authService.js', {
-  default: { checkAuth: mockCheckAuth },
-  exports: { checkAuth: mockCheckAuth },
+const authServiceMock = { checkAuth: mockCheckAuth };
+mock.module(path.join(srcDir, 'services/authService.js'), {
+  default: authServiceMock,
+  exports: authServiceMock,
 });
 
 // 4. Mock logger
 const mockLoggerObj = { error: mock.fn(), info: mock.fn(), warn: mock.fn() };
-mock.module('../../src/utils/logger.js', {
-  default: { logger: mockLoggerObj },
-  exports: { logger: mockLoggerObj },
+const loggerMock = { logger: mockLoggerObj };
+mock.module(path.join(srcDir, 'utils/logger.js'), {
+  default: loggerMock,
+  exports: loggerMock,
 });
 
 // Now import the middleware to test
