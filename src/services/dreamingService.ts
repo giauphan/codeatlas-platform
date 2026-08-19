@@ -433,58 +433,94 @@ export class OracleDreamingService {
     // Content hash for dedup — same content always produces same hash
     const contentHash = crypto.createHash('sha256').update(content).digest('hex');
 
-    let connection;
+    const db = createDatabaseAdapter();
+    const tenantId = authStorage.getStore()!.uid;
+    const id = `${project}_${memoryType}_${sessionId}_${Date.now()}`;
+    const initialConfidence = OracleDreamingService.calcInitialConfidence(memoryType, importance);
+    const tagsJson = tags ? JSON.stringify(tags) : null;
+    const relatedIdsJson = relatedIds ? JSON.stringify(relatedIds) : null;
+    const dbType = (process.env.CODEATLAS_DB_TYPE || "oracle").toLowerCase();
+
     try {
-      const pool = await initPool();
-      connection = await pool.getConnection();
-      await setSessionContext(connection);
-
-      const tenantId = authStorage.getStore()!.uid;
-      const id = `${project}_${memoryType}_${sessionId}_${Date.now()}`;
-      const initialConfidence = OracleDreamingService.calcInitialConfidence(memoryType, importance);
-      const tagsJson = tags ? JSON.stringify(tags) : null;
-      const relatedIdsJson = relatedIds ? JSON.stringify(relatedIds) : null;
-
       if (OracleDreamingService._hasContentHashColumn && OracleDreamingService._hasLifecycleColumns) {
-        // Full MERGE with dedup on content_hash (preferred path)
-        const sql = `
-          MERGE INTO ai_dreaming_memory trg
-          USING (SELECT :project AS project, :memoryType AS memory_type, :contentHash AS content_hash, :tenantId AS tenant_id FROM DUAL) src
-          ON (trg.project = src.project AND trg.memory_type = src.memory_type AND trg.content_hash = src.content_hash AND trg.tenant_id = src.tenant_id)
-          WHEN MATCHED THEN
-            UPDATE SET
-              embedding      = :embedding,
-              importance     = GREATEST(trg.importance, :importance),
-              content        = :content,
-              session_id     = :sessionId,
-              provider       = :provider,
-              id             = :id,
-              confidence     = GREATEST(trg.confidence, :initialConfidence),
-              evidence_count = trg.evidence_count + 1,
-              scope          = COALESCE(:scope, trg.scope),
-              tags           = COALESCE(TO_CLOB(:tagsJson), trg.tags),
-              related_ids    = COALESCE(TO_CLOB(:relatedIdsJson), trg.related_ids)
-          WHEN NOT MATCHED THEN
-            INSERT (id, session_id, project, provider, memory_type, content, embedding, importance, content_hash, confidence, status, evidence_count, access_count, version, tenant_id, scope, tags, related_ids)
-            VALUES (:id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :contentHash, :initialConfidence, 'active', 1, 0, 1, :tenantId, :scope, :tagsJson, :relatedIdsJson)
-        `;
+        if (dbType === "postgres" || dbType === "sqlite") {
+          const sql = `
+            INSERT INTO ai_dreaming_memory (
+              id, session_id, project, provider, memory_type, content, embedding, importance, content_hash, confidence, status, evidence_count, access_count, version, tenant_id, scope, tags, related_ids
+            ) VALUES (
+              :id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :contentHash, :initialConfidence, 'active', 1, 0, 1, :tenantId, :scope, :tagsJson, :relatedIdsJson
+            )
+            ON CONFLICT(project, memory_type, content_hash, tenant_id) DO UPDATE SET
+              embedding      = EXCLUDED.embedding,
+              importance     = CASE WHEN ai_dreaming_memory.importance > EXCLUDED.importance THEN ai_dreaming_memory.importance ELSE EXCLUDED.importance END,
+              content        = EXCLUDED.content,
+              session_id     = EXCLUDED.session_id,
+              provider       = EXCLUDED.provider,
+              id             = EXCLUDED.id,
+              confidence     = CASE WHEN ai_dreaming_memory.confidence > EXCLUDED.confidence THEN ai_dreaming_memory.confidence ELSE EXCLUDED.confidence END,
+              evidence_count = ai_dreaming_memory.evidence_count + 1,
+              scope          = COALESCE(EXCLUDED.scope, ai_dreaming_memory.scope),
+              tags           = COALESCE(EXCLUDED.tags, ai_dreaming_memory.tags),
+              related_ids    = COALESCE(EXCLUDED.related_ids, ai_dreaming_memory.related_ids)
+          `;
 
-        await connection.execute(sql, {
-          id,
-          sessionId,
-          project,
-          provider: aiModel ?? null,
-          memoryType,
-          content,
-          contentHash,
-          embedding: embeddingVector ? new Float32Array(embeddingVector) : null,
-          importance,
-          initialConfidence,
-          tenantId,
-          scope: scope ?? null,
-          tagsJson,
-          relatedIdsJson
-        } as oracledb.BindParameters, { autoCommit: true });
+          await db.execute(sql, {
+            id,
+            sessionId,
+            project,
+            provider: aiModel ?? null,
+            memoryType,
+            content,
+            contentHash,
+            embedding: embeddingVector ? (dbType === "sqlite" ? new Uint8Array(new Float32Array(embeddingVector).buffer) : new Float32Array(embeddingVector)) : null,
+            importance,
+            initialConfidence,
+            tenantId,
+            scope: scope ?? null,
+            tagsJson,
+            relatedIdsJson
+          });
+        } else {
+          // Full MERGE with dedup on content_hash (preferred path for Oracle)
+          const sql = `
+            MERGE INTO ai_dreaming_memory trg
+            USING (SELECT :project AS project, :memoryType AS memory_type, :contentHash AS content_hash, :tenantId AS tenant_id FROM DUAL) src
+            ON (trg.project = src.project AND trg.memory_type = src.memory_type AND trg.content_hash = src.content_hash AND trg.tenant_id = src.tenant_id)
+            WHEN MATCHED THEN
+              UPDATE SET
+                embedding      = :embedding,
+                importance     = GREATEST(trg.importance, :importance),
+                content        = :content,
+                session_id     = :sessionId,
+                provider       = :provider,
+                id             = :id,
+                confidence     = GREATEST(trg.confidence, :initialConfidence),
+                evidence_count = trg.evidence_count + 1,
+                scope          = COALESCE(:scope, trg.scope),
+                tags           = COALESCE(TO_CLOB(:tagsJson), trg.tags),
+                related_ids    = COALESCE(TO_CLOB(:relatedIdsJson), trg.related_ids)
+            WHEN NOT MATCHED THEN
+              INSERT (id, session_id, project, provider, memory_type, content, embedding, importance, content_hash, confidence, status, evidence_count, access_count, version, tenant_id, scope, tags, related_ids)
+              VALUES (:id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :contentHash, :initialConfidence, 'active', 1, 0, 1, :tenantId, :scope, :tagsJson, :relatedIdsJson)
+          `;
+
+          await db.execute(sql, {
+            id,
+            sessionId,
+            project,
+            provider: aiModel ?? null,
+            memoryType,
+            content,
+            contentHash,
+            embedding: embeddingVector ? new Float32Array(embeddingVector) : null,
+            importance,
+            initialConfidence,
+            tenantId,
+            scope: scope ?? null,
+            tagsJson,
+            relatedIdsJson
+          });
+        }
       } else {
         // Fallback: simple INSERT when content_hash column is missing
         const cols = OracleDreamingService._hasLifecycleColumns
@@ -497,10 +533,9 @@ export class OracleDreamingService {
           ? { id, sessionId, project, provider: aiModel ?? null, memoryType, content, embedding: embeddingVector ? new Float32Array(embeddingVector) : null, importance, initialConfidence, tenantId, scope: scope ?? null, tagsJson, relatedIdsJson }
           : { id, sessionId, project, provider: aiModel ?? null, memoryType, content, embedding: embeddingVector ? new Float32Array(embeddingVector) : null, importance, tenantId, scope: scope ?? null, tagsJson, relatedIdsJson };
 
-        await connection.execute(
+        await db.execute(
           `INSERT INTO ai_dreaming_memory (${cols}) VALUES (${vals})`,
-          binds as oracledb.BindParameters,
-          { autoCommit: true }
+          binds
         );
       }
 
@@ -509,14 +544,6 @@ export class OracleDreamingService {
     } catch (err) {
       logger.error("[Oracle Dreaming] Error saving dream memory:", err instanceof Error ? err.message : String(err));
       throw err;
-    } finally {
-      if (connection) {
-        try {
-          await connection.close();
-        } catch (closeErr) {
-          logger.error("[Oracle Dreaming] Error closing connection:", closeErr);
-        }
-      }
     }
   }
 
