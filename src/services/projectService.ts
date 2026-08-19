@@ -857,9 +857,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           if (updated) {
             await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
           }
-          // Chunked Promise.all replaces sequential N+1 file system checks.
-          // Expected impact: Dramatically improves startup and project discovery time,
-          // particularly when dealing with many registered but potentially missing project directories.
+          // Chunked to avoid EMFILE while reducing sequential I/O latency
           for (let i = 0; i < filtered.length; i += FILE_EXISTS_CONCURRENCY) {
             const chunk = filtered.slice(i, i + FILE_EXISTS_CONCURRENCY);
             const results = await Promise.all(
