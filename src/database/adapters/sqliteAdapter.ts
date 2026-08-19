@@ -3,12 +3,28 @@ import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
 import { authStorage } from "../../utils/context.js";
 import { logger } from "../../utils/logger.js";
 
-// Lazy-loaded optional dependencies to avoid hard require when DB_TYPE != sqlite
-let Database: any;
-let sqliteVec: any;
+interface SqliteStatement {
+  all(...params: unknown[]): unknown[];
+  run(...params: unknown[]): { changes: number };
+}
+
+interface SqliteDatabase {
+  prepare(sql: string): SqliteStatement;
+  pragma(sql: string): unknown;
+  exec(sql: string): void;
+  close(): void;
+  transaction<T extends (...args: any[]) => any>(fn: T): T;
+}
+
+type DatabaseConstructor = new (filename: string) => SqliteDatabase;
+type SqliteVecLoad = (db: unknown) => void;
+
+let DatabaseClass: DatabaseConstructor | undefined;
+let sqliteVecLoad: SqliteVecLoad | undefined;
 
 export class SQLiteAdapter implements IDatabaseAdapter {
-  private db: any;
+  private db: SqliteDatabase | null = null;
+  private connectPromise: Promise<void> | null = null;
   private readonly dbPath: string;
 
   constructor() {
@@ -17,21 +33,46 @@ export class SQLiteAdapter implements IDatabaseAdapter {
 
   async connect(): Promise<void> {
     if (this.db) return;
-    try {
-      const DatabaseModule = await import("better-sqlite3");
-      const sqliteVecModule = await import("sqlite-vec");
-      Database = DatabaseModule.default;
-      sqliteVec = sqliteVecModule.load;
-    } catch (err) {
-      throw new Error(
-        "SQLite adapter requires 'better-sqlite3' and 'sqlite-vec'. Install: pnpm add better-sqlite3 sqlite-vec"
-      );
-    }
-    this.db = new Database(this.dbPath);
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("busy_timeout = 5000");
-    sqliteVec(this.db);
-    logger.info(`[SQLiteAdapter] Connected to ${this.dbPath}`);
+    if (this.connectPromise) return this.connectPromise;
+
+    this.connectPromise = (async () => {
+      try {
+        if (!DatabaseClass) {
+          const DatabaseModule = await import("better-sqlite3");
+          DatabaseClass = DatabaseModule.default as unknown as DatabaseConstructor;
+        }
+        if (!sqliteVecLoad) {
+          const sqliteVecModule = await import("sqlite-vec");
+          sqliteVecLoad = (sqliteVecModule as unknown as { load: SqliteVecLoad }).load;
+        }
+      } catch (err) {
+        this.connectPromise = null;
+        throw new Error(
+          "SQLite adapter requires 'better-sqlite3' and 'sqlite-vec'. Install: pnpm add better-sqlite3 sqlite-vec @types/better-sqlite3"
+        );
+      }
+
+      // Ensure directory exists
+      const path = await import("path");
+      const fs = await import("fs");
+      const dir = path.dirname(this.dbPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      this.db = new DatabaseClass(this.dbPath);
+      if (sqliteVecLoad) {
+        sqliteVecLoad(this.db);
+      }
+
+      // WAL mode & busy timeout for performance & high concurrency
+      this.db.pragma("journal_mode = WAL");
+      this.db.pragma("busy_timeout = 5000");
+
+      logger.info(`[SQLiteAdapter] Connected to SQLite database at ${this.dbPath}`);
+    })();
+
+    return this.connectPromise;
   }
 
   async disconnect(): Promise<void> {
@@ -42,58 +83,65 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         logger.error("Error closing SQLite connection:", err instanceof Error ? err.message : String(err));
       } finally {
         this.db = null;
+        this.connectPromise = null;
       }
     }
   }
 
-  async getConnection(): Promise<any> {
+  async getConnection(): Promise<unknown> {
     if (!this.db) await this.connect();
     return this.db;
   }
 
   async query<T>(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<T[]> {
     if (!this.db) await this.connect();
-    const stmt = this.db.prepare(sql);
-    const result = Array.isArray(params) ? stmt.all(...params) : stmt.all(params);
-    return result as T[];
+    const paramArray = Array.isArray(params) ? params : Object.values(params);
+    const stmt = this.db!.prepare(sql);
+    return stmt.all(...paramArray) as T[];
   }
 
   async execute(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<{ rowsAffected: number }> {
     if (!this.db) await this.connect();
-    const stmt = this.db.prepare(sql);
-    const info = Array.isArray(params) ? stmt.run(...params) : stmt.run(params);
-    return { rowsAffected: info.changes };
+    const paramArray = Array.isArray(params) ? params : Object.values(params);
+    const stmt = this.db!.prepare(sql);
+    const result = stmt.run(...paramArray);
+    return { rowsAffected: result.changes };
   }
 
   async executeMany(sql: string, params: Array<Record<string, unknown>>): Promise<{ rowsAffected: number }> {
     if (!this.db) await this.connect();
+    const stmt = this.db!.prepare(sql);
     let totalChanges = 0;
-    this.db.transaction(() => {
-      const stmt = this.db.prepare(sql);
-      for (const p of params) {
-        const info = stmt.run(p);
-        totalChanges += info.changes;
+    const transaction = this.db!.transaction((rows: Array<Record<string, unknown>>) => {
+      for (const row of rows) {
+        const result = stmt.run(...Object.values(row));
+        totalChanges += result.changes;
       }
-    })();
+    });
+    transaction(params);
     return { rowsAffected: totalChanges };
   }
 
   async searchVector(table: string, embedding: number[], limit: number, tenantId: string): Promise<VectorSearchResult[]> {
     if (!this.db) await this.connect();
-    const embeddingBinary = new Uint8Array(new Float32Array(embedding).buffer);
+    const blob = new Uint8Array(new Float32Array(embedding).buffer);
+
+    // sqlite-vec cosine distance function
     const sql = `
       SELECT id, 1 - vec_distance_cosine(embedding, ?) AS score
       FROM ${table}
       WHERE tenant_id = ?
-      ORDER BY score DESC
+      ORDER BY vec_distance_cosine(embedding, ?) ASC
       LIMIT ?
     `;
-    return this.query<VectorSearchResult>(sql, [embeddingBinary, tenantId, limit]);
+
+    return this.query<VectorSearchResult>(sql, [blob, tenantId, blob, limit]);
   }
 
   async initializeSchema(): Promise<void> {
     if (!this.db) await this.connect();
-    this.db.exec(`
+
+    this.db!.exec(`
       CREATE TABLE IF NOT EXISTS ai_dreaming_memory (
         id TEXT PRIMARY KEY,
         session_id TEXT,
@@ -117,9 +165,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       );
       CREATE INDEX IF NOT EXISTS idx_dreaming_tenant_project ON ai_dreaming_memory(tenant_id, project);
       CREATE INDEX IF NOT EXISTS idx_dreaming_hash ON ai_dreaming_memory(content_hash);
-      CREATE VIRTUAL TABLE IF NOT EXISTS ai_dreaming_memory_vec USING vec0(embedding float[1024]);
-    `);
-    this.db.exec(`
+
       CREATE TABLE IF NOT EXISTS tenants (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -131,46 +177,41 @@ export class SQLiteAdapter implements IDatabaseAdapter {
 
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
         email TEXT UNIQUE,
         name TEXT,
         role TEXT DEFAULT 'user',
         tier TEXT DEFAULT 'free',
         created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+        updated_at TEXT DEFAULT (datetime('now'))
       );
 
       CREATE TABLE IF NOT EXISTS keys (
         id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        user_id TEXT,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
+        user_id TEXT REFERENCES users(id),
         name TEXT,
         key TEXT NOT NULL UNIQUE,
         key_hash TEXT,
         tier TEXT DEFAULT 'free',
         expires_at TEXT,
         created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-        FOREIGN KEY (user_id) REFERENCES users(id)
+        updated_at TEXT DEFAULT (datetime('now'))
       );
 
       CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id),
         name TEXT NOT NULL,
         description TEXT,
         created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+        updated_at TEXT DEFAULT (datetime('now'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_projects_tenant ON projects(tenant_id);
-    `);
-    this.db.exec(`
+
       CREATE TABLE IF NOT EXISTS codeatlas_genome (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -194,9 +235,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         updated_at TEXT DEFAULT (datetime('now')),
         tenant_id TEXT NOT NULL
       );
-      CREATE VIRTUAL TABLE IF NOT EXISTS codeatlas_genome_vec USING vec0(embedding float[1024]);
-    `);
-    this.db.exec(`
+
       CREATE TABLE IF NOT EXISTS ai_semantic_memory (
         id TEXT PRIMARY KEY,
         project_name TEXT,
@@ -208,8 +247,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         tenant_id TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_semantic_tenant_project ON ai_semantic_memory(tenant_id, project_name);
-    `);
-    this.db.exec(`
+
       CREATE TABLE IF NOT EXISTS ai_relational_memory (
         source_id TEXT,
         target_id TEXT,
@@ -219,8 +257,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         PRIMARY KEY (source_id, target_id, project_name, tenant_id)
       );
       CREATE INDEX IF NOT EXISTS idx_rel_tenant_project ON ai_relational_memory(tenant_id, project_name);
-    `);
-    this.db.exec(`
+
       CREATE TABLE IF NOT EXISTS ai_episodic_memory (
         id TEXT PRIMARY KEY,
         event_type TEXT,
@@ -228,8 +265,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         created_at TEXT DEFAULT (datetime('now')),
         tenant_id TEXT NOT NULL
       );
-    `);
-    this.db.exec(`
+
       CREATE TABLE IF NOT EXISTS codeatlas_concepts (
         id TEXT PRIMARY KEY,
         label TEXT,
@@ -248,18 +284,18 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         tenant_id TEXT NOT NULL
       );
     `);
+
     logger.info("[SQLiteAdapter] Schema initialized.");
   }
 
   async checkColumnExists(table: string, column: string): Promise<boolean> {
     if (!this.db) await this.connect();
-    const rows = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-    return rows.some(r => r.name === column);
+    const info = this.db!.pragma(`table_info(${table})`) as Array<{ name: string }>;
+    return info.some((c) => c.name === column);
   }
 
   async detectCircularDependencies(project: string, tenantId: string): Promise<Array<{ entity_name: string; file_path: string }>> {
     if (!this.db) await this.connect();
-    // Recursive CTE replacement for Oracle GRAPH_TABLE cycle query (depth-bounded to 5)
     const sql = `
       WITH RECURSIVE dependency_chain AS (
         SELECT source_id, target_id, 1 AS depth
@@ -282,7 +318,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
   async detectGodObjects(project: string, tenantId: string): Promise<Array<{ entity_name: string; in_degree: number }>> {
     if (!this.db) await this.connect();
     const sql = `
-      SELECT s.entity_name, s.entity_type, s.file_path, r.in_degree
+      SELECT s.entity_name, r.in_degree
       FROM (
         SELECT target_id, count(*) AS in_degree
         FROM ai_relational_memory
