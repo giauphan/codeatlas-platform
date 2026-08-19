@@ -30,16 +30,26 @@ export class PostgresAdapter implements IDatabaseAdapter {
       try {
         if (!PoolClass) {
           const pg = await import("pg");
-          const pgAny = pg as unknown as { Pool?: PgPoolConstructor; default?: { Pool?: PgPoolConstructor } | PgPoolConstructor };
-          PoolClass = (pgAny.Pool || (pgAny.default as { Pool?: PgPoolConstructor })?.Pool || pgAny.default) as unknown as PgPoolConstructor;
+          const pgAny = pg as any;
+          const candidate = pgAny.Pool || pgAny.default?.Pool || pgAny.default;
+          if (typeof candidate === "function") {
+            PoolClass = candidate as PgPoolConstructor;
+          } else if (candidate && typeof candidate.Pool === "function") {
+            PoolClass = candidate.Pool as PgPoolConstructor;
+          }
           if (!PoolClass) {
             throw new Error("Postgres adapter requires 'pg'. Install: pnpm add pg @types/pg");
           }
         }
         if (!toSql) {
           const pgv = await import("pgvector/pg" as unknown as string);
-          const pgvAny = pgv as unknown as { toSql?: typeof toSql; default?: { toSql?: typeof toSql } };
-          toSql = pgvAny.toSql || pgvAny.default?.toSql;
+          const pgvAny = pgv as any;
+          const candidate = pgvAny.toSql || pgvAny.default?.toSql || pgvAny.default;
+          if (typeof candidate === "function") {
+            toSql = candidate;
+          } else if (candidate && typeof candidate.toSql === "function") {
+            toSql = candidate.toSql;
+          }
           if (!toSql) {
             throw new Error("Postgres adapter requires 'pgvector'. Install: pnpm add pgvector @types/pgvector");
           }
