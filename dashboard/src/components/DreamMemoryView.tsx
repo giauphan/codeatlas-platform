@@ -310,6 +310,7 @@ export function DreamMemoryView() {
           <Settings size={18} style={{ marginRight: '0.5rem' }} /> Config
         </button>
         <button onClick={() => { setShowAll(!showAll); fetchMemories(searchQuery, 0, dreamConfig); }}
+          className={FOCUS_RING_CLASS}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: showAll ? '1px solid var(--primary-neon)' : '1px solid rgba(255,255,255,0.1)',
             background: showAll ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
@@ -333,10 +334,10 @@ export function DreamMemoryView() {
             <label htmlFor="config-provider">Provider:</label>
             <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} style={{ padding: '0.5rem' }} />
           </div>
-          <button onClick={saveDreamConfig} disabled={savingConfig} style={{ padding: '0.5rem 1rem' }}>
+          <button onClick={saveDreamConfig} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem' }}>
             {savingConfig ? 'Saving...' : 'Save Config'}
           </button>
-          <button onClick={runDailyDreamsNow} disabled={savingConfig} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
+          <button onClick={runDailyDreamsNow} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
             Run Now
           </button>
         </div>
@@ -439,6 +440,7 @@ export function DreamMemoryView() {
       {/* Pagination */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', padding: '0.75rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
         <button onClick={() => goToPage(page - 1)} disabled={!hasPrev}
+          className={FOCUS_RING_CLASS}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
             background: hasPrev ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)',
@@ -451,6 +453,7 @@ export function DreamMemoryView() {
           Page {page + 1}
         </span>
         <button onClick={() => goToPage(page + 1)} disabled={!hasNext}
+          className={FOCUS_RING_CLASS}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
             background: hasNext ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)',
