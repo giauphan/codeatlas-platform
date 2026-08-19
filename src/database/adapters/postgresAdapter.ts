@@ -30,7 +30,10 @@ export class PostgresAdapter implements IDatabaseAdapter {
       try {
         if (!PoolClass) {
           const pg = await import("pg");
-          PoolClass = (pg.default?.Pool ?? pg.Pool) as unknown as PgPoolConstructor;
+          const pgObj = pg as unknown as { Pool?: PgPoolConstructor; default?: { Pool?: PgPoolConstructor } | PgPoolConstructor };
+          PoolClass = (pgObj.default && typeof pgObj.default === 'object' && 'Pool' in pgObj.default ? pgObj.default.Pool : undefined)
+            ?? pgObj.Pool
+            ?? (typeof pgObj.default === 'function' ? (pgObj.default as unknown as PgPoolConstructor) : undefined);
         }
         if (!toSql) {
           const pgv = await import("pgvector/pg" as unknown as string);

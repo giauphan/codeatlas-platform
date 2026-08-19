@@ -20,9 +20,10 @@ const MockPool = mock.fn(function () {
 });
 
 mock.module('pg', {
-  default: { Pool: MockPool },
+  default: { Pool: MockPool, default: { Pool: MockPool } },
   exports: {
     Pool: MockPool,
+    default: { Pool: MockPool },
   },
 });
 
