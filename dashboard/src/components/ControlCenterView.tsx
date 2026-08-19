@@ -183,6 +183,7 @@ const freqLabels: Record<string, string> = {
                   <input type="text" value={cronSchedule} onChange={e => setCronSchedule(e.target.value)}
                     placeholder="Custom cron (e.g. 0 19 * * *)"
                     aria-label="Custom cron frequency"
+                    className={FOCUS_RING_CLASS}
                     style={{ width: '100%', marginTop: '0.5rem', padding: '0.75rem 1rem', borderRadius: '12px',
                       border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
                       color: '#fff', fontSize: '0.85rem', fontFamily: 'monospace' }}
