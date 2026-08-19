@@ -15,7 +15,7 @@ import { logger } from "../../utils/logger.js";
 import { authMiddleware } from "../../middleware/auth.js";
 import rateLimit from "express-rate-limit";
 
-const a2aRateLimiter = rateLimit({
+export const a2aRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 120, // limit each IP to 120 requests per windowMs
   standardHeaders: true,
