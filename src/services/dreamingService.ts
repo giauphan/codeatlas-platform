@@ -5,6 +5,7 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { initPool, setSessionContext } from "../database/connection.js";
 import { generateEmbedding } from "./embeddingService.js";
+import { createDatabaseAdapter } from "../database/factory.js";
 
 /**
  * Stop words for noise gate — English + Vietnamese.
@@ -540,6 +541,21 @@ export class OracleDreamingService {
 
     let connection;
     try {
+      const tenantId = authStorage.getStore()!.uid;
+      let vectorSearchIds: string[] = [];
+      let vectorScores: Record<string, number> = {};
+
+      if (queryVector) {
+        const db = createDatabaseAdapter();
+        // Request limit + offset since we will paginate in memory after db search
+        const searchResults = await db.searchVector('ai_dreaming_memory', queryVector, limit + offset, tenantId);
+        vectorSearchIds = searchResults.map(r => r.id);
+        searchResults.forEach(r => { vectorScores[r.id] = r.score; });
+        if (vectorSearchIds.length === 0) {
+          return [];
+        }
+      }
+
       const pool = await initPool();
       connection = await pool.getConnection();
 
@@ -577,7 +593,12 @@ export class OracleDreamingService {
 
       // Build type filter for memory_type IN clause
       let typeFilter = '';
-      const binds: Record<string, unknown> = { tenantId: authStorage.getStore()!.uid, limit, offset };
+      const binds: Record<string, unknown> = { tenantId };
+      if (!queryVector) {
+        binds.limit = limit;
+        binds.offset = offset;
+      }
+
       if (project) binds.project = project;
       if (provider) binds.provider = provider;
       if (startDate) binds.startDate = startDate;
@@ -592,7 +613,10 @@ export class OracleDreamingService {
         });
       }
       if (queryVector) {
-        binds.queryVector = new Float32Array(queryVector);
+        // Build IN clause for IDs returned from searchVector
+        const idBinds = vectorSearchIds.map((_, i) => `:vecId${i}`).join(', ');
+        typeFilter += ` AND id IN (${idBinds})`;
+        vectorSearchIds.forEach((id, i) => { binds[`vecId${i}`] = id; });
       }
 
       if (memoryType) {
@@ -611,25 +635,16 @@ export class OracleDreamingService {
         : '';
 
       let orderClause: string;
-      if (queryVector) {
-        // Weighted ranking: similarity + freshness + importance + lifecycle bonuses + optional scope match boost
-        const lifecycleBonus = OracleDreamingService._hasLifecycleColumns
-          ? `\n            + 0.20 * NVL(confidence, 0.50)\n            + 0.05 * CASE WHEN evidence_count > 0 THEN LEAST(1.0, LOG(2, evidence_count + 1) / 5) ELSE 0 END`
-          : '';
-        const scopeBoost = scope
-          ? `\n            + CASE WHEN scope = :scopeExact THEN 0.30 WHEN scope LIKE :scopeLike THEN 0.15 ELSE 0 END`
-          : '';
-        orderClause = `
-          ORDER BY (
-            0.50 * (1 - VECTOR_DISTANCE(embedding, :queryVector, COSINE))${lifecycleBonus}${scopeBoost}
-            + 0.15 * (1.0 - LEAST(1.0, (SYSDATE - CAST(created_at AS DATE)) / 90))
-            + 0.10 * (importance / 10.0)
-          ) DESC
-        `;
-      } else {
+      let paginationClause = '';
+
+      if (!queryVector) {
         // When there is no search query, default to purely chronological sorting (newest first)
         // so the UI naturally shows recent memories instead of burying them under old high-importance ones.
         orderClause = `ORDER BY created_at DESC`;
+        paginationClause = `OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+      } else {
+        // If queryVector, we will sort and paginate in memory
+        orderClause = '';
       }
 
       const selectCols = OracleDreamingService._hasLifecycleColumns
@@ -641,18 +656,53 @@ export class OracleDreamingService {
         FROM ai_dreaming_memory
         WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter} ${statusFilter} ${startDateFilter} ${endDateFilter} ${scopeFilter} ${tagsFilter}
         ${orderClause}
-        OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+        ${paginationClause}
       `;
-      if (queryVector) {
-        binds.queryVector = new Float32Array(queryVector);
-      }
 
       const result = await OracleDreamingService.executeAsync(connection, sql, binds);
 
+      let processedRows = result.rows ? [...(result.rows as any[])] : [];
+
+      if (queryVector) {
+        // In-memory sorting based on vector distance + metadata
+        processedRows = processedRows.map(row => {
+          // Note: these mappings depend on the order of selectCols
+          const id = row[0];
+          const importance = row[6] || 0;
+          const createdAtDate = row[7] instanceof Date ? row[7] : new Date(row[7]);
+          const scopeVal = OracleDreamingService._hasLifecycleColumns ? row[13] : row[8];
+          const confidence = OracleDreamingService._hasLifecycleColumns ? (row[8] ?? 0.50) : 0.50;
+          const evidenceCount = OracleDreamingService._hasLifecycleColumns ? (row[10] || 0) : 0;
+
+          const baseScore = vectorScores[id] ?? 0; // 0.50 * (1 - VECTOR_DISTANCE) from adapter
+
+          let lifecycleBonus = 0;
+          if (OracleDreamingService._hasLifecycleColumns) {
+            lifecycleBonus = 0.20 * confidence + 0.05 * (evidenceCount > 0 ? Math.min(1.0, Math.log2(evidenceCount + 1) / 5) : 0);
+          }
+
+          let scopeBoost = 0;
+          if (scope) {
+             if (scopeVal === scope) scopeBoost = 0.30;
+             else if (typeof scopeVal === 'string' && scopeVal.startsWith(scope + '/')) scopeBoost = 0.15;
+          }
+
+          const freshnessDays = (Date.now() - createdAtDate.getTime()) / (1000 * 60 * 60 * 24);
+          const freshnessScore = 0.15 * (1.0 - Math.min(1.0, freshnessDays / 90));
+          const importanceScore = 0.10 * (importance / 10.0);
+
+          const finalScore = baseScore + lifecycleBonus + scopeBoost + freshnessScore + importanceScore;
+          return { row, finalScore };
+        });
+
+        processedRows.sort((a, b) => b.finalScore - a.finalScore);
+        processedRows = processedRows.slice(offset, offset + limit).map(item => item.row);
+      }
+
       // Bump access_count for retrieved dreams — tracks usefulness for decay calculation
-      if (result.rows && result.rows.length > 0 && OracleDreamingService._hasLifecycleColumns) {
+      if (processedRows && processedRows.length > 0 && OracleDreamingService._hasLifecycleColumns) {
         const fetchedIds: string[] = [];
-        for (const row of result.rows as any[]) {
+        for (const row of processedRows) {
           if (row[0]) fetchedIds.push(row[0]);  // id is column 0
         }
         if (fetchedIds.length > 0) {
@@ -673,7 +723,7 @@ export class OracleDreamingService {
         }
       }
 
-      return result.rows ?? [];
+      return processedRows;
     } catch (err) {
       logger.error("[Oracle Dreaming] Error querying dream memories:", err instanceof Error ? err.message : String(err));
       throw err;

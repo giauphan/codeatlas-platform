@@ -175,39 +175,53 @@ app.use(rateLimit({
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
 const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+app.use(cors((req, callback) => {
+  const origin = req.headers.origin;
+  const corsOptions = {
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
+    credentials: true,
+    origin: false as any
+  };
 
-    // Explicitly reject null origin to prevent sandboxed iframe bypasses
-    if (origin === 'null') {
-      return callback(null, false);
+  // Allow requests with no origin (like mobile apps or curl requests)
+  if (!origin) {
+    corsOptions.origin = true;
+    return callback(null, corsOptions);
+  }
+
+  // Explicitly reject null origin to prevent sandboxed iframe bypasses
+  if (origin === 'null') {
+    corsOptions.origin = false;
+    return callback(null, corsOptions);
+  }
+
+  if (allowedList.includes('*')) {
+    // Return static string '*' to prevent arbitrary origin reflection while allowing non-credentialed APIs.
+    // Must explicitly disable credentials to comply with CORS spec when origin is '*'.
+    corsOptions.origin = '*';
+    corsOptions.credentials = false;
+    return callback(null, corsOptions);
+  }
+
+  try {
+    const parsedOrigin = new URL(origin);
+    if (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') {
+      corsOptions.origin = false;
+      return callback(null, corsOptions);
     }
 
-    if (allowedList.includes('*')) {
-      // With credentials:true, reflect any valid origin dynamically
-      return callback(null, '*');
+    if (allowedList.includes(origin)) {
+      corsOptions.origin = true;
+      return callback(null, corsOptions);
+    } else {
+      corsOptions.origin = false;
+      return callback(null, corsOptions);
     }
-
-    try {
-      const parsedOrigin = new URL(origin);
-      if (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') {
-        return callback(null, false);
-      }
-
-      if (allowedList.includes(origin)) {
-        return callback(null, true);
-      } else {
-        return callback(null, false);
-      }
-    } catch (err) {
-      return callback(null, false);
-    }
-  },
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
-  credentials: true
+  } catch (err) {
+    corsOptions.origin = false;
+    return callback(null, corsOptions);
+  }
 }));
 
 // Auth Proxy (Firebase sign-in without Web SDK)
@@ -1217,8 +1231,7 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           logger.info(`[DreamCron] Daily dream generation successful for ${today}.`);
           lastDreamRunDate = today;
         } else {
-          const errorText = await response.text();
-          logger.error(`[DreamCron] Daily dream generation failed: ${response.status} - ${errorText}`);
+          logger.error(`[DreamCron] Daily dream generation failed for ${response.url}: ${response.status} - ${response.statusText}`);
         }
       } catch (err) {
         logger.error("[DreamCron] Error during daily dream generation:", err);
