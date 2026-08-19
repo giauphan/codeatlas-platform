@@ -30,23 +30,19 @@ export class PostgresAdapter implements IDatabaseAdapter {
       try {
         if (!PoolClass) {
           const pg = await import("pg");
-          const pgObj = pg as unknown as { Pool?: PgPoolConstructor; default?: { Pool?: PgPoolConstructor } | PgPoolConstructor };
-          const ResolvedPool = (pgObj.default && typeof pgObj.default === 'object' && 'Pool' in pgObj.default ? pgObj.default.Pool : undefined)
-            ?? pgObj.Pool
-            ?? (typeof pgObj.default === 'function' ? (pgObj.default as unknown as PgPoolConstructor) : undefined);
-          if (!ResolvedPool) {
+          const pgAny = pg as unknown as { Pool?: PgPoolConstructor; default?: { Pool?: PgPoolConstructor } | PgPoolConstructor };
+          PoolClass = (pgAny.Pool || (pgAny.default as { Pool?: PgPoolConstructor })?.Pool || pgAny.default) as unknown as PgPoolConstructor;
+          if (!PoolClass) {
             throw new Error("Postgres adapter requires 'pg'. Install: pnpm add pg @types/pg");
           }
-          PoolClass = ResolvedPool;
         }
         if (!toSql) {
           const pgv = await import("pgvector/pg" as unknown as string);
-          const pgvObj = pgv as unknown as { toSql?: typeof toSql; default?: { toSql?: typeof toSql } };
-          const ResolvedToSql = pgvObj.toSql ?? pgvObj.default?.toSql;
-          if (!ResolvedToSql) {
+          const pgvAny = pgv as unknown as { toSql?: typeof toSql; default?: { toSql?: typeof toSql } };
+          toSql = pgvAny.toSql || pgvAny.default?.toSql;
+          if (!toSql) {
             throw new Error("Postgres adapter requires 'pgvector'. Install: pnpm add pgvector @types/pgvector");
           }
-          toSql = ResolvedToSql;
         }
       } catch (err) {
         this.connectPromise = null;

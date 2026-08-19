@@ -20,19 +20,13 @@ const MockPool = mock.fn(function () {
 });
 
 mock.module('pg', {
-  default: { Pool: MockPool, default: { Pool: MockPool } },
-  exports: {
-    Pool: MockPool,
-    default: { Pool: MockPool },
-  },
+  default: { Pool: MockPool },
+  exports: { Pool: MockPool },
 });
 
 mock.module('pgvector/pg', {
   default: { toSql: (arr: number[]) => `[${arr.join(',')}]` },
-  exports: {
-    toSql: (arr: number[]) => `[${arr.join(',')}]`,
-    default: { toSql: (arr: number[]) => `[${arr.join(',')}]` },
-  },
+  exports: { toSql: (arr: number[]) => `[${arr.join(',')}]` },
 });
 
 const { PostgresAdapter } = await import(path.join(srcDir, 'database/adapters/postgresAdapter.js'));
