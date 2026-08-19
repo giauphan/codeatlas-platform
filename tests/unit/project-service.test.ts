@@ -3,9 +3,9 @@ import assert from 'node:assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { isProjectDirectory } from '../../src/services/projectService.js';
 
-describe('isProjectDirectory', () => {
+describe('isProjectDirectory', async () => {
+  const { isProjectDirectory } = await import('../../src/services/projectService.js');
   let tempDirBase: string;
 
   before(() => {

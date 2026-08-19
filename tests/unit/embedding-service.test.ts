@@ -1,9 +1,9 @@
 import { test, describe, before, after, mock } from 'node:test';
 import assert from 'node:assert';
-import { generateEmbedding } from '../../src/services/embeddingService.js';
-import { logger } from '../../src/utils/logger.js';
 
-describe('Embedding Service', () => {
+describe('Embedding Service', async () => {
+  const { generateEmbedding } = await import('../../src/services/embeddingService.js');
+  const { logger } = await import('../../src/utils/logger.js');
   const originalEnv = process.env;
 
   before(() => {

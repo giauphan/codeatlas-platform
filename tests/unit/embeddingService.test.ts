@@ -1,8 +1,8 @@
 import { test, describe, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateEmbedding, generateEmbeddingsBatch } from '../../src/services/embeddingService.js';
 
-describe('Embedding Service', () => {
+describe('Embedding Service', async () => {
+  const { generateEmbedding, generateEmbeddingsBatch } = await import('../../src/services/embeddingService.js');
   let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {

@@ -120,4 +120,11 @@ mock.module(path.join(srcDir, 'utils/logger.js'), {
   exports: loggerMock,
 });
 
+const mockCheckAuth = async () => ({ tier: 'enterprise', uid: 'test-user', keyId: 'test-key' });
+const authServiceMock = { checkAuth: mockCheckAuth };
+mock.module(path.join(srcDir, 'services/authService.js'), {
+  default: authServiceMock,
+  exports: authServiceMock,
+});
+
 const { OracleDreamingService } = await import(path.join(srcDir, 'services/dreamingService.js'));

@@ -4,9 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import http from 'http';
 import { spawn } from 'child_process';
-import { app } from '../../src/presentation/httpServer.js';
+import type { Express } from 'express';
 
 describe('MCP Auto-Scan & Database Sync Integration', () => {
+  let app: Express;
   let server: http.Server;
   let port: number;
   const testProjectDir = path.join(process.cwd(), 'tests', 'mock_index_project');
@@ -18,6 +19,8 @@ describe('MCP Auto-Scan & Database Sync Integration', () => {
   const origProjectsRoot = process.env.CODEATLAS_PROJECTS_ROOT;
 
   before(async () => {
+    const mod = await import('../../src/presentation/httpServer.js');
+    app = mod.app;
     process.env.CODEATLAS_API_KEY = apiKeyValue;
     process.env.CODEATLAS_MULTI_TENANT = 'false'; // single tenant mode for simpler pathing
     

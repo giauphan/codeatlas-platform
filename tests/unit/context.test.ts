@@ -1,8 +1,9 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { authStorage, AuthContext } from '../../src/utils/context.js';
+import type { AuthContext } from '../../src/utils/context.js';
 
-describe('authStorage', () => {
+describe('authStorage', async () => {
+  const { authStorage } = await import('../../src/utils/context.js');
   test('should return undefined when getStore is called outside of run', () => {
     const store = authStorage.getStore();
     assert.strictEqual(store, undefined, 'Store should be undefined outside of run block');
