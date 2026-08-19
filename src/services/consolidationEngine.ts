@@ -145,12 +145,15 @@ export class ConsolidationEngine {
         const toRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
-          if (toRemove.has(String(group[i][R_IDX.ID]))) continue;
+          const idI = String(group[i][R_IDX.ID]);
+          if (toRemove.has(idI)) continue;
           // Embeddings validated above during preprocessing
           const embI = group[i][R_IDX.EMBEDDING];
+          const importanceI = Number(group[i][R_IDX.IMPORTANCE]);
 
           for (let j = i + 1; j < group.length; j++) {
-            if (toRemove.has(String(group[j][R_IDX.ID]))) continue;
+            const idJ = String(group[j][R_IDX.ID]);
+            if (toRemove.has(idJ)) continue;
 
             // Cosine similarity on embeddings
             const embJ = group[j][R_IDX.EMBEDDING];
@@ -159,9 +162,11 @@ export class ConsolidationEngine {
 
             if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD) {
               // Merge: keep the one with higher importance
-              const keepIdx = Number(group[i][R_IDX.IMPORTANCE]) >= Number(group[j][R_IDX.IMPORTANCE]) ? i : j;
+              const importanceJ = Number(group[j][R_IDX.IMPORTANCE]);
+              const keepIdx = importanceI >= importanceJ ? i : j;
               const removeIdx = keepIdx === i ? j : i;
-              toRemove.add(String(group[removeIdx][R_IDX.ID]));
+              const removeId = removeIdx === i ? idI : idJ;
+              toRemove.add(removeId);
 
               // Early exit if the outer loop element was just marked for removal
               // (This is safe because the outer loop guarantees skipping over removed indices on subsequent iterations)
@@ -511,22 +516,23 @@ export class ConsolidationEngine {
         for (const [, group] of groups) {
           if (group.length < 2) continue;
           for (let i = 0; i < group.length; i++) {
-            if (toSupersede.has(String(group[i][SCORE_IDX.ID]))) continue;
             const older = group[i];
+            const idO = String(older[SCORE_IDX.ID]);
+            if (toSupersede.has(idO)) continue;
             // Embeddings validated above during preprocessing
             const embO = older[SCORE_IDX.EMBEDDING]; // embedding
+            const confO = Number(older[SCORE_IDX.CONFIDENCE]);
 
-            let isSuperseded = false;
             for (let j = i + 1; j < group.length; j++) {
-              if (toSupersede.has(String(group[j][SCORE_IDX.ID]))) continue;
               const newer = group[j];
+              if (toSupersede.has(String(newer[SCORE_IDX.ID]))) continue;
               const embN = newer[SCORE_IDX.EMBEDDING];
 
               const similarity = this.cosineSimilarity(embO, embN);
 
               // If similarity is high and newer has higher confidence → supersede older
-              if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && Number(newer[SCORE_IDX.CONFIDENCE]) > Number(older[SCORE_IDX.CONFIDENCE])) {
-                toSupersede.add(String(older[SCORE_IDX.ID]));  // older's id
+              if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && Number(newer[SCORE_IDX.CONFIDENCE]) > confO) {
+                toSupersede.add(idO);  // older's id
                 break;
               }
             }
@@ -649,7 +655,8 @@ export class ConsolidationEngine {
     if (rawEmb instanceof Float32Array) {
       safeEmb = rawEmb;
     } else if (Array.isArray(rawEmb)) {
-      safeEmb = rawEmb;
+      safeEmb = new Float32Array(rawEmb); // pre-normalize array embeddings to Float32Array
+      row[embIdx] = safeEmb; // update row to avoid re-allocating Float32Array
     } else {
       logger.debug(`[Consolidation] ${contextLabel} encountered unexpected embedding type for ID ${row[idIdx]}`);
       return false;
