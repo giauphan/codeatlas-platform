@@ -18,6 +18,15 @@ type PgPoolConstructor = new (config: Record<string, unknown>) => PgPool;
 let PoolClass: PgPoolConstructor | undefined;
 let toSql: ((value: number[] | Float32Array) => string) | undefined;
 
+function findExportFn<T>(obj: unknown, prop: string): T | undefined {
+  if (!obj || typeof obj !== "object") return undefined;
+  const rec = obj as Record<string, unknown>;
+  if (typeof rec[prop] === "function") return rec[prop] as T;
+  if (typeof rec.default === "function") return rec.default as T;
+  if (rec.default && typeof rec.default === "object") return findExportFn<T>(rec.default, prop);
+  return undefined;
+}
+
 export class PostgresAdapter implements IDatabaseAdapter {
   private pool: PgPool | null = null;
   private connectPromise: Promise<void> | null = null;
@@ -30,26 +39,14 @@ export class PostgresAdapter implements IDatabaseAdapter {
       try {
         if (!PoolClass) {
           const pg = await import("pg");
-          const pgAny = pg as any;
-          const candidate = pgAny.Pool || pgAny.default?.Pool || pgAny.default;
-          if (typeof candidate === "function") {
-            PoolClass = candidate as PgPoolConstructor;
-          } else if (candidate && typeof candidate.Pool === "function") {
-            PoolClass = candidate.Pool as PgPoolConstructor;
-          }
+          PoolClass = findExportFn<PgPoolConstructor>(pg, "Pool");
           if (!PoolClass) {
             throw new Error("Postgres adapter requires 'pg'. Install: pnpm add pg @types/pg");
           }
         }
         if (!toSql) {
           const pgv = await import("pgvector/pg" as unknown as string);
-          const pgvAny = pgv as any;
-          const candidate = pgvAny.toSql || pgvAny.default?.toSql || pgvAny.default;
-          if (typeof candidate === "function") {
-            toSql = candidate;
-          } else if (candidate && typeof candidate.toSql === "function") {
-            toSql = candidate.toSql;
-          }
+          toSql = findExportFn<typeof toSql>(pgv, "toSql");
           if (!toSql) {
             throw new Error("Postgres adapter requires 'pgvector'. Install: pnpm add pgvector @types/pgvector");
           }
