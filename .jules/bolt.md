@@ -17,3 +17,7 @@
 ## 2026-08-18 - Replacing Sequential File Checks with Batched Concurrency in N+1 scenarios
 **Learning:** Checking `await fileExists()` inside sequential `for` loops (like iterating over global project registries) causes an N+1 latency bottleneck in project discovery.
 **Action:** Replace sequential file system operations with bounded `Promise.all` chunking (e.g., `chunkSize = 50`) to maximize I/O throughput safely without hitting `EMFILE` limits.
+
+## 2026-08-19 - Fast vector similarity loops
+**Learning:** In highly mathematical operations inside $O(N^2)$ loops (like pairwise cosine similarity computations), redundant allocations such as extracting IDs/properties and generating arrays dynamically causes massive garbage collection overhead. Furthermore, ensuring input arrays are always passed directly as `Float32Array` enables the V8 runtime to leverage fast, unboxed vector operations natively.
+**Action:** When calculating similarity matrix distances or comparisons, pre-normalize structural types like raw arrays to `Float32Array` before executing nested loops, and cache invariant lookups out of the inner loop scope.
