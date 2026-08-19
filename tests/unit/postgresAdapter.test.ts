@@ -15,9 +15,17 @@ const mockPgPoolInstance = {
   end: mock.fn(async () => {}),
 };
 
-const MockPool = mock.fn(function () {
-  return mockPgPoolInstance;
-});
+class MockPool {
+  async connect() {
+    return mockPgPoolInstance.connect();
+  }
+  async query(sql: string, params?: unknown[]) {
+    return mockPgPoolInstance.query(sql, params);
+  }
+  async end() {
+    return mockPgPoolInstance.end();
+  }
+}
 
 mock.module('pg', {
   default: { Pool: MockPool },
