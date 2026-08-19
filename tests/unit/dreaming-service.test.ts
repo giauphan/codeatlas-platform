@@ -40,6 +40,8 @@ mock.module(path.join(srcDir, 'database/connection.js'), {
 
 // Mock database/factory.ts
 const mockDbAdapter = {
+  execute: mock.fn(() => Promise.resolve({ rowsAffected: 1 })),
+  query: mock.fn(() => Promise.resolve([])),
   searchVector: mock.fn(() => Promise.resolve([
     { id: 'memory_1', score: 0.9 },
     { id: 'memory_2', score: 0.8 },
@@ -100,6 +102,9 @@ describe('OracleDreamingService', () => {
     mockConnection.execute.mock.resetCalls();
     mockConnection.close.mock.resetCalls();
     mockPool.getConnection.mock.resetCalls();
+    mockDbAdapter.execute.mock.resetCalls();
+    mockDbAdapter.query.mock.resetCalls();
+    mockDbAdapter.searchVector.mock.resetCalls();
     mockGenerateEmbedding.mock.resetCalls();
     mockAuthStore.getStore.mock.resetCalls();
     mockAuthStore.run.mock.resetCalls();
@@ -124,7 +129,7 @@ describe('OracleDreamingService', () => {
   // ── saveDreamMemory ────────────────────────────────────────────────
   describe('saveDreamMemory()', () => {
     test('with valid inputs returns id string', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
+      mockDbAdapter.execute.mock.mockImplementation(async () => {
         return { rowsAffected: 1 };
       });
 
@@ -147,26 +152,15 @@ describe('OracleDreamingService', () => {
         'passage',
       );
 
-      // Should have acquired a connection
-      assert.strictEqual(mockPool.getConnection.mock.calls.length, 1);
-      // Should have set session context
-      const { initPool, setSessionContext } = await import(
-        path.join(srcDir, 'database/connection.js')
-      );
-      assert.strictEqual(setSessionContext.mock.calls.length, 1);
-
-      // Should have executed the INSERT
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 1);
-      const insertSql = mockConnection.execute.mock.calls[0].arguments[0] as string;
-      assert.ok(insertSql.includes('INSERT INTO ai_dreaming_memory'));
-
-      // Should have closed the connection
-      assert.strictEqual(mockConnection.close.mock.calls.length, 1);
+      // Should have executed the statement via adapter
+      assert.strictEqual(mockDbAdapter.execute.mock.calls.length, 1);
+      const insertSql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
+      assert.ok(insertSql.includes('ai_dreaming_memory'));
     });
 
     test('without embedding (null vector) still saves correctly', async () => {
       mockGenerateEmbedding.mock.mockImplementation(() => Promise.resolve(null));
-      mockConnection.execute.mock.mockImplementation(async () => {
+      mockDbAdapter.execute.mock.mockImplementation(async () => {
         return { rowsAffected: 1 };
       });
 
@@ -180,15 +174,15 @@ describe('OracleDreamingService', () => {
       // Embedding was attempted but returned null
       assert.strictEqual(mockGenerateEmbedding.mock.calls.length, 1);
 
-      // INSERT still executed (with null embedding)
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 1);
-      const binds = mockConnection.execute.mock.calls[0].arguments[1] as Record<string, unknown>;
+      // statement still executed (with null embedding)
+      assert.strictEqual(mockDbAdapter.execute.mock.calls.length, 1);
+      const binds = mockDbAdapter.execute.mock.calls[0].arguments[1] as Record<string, unknown>;
       // embedding should be null when generateEmbedding returns null
       assert.strictEqual(binds.embedding, null);
     });
 
     test('with DB error throws error', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
+      mockDbAdapter.execute.mock.mockImplementation(async () => {
         throw new Error('ORA-00001: unique constraint violated');
       });
 
@@ -202,14 +196,12 @@ describe('OracleDreamingService', () => {
         },
       );
 
-      // Connection should still be closed after error
-      assert.strictEqual(mockConnection.close.mock.calls.length, 1);
       // Error should have been logged
-      assert.strict(mockLogger.error.mock.calls.length >= 1, true);
+      assert.ok(mockLogger.error.mock.calls.length >= 1);
     });
 
     test('with scope, tags, related_ids and SESSION_SUMMARY memory type saves correctly', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
+      mockDbAdapter.execute.mock.mockImplementation(async () => {
         return { rowsAffected: 1 };
       });
 
@@ -222,8 +214,8 @@ describe('OracleDreamingService', () => {
       assert.ok(id);
       assert.ok(id.includes('SESSION_SUMMARY'));
 
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 1);
-      const binds = mockConnection.execute.mock.calls[0].arguments[1] as Record<string, unknown>;
+      assert.strictEqual(mockDbAdapter.execute.mock.calls.length, 1);
+      const binds = mockDbAdapter.execute.mock.calls[0].arguments[1] as Record<string, unknown>;
       assert.strictEqual(binds.scope, 'auth/login');
       assert.strictEqual(binds.tagsJson, JSON.stringify(['jwt', 'security']));
       assert.strictEqual(binds.relatedIdsJson, JSON.stringify(['rel-1', 'rel-2']));
