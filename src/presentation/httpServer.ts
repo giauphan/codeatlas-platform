@@ -177,11 +177,11 @@ const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
 app.use(cors((req, callback) => {
   const origin = req.headers.origin;
-  const corsOptions = {
+  const corsOptions: cors.CorsOptions = {
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
     credentials: true,
-    origin: false as any
+    origin: false,
   };
 
   // Allow requests with no origin (like mobile apps or curl requests)
@@ -197,8 +197,7 @@ app.use(cors((req, callback) => {
   }
 
   if (allowedList.includes('*')) {
-    // Return static string '*' to prevent arbitrary origin reflection while allowing non-credentialed APIs.
-    // Must explicitly disable credentials to comply with CORS spec when origin is '*'.
+    // Static wildcard: allow all origins without credentials
     corsOptions.origin = '*';
     corsOptions.credentials = false;
     return callback(null, corsOptions);
@@ -213,15 +212,14 @@ app.use(cors((req, callback) => {
 
     if (allowedList.includes(origin)) {
       corsOptions.origin = true;
-      return callback(null, corsOptions);
     } else {
       corsOptions.origin = false;
-      return callback(null, corsOptions);
     }
   } catch (err) {
     corsOptions.origin = false;
-    return callback(null, corsOptions);
   }
+
+  return callback(null, corsOptions);
 }));
 
 // Auth Proxy (Firebase sign-in without Web SDK)
