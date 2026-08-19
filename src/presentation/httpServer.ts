@@ -1,7 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import compression from "compression";
-import cors from "cors";
+import cors, { CorsOptions } from "cors";
 import rateLimit from "express-rate-limit";
 import { IncomingMessage, Server } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -175,39 +175,45 @@ app.use(rateLimit({
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
 const allowedList = allowedOrigins.split(',').map(s => s.trim());
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+app.use(cors((req, callback) => {
+  const corsOptions: CorsOptions = {
+    origin: false,
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
+    credentials: true,
+  };
 
-    // Explicitly reject null origin to prevent sandboxed iframe bypasses
-    if (origin === 'null') {
-      return callback(null, false);
-    }
+  const origin = req.headers.origin;
 
-    if (allowedList.includes('*')) {
-      // With credentials:true, reflect any valid origin dynamically
-      return callback(null, '*');
-    }
-
+  // Allow requests with no origin (like mobile apps or curl requests)
+  if (!origin) {
+    corsOptions.origin = true;
+  }
+  // Explicitly reject null origin to prevent sandboxed iframe bypasses
+  else if (origin === 'null') {
+    corsOptions.origin = false;
+  }
+  else if (allowedList.includes('*')) {
+    // Static wildcard: allow all origins without credentials
+    corsOptions.origin = '*';
+    corsOptions.credentials = false;
+  }
+  else {
     try {
       const parsedOrigin = new URL(origin);
       if (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') {
-        return callback(null, false);
-      }
-
-      if (allowedList.includes(origin)) {
-        return callback(null, true);
+        corsOptions.origin = false;
+      } else if (allowedList.includes(origin)) {
+        corsOptions.origin = true;
       } else {
-        return callback(null, false);
+        corsOptions.origin = false;
       }
     } catch (err) {
-      return callback(null, false);
+      corsOptions.origin = false;
     }
-  },
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
-  credentials: true
+  }
+
+  return callback(null, corsOptions);
 }));
 
 // Auth Proxy (Firebase sign-in without Web SDK)
@@ -289,7 +295,7 @@ app.delete("/api/projects", localRateLimiter, authMiddleware, async (req, res) =
     let realProjectDir: string;
     try {
       realProjectDir = await fs.promises.realpath(fullProjectDir);
-    } catch {
+    } catch (err) {
       realProjectDir = path.resolve(fullProjectDir);
     }
     
@@ -397,7 +403,7 @@ app.delete("/api/projects", localRateLimiter, authMiddleware, async (req, res) =
       let codeatlasLstat;
       try {
         codeatlasLstat = await fs.promises.lstat(codeatlasDir);
-      } catch {}
+      } catch (err) {}
 
       if (codeatlasLstat) {
         if (codeatlasLstat.isSymbolicLink()) {
@@ -656,7 +662,7 @@ app.get("/api/version", localRateLimiter, async (_req, res) => {
   try {
     const pkg = JSON.parse(await fs.promises.readFile(path.join(process.cwd(), "package.json"), "utf-8"));
     version = pkg.version || "unknown";
-  } catch {}
+  } catch (err) {}
   res.json({ version, buildTime: Date.now() });
 });
 
