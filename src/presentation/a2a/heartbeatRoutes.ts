@@ -10,11 +10,13 @@
 import express from "express";
 import { a2aRegistry } from "../../services/a2aRegistry.js";
 import { logger } from "../../utils/logger.js";
+import { authMiddleware } from "../../middleware/auth.js";
+import { a2aRateLimiter } from "./a2aRoutes.js";
 
 export function mountHeartbeatRoutes(app: express.Express): void {
 
   // Register an agent
-  app.get("/a2a/register", (req, res) => {
+  app.get("/a2a/register", a2aRateLimiter, authMiddleware, (req, res) => {
     const agentUrl = req.query.agent_url as string;
     const agentName = req.query.agent_name as string || "Unknown Agent";
     const capabilities = (req.query.capabilities as string || "").split(",").filter(Boolean);
@@ -37,7 +39,7 @@ export function mountHeartbeatRoutes(app: express.Express): void {
   });
 
   // Heartbeat ping
-  app.post("/a2a/heartbeat", (req, res) => {
+  app.post("/a2a/heartbeat", a2aRateLimiter, authMiddleware, (req, res) => {
     const { agent_url } = req.body || {};
     if (!agent_url) {
       res.status(400).json({ error: "Missing agent_url" });
@@ -48,23 +50,27 @@ export function mountHeartbeatRoutes(app: express.Express): void {
   });
 
   // List agents
-  app.get("/a2a/agents", async (_req, res) => {
-    const records = await a2aRegistry.listAll();
-    const agents = records.map(r => ({
-      agentId: r.agentId,
-      name: r.agentName,
-      url: r.agentUrl,
-      capabilities: r.capabilities,
-      status: r.status,
-      lastHeartbeat: r.lastHeartbeat.toISOString(),
-      registeredAt: r.registeredAt.toISOString(),
-    }));
+  app.get("/a2a/agents", a2aRateLimiter, authMiddleware, async (_req, res, next) => {
+    try {
+      const records = await a2aRegistry.listAll();
+      const agents = records.map(r => ({
+        agentId: r.agentId,
+        name: r.agentName,
+        url: r.agentUrl,
+        capabilities: r.capabilities,
+        status: r.status,
+        lastHeartbeat: r.lastHeartbeat.toISOString(),
+        registeredAt: r.registeredAt.toISOString(),
+      }));
 
-    res.json({
-      agentCount: agents.length,
-      onlineCount: agents.filter(a => a.status === "online").length,
-      agents: agents.sort((a, b) => a.status === "online" ? -1 : 1),
-    });
+      res.json({
+        agentCount: agents.length,
+        onlineCount: agents.filter(a => a.status === "online").length,
+        agents: agents.sort((a, b) => a.status === "online" ? -1 : 1),
+      });
+    } catch (err) {
+      next(err);
+    }
   });
 
   logger.info("[A2A Heartbeat] Routes mounted: /a2a/register, /a2a/heartbeat, /a2a/agents");

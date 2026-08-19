@@ -45,8 +45,7 @@ export async function generateEmbedding(text: string, inputType: 'passage' | 'qu
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      logger.error(`[NVIDIA SDK] API returned error ${response.status}: ${errText}`);
+      logger.error(`[NVIDIA SDK] API returned error ${response.status} for ${response.url}: ${response.statusText}`);
       return null;
     }
 
@@ -93,8 +92,7 @@ export async function generateEmbeddingsBatch(texts: string[], inputType: 'passa
       });
 
       if (!response.ok) {
-        const errText = await response.text();
-        logger.error(`[NVIDIA SDK] API returned error ${response.status}: ${errText}`);
+        logger.error(`[NVIDIA SDK] API returned error ${response.status} for ${response.url}: ${response.statusText}`);
         return null;
       }
 

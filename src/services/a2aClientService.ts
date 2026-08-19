@@ -180,8 +180,7 @@ export class A2AClientService {
       });
 
       if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`HTTP ${response.status}: ${text.slice(0, 200)}`);
+        throw new Error(`HTTP ${response.status} for ${response.url}: ${response.statusText}`);
       }
 
       return response.json();

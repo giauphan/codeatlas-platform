@@ -34,6 +34,7 @@ import { OrchestrationTasksView } from './OrchestrationTasksView';
 import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
 import { getAuthHeaders } from '../lib/auth';
 import { setCacheItem, getCacheItem, removeCacheItem, clearCache } from '../lib/db';
+import { FOCUS_RING_CLASS } from '../lib/constants';
 
 // API Configuration
 const API_BASE = window.location.origin.includes('localhost:5173')
@@ -536,11 +537,12 @@ export const Dashboard: React.FC = () => {
                 <button
                   onClick={() => setActiveTab(tab)}
                   aria-current={activeTab === tab ? 'page' : undefined}
+                  className={FOCUS_RING_CLASS}
                   style={{
                     width: '100%', padding: '0.75rem 1rem', borderRadius: '8px',
                     background: activeTab === tab ? 'var(--button-active-background)' : 'transparent',
                     color: activeTab === tab ? 'var(--primary-neon)' : 'var(--text-muted)',
-                    border: 'none', textAlign: 'left', cursor: 'pointer',
+                    outline: 'none', border: 'none', textAlign: 'left', cursor: 'pointer',
                     fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
                     transition: 'all 0.3s ease',
                     boxShadow: activeTab === tab ? '0 0 15px rgba(0, 240, 255, 0.2)' : 'none'
@@ -569,10 +571,11 @@ export const Dashboard: React.FC = () => {
           )}
           <button
             onClick={clearAllCaches}
+            className={FOCUS_RING_CLASS}
             style={{
               width: '100%', padding: '0.75rem 1rem', borderRadius: '8px',
               background: 'transparent', color: 'var(--text-muted)',
-              border: 'none', textAlign: 'left', cursor: 'pointer',
+              outline: 'none', border: 'none', textAlign: 'left', cursor: 'pointer',
               fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
               transition: 'all 0.3s ease'
             }}

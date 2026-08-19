@@ -3,8 +3,25 @@ import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
 import { logger } from "../../utils/logger.js";
 
 // Lazy-loaded optional dependencies
-let { Pool } = require("pg");
-let pgvector: any;
+// Ensure TypeScript knows Pool is initialized when we construct it
+let Pool: typeof import("pg").Pool | undefined;
+
+let toSql: (value: number[] | Float32Array) => string;
+
+const importPgvector = async () => {
+  if (!toSql) {
+    const pgv = await import("pgvector/pg" as any);
+    toSql = pgv.toSql;
+  }
+};
+
+const importPg = async () => {
+  if (!Pool) {
+    const pg = await import("pg");
+    Pool = pg.default ? pg.default.Pool || pg.Pool : pg.Pool;
+  }
+  return Pool;
+};
 
 interface PgPool {
   query: (sql: string, params?: any[]) => Promise<{ rows: any[]; rowCount: number }>;
@@ -14,19 +31,18 @@ interface PgPool {
 export class PostgresAdapter implements IDatabaseAdapter {
   private pool: PgPool | null = null;
 
-  constructor() {
+  async connect(): Promise<void> {
+    let pgPoolConstructor: typeof import("pg").Pool;
     try {
-      Pool = require("pg").Pool;
-      pgvector = require("pgvector");
+      pgPoolConstructor = (await importPg())!;
+      await importPgvector();
     } catch (err) {
       throw new Error(
         "Postgres adapter requires 'pg' and 'pgvector'. Install: pnpm add pg pgvector"
       );
     }
-  }
 
-  async connect(): Promise<void> {
-    this.pool = new Pool({
+    this.pool = new pgPoolConstructor({
       host: process.env.PGHOST,
       port: parseInt(process.env.PGPORT || "5432"),
       user: process.env.PGUSER,
@@ -77,7 +93,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   async searchVector(table: string, embedding: number[], limit: number, tenantId: string): Promise<VectorSearchResult[]> {
     const pool = await this.getConnection();
-    const embeddingVector = pgvector.toSql(embedding);
+    const embeddingVector = toSql(embedding);
     const sql = `
       SELECT id, 1 - (embedding <=> $1) AS score
       FROM ${table}
