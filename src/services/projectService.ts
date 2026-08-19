@@ -9,6 +9,8 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
 
+const FILE_EXISTS_CONCURRENCY = 50;
+
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
 }
@@ -855,10 +857,13 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           if (updated) {
             await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
           }
-          for (const dir of filtered) {
-            if (await fileExists(dir)) {
-              searchDirs.push(dir);
-            }
+          // Chunked to avoid EMFILE while reducing sequential I/O latency
+          for (let i = 0; i < filtered.length; i += FILE_EXISTS_CONCURRENCY) {
+            const chunk = filtered.slice(i, i + FILE_EXISTS_CONCURRENCY);
+            const results = await Promise.all(
+              chunk.map((dir) => fileExists(dir).then((ok) => (ok ? dir : null)))
+            );
+            searchDirs.push(...results.filter((result): result is string => result !== null));
           }
         }
       }
@@ -882,7 +887,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     return true;
   });
 
-  const chunkSize = 50; // Batch file system operations to prevent EMFILE
+  const chunkSize = FILE_EXISTS_CONCURRENCY; // Batch file system operations to prevent EMFILE
   for (let i = 0; i < uniqueDirs.length; i += chunkSize) {
     const chunk = uniqueDirs.slice(i, i + chunkSize);
     const results = await Promise.all(
