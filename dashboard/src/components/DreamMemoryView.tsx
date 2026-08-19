@@ -284,8 +284,7 @@ export function DreamMemoryView() {
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontSize: '0.8rem',
-                fontWeight: 600,
-                outline: 'none'
+                fontWeight: 600
               }}
             >
               Clear
@@ -315,7 +314,7 @@ export function DreamMemoryView() {
           className={FOCUS_RING_CLASS}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: showAll ? '1px solid var(--primary-neon)' : '1px solid rgba(255,255,255,0.1)',
-            background: showAll ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer', outline: 'none'
+            background: showAll ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
           }}>
           {showAll ? 'All Projects' : 'GolikeTool'}
         </button>
@@ -336,10 +335,10 @@ export function DreamMemoryView() {
             <label htmlFor="config-provider">Provider:</label>
             <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} style={{ padding: '0.5rem' }} />
           </div>
-          <button onClick={saveDreamConfig} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', outline: 'none' }}>
+          <button onClick={saveDreamConfig} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem' }}>
             {savingConfig ? 'Saving...' : 'Save Config'}
           </button>
-          <button onClick={runDailyDreamsNow} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000', outline: 'none' }}>
+          <button onClick={runDailyDreamsNow} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
             Run Now
           </button>
         </div>
@@ -447,7 +446,7 @@ export function DreamMemoryView() {
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
             background: hasPrev ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)',
             color: hasPrev ? 'var(--primary-neon)' : 'var(--text-muted)',
-            cursor: hasPrev ? 'pointer' : 'default', fontWeight: 700, fontSize: '0.85rem', outline: 'none'
+            cursor: hasPrev ? 'pointer' : 'default', fontWeight: 700, fontSize: '0.85rem'
           }}>
           ← Prev
         </button>
@@ -460,7 +459,7 @@ export function DreamMemoryView() {
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
             background: hasNext ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)',
             color: hasNext ? 'var(--primary-neon)' : 'var(--text-muted)',
-            cursor: hasNext ? 'pointer' : 'default', fontWeight: 700, fontSize: '0.85rem', outline: 'none'
+            cursor: hasNext ? 'pointer' : 'default', fontWeight: 700, fontSize: '0.85rem'
           }}>
           Next →
         </button>

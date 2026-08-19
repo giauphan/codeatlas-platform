@@ -211,7 +211,7 @@ const freqLabels: Record<string, string> = {
                   style={{
                     width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--primary-neon)',
                     background: 'rgba(0,240,255,0.1)', color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: '0.95rem',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', outline: 'none'
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'
                   }}>
                   {cronSaving ? <><RefreshCw className="animate-spin" size={20} /> SAVING...</> : (
                     <><Save size={18} />{cronSaved ? '✅ SAVED' : 'SAVE SCHEDULE'}</>
@@ -231,14 +231,14 @@ const freqLabels: Record<string, string> = {
               <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', wordBreak: 'break-all', padding: '1rem', borderRadius: '12px', background: 'rgba(0,255,0,0.05)', border: '1px solid rgba(0,255,0,0.2)', marginBottom: '1rem' }}>
                 {createdKey}
               </div>
-              <button onClick={clearCreatedKey} className={`btn-neon-cyan ${FOCUS_RING_CLASS}`} style={{ width: '100%', outline: 'none' }}>DISMISS</button>
+              <button onClick={clearCreatedKey} className={`btn-neon-cyan ${FOCUS_RING_CLASS}`} style={{ width: '100%' }}>DISMISS</button>
             </motion.div>
           )}
 
           <div className="glass-panel" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.05)', alignSelf: 'start' }}>
             <h3 className="tech-font" style={{ fontSize: '1.25rem', marginBottom: '1.5rem', fontWeight: 800 }}>GENERATE TOKEN</h3>
             <form onSubmit={createKey} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <button type="submit" className={`btn-neon-cyan ${FOCUS_RING_CLASS}`} style={{ width: '100%', height: '54px', fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', outline: 'none' }} disabled={loading}>
+              <button type="submit" className={`btn-neon-cyan ${FOCUS_RING_CLASS}`} style={{ width: '100%', height: '54px', fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={loading}>
                 {loading ? <><RefreshCw className="animate-spin" size={20} /> CREATING...</> : 'CREATE ACCESS TOKEN'}
               </button>
             </form>
