@@ -20,8 +20,6 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   };
   const opts = { exports: exportsObj };
 
-  mock.module(specifier, opts);
-
   const specs = new Set<string>([specifier]);
 
   if (!specifier.startsWith('/') && !specifier.startsWith('.')) {
