@@ -20,36 +20,36 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   const specs = new Set<string>([specifier]);
 
   if (specifier.startsWith('/')) {
-    specs.add(pathToFileURL(specifier).href);
+    const rawBasePath = specifier.endsWith('.js')
+      ? specifier.slice(0, -3)
+      : specifier.endsWith('.ts')
+        ? specifier.slice(0, -2)
+        : specifier;
 
-    const basePath = specifier.endsWith('.js') ? specifier.slice(0, -3) : specifier.endsWith('.ts') ? specifier.slice(0, -2) : specifier;
-
-    for (const ext of ['.js', '.ts']) {
-      const p = basePath + ext;
-      specs.add(p);
-      specs.add(pathToFileURL(p).href);
+    const basePaths = new Set<string>([rawBasePath]);
+    if (rawBasePath.includes('/src/')) {
+      basePaths.add(rawBasePath.replace('/src/', '/dist/'));
+      basePaths.add(rawBasePath.replace('/src/', '/dist/src/'));
+    }
+    if (rawBasePath.includes('/dist/src/')) {
+      basePaths.add(rawBasePath.replace('/dist/src/', '/src/'));
+    }
+    if (rawBasePath.includes('/dist/')) {
+      basePaths.add(rawBasePath.replace('/dist/', '/src/'));
     }
 
-    if (basePath.includes('/src/')) {
-      for (const distBase of [basePath.replace('/src/', '/dist/'), basePath.replace('/src/', '/dist/src/')]) {
-        for (const ext of ['.js', '.ts']) {
-          const p = distBase + ext;
-          specs.add(p);
-          specs.add(pathToFileURL(p).href);
-        }
-      }
-      const srcIdx = specifier.indexOf('/src/');
-      const subPath = specifier.slice(srcIdx + 5);
-      const subPathBase = subPath.endsWith('.js')
-        ? subPath.slice(0, -3)
-        : subPath.endsWith('.ts')
-          ? subPath.slice(0, -2)
-          : subPath;
-
-      for (const prefix of ['./', '../', '../../', '../../../']) {
-        for (const ext of ['', '.js', '.ts']) {
-          specs.add(prefix + subPathBase + ext);
-        }
+    for (const b of basePaths) {
+      for (const ext of ['', '.js', '.ts']) {
+        const p = b + ext;
+        specs.add(p);
+        specs.add(pathToFileURL(p).href);
+        try {
+          if (fs.existsSync(p)) {
+            const realP = fs.realpathSync(p);
+            specs.add(realP);
+            specs.add(pathToFileURL(realP).href);
+          }
+        } catch {}
       }
     }
   }

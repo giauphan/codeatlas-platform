@@ -29,7 +29,6 @@ class MockPool {
 
 const pgMock = { Pool: MockPool };
 mock.module('pg', {
-  default: pgMock,
   exports: {
     __esModule: true,
     default: pgMock,
@@ -39,7 +38,6 @@ mock.module('pg', {
 
 const pgvectorMock = { toSql: (arr: number[]) => `[${arr.join(',')}]` };
 mock.module('pgvector/pg', {
-  default: pgvectorMock,
   exports: {
     __esModule: true,
     default: pgvectorMock,
