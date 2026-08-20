@@ -1,8 +1,74 @@
 import { test, describe, before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
+
+function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
+  const exportsObj = 'default' in mockObj
+    ? mockObj
+    : { __esModule: true, default: mockObj, ...mockObj };
+  const opts = { exports: exportsObj };
+
+  const specs = new Set<string>([specifier]);
+
+  if (!specifier.startsWith('/') && !specifier.startsWith('.')) {
+    specs.add(specifier);
+    specs.add(specifier + '/index.js');
+    specs.add(specifier + '/lib/index.js');
+  } else if (specifier.startsWith('/')) {
+    const rawBasePath = specifier.endsWith('.js')
+      ? specifier.slice(0, -3)
+      : specifier.endsWith('.ts')
+        ? specifier.slice(0, -2)
+        : specifier;
+
+    const basePaths = new Set<string>([rawBasePath]);
+    if (rawBasePath.includes('/src/')) {
+      basePaths.add(rawBasePath.replace('/src/', '/dist/'));
+      basePaths.add(rawBasePath.replace('/src/', '/dist/src/'));
+    }
+    if (rawBasePath.includes('/dist/src/')) {
+      basePaths.add(rawBasePath.replace('/dist/src/', '/src/'));
+    }
+    if (rawBasePath.includes('/dist/')) {
+      basePaths.add(rawBasePath.replace('/dist/', '/src/'));
+    }
+
+    for (const b of basePaths) {
+      for (const ext of ['', '.js', '.ts']) {
+        const p = b + ext;
+        specs.add(p);
+        specs.add(pathToFileURL(p).href);
+        try {
+          if (fs.existsSync(p)) {
+            const realP = fs.realpathSync(p);
+            specs.add(realP);
+            specs.add(pathToFileURL(realP).href);
+          }
+        } catch {}
+      }
+    }
+
+    if (rawBasePath.includes('/src/')) {
+      const srcIdx = rawBasePath.indexOf('/src/');
+      const subPathBase = rawBasePath.slice(srcIdx + 5);
+      for (const prefix of ['./', '../', '../../', '../../../', 'src/']) {
+        for (const ext of ['', '.js', '.ts']) {
+          specs.add(prefix + subPathBase + ext);
+        }
+      }
+    }
+  }
+
+  for (const s of specs) {
+    try {
+      mock.module(s, opts);
+    } catch {}
+  }
+}
 
 const mockPgClient = {
   query: mock.fn(async () => ({ rowCount: 1, rows: [] })),
@@ -28,24 +94,10 @@ class MockPool {
 }
 
 const pgMock = { Pool: MockPool };
-mock.module('pg', {
-  default: pgMock,
-  exports: {
-    __esModule: true,
-    default: pgMock,
-    Pool: MockPool,
-  },
-});
+safeMockModule('pg', { default: pgMock, Pool: MockPool });
 
 const pgvectorMock = { toSql: (arr: number[]) => `[${arr.join(',')}]` };
-mock.module('pgvector/pg', {
-  default: pgvectorMock,
-  exports: {
-    __esModule: true,
-    default: pgvectorMock,
-    toSql: pgvectorMock.toSql,
-  },
-});
+safeMockModule('pgvector/pg', { default: pgvectorMock, toSql: pgvectorMock.toSql });
 
 const { PostgresAdapter } = await import(path.join(srcDir, 'database/adapters/postgresAdapter.js'));
 
