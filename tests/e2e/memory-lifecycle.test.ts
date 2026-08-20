@@ -37,13 +37,6 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
           specs.add(pathToFileURL(p).href);
         }
       }
-      const srcIdx = specifier.indexOf('/src/');
-      const subPath = specifier.slice(srcIdx + 5);
-      const subBase = subPath.endsWith('.js') ? subPath.slice(0, -3) : subPath.endsWith('.ts') ? subPath.slice(0, -2) : subPath;
-      specs.add('../' + subBase + '.js');
-      specs.add('../' + subBase + '.ts');
-      specs.add('./' + subBase + '.js');
-      specs.add('./' + subBase + '.ts');
     }
   }
 
