@@ -27,6 +27,9 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
     }
     const srcIdx = specifier.indexOf('/src/');
     if (srcIdx !== -1) {
+      const distSpec = specifier.replace('/src/', '/dist/');
+      specs.push(distSpec);
+      specs.push(pathToFileURL(distSpec).href);
       const subPath = specifier.slice(srcIdx + 5);
       const subTs = subPath.endsWith('.js') ? subPath.slice(0, -3) + '.ts' : subPath;
       specs.push('../' + subPath, '../' + subTs);
