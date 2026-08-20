@@ -16,7 +16,10 @@ import { pathToFileURL } from 'node:url';
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 
 function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
-  const opts = { exports: { default: mockObj, ...mockObj } };
+  const exportsObj = 'default' in mockObj
+    ? mockObj
+    : { __esModule: true, default: mockObj, ...mockObj };
+  const opts = { exports: exportsObj };
   const specs = new Set<string>([specifier]);
 
   if (specifier.startsWith('/')) {
@@ -37,6 +40,13 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
           specs.add(pathToFileURL(p).href);
         }
       }
+      const srcIdx = specifier.indexOf('/src/');
+      const subPath = specifier.slice(srcIdx + 5);
+      const subBase = subPath.endsWith('.js') ? subPath.slice(0, -3) : subPath.endsWith('.ts') ? subPath.slice(0, -2) : subPath;
+      specs.add('../' + subBase + '.js');
+      specs.add('../' + subBase + '.ts');
+      specs.add('./' + subBase + '.js');
+      specs.add('./' + subBase + '.ts');
     }
   }
 
