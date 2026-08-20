@@ -108,7 +108,8 @@ const mockAuthStore = {
   getStore: mock.fn(() => ({ uid: 'test-user', tier: 'enterprise', keyId: 'test-key' })),
   run: mock.fn((_store: unknown, fn: () => unknown) => fn()),
 };
-safeMockModule(path.join(srcDir, 'utils/context.js'), { authStorage: mockAuthStore });
+const contextMock = { authStorage: mockAuthStore };
+safeMockModule(path.join(srcDir, 'utils/context.js'), contextMock);
 
 // Now import the middleware to test
 // Note: We need to use dynamic import to ensure mocks are applied before the module is evaluated
