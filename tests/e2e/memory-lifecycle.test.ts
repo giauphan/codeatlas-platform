@@ -17,9 +17,11 @@ import { pathToFileURL } from 'node:url';
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 
 function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
-  const exportsObj = 'default' in mockObj
-    ? mockObj
-    : { __esModule: true, default: mockObj, ...mockObj };
+  const exportsObj = {
+    __esModule: true,
+    default: 'default' in mockObj ? mockObj.default : mockObj,
+    ...mockObj,
+  };
   const opts = { exports: exportsObj };
 
   const specs = new Set<string>([specifier]);
