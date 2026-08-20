@@ -238,14 +238,14 @@ export function DreamMemoryView() {
               setStartDate(e.target.value);
               setPage(0);
             }}
+            className={FOCUS_RING_CLASS}
             style={{
               padding: '0.5rem',
               borderRadius: '8px',
               border: '1px solid rgba(255,255,255,0.1)',
               background: 'rgba(0,0,0,0.2)',
               color: '#fff',
-              fontSize: '0.85rem',
-              outline: 'none'
+              fontSize: '0.85rem'
             }}
           />
           <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>to</span>
@@ -257,14 +257,14 @@ export function DreamMemoryView() {
               setEndDate(e.target.value);
               setPage(0);
             }}
+            className={FOCUS_RING_CLASS}
             style={{
               padding: '0.5rem',
               borderRadius: '8px',
               border: '1px solid rgba(255,255,255,0.1)',
               background: 'rgba(0,0,0,0.2)',
               color: '#fff',
-              fontSize: '0.85rem',
-              outline: 'none'
+              fontSize: '0.85rem'
             }}
           />
           {(startDate || endDate) && (
@@ -275,6 +275,7 @@ export function DreamMemoryView() {
                 setEndDate('');
                 setPage(0);
               }}
+              className={FOCUS_RING_CLASS}
               style={{
                 background: 'rgba(255,255,255,0.1)',
                 border: 'none',
@@ -305,11 +306,12 @@ export function DreamMemoryView() {
           className={FOCUS_RING_CLASS}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)',
-            background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer', outline: 'none'
+            background: 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
           }}>
           <Settings size={18} style={{ marginRight: '0.5rem' }} /> Config
         </button>
         <button onClick={() => { setShowAll(!showAll); fetchMemories(searchQuery, 0, dreamConfig); }}
+          className={FOCUS_RING_CLASS}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: showAll ? '1px solid var(--primary-neon)' : '1px solid rgba(255,255,255,0.1)',
             background: showAll ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)', color: '#fff', fontWeight: 700, cursor: 'pointer'
@@ -323,20 +325,20 @@ export function DreamMemoryView() {
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <label htmlFor="config-enabled">Enabled:</label>
-            <input id="config-enabled" type="checkbox" checked={tempEnabled} onChange={e => setTempEnabled(e.target.checked)} />
+            <input id="config-enabled" type="checkbox" checked={tempEnabled} onChange={e => setTempEnabled(e.target.checked)} className={FOCUS_RING_CLASS} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <label htmlFor="config-schedule">Schedule (cron):</label>
-            <input id="config-schedule" type="text" value={tempSchedule} onChange={e => setTempSchedule(e.target.value)} style={{ padding: '0.5rem' }} />
+            <input id="config-schedule" type="text" value={tempSchedule} onChange={e => setTempSchedule(e.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem' }} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <label htmlFor="config-provider">Provider:</label>
-            <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} style={{ padding: '0.5rem' }} />
+            <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem' }} />
           </div>
-          <button onClick={saveDreamConfig} disabled={savingConfig} style={{ padding: '0.5rem 1rem' }}>
+          <button onClick={saveDreamConfig} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem' }}>
             {savingConfig ? 'Saving...' : 'Save Config'}
           </button>
-          <button onClick={runDailyDreamsNow} disabled={savingConfig} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
+          <button onClick={runDailyDreamsNow} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
             Run Now
           </button>
         </div>
@@ -353,8 +355,7 @@ export function DreamMemoryView() {
               padding: '0.4rem 1rem', borderRadius: '100px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
               background: selectedTypes.includes(type) ? `${typeColors[type]}22` : 'rgba(255,255,255,0.05)',
               border: `1px solid ${selectedTypes.includes(type) ? typeColors[type] : 'rgba(255,255,255,0.1)'}`,
-              color: selectedTypes.includes(type) ? typeColors[type] : 'var(--text-muted)',
-              outline: 'none'
+              color: selectedTypes.includes(type) ? typeColors[type] : 'var(--text-muted)'
             }}
             className={FOCUS_RING_CLASS}
           >
@@ -439,6 +440,7 @@ export function DreamMemoryView() {
       {/* Pagination */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', padding: '0.75rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
         <button onClick={() => goToPage(page - 1)} disabled={!hasPrev}
+          className={FOCUS_RING_CLASS}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
             background: hasPrev ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)',
@@ -451,6 +453,7 @@ export function DreamMemoryView() {
           Page {page + 1}
         </span>
         <button onClick={() => goToPage(page + 1)} disabled={!hasNext}
+          className={FOCUS_RING_CLASS}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
             background: hasNext ? 'rgba(0,240,255,0.1)' : 'rgba(255,255,255,0.05)',
