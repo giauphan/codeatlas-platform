@@ -79,8 +79,9 @@ export class ConsolidationEngine {
 
     const rowCache = this.getRowCache(row);
 
-    if (rowCache.has(keyStr)) {
-      return rowCache.get(keyStr) as Float32Array | null;
+    const cached = rowCache.get(keyStr);
+    if (cached !== undefined) {
+      return cached;
     }
 
     const emb = this.parseEmbedding(this.getVal(row, keyIdx, keyStr));
