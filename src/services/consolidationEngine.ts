@@ -51,7 +51,7 @@ export interface ConsolidationReport {
 export class ConsolidationEngine {
   // Cache parsed Float32Arrays for row objects to prevent redundant O(n²)
   // JSON/array parsing overhead inside similarity loops
-  private parsedEmbeddingCache = new WeakMap<Record<string, unknown>, Float32Array>();
+  private parsedEmbeddingCache = new WeakMap<Record<string, unknown>, Float32Array | null>();
 
   private getVal(row: any, index: number, keyStr: string): any {
     if (!row) return undefined;
@@ -66,11 +66,12 @@ export class ConsolidationEngine {
    * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
    */
   private getOrParseEmbedding(row: any, keyIdx: number, keyStr: string): Float32Array | null {
-    let emb = this.parsedEmbeddingCache.get(row) || null;
-    if (!emb) {
-      emb = this.parseEmbedding(this.getVal(row, keyIdx, keyStr));
-      if (emb) this.parsedEmbeddingCache.set(row, emb);
+    if (this.parsedEmbeddingCache.has(row)) {
+      return this.parsedEmbeddingCache.get(row) ?? null;
     }
+
+    const emb = this.parseEmbedding(this.getVal(row, keyIdx, keyStr));
+    this.parsedEmbeddingCache.set(row, emb);
     return emb;
   }
 
