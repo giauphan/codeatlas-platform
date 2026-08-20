@@ -1,54 +1,114 @@
 import { test, describe, mock } from 'node:test';
 import assert from 'node:assert';
+import path from 'node:path';
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import express from 'express';
+
+const srcDir = path.resolve(import.meta.dirname, '../../src');
+
+function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
+  const named = { ...mockObj };
+  delete named.default;
+  const def = 'default' in mockObj ? mockObj.default : mockObj;
+  const opts = { defaultExport: def, namedExports: named };
+
+  const specs = new Set<string>([specifier]);
+
+  if (!specifier.startsWith('/') && !specifier.startsWith('.')) {
+    specs.add(specifier);
+    specs.add(specifier + '/index.js');
+    specs.add(specifier + '/lib/index.js');
+    try {
+      const resolvedPkg = import.meta.resolve(specifier);
+      specs.add(resolvedPkg);
+      specs.add(pathToFileURL(resolvedPkg).href);
+    } catch {}
+  } else {
+    const absPath = path.isAbsolute(specifier)
+      ? specifier
+      : path.resolve(import.meta.dirname, specifier);
+
+    const rawBasePath = absPath.endsWith('.js')
+      ? absPath.slice(0, -3)
+      : absPath.endsWith('.ts')
+        ? absPath.slice(0, -2)
+        : absPath;
+
+    const basePaths = new Set<string>([rawBasePath]);
+    if (rawBasePath.includes('/src/')) {
+      basePaths.add(rawBasePath.replace('/src/', '/dist/'));
+      basePaths.add(rawBasePath.replace('/src/', '/dist/src/'));
+    }
+    if (rawBasePath.includes('/dist/src/')) {
+      basePaths.add(rawBasePath.replace('/dist/src/', '/src/'));
+    }
+    if (rawBasePath.includes('/dist/')) {
+      basePaths.add(rawBasePath.replace('/dist/', '/src/'));
+    }
+
+    for (const b of basePaths) {
+      for (const ext of ['', '.js', '.ts']) {
+        const p = b + ext;
+        specs.add(p);
+        specs.add(pathToFileURL(p).href);
+        try {
+          if (fs.existsSync(p)) {
+            const realP = fs.realpathSync(p);
+            specs.add(realP);
+            specs.add(pathToFileURL(realP).href);
+          }
+        } catch {}
+      }
+    }
+  }
+
+  for (const s of specs) {
+    try {
+      mock.module(s, opts);
+    } catch {}
+  }
+}
 
 // 1. Mock firebase-admin/auth
 const mockVerifyIdToken = mock.fn();
-mock.module('firebase-admin/auth', {
-  namedExports: {
-    getAuth: () => ({
-      verifyIdToken: mockVerifyIdToken,
-    }),
-  },
-});
+const getAuthMock = () => ({ verifyIdToken: mockVerifyIdToken });
+const firebaseAuthMock = { getAuth: getAuthMock };
+safeMockModule('firebase-admin/auth', firebaseAuthMock);
 
 // 2. Mock firebase-admin/firestore to prevent side-effects
-mock.module('firebase-admin/firestore', {
-  namedExports: {
-    getFirestore: () => ({
-      collection: () => ({
-        doc: () => ({
-          get: async () => ({ exists: false, data: () => ({}) }),
-        }),
-      }),
+const getFirestoreMock = () => ({
+  collection: () => ({
+    doc: () => ({
+      get: async () => ({ exists: false, data: () => ({}) }),
     }),
-  },
+  }),
 });
+const firebaseFirestoreMock = { getFirestore: getFirestoreMock };
+safeMockModule('firebase-admin/firestore', firebaseFirestoreMock);
 
 // 3. Mock authService
-mock.module('../../src/services/authService.js', {
-  namedExports: {
-    checkAuth: async () => {
-      throw new Error("Unauthorized");
-    },
-  },
-});
+const mockCheckAuth = async () => { throw new Error("Unauthorized"); };
+const authServiceMock = { checkAuth: mockCheckAuth };
+safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 
 // 4. Mock logger
-mock.module('../../src/utils/logger.js', {
-  namedExports: {
-    logger: {
-      error: mock.fn(),
-      info: mock.fn(),
-      warn: mock.fn(),
-    },
-  },
-});
+const mockLoggerObj = { error: mock.fn(), info: mock.fn(), warn: mock.fn() };
+const loggerMock = { logger: mockLoggerObj };
+safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
+
+// 5. Mock context
+const mockAuthStore = {
+  getStore: mock.fn(() => ({ uid: 'test-user', tier: 'enterprise', keyId: 'test-key' })),
+  run: mock.fn((_store: unknown, fn: () => unknown) => fn()),
+};
+const contextMock = { authStorage: mockAuthStore, default: { authStorage: mockAuthStore } };
+safeMockModule(path.join(srcDir, 'utils/context.js'), contextMock);
 
 // Now import the middleware to test
 // Note: We need to use dynamic import to ensure mocks are applied before the module is evaluated
 describe('Auth Middleware', async () => {
-  const { authMiddleware } = await import('../../src/middleware/auth.js');
+  const { authMiddleware } = await import(path.join(srcDir, 'middleware/auth.js'));
 
   test('should return 401 when Firebase ID token is invalid', async () => {
     const errorMessage = 'Firebase ID token has expired. Get a fresh id token from your client app.';

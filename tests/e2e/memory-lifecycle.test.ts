@@ -11,8 +11,73 @@
 import { test, describe, before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
+
+function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
+  const named = { ...mockObj };
+  delete named.default;
+  const def = 'default' in mockObj ? mockObj.default : mockObj;
+  const opts = { defaultExport: def, namedExports: named };
+
+  const specs = new Set<string>([specifier]);
+
+  if (!specifier.startsWith('/') && !specifier.startsWith('.')) {
+    specs.add(specifier);
+    specs.add(specifier + '/index.js');
+    specs.add(specifier + '/lib/index.js');
+    try {
+      const resolvedPkg = import.meta.resolve(specifier);
+      specs.add(resolvedPkg);
+      specs.add(pathToFileURL(resolvedPkg).href);
+    } catch {}
+  } else {
+    const absPath = path.isAbsolute(specifier)
+      ? specifier
+      : path.resolve(import.meta.dirname, specifier);
+
+    const rawBasePath = absPath.endsWith('.js')
+      ? absPath.slice(0, -3)
+      : absPath.endsWith('.ts')
+        ? absPath.slice(0, -2)
+        : absPath;
+
+    const basePaths = new Set<string>([rawBasePath]);
+    if (rawBasePath.includes('/src/')) {
+      basePaths.add(rawBasePath.replace('/src/', '/dist/'));
+      basePaths.add(rawBasePath.replace('/src/', '/dist/src/'));
+    }
+    if (rawBasePath.includes('/dist/src/')) {
+      basePaths.add(rawBasePath.replace('/dist/src/', '/src/'));
+    }
+    if (rawBasePath.includes('/dist/')) {
+      basePaths.add(rawBasePath.replace('/dist/', '/src/'));
+    }
+
+    for (const b of basePaths) {
+      for (const ext of ['', '.js', '.ts']) {
+        const p = b + ext;
+        specs.add(p);
+        specs.add(pathToFileURL(p).href);
+        try {
+          if (fs.existsSync(p)) {
+            const realP = fs.realpathSync(p);
+            specs.add(realP);
+            specs.add(pathToFileURL(realP).href);
+          }
+        } catch {}
+      }
+    }
+  }
+
+  for (const s of specs) {
+    try {
+      mock.module(s, opts);
+    } catch {}
+  }
+}
 
 // ═════════════════════════════════════════════════════════════════════
 // Shared mocks
@@ -30,26 +95,24 @@ const mockPool = {
   getConnection: mock.fn(() => Promise.resolve(mockConnection)),
 };
 
-mock.module('oracledb', {
-  namedExports: {
-    OUT_FORMAT_OBJECT: 4001,
-    CLOB: 2011,
-    STRING: 2001,
-    DB_TYPE_JSON: 2007,
-    createPool: mock.fn(() => Promise.resolve(mockPool)),
-    initOracleClient: mock.fn(),
-    outFormat: undefined as unknown,
-    fetchAsString: [] as number[],
-    default: {},
-  },
-});
+const oracleMock = {
+  OUT_FORMAT_OBJECT: 4001,
+  CLOB: 2011,
+  STRING: 2001,
+  DB_TYPE_JSON: 2007,
+  createPool: mock.fn(() => Promise.resolve(mockPool)),
+  initOracleClient: mock.fn(),
+  outFormat: undefined as unknown,
+  fetchAsString: [] as number[],
+  default: {},
+};
+safeMockModule('oracledb', oracleMock);
 
-mock.module(path.join(srcDir, 'database/connection.js'), {
-  namedExports: {
-    initPool: mock.fn(() => Promise.resolve(mockPool)),
-    setSessionContext: mock.fn(() => Promise.resolve()),
-  },
-});
+const connMock = {
+  initPool: mock.fn(() => Promise.resolve(mockPool)),
+  setSessionContext: mock.fn(() => Promise.resolve()),
+};
+safeMockModule(path.join(srcDir, 'database/connection.js'), connMock);
 
 const mockDbAdapter = {
   searchVector: mock.fn(() => Promise.resolve([
@@ -72,31 +135,26 @@ const mockDbAdapter = {
   detectDeadCode: mock.fn(() => Promise.resolve([])),
 };
 
-mock.module(path.join(srcDir, 'database/factory.js'), {
-  namedExports: {
-    createDatabaseAdapter: mock.fn(() => mockDbAdapter),
-  },
-});
+const factoryMock = {
+  createDatabaseAdapter: mock.fn(() => mockDbAdapter),
+};
+safeMockModule(path.join(srcDir, 'database/factory.js'), factoryMock);
 
 const mockGenerateEmbedding = mock.fn(() => Promise.resolve([0.1, 0.2, 0.3]));
-
-mock.module(path.join(srcDir, 'services/embeddingService.js'), {
-  namedExports: {
-    generateEmbedding: mockGenerateEmbedding,
-    generateEmbeddingsBatch: mock.fn(() => Promise.resolve([[0.1, 0.2, 0.3]])),
-  },
-});
+const embeddingMock = {
+  generateEmbedding: mockGenerateEmbedding,
+  generateEmbeddingsBatch: mock.fn(() => Promise.resolve([[0.1, 0.2, 0.3]])),
+};
+safeMockModule(path.join(srcDir, 'services/embeddingService.js'), embeddingMock);
 
 const mockAuthStore = {
   getStore: mock.fn(() => ({ uid: 'test-user', tier: 'enterprise', keyId: 'test-key' })),
   run: mock.fn((_store: unknown, fn: () => unknown) => fn()),
 };
-
-mock.module(path.join(srcDir, 'utils/context.js'), {
-  namedExports: {
-    authStorage: mockAuthStore,
-  },
-});
+const contextMock = {
+  authStorage: mockAuthStore,
+};
+safeMockModule(path.join(srcDir, 'utils/context.js'), contextMock);
 
 const mockLogger = {
   info: mock.fn(),
@@ -104,11 +162,13 @@ const mockLogger = {
   warn: mock.fn(),
   debug: mock.fn(),
 };
+const loggerMock = {
+  logger: mockLogger,
+};
+safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
 
-mock.module(path.join(srcDir, 'utils/logger.js'), {
-  namedExports: {
-    logger: mockLogger,
-  },
-});
+const mockCheckAuth = async () => ({ tier: 'enterprise', uid: 'test-user', keyId: 'test-key' });
+const authServiceMock = { checkAuth: mockCheckAuth };
+safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 
 const { OracleDreamingService } = await import(path.join(srcDir, 'services/dreamingService.js'));

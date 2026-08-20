@@ -18,6 +18,24 @@ type PgPoolConstructor = new (config: Record<string, unknown>) => PgPool;
 let PoolClass: PgPoolConstructor | undefined;
 let toSql: ((value: number[] | Float32Array) => string) | undefined;
 
+function findExportFn<T>(obj: unknown, prop: string): T | undefined {
+  if (!obj) return undefined;
+  if (typeof obj === "function") return obj as T;
+  const rec = obj as Record<string, unknown>;
+
+  if (typeof rec[prop] === "function") return rec[prop] as T;
+
+  if (rec.default) {
+    if (typeof rec.default === "function") return rec.default as T;
+    if (typeof rec.default === "object") {
+      const found = findExportFn<T>(rec.default, prop);
+      if (found) return found;
+    }
+  }
+
+  return undefined;
+}
+
 export class PostgresAdapter implements IDatabaseAdapter {
   private pool: PgPool | null = null;
   private connectPromise: Promise<void> | null = null;
@@ -30,30 +48,37 @@ export class PostgresAdapter implements IDatabaseAdapter {
       try {
         if (!PoolClass) {
           const pg = await import("pg");
-          PoolClass = (pg.default?.Pool ?? pg.Pool) as unknown as PgPoolConstructor;
+          PoolClass = findExportFn<PgPoolConstructor>(pg, "Pool");
+          if (!PoolClass) {
+            throw new Error("Postgres adapter requires 'pg'. Install: pnpm add pg @types/pg");
+          }
         }
         if (!toSql) {
           const pgv = await import("pgvector/pg" as unknown as string);
-          toSql = pgv.toSql;
+          toSql = findExportFn<typeof toSql>(pgv, "toSql");
+          if (!toSql) {
+            throw new Error("Postgres adapter requires 'pgvector'. Install: pnpm add pgvector @types/pgvector");
+          }
         }
+        this.pool = new PoolClass({
+          user: process.env.POSTGRES_USER || "postgres",
+          password: process.env.POSTGRES_PASSWORD || "postgres",
+          host: process.env.POSTGRES_HOST || "localhost",
+          port: parseInt(process.env.POSTGRES_PORT || "5432", 10),
+          database: process.env.POSTGRES_DB || "codeatlas",
+          max: 10,
+          idleTimeoutMillis: 30000,
+        });
+
+        logger.info("[PostgresAdapter] Connected to PostgreSQL database pool.");
       } catch (err) {
         this.connectPromise = null;
-        throw new Error(
-          "Postgres adapter requires 'pg' and 'pgvector'. Install: pnpm add pg pgvector @types/pg"
-        );
+        if (err instanceof Error && err.message.startsWith("Postgres adapter requires")) {
+          throw err;
+        }
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Postgres adapter failed to connect: ${msg}`);
       }
-
-      this.pool = new PoolClass({
-        user: process.env.POSTGRES_USER || "postgres",
-        password: process.env.POSTGRES_PASSWORD || "postgres",
-        host: process.env.POSTGRES_HOST || "localhost",
-        port: parseInt(process.env.POSTGRES_PORT || "5432", 10),
-        database: process.env.POSTGRES_DB || "codeatlas",
-        max: 10,
-        idleTimeoutMillis: 30000,
-      });
-
-      logger.info("[PostgresAdapter] Connected to PostgreSQL database pool.");
     })();
 
     return this.connectPromise;
