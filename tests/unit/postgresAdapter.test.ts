@@ -14,8 +14,6 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   };
   const opts = { exports: exportsObj };
 
-  mock.module(specifier, opts);
-
   const specs = new Set<string>([specifier]);
 
   if (!specifier.startsWith('/') && !specifier.startsWith('.')) {
@@ -113,12 +111,9 @@ class MockPool {
   }
 }
 
-const pgMock = { Pool: MockPool, default: { Pool: MockPool } };
-safeMockModule('pg', { default: pgMock, Pool: MockPool });
-
-const pgvectorMock = { toSql: (arr: number[]) => `[${arr.join(',')}]`, default: { toSql: (arr: number[]) => `[${arr.join(',')}]` } };
-safeMockModule('pgvector/pg', { default: pgvectorMock, toSql: pgvectorMock.toSql });
-safeMockModule('pgvector', { default: pgvectorMock, toSql: pgvectorMock.toSql });
+mock.module('pg', { exports: { __esModule: true, default: { Pool: MockPool }, Pool: MockPool } });
+mock.module('pgvector/pg', { exports: { __esModule: true, default: { toSql: (arr: number[]) => `[${arr.join(',')}]` }, toSql: (arr: number[]) => `[${arr.join(',')}]` } });
+mock.module('pgvector', { exports: { __esModule: true, default: { toSql: (arr: number[]) => `[${arr.join(',')}]` }, toSql: (arr: number[]) => `[${arr.join(',')}]` } });
 
 const { PostgresAdapter } = await import(path.join(srcDir, 'database/adapters/postgresAdapter.js'));
 
