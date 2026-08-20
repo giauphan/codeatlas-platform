@@ -8,27 +8,40 @@ const srcDir = path.resolve(import.meta.dirname, '../../src');
 
 function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   const opts = { exports: { default: mockObj, ...mockObj } };
-  const specs = [specifier];
+  const specs = new Set<string>([specifier]);
+
   if (specifier.startsWith('/')) {
-    specs.push(pathToFileURL(specifier).href);
-    if (specifier.endsWith('.js')) {
-      const tsPath = specifier.slice(0, -3) + '.ts';
-      specs.push(tsPath);
-      specs.push(pathToFileURL(tsPath).href);
+    specs.add(pathToFileURL(specifier).href);
+
+    const basePath = specifier.endsWith('.js') ? specifier.slice(0, -3) : specifier.endsWith('.ts') ? specifier.slice(0, -2) : specifier;
+
+    for (const p of [basePath + '.js', basePath + '.ts']) {
+      specs.add(p);
+      specs.add(pathToFileURL(p).href);
     }
-    const srcIdx = specifier.indexOf('/src/');
-    if (srcIdx !== -1) {
-      const distSpec = specifier.replace('/src/', '/dist/');
-      specs.push(distSpec);
-      specs.push(pathToFileURL(distSpec).href);
+
+    if (basePath.includes('/src/')) {
+      for (const distPath of [basePath.replace('/src/', '/dist/'), basePath.replace('/src/', '/dist/src/')]) {
+        for (const ext of ['.js', '.ts']) {
+          const p = distPath + ext;
+          specs.add(p);
+          specs.add(pathToFileURL(p).href);
+        }
+      }
+      const srcIdx = specifier.indexOf('/src/');
       const subPath = specifier.slice(srcIdx + 5);
-      const subTs = subPath.endsWith('.js') ? subPath.slice(0, -3) + '.ts' : subPath;
-      specs.push('../' + subPath, '../' + subTs);
-      specs.push('./' + subPath, './' + subTs);
+      const subBase = subPath.endsWith('.js') ? subPath.slice(0, -3) : subPath.endsWith('.ts') ? subPath.slice(0, -2) : subPath;
+      specs.add('../' + subBase + '.js');
+      specs.add('../' + subBase + '.ts');
+      specs.add('./' + subBase + '.js');
+      specs.add('./' + subBase + '.ts');
     }
   }
+
   for (const s of specs) {
-    try { mock.module(s, opts); } catch {}
+    try {
+      mock.module(s, opts);
+    } catch {}
   }
 }
 
