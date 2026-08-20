@@ -51,7 +51,7 @@ export interface ConsolidationReport {
 export class ConsolidationEngine {
   // Cache parsed Float32Arrays for row objects to prevent redundant O(n²)
   // JSON/array parsing overhead inside similarity loops
-  private parsedEmbeddingCache = new WeakMap<Record<string, unknown>, Float32Array | null>();
+  private parsedEmbeddingCache = new WeakMap<Record<string, unknown>, Map<string, Float32Array | null>>();
 
   private getVal(row: any, index: number, keyStr: string): any {
     if (!row) return undefined;
@@ -66,12 +66,19 @@ export class ConsolidationEngine {
    * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
    */
   private getOrParseEmbedding(row: any, keyIdx: number, keyStr: string): Float32Array | null {
-    if (this.parsedEmbeddingCache.has(row)) {
-      return this.parsedEmbeddingCache.get(row) ?? null;
+    let rowCache = this.parsedEmbeddingCache.get(row);
+
+    if (rowCache !== undefined) {
+      if (rowCache.has(keyStr)) {
+        return rowCache.get(keyStr) as Float32Array | null;
+      }
+    } else {
+      rowCache = new Map<string, Float32Array | null>();
+      this.parsedEmbeddingCache.set(row, rowCache);
     }
 
     const emb = this.parseEmbedding(this.getVal(row, keyIdx, keyStr));
-    this.parsedEmbeddingCache.set(row, emb);
+    rowCache.set(keyStr, emb);
     return emb;
   }
 
@@ -118,7 +125,14 @@ export class ConsolidationEngine {
       logger.warn(`[Consolidation] ${stepName}: Skipping row ${idVal} due to missing or invalid embedding format.`);
       return false;
     }
-    this.parsedEmbeddingCache.set(row, parsed);
+
+    let rowCache = this.parsedEmbeddingCache.get(row);
+    if (!rowCache) {
+      rowCache = new Map<string, Float32Array | null>();
+      this.parsedEmbeddingCache.set(row, rowCache);
+    }
+    rowCache.set('EMBEDDING', parsed);
+
     return true;
   }
 
