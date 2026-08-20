@@ -113,7 +113,7 @@ safeMockModule(path.join(srcDir, 'utils/context.js'), { authStorage: mockAuthSto
 // Now import the middleware to test
 // Note: We need to use dynamic import to ensure mocks are applied before the module is evaluated
 describe('Auth Middleware', async () => {
-  const { authMiddleware } = await import('../../src/middleware/auth.js');
+  const { authMiddleware } = await import(path.join(srcDir, 'middleware/auth.js'));
 
   test('should return 401 when Firebase ID token is invalid', async () => {
     const errorMessage = 'Firebase ID token has expired. Get a fresh id token from your client app.';
