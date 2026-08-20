@@ -187,7 +187,7 @@ export class ConsolidationEngine {
       }
 
       // Group by project to avoid cross-project false positives
-      const byProject = new Map<string, any[]>();
+      const byProject = new Map<string, { id: string, importance: number, embedding: Float32Array }[]>();
       for (const row of rows) {
         const proj = String(this.getVal(row, R_IDX.PROJECT, 'PROJECT') || "default");
 
@@ -196,8 +196,15 @@ export class ConsolidationEngine {
           continue;
         }
 
+        const id = String(this.getVal(row, R_IDX.ID, 'ID'));
+        const importance = Number(this.getVal(row, R_IDX.IMPORTANCE, 'IMPORTANCE'));
+        const rawEmb = this.getVal(row, R_IDX.EMBEDDING, 'EMBEDDING');
+        const embedding = this.parseEmbedding(rawEmb);
+
+        if (!embedding) continue;
+
         if (!byProject.has(proj)) byProject.set(proj, []);
-        byProject.get(proj)!.push(row);
+        byProject.get(proj)!.push({ id, importance, embedding });
       }
 
       let merged = 0;
@@ -205,28 +212,20 @@ export class ConsolidationEngine {
         const toRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
-          const rowI = group[i];
-          const idI = String(this.getVal(rowI, R_IDX.ID, 'ID'));
-          if (toRemove.has(idI)) continue;
-
-          // Embeddings validated above during preprocessing
-          const embI = this.getVal(rowI, R_IDX.EMBEDDING, 'EMBEDDING');
-          const importanceI = Number(this.getVal(rowI, R_IDX.IMPORTANCE, 'IMPORTANCE'));
+          const itemI = group[i];
+          if (toRemove.has(itemI.id)) continue;
 
           for (let j = i + 1; j < group.length; j++) {
-            const rowJ = group[j];
-            const idJ = String(this.getVal(rowJ, R_IDX.ID, 'ID'));
-            if (toRemove.has(idJ)) continue;
+            const itemJ = group[j];
+            if (toRemove.has(itemJ.id)) continue;
 
-            const embJ = this.getVal(rowJ, R_IDX.EMBEDDING, 'EMBEDDING');
-            const similarity = this.cosineSimilarity(embI, embJ);
+            const similarity = this.cosineSimilarity(itemI.embedding, itemJ.embedding);
 
             if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD) {
               // Merge: keep the one with higher importance
-              const importanceJ = Number(this.getVal(rowJ, R_IDX.IMPORTANCE, 'IMPORTANCE'));
-              const keepIdx = importanceI >= importanceJ ? i : j;
+              const keepIdx = itemI.importance >= itemJ.importance ? i : j;
               const removeIdx = keepIdx === i ? j : i;
-              const idToRemove = keepIdx === i ? idJ : idI;
+              const idToRemove = keepIdx === i ? itemJ.id : itemI.id;
               toRemove.add(idToRemove);
 
               // If the outer element 'i' is removed, break the inner loop early.
@@ -459,7 +458,7 @@ export class ConsolidationEngine {
     let supersededCount = 0;
 
     if (rows.length > 1) {
-      const groups = new Map<string, any[]>();
+      const groups = new Map<string, { id: string, confidence: number, embedding: Float32Array }[]>();
       for (const row of rows) {
         const proj = String(this.getVal(row, SCORE_IDX.PROJECT, 'PROJECT') || "default");
         const mtype = String(this.getVal(row, SCORE_IDX.MEMORY_TYPE, 'MEMORY_TYPE') || "GENERAL");
@@ -470,8 +469,15 @@ export class ConsolidationEngine {
           continue;
         }
 
+        const id = String(this.getVal(row, SCORE_IDX.ID, 'ID'));
+        const confidence = Number(this.getVal(row, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
+        const rawEmb = this.getVal(row, SCORE_IDX.EMBEDDING, 'EMBEDDING');
+        const embedding = this.parseEmbedding(rawEmb);
+
+        if (!embedding) continue;
+
         if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(row);
+        groups.get(key)!.push({ id, confidence, embedding });
       }
 
       const toSupersede = new Set<string>();
@@ -479,23 +485,16 @@ export class ConsolidationEngine {
         if (group.length < 2) continue;
         for (let i = 0; i < group.length; i++) {
           const older = group[i];
-          const olderId = String(this.getVal(older, SCORE_IDX.ID, 'ID'));
-          if (toSupersede.has(olderId)) continue;
-
-          const embO = this.getVal(older, SCORE_IDX.EMBEDDING, 'EMBEDDING');
-          const olderConfidence = Number(this.getVal(older, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
+          if (toSupersede.has(older.id)) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             const newer = group[j];
-            const newerId = String(this.getVal(newer, SCORE_IDX.ID, 'ID'));
-            if (toSupersede.has(newerId)) continue;
+            if (toSupersede.has(newer.id)) continue;
 
-            const embN = this.getVal(newer, SCORE_IDX.EMBEDDING, 'EMBEDDING');
-            const similarity = this.cosineSimilarity(embO, embN);
+            const similarity = this.cosineSimilarity(older.embedding, newer.embedding);
 
-            const newerConfidence = Number(this.getVal(newer, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
-            if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && newerConfidence > olderConfidence) {
-              toSupersede.add(olderId);
+            if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && newer.confidence > older.confidence) {
+              toSupersede.add(older.id);
               break;
             }
           }
@@ -524,10 +523,7 @@ export class ConsolidationEngine {
    * - Confidence decays exponentially with time (0.995 per day)
    * - Archived concepts get reduced confidence
    */
-  private cosineSimilarity(a: any, b: any): number {
-    const vecA = this.parseEmbedding(a);
-    const vecB = this.parseEmbedding(b);
-
+  private cosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
     if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) {
       return 0;
     }
