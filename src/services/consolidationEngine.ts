@@ -62,7 +62,21 @@ export class ConsolidationEngine {
   /**
    * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
    */
-  private parseEmbedding(rawEmb: any): Float32Array | null {
+  private normalizeEmbedding(result: Float32Array): Float32Array {
+    let norm = 0;
+    for (let i = 0; i < result.length; i++) {
+      norm += result[i] * result[i];
+    }
+    if (norm > 0) {
+      const len = Math.sqrt(norm);
+      for (let i = 0; i < result.length; i++) {
+        result[i] /= len;
+      }
+    }
+    return result;
+  }
+
+  private parseEmbedding(rawEmb: Float32Array | number[] | Uint8Array | Buffer | string | null | undefined): Float32Array | null {
     let result: Float32Array | null = null;
     if (!rawEmb) return null;
 
@@ -71,12 +85,18 @@ export class ConsolidationEngine {
       result = new Float32Array(rawEmb);
     } else if (Array.isArray(rawEmb)) {
       result = new Float32Array(rawEmb);
-    } else if (rawEmb instanceof Uint8Array || rawEmb instanceof Buffer) {
+    } else if (rawEmb instanceof Uint8Array) {
       // Int8Array/Uint8Array containing Float32 raw bytes
       if (rawEmb.byteLength % 4 === 0) {
-        // Deep copy the buffer to avoid mutating shared internal memory pools
-        const copy = rawEmb.buffer.slice(rawEmb.byteOffset, rawEmb.byteOffset + rawEmb.byteLength);
-        result = new Float32Array(copy);
+        // Deep copy the buffer to avoid mutating shared internal memory pools.
+        // Guard against SharedArrayBuffer which lacks .slice()
+        if (rawEmb.buffer instanceof ArrayBuffer) {
+          const copy = rawEmb.buffer.slice(rawEmb.byteOffset, rawEmb.byteOffset + rawEmb.byteLength);
+          result = new Float32Array(copy);
+        } else {
+          // Fallback for SharedArrayBuffer
+          result = new Float32Array(new Uint8Array(rawEmb.buffer, rawEmb.byteOffset, rawEmb.byteLength).slice().buffer);
+        }
       }
     } else if (typeof rawEmb === "string") {
       try {
@@ -85,20 +105,6 @@ export class ConsolidationEngine {
           result = new Float32Array(parsed);
         }
       } catch {
-        // null
-      }
-    }
-
-    if (result) {
-      let norm = 0;
-      for (let i = 0; i < result.length; i++) {
-        norm += result[i] * result[i];
-      }
-      if (norm > 0) {
-        const len = Math.sqrt(norm);
-        for (let i = 0; i < result.length; i++) {
-          result[i] /= len;
-        }
       }
     }
 
@@ -213,6 +219,7 @@ export class ConsolidationEngine {
         const embedding = this.parseEmbedding(rawEmb);
 
         if (!embedding) continue;
+        this.normalizeEmbedding(embedding);
 
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push({ id, importance, embedding });
@@ -486,6 +493,7 @@ export class ConsolidationEngine {
         const embedding = this.parseEmbedding(rawEmb);
 
         if (!embedding) continue;
+        this.normalizeEmbedding(embedding);
 
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push({ id, confidence, embedding });
@@ -534,6 +542,11 @@ export class ConsolidationEngine {
    * - Confidence decays exponentially with time (0.995 per day)
    * - Archived concepts get reduced confidence
    */
+  /**
+   * Computes the cosine similarity of two vectors using only their dot product.
+   * PRECONDITION: vecA and vecB must be pre-normalized to unit length (L2 norm = 1).
+   * Calling this with unnormalized vectors will return an incorrect result.
+   */
   private cosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
     if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) {
       return 0;
@@ -544,8 +557,6 @@ export class ConsolidationEngine {
       dot += vecA[i] * vecB[i];
     }
 
-    // Vectors are already normalized to unit length in parseEmbedding,
-    // so the dot product is exactly the cosine similarity.
     return dot;
   }
 }
