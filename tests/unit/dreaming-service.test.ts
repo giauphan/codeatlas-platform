@@ -46,6 +46,16 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
         } catch {}
       }
     }
+
+    if (rawBasePath.includes('/src/')) {
+      const srcIdx = rawBasePath.indexOf('/src/');
+      const subPathBase = rawBasePath.slice(srcIdx + 5);
+      for (const prefix of ['./', '../', '../../', '../../../']) {
+        for (const ext of ['', '.js', '.ts']) {
+          specs.add(prefix + subPathBase + ext);
+        }
+      }
+    }
   }
 
   for (const s of specs) {
