@@ -53,6 +53,15 @@ export class ConsolidationEngine {
   // JSON/array parsing overhead inside similarity loops
   private parsedEmbeddingCache = new WeakMap<Record<string, unknown>, Map<string, Float32Array | null>>();
 
+  private getRowCache(row: any): Map<string, Float32Array | null> {
+    let rowCache = this.parsedEmbeddingCache.get(row);
+    if (!rowCache) {
+      rowCache = new Map<string, Float32Array | null>();
+      this.parsedEmbeddingCache.set(row, rowCache);
+    }
+    return rowCache;
+  }
+
   private getVal(row: any, index: number, keyStr: string): any {
     if (!row) return undefined;
     if (row[index] !== undefined) return row[index];
@@ -68,15 +77,10 @@ export class ConsolidationEngine {
   private getOrParseEmbedding(row: any, keyIdx: number, keyStr: string): Float32Array | null {
     if (!row || typeof row !== 'object') return null;
 
-    let rowCache = this.parsedEmbeddingCache.get(row);
+    const rowCache = this.getRowCache(row);
 
-    if (rowCache !== undefined) {
-      if (rowCache.has(keyStr)) {
-        return rowCache.get(keyStr) as Float32Array | null;
-      }
-    } else {
-      rowCache = new Map<string, Float32Array | null>();
-      this.parsedEmbeddingCache.set(row, rowCache);
+    if (rowCache.has(keyStr)) {
+      return rowCache.get(keyStr) as Float32Array | null;
     }
 
     const emb = this.parseEmbedding(this.getVal(row, keyIdx, keyStr));
@@ -128,12 +132,9 @@ export class ConsolidationEngine {
       return false;
     }
 
-    let rowCache = this.parsedEmbeddingCache.get(row);
-    if (!rowCache) {
-      rowCache = new Map<string, Float32Array | null>();
-      this.parsedEmbeddingCache.set(row, rowCache);
+    if (row && typeof row === 'object') {
+      this.getRowCache(row).set('EMBEDDING', parsed);
     }
-    rowCache.set('EMBEDDING', parsed);
 
     return true;
   }
@@ -241,9 +242,10 @@ export class ConsolidationEngine {
 
           // Embeddings validated above during preprocessing
           const embI = this.getOrParseEmbedding(rowI, R_IDX.EMBEDDING, 'EMBEDDING');
-          const importanceI = Number(this.getVal(rowI, R_IDX.IMPORTANCE, 'IMPORTANCE'));
 
           if (!embI) continue;
+
+          const importanceI = Number(this.getVal(rowI, R_IDX.IMPORTANCE, 'IMPORTANCE'));
 
           for (let j = i + 1; j < group.length; j++) {
             const rowJ = group[j];
@@ -517,9 +519,10 @@ export class ConsolidationEngine {
           if (toSupersede.has(olderId)) continue;
 
           const embO = this.getOrParseEmbedding(older, SCORE_IDX.EMBEDDING, 'EMBEDDING');
-          const olderConfidence = Number(this.getVal(older, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
 
           if (!embO) continue;
+
+          const olderConfidence = Number(this.getVal(older, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
 
           for (let j = i + 1; j < group.length; j++) {
             const newer = group[j];
