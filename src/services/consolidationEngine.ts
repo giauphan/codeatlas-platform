@@ -51,7 +51,7 @@ export interface ConsolidationReport {
 export class ConsolidationEngine {
   // Cache parsed Float32Arrays for row objects to prevent redundant O(n²)
   // JSON/array parsing overhead inside similarity loops
-  private parsedEmbeddingCache = new WeakMap<any, Float32Array>();
+  private parsedEmbeddingCache = new WeakMap<object, Float32Array>();
 
   private getVal(row: any, index: number, keyStr: string): any {
     if (!row) return undefined;
@@ -214,7 +214,7 @@ export class ConsolidationEngine {
           if (toRemove.has(idI)) continue;
 
           // Embeddings validated above during preprocessing
-          const embI = this.parsedEmbeddingCache.get(rowI) || this.parseEmbedding(this.getVal(rowI, R_IDX.EMBEDDING, 'EMBEDDING'));
+          const embI = this.parsedEmbeddingCache.get(rowI) ?? this.parseEmbedding(this.getVal(rowI, R_IDX.EMBEDDING, 'EMBEDDING'));
           const importanceI = Number(this.getVal(rowI, R_IDX.IMPORTANCE, 'IMPORTANCE'));
 
           if (!embI) continue;
@@ -224,7 +224,7 @@ export class ConsolidationEngine {
             const idJ = String(this.getVal(rowJ, R_IDX.ID, 'ID'));
             if (toRemove.has(idJ)) continue;
 
-            const embJ = this.parsedEmbeddingCache.get(rowJ) || this.parseEmbedding(this.getVal(rowJ, R_IDX.EMBEDDING, 'EMBEDDING'));
+            const embJ = this.parsedEmbeddingCache.get(rowJ) ?? this.parseEmbedding(this.getVal(rowJ, R_IDX.EMBEDDING, 'EMBEDDING'));
             if (!embJ) continue;
 
             const similarity = this.cosineSimilarity(embI, embJ);
@@ -490,7 +490,7 @@ export class ConsolidationEngine {
           const olderId = String(this.getVal(older, SCORE_IDX.ID, 'ID'));
           if (toSupersede.has(olderId)) continue;
 
-          const embO = this.parsedEmbeddingCache.get(older) || this.parseEmbedding(this.getVal(older, SCORE_IDX.EMBEDDING, 'EMBEDDING'));
+          const embO = this.parsedEmbeddingCache.get(older) ?? this.parseEmbedding(this.getVal(older, SCORE_IDX.EMBEDDING, 'EMBEDDING'));
           const olderConfidence = Number(this.getVal(older, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
 
           if (!embO) continue;
@@ -500,7 +500,7 @@ export class ConsolidationEngine {
             const newerId = String(this.getVal(newer, SCORE_IDX.ID, 'ID'));
             if (toSupersede.has(newerId)) continue;
 
-            const embN = this.parsedEmbeddingCache.get(newer) || this.parseEmbedding(this.getVal(newer, SCORE_IDX.EMBEDDING, 'EMBEDDING'));
+            const embN = this.parsedEmbeddingCache.get(newer) ?? this.parseEmbedding(this.getVal(newer, SCORE_IDX.EMBEDDING, 'EMBEDDING'));
             if (!embN) continue;
 
             const similarity = this.cosineSimilarity(embO, embN);
