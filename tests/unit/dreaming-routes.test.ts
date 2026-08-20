@@ -75,6 +75,11 @@ const mockLogger = {
 const loggerMock = { logger: mockLogger };
 safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
 
+// Mock llmService & firebase
+safeMockModule(path.join(srcDir, 'services/llmService.js'), { summarizeConversationForDreams: mock.fn() });
+safeMockModule('firebase-admin/auth', { getAuth: () => ({ verifyIdToken: mock.fn() }) });
+safeMockModule('firebase-admin/firestore', { getFirestore: () => ({ collection: () => ({ doc: () => ({ get: mock.fn() }) }) }) });
+
 // ── Import modules under test ────────────────────────────────────────
 const { registerDreamingRoutes } = await import(
   path.join(srcDir, 'presentation/dreamingRoutes.js')

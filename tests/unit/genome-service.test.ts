@@ -99,6 +99,13 @@ safeMockModule(path.join(srcDir, 'database/factory.js'), factoryMock);
 const loggerMock = { logger: { info: mock.fn(), error: mock.fn(), warn: mock.fn() } };
 safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
 
+// Mock context
+const mockAuthStore = {
+  getStore: mock.fn(() => ({ uid: 'test-user', tier: 'enterprise', keyId: 'test-key' })),
+  run: mock.fn((_store: unknown, fn: () => unknown) => fn()),
+};
+safeMockModule(path.join(srcDir, 'utils/context.js'), { authStorage: mockAuthStore });
+
 // ── Import module under test ─────────────────────────────────────────
 const { GenomeService } = await import(
   path.join(srcDir, 'services/genomeService.js')
