@@ -114,11 +114,9 @@ class MockPool {
 }
 
 const pgMock = { Pool: MockPool, default: { Pool: MockPool } };
-mock.module('pg', { exports: { __esModule: true, default: pgMock, Pool: MockPool } });
 safeMockModule('pg', { default: pgMock, Pool: MockPool });
 
 const pgvectorMock = { toSql: (arr: number[]) => `[${arr.join(',')}]`, default: { toSql: (arr: number[]) => `[${arr.join(',')}]` } };
-mock.module('pgvector/pg', { exports: { __esModule: true, default: pgvectorMock, toSql: pgvectorMock.toSql } });
 safeMockModule('pgvector/pg', { default: pgvectorMock, toSql: pgvectorMock.toSql });
 safeMockModule('pgvector', { default: pgvectorMock, toSql: pgvectorMock.toSql });
 
