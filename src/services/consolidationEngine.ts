@@ -66,6 +66,8 @@ export class ConsolidationEngine {
    * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
    */
   private getOrParseEmbedding(row: any, keyIdx: number, keyStr: string): Float32Array | null {
+    if (!row || typeof row !== 'object') return null;
+
     let rowCache = this.parsedEmbeddingCache.get(row);
 
     if (rowCache !== undefined) {
