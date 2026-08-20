@@ -336,7 +336,7 @@ export function DreamMemoryView() {
             <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem' }} />
           </div>
           <button onClick={saveDreamConfig} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem' }}>
-            {savingConfig ? 'Saving...' : 'Save Config'}
+            {savingConfig ? <><Loader2 className="animate-spin" size={16} style={{ marginRight: '0.25rem', verticalAlign: 'text-bottom' }} /> Saving...</> : 'Save Config'}
           </button>
           <button onClick={runDailyDreamsNow} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
             Run Now
