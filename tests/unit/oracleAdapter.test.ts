@@ -8,10 +8,7 @@ const srcDir = path.resolve(import.meta.dirname, '../../src');
 
 function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   const opts = { exports: { default: mockObj, ...mockObj } };
-  try { mock.module(specifier, opts); } catch {}
-  if (specifier.endsWith('.js')) {
-    try { mock.module(specifier.slice(0, -3) + '.ts', opts); } catch {}
-  }
+  mock.module(specifier, opts);
 }
 
 const mockConnection = {
