@@ -72,7 +72,7 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   for (const s of specs) {
     try {
       mock.module(s, opts);
-      mock.module(s, { default: exportsObj, exports: exportsObj });
+      mock.module(s, { default: mockObj, exports: exportsObj });
     } catch {}
   }
 }
