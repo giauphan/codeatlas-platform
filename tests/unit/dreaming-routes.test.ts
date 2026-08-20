@@ -36,12 +36,9 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
       for (const ext of ['', '.js', '.ts']) {
         const p = b + ext;
         specs.add(p);
-        specs.add(pathToFileURL(p).href);
         try {
           if (fs.existsSync(p)) {
-            const realP = fs.realpathSync(p);
-            specs.add(realP);
-            specs.add(pathToFileURL(realP).href);
+            specs.add(fs.realpathSync(p));
           }
         } catch {}
       }
@@ -59,9 +56,11 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   }
 
   for (const s of specs) {
-    try {
-      mock.module(s, opts);
-    } catch {}
+    if (!s.startsWith('file://')) {
+      try {
+        mock.module(s, opts);
+      } catch {}
+    }
   }
 }
 
