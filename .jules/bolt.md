@@ -25,3 +25,7 @@
 ## 2026-08-19 - Pre-parsing vectors to avoid O(N^2) inner-loop allocations
 **Learning:** When calculating vector similarities or comparisons in $O(N^2)$ nested loops, repeatedly extracting properties (`getVal`) and parsing raw string/arrays into `Float32Array` within the inner loop causes massive, redundant CPU cycles and garbage collection pressure in V8.
 **Action:** When calculating similarity matrix distances or comparisons, pre-parse data structures (like converting raw arrays to `Float32Array`) and extract invariant lookups during an $O(N)$ preprocessing phase, mapping the valid subset to an array of objects to iterate over, effectively eliminating redundant type coercion in the inner loop.
+
+## 2026-08-20 - Redundant Array Lookups in Hot Math Loops
+**Learning:** In hot loops involving heavy math like vector similarity, continuously evaluating array indexing (e.g. `vecA[i]`) multiplies access lookup overhead, hurting JS engine optimizations.
+**Action:** Always cache `length` and array elements (e.g., `const a = vecA[i]`) locally inside tight iteration blocks to minimize property lookups and bounds checking.
