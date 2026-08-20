@@ -63,35 +63,46 @@ export class ConsolidationEngine {
    * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
    */
   private parseEmbedding(rawEmb: any): Float32Array | null {
+    let result: Float32Array | null = null;
     if (!rawEmb) return null;
 
     if (rawEmb instanceof Float32Array) {
-      return rawEmb;
-    }
-
-    if (Array.isArray(rawEmb)) {
-      return new Float32Array(rawEmb);
-    }
-
-    if (rawEmb instanceof Uint8Array || rawEmb instanceof Buffer) {
+      // Create a copy to avoid mutating the original input if it's cached or reused
+      result = new Float32Array(rawEmb);
+    } else if (Array.isArray(rawEmb)) {
+      result = new Float32Array(rawEmb);
+    } else if (rawEmb instanceof Uint8Array || rawEmb instanceof Buffer) {
       // Int8Array/Uint8Array containing Float32 raw bytes
       if (rawEmb.byteLength % 4 === 0) {
-        return new Float32Array(rawEmb.buffer, rawEmb.byteOffset, rawEmb.byteLength / 4);
+        // Deep copy the buffer to avoid mutating shared internal memory pools
+        const copy = rawEmb.buffer.slice(rawEmb.byteOffset, rawEmb.byteOffset + rawEmb.byteLength);
+        result = new Float32Array(copy);
       }
-    }
-
-    if (typeof rawEmb === "string") {
+    } else if (typeof rawEmb === "string") {
       try {
         const parsed = JSON.parse(rawEmb);
         if (Array.isArray(parsed)) {
-          return new Float32Array(parsed);
+          result = new Float32Array(parsed);
         }
       } catch {
-        return null;
+        // null
       }
     }
 
-    return null;
+    if (result) {
+      let norm = 0;
+      for (let i = 0; i < result.length; i++) {
+        norm += result[i] * result[i];
+      }
+      if (norm > 0) {
+        const len = Math.sqrt(norm);
+        for (let i = 0; i < result.length; i++) {
+          result[i] /= len;
+        }
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -529,19 +540,13 @@ export class ConsolidationEngine {
     }
 
     let dot = 0;
-    let normA = 0;
-    let normB = 0;
-
     for (let i = 0; i < vecA.length; i++) {
       dot += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
     }
 
-    const denom = Math.sqrt(normA) * Math.sqrt(normB);
-    if (denom === 0) return 0;
-
-    return dot / denom;
+    // Vectors are already normalized to unit length in parseEmbedding,
+    // so the dot product is exactly the cosine similarity.
+    return dot;
   }
 }
 

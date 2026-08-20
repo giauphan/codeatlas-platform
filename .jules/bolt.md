@@ -25,3 +25,6 @@
 ## 2026-08-19 - Pre-parsing vectors to avoid O(N^2) inner-loop allocations
 **Learning:** When calculating vector similarities or comparisons in $O(N^2)$ nested loops, repeatedly extracting properties (`getVal`) and parsing raw string/arrays into `Float32Array` within the inner loop causes massive, redundant CPU cycles and garbage collection pressure in V8.
 **Action:** When calculating similarity matrix distances or comparisons, pre-parse data structures (like converting raw arrays to `Float32Array`) and extract invariant lookups during an $O(N)$ preprocessing phase, mapping the valid subset to an array of objects to iterate over, effectively eliminating redundant type coercion in the inner loop.
+## 2026-08-20 - In-place ArrayBuffer mutation bugs
+**Learning:** When creating a Float32Array directly from an incoming `Uint8Array` or `Buffer` and then modifying it (like during vector normalization), it acts as a view over the underlying buffer. If that buffer is part of Node's internal memory pool or shared across references, modifying it in-place causes data corruption.
+**Action:** Always use `.slice()` to deep-copy the underlying buffer bytes before wrapping them in a typed array if you intend to perform in-place mathematical operations on them.
