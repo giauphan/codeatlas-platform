@@ -76,7 +76,7 @@ export class ConsolidationEngine {
     return result;
   }
 
-  private parseEmbedding(rawEmb: Float32Array | number[] | Uint8Array | Buffer | string | null | undefined): Float32Array | null {
+  private parseEmbedding(rawEmb: Float32Array | number[] | Uint8Array | string | null | undefined): Float32Array | null {
     let result: Float32Array | null = null;
     if (!rawEmb) return null;
 
@@ -105,6 +105,7 @@ export class ConsolidationEngine {
           result = new Float32Array(parsed);
         }
       } catch {
+        // Ignoring JSON.parse SyntaxError: fallback to null if string is not a valid JSON array
       }
     }
 
@@ -550,6 +551,14 @@ export class ConsolidationEngine {
   private cosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
     if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) {
       return 0;
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      let normA = 0;
+      for (let i = 0; i < vecA.length; i++) normA += vecA[i] * vecA[i];
+      if (Math.abs(normA - 1) > 0.01) {
+         throw new Error(`cosineSimilarity invariant violation: vector is not unit normalized (norm=${normA})`);
+      }
     }
 
     let dot = 0;
