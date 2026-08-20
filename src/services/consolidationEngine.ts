@@ -537,7 +537,7 @@ export class ConsolidationEngine {
    * - Archived concepts get reduced confidence
    */
   private cosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
-    if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) {
+    if (vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) {
       return 0;
     }
 
