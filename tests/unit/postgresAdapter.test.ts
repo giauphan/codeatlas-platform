@@ -14,8 +14,6 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   };
   const opts = { exports: exportsObj };
 
-  mock.module(specifier, opts);
-
   const specs = new Set<string>([specifier]);
 
   if (!specifier.startsWith('/') && !specifier.startsWith('.')) {
@@ -27,12 +25,16 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
       specs.add(resolvedPkg);
       specs.add(pathToFileURL(resolvedPkg).href);
     } catch {}
-  } else if (specifier.startsWith('/')) {
-    const rawBasePath = specifier.endsWith('.js')
-      ? specifier.slice(0, -3)
-      : specifier.endsWith('.ts')
-        ? specifier.slice(0, -2)
-        : specifier;
+  } else {
+    const absPath = path.isAbsolute(specifier)
+      ? specifier
+      : path.resolve(import.meta.dirname, specifier);
+
+    const rawBasePath = absPath.endsWith('.js')
+      ? absPath.slice(0, -3)
+      : absPath.endsWith('.ts')
+        ? absPath.slice(0, -2)
+        : absPath;
 
     const basePaths = new Set<string>([rawBasePath]);
     if (rawBasePath.includes('/src/')) {
@@ -58,27 +60,6 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
             specs.add(pathToFileURL(realP).href);
           }
         } catch {}
-      }
-    }
-
-    const lastSegment = path.basename(rawBasePath);
-    let subPathBase = lastSegment;
-    if (rawBasePath.includes('/src/')) {
-      const srcIdx = rawBasePath.indexOf('/src/');
-      subPathBase = rawBasePath.slice(srcIdx + 5);
-    }
-
-    for (const name of new Set([subPathBase, lastSegment])) {
-      for (const prefix of ['', './', '../', '../../', '../../../', '../../../../', 'src/']) {
-        for (const ext of ['', '.js', '.ts']) {
-          const spec = prefix + name + ext;
-          specs.add(spec);
-          if (spec.startsWith('./') || spec.startsWith('../')) {
-            const resolvedAbs = path.resolve(import.meta.dirname, spec);
-            specs.add(resolvedAbs);
-            specs.add(pathToFileURL(resolvedAbs).href);
-          }
-        }
       }
     }
   }
@@ -113,9 +94,9 @@ class MockPool {
   }
 }
 
-mock.module('pg', { exports: { __esModule: true, default: { Pool: MockPool }, Pool: MockPool } });
-mock.module('pgvector/pg', { exports: { __esModule: true, default: { toSql: (arr: number[]) => `[${arr.join(',')}]` }, toSql: (arr: number[]) => `[${arr.join(',')}]` } });
-mock.module('pgvector', { exports: { __esModule: true, default: { toSql: (arr: number[]) => `[${arr.join(',')}]` }, toSql: (arr: number[]) => `[${arr.join(',')}]` } });
+safeMockModule('pg', { Pool: MockPool });
+safeMockModule('pgvector/pg', { toSql: (arr: number[]) => `[${arr.join(',')}]` });
+safeMockModule('pgvector', { toSql: (arr: number[]) => `[${arr.join(',')}]` });
 
 const { PostgresAdapter } = await import(path.join(srcDir, 'database/adapters/postgresAdapter.js'));
 

@@ -20,12 +20,21 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
     specs.add(specifier);
     specs.add(specifier + '/index.js');
     specs.add(specifier + '/lib/index.js');
-  } else if (specifier.startsWith('/')) {
-    const rawBasePath = specifier.endsWith('.js')
-      ? specifier.slice(0, -3)
-      : specifier.endsWith('.ts')
-        ? specifier.slice(0, -2)
-        : specifier;
+    try {
+      const resolvedPkg = import.meta.resolve(specifier);
+      specs.add(resolvedPkg);
+      specs.add(pathToFileURL(resolvedPkg).href);
+    } catch {}
+  } else {
+    const absPath = path.isAbsolute(specifier)
+      ? specifier
+      : path.resolve(import.meta.dirname, specifier);
+
+    const rawBasePath = absPath.endsWith('.js')
+      ? absPath.slice(0, -3)
+      : absPath.endsWith('.ts')
+        ? absPath.slice(0, -2)
+        : absPath;
 
     const basePaths = new Set<string>([rawBasePath]);
     if (rawBasePath.includes('/src/')) {
@@ -51,27 +60,6 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
             specs.add(pathToFileURL(realP).href);
           }
         } catch {}
-      }
-    }
-
-    const lastSegment = path.basename(rawBasePath);
-    let subPathBase = lastSegment;
-    if (rawBasePath.includes('/src/')) {
-      const srcIdx = rawBasePath.indexOf('/src/');
-      subPathBase = rawBasePath.slice(srcIdx + 5);
-    }
-
-    for (const name of new Set([subPathBase, lastSegment])) {
-      for (const prefix of ['', './', '../', '../../', '../../../', '../../../../', 'src/']) {
-        for (const ext of ['', '.js', '.ts']) {
-          const spec = prefix + name + ext;
-          specs.add(spec);
-          if (spec.startsWith('./') || spec.startsWith('../')) {
-            const resolvedAbs = path.resolve(import.meta.dirname, spec);
-            specs.add(resolvedAbs);
-            specs.add(pathToFileURL(resolvedAbs).href);
-          }
-        }
       }
     }
   }
