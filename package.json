@@ -43,7 +43,8 @@
     "dev": "tsx watch src/index.ts",
     "test": "node --experimental-test-module-mocks --test-concurrency=1 --import tsx --test 'tests/**/*.test.ts'",
     "db-init": "tsx scripts/db-init.ts",
-    "db-seed": "tsx scripts/db-seed.ts"
+    "db-seed": "tsx scripts/db-seed.ts",
+    "db-migrate-oracle-to-sqlite": "tsx scripts/migrate-oracle-to-sqlite.ts"
   },
   "overrides": {
     "uuid": "11.1.1"

@@ -4,28 +4,31 @@ CodeAtlas Platform supports **three database backends** via the `IDatabaseAdapte
 
 | Database | Use Case | Setup Difficulty |
 | :--- | :--- | :--- |
-| **Oracle 26ai** | Production cloud (default) | 🔴 Hard (Wallet + Instant Client) |
-| **SQLite + sqlite-vec** | Local dev / single-user | 🟢 Zero-config |
+| **SQLite + sqlite-vec** | Local dev / single-user (default) | 🟢 Zero-config |
 | **PostgreSQL + pgvector** | Self-hosted production | 🟡 Easy (Supabase/Neon) |
+| **Oracle 26ai** | Cloud production (optional) | 🔴 Hard (Wallet + Instant Client) |
 
 ## Quick Start
 
-### Option 1: SQLite (Recommended for Local Dev)
+### Option 1: SQLite + sqlite-vec (Default)
 
 ```bash
-# Set environment variable
+cp .env.example .env
 export CODEATLAS_DB_TYPE=sqlite
 export CODEATLAS_SQLITE_PATH=./data/codeatlas.db
 
-# Install dependencies
-pnpm add better-sqlite3 sqlite-vec
-
-# Run seeder
+pnpm install
 pnpm run db-seed
-
-# Start server
 pnpm start
 ```
+
+To copy existing Oracle data into SQLite, configure `ORACLE_USER`, `ORACLE_PASSWORD`, and `ORACLE_CONN_STRING`, then run:
+
+```bash
+pnpm run db-migrate-oracle-to-sqlite
+```
+
+Migration is idempotent and preserves IDs, tenant metadata, JSON values, and vector embeddings as SQLite BLOBs.
 
 ### Option 2: PostgreSQL (Self-hosted Production)
 

@@ -96,8 +96,8 @@ async function seed() {
 
     for (const dream of dreams) {
       const exists = await db.query(
-        "SELECT 1 FROM ai_dreaming_memory WHERE id = ?",
-        [dream.id]
+        "SELECT 1 FROM ai_dreaming_memory WHERE project = ? AND memory_type = ? AND content_hash = ? AND tenant_id = ?",
+        [dream.project, dream.memory_type, dream.content_hash, dream.tenant_id]
       );
       if (exists.length === 0) {
         await db.execute(
