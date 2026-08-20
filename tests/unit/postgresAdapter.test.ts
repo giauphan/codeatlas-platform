@@ -108,12 +108,12 @@ class MockPool {
   }
 }
 
-const pgMock = { Pool: MockPool };
-safeMockModule('pg', { default: pgMock, Pool: MockPool });
+const pgMock = { default: { Pool: MockPool }, Pool: MockPool };
+safeMockModule('pg', pgMock);
 
-const pgvectorMock = { toSql: (arr: number[]) => `[${arr.join(',')}]` };
-safeMockModule('pgvector/pg', { default: pgvectorMock, toSql: pgvectorMock.toSql });
-safeMockModule('pgvector', { default: pgvectorMock, toSql: pgvectorMock.toSql });
+const pgvectorMock = { default: { toSql: (arr: number[]) => `[${arr.join(',')}]` }, toSql: (arr: number[]) => `[${arr.join(',')}]` };
+safeMockModule('pgvector/pg', pgvectorMock);
+safeMockModule('pgvector', pgvectorMock);
 
 const { PostgresAdapter } = await import(path.join(srcDir, 'database/adapters/postgresAdapter.js'));
 
