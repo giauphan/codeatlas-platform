@@ -98,9 +98,11 @@ const authServiceMock = { checkAuth: mockCheckAuth, logActivity: mockLogActivity
 safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 
 // Mock dreamingService
-const mockDreamingSvc = {
-  saveDreamMemory: mockSaveDreamMemory,
-  queryDreamMemories: mockQueryDreamMemories,
+const mockDreamingSvc = function() {
+  return {
+    saveDreamMemory: mockSaveDreamMemory,
+    queryDreamMemories: mockQueryDreamMemories,
+  };
 };
 const dreamingServiceMock = { OracleDreamingService: mockDreamingSvc };
 safeMockModule(path.join(srcDir, 'services/dreamingService.js'), dreamingServiceMock);
