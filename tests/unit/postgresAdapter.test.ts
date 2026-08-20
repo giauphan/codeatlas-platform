@@ -100,6 +100,7 @@ safeMockModule('pg', { default: pgMock, Pool: MockPool });
 
 const pgvectorMock = { toSql: (arr: number[]) => `[${arr.join(',')}]` };
 safeMockModule('pgvector/pg', { default: pgvectorMock, toSql: pgvectorMock.toSql });
+safeMockModule('pgvector', { default: pgvectorMock, toSql: pgvectorMock.toSql });
 
 const { PostgresAdapter } = await import(path.join(srcDir, 'database/adapters/postgresAdapter.js'));
 
