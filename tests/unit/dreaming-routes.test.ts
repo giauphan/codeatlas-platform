@@ -126,10 +126,10 @@ const mockLogger = {
 const loggerMock = { logger: mockLogger };
 safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
 
-// Mock llmService & firebase
-safeMockModule(path.join(srcDir, 'services/llmService.js'), { summarizeConversationForDreams: mock.fn() });
-safeMockModule('firebase-admin/auth', { getAuth: () => ({ verifyIdToken: mock.fn() }) });
-safeMockModule('firebase-admin/firestore', { getFirestore: () => ({ collection: () => ({ doc: () => ({ get: mock.fn() }) }) }) });
+// Mock authMiddleware
+safeMockModule(path.join(srcDir, 'middleware/auth.js'), {
+  authMiddleware: (_req: unknown, _res: unknown, next: () => void) => next(),
+});
 
 // ── Import modules under test ────────────────────────────────────────
 const { registerDreamingRoutes } = await import(
