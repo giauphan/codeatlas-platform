@@ -7,7 +7,7 @@
 import { test, describe, before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-
+import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
@@ -20,29 +20,24 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   const specs = new Set<string>([specifier]);
 
   if (specifier.startsWith('/')) {
-    specs.add(pathToFileURL(specifier).href);
-
     const basePath = specifier.endsWith('.js') ? specifier.slice(0, -3) : specifier.endsWith('.ts') ? specifier.slice(0, -2) : specifier;
 
-    for (const p of [basePath, basePath + '.js', basePath + '.ts']) {
-      specs.add(p);
-      specs.add(pathToFileURL(p).href);
+    for (const ext of ['.js', '.ts']) {
+      const p = basePath + ext;
+      if (fs.existsSync(p)) {
+        specs.add(p);
+        specs.add(pathToFileURL(p).href);
+      }
     }
 
     if (basePath.includes('/src/')) {
-      for (const distPath of [basePath.replace('/src/', '/dist/'), basePath.replace('/src/', '/dist/src/')]) {
-        for (const ext of ['', '.js', '.ts']) {
-          const p = distPath + ext;
-          specs.add(p);
-          specs.add(pathToFileURL(p).href);
-        }
-      }
-      const srcIdx = specifier.indexOf('/src/');
-      const subPath = specifier.slice(srcIdx + 5);
-      const subBase = subPath.endsWith('.js') ? subPath.slice(0, -3) : subPath.endsWith('.ts') ? subPath.slice(0, -2) : subPath;
-      for (const rel of ['./', '../', '../../', '../../../']) {
-        for (const ext of ['', '.js', '.ts']) {
-          specs.add(rel + subBase + ext);
+      for (const distBase of [basePath.replace('/src/', '/dist/'), basePath.replace('/src/', '/dist/src/')]) {
+        for (const ext of ['.js', '.ts']) {
+          const p = distBase + ext;
+          if (fs.existsSync(p)) {
+            specs.add(p);
+            specs.add(pathToFileURL(p).href);
+          }
         }
       }
     }
