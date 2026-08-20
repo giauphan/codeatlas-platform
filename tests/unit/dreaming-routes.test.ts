@@ -11,9 +11,14 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
     ? mockObj
     : { __esModule: true, default: mockObj, ...mockObj };
   const opts = { exports: exportsObj };
+
   const specs = new Set<string>([specifier]);
 
-  if (specifier.startsWith('/')) {
+  if (!specifier.startsWith('/') && !specifier.startsWith('.')) {
+    specs.add(specifier);
+    specs.add(specifier + '/index.js');
+    specs.add(specifier + '/lib/index.js');
+  } else if (specifier.startsWith('/')) {
     const rawBasePath = specifier.endsWith('.js')
       ? specifier.slice(0, -3)
       : specifier.endsWith('.ts')
@@ -50,7 +55,7 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
     if (rawBasePath.includes('/src/')) {
       const srcIdx = rawBasePath.indexOf('/src/');
       const subPathBase = rawBasePath.slice(srcIdx + 5);
-      for (const prefix of ['./', '../', '../../', '../../../']) {
+      for (const prefix of ['./', '../', '../../', '../../../', 'src/']) {
         for (const ext of ['', '.js', '.ts']) {
           specs.add(prefix + subPathBase + ext);
         }
