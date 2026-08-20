@@ -555,9 +555,17 @@ export class ConsolidationEngine {
 
     if (process.env.NODE_ENV !== 'production') {
       let normA = 0;
-      for (let i = 0; i < vecA.length; i++) normA += vecA[i] * vecA[i];
-      if (Math.abs(normA - 1) > 0.01) {
-         throw new Error(`cosineSimilarity invariant violation: vector is not unit normalized (norm=${normA})`);
+      let normB = 0;
+      for (let i = 0; i < vecA.length; i++) {
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
+      }
+      // Allow zero-vectors, which have norm 0. Otherwise check for unit length.
+      if (normA > 0 && Math.abs(normA - 1) > 0.01) {
+         throw new Error(`cosineSimilarity invariant violation: vecA is not unit normalized (norm=${normA})`);
+      }
+      if (normB > 0 && Math.abs(normB - 1) > 0.01) {
+         throw new Error(`cosineSimilarity invariant violation: vecB is not unit normalized (norm=${normB})`);
       }
     }
 
