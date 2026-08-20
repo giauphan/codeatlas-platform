@@ -74,7 +74,13 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
     for (const name of new Set([subPathBase, lastSegment])) {
       for (const prefix of ['', './', '../', '../../', '../../../', '../../../../', 'src/']) {
         for (const ext of ['', '.js', '.ts']) {
-          specs.add(prefix + name + ext);
+          const spec = prefix + name + ext;
+          specs.add(spec);
+          if (spec.startsWith('./') || spec.startsWith('../')) {
+            const resolvedAbs = path.resolve(import.meta.dirname, spec);
+            specs.add(resolvedAbs);
+            specs.add(pathToFileURL(resolvedAbs).href);
+          }
         }
       }
     }
