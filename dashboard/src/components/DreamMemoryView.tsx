@@ -325,15 +325,15 @@ export function DreamMemoryView() {
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <label htmlFor="config-enabled">Enabled:</label>
-            <input id="config-enabled" type="checkbox" checked={tempEnabled} onChange={e => setTempEnabled(e.target.checked)} />
+            <input id="config-enabled" type="checkbox" checked={tempEnabled} onChange={e => setTempEnabled(e.target.checked)} className={FOCUS_RING_CLASS} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <label htmlFor="config-schedule">Schedule (cron):</label>
-            <input id="config-schedule" type="text" value={tempSchedule} onChange={e => setTempSchedule(e.target.value)} style={{ padding: '0.5rem' }} />
+            <input id="config-schedule" type="text" value={tempSchedule} onChange={e => setTempSchedule(e.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem' }} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <label htmlFor="config-provider">Provider:</label>
-            <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} style={{ padding: '0.5rem' }} />
+            <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem' }} />
           </div>
           <button onClick={saveDreamConfig} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem' }}>
             {savingConfig ? 'Saving...' : 'Save Config'}
