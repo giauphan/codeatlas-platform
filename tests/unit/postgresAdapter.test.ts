@@ -22,6 +22,11 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
     specs.add(specifier);
     specs.add(specifier + '/index.js');
     specs.add(specifier + '/lib/index.js');
+    try {
+      const resolvedPkg = import.meta.resolve(specifier);
+      specs.add(resolvedPkg);
+      specs.add(pathToFileURL(resolvedPkg).href);
+    } catch {}
   } else if (specifier.startsWith('/')) {
     const rawBasePath = specifier.endsWith('.js')
       ? specifier.slice(0, -3)
