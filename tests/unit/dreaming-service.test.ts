@@ -14,24 +14,35 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
   const specs = new Set<string>([specifier]);
 
   if (specifier.startsWith('/')) {
+    specs.add(pathToFileURL(specifier).href);
+
     const basePath = specifier.endsWith('.js') ? specifier.slice(0, -3) : specifier.endsWith('.ts') ? specifier.slice(0, -2) : specifier;
 
     for (const ext of ['.js', '.ts']) {
       const p = basePath + ext;
-      if (fs.existsSync(p)) {
-        specs.add(p);
-        specs.add(pathToFileURL(p).href);
-      }
+      specs.add(p);
+      specs.add(pathToFileURL(p).href);
     }
 
     if (basePath.includes('/src/')) {
       for (const distBase of [basePath.replace('/src/', '/dist/'), basePath.replace('/src/', '/dist/src/')]) {
         for (const ext of ['.js', '.ts']) {
           const p = distBase + ext;
-          if (fs.existsSync(p)) {
-            specs.add(p);
-            specs.add(pathToFileURL(p).href);
-          }
+          specs.add(p);
+          specs.add(pathToFileURL(p).href);
+        }
+      }
+      const srcIdx = specifier.indexOf('/src/');
+      const subPath = specifier.slice(srcIdx + 5);
+      const subPathBase = subPath.endsWith('.js')
+        ? subPath.slice(0, -3)
+        : subPath.endsWith('.ts')
+          ? subPath.slice(0, -2)
+          : subPath;
+
+      for (const prefix of ['./', '../', '../../', '../../../']) {
+        for (const ext of ['', '.js', '.ts']) {
+          specs.add(prefix + subPathBase + ext);
         }
       }
     }
