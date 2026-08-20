@@ -53,12 +53,17 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
       }
     }
 
+    const lastSegment = path.basename(rawBasePath);
+    let subPathBase = lastSegment;
     if (rawBasePath.includes('/src/')) {
       const srcIdx = rawBasePath.indexOf('/src/');
-      const subPathBase = rawBasePath.slice(srcIdx + 5);
-      for (const prefix of ['./', '../', '../../', '../../../', 'src/']) {
+      subPathBase = rawBasePath.slice(srcIdx + 5);
+    }
+
+    for (const name of new Set([subPathBase, lastSegment])) {
+      for (const prefix of ['', './', '../', '../../', '../../../', '../../../../', 'src/']) {
         for (const ext of ['', '.js', '.ts']) {
-          specs.add(prefix + subPathBase + ext);
+          specs.add(prefix + name + ext);
         }
       }
     }
