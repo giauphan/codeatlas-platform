@@ -116,7 +116,7 @@ export function DreamMemoryView() {
   }, [tempSchedule, tempEnabled, tempProvider]);
 
   const runDailyDreamsNow = useCallback(async () => {
-    setSavingConfig(true);
+    setRunningDailyDreams(true);
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch('/api/dreams/generate-daily-dreams', {
@@ -129,7 +129,7 @@ export function DreamMemoryView() {
     } catch (err: any) {
       alert(`Failed to run daily dreams: ${err.message}`);
     } finally {
-      setSavingConfig(false);
+      setRunningDailyDreams(false);
     }
   }, [tempProvider]);
 
