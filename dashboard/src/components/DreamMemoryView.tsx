@@ -22,7 +22,7 @@ interface DreamMemory {
   created_at: string;
 }
 
-interface LoadingButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface LoadingButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   loading: boolean;
   loadingText: string;
   defaultText: string;
