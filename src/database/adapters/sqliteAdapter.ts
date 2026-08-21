@@ -19,6 +19,15 @@ interface SqliteDatabase {
 type DatabaseConstructor = new (filename: string) => SqliteDatabase;
 type SqliteVecLoad = (db: unknown) => void;
 
+type SqliteParams = Record<string, unknown> | unknown[];
+
+const NAMED_PLACEHOLDER = /[:@$][a-zA-Z_][a-zA-Z0-9_]*/;
+
+function bindArgs(sql: string, params: SqliteParams): unknown[] {
+  if (Array.isArray(params)) return params;
+  return NAMED_PLACEHOLDER.test(sql) ? [params] : Object.values(params);
+}
+
 let DatabaseClass: DatabaseConstructor | undefined;
 let sqliteVecLoad: SqliteVecLoad | undefined;
 
@@ -95,16 +104,14 @@ export class SQLiteAdapter implements IDatabaseAdapter {
 
   async query<T>(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<T[]> {
     if (!this.db) await this.connect();
-    const paramArray = Array.isArray(params) ? params : Object.values(params);
     const stmt = this.db!.prepare(sql);
-    return stmt.all(...paramArray) as T[];
+    return stmt.all(...bindArgs(sql, params)) as T[];
   }
 
   async execute(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<{ rowsAffected: number }> {
     if (!this.db) await this.connect();
-    const paramArray = Array.isArray(params) ? params : Object.values(params);
     const stmt = this.db!.prepare(sql);
-    const result = stmt.run(...paramArray);
+    const result = stmt.run(...bindArgs(sql, params));
     return { rowsAffected: result.changes };
   }
 
@@ -114,7 +121,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     let totalChanges = 0;
     const transaction = this.db!.transaction((rows: Array<Record<string, unknown>>) => {
       for (const row of rows) {
-        const result = stmt.run(...Object.values(row));
+        const result = stmt.run(...bindArgs(sql, row));
         totalChanges += result.changes;
       }
     });

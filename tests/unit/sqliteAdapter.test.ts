@@ -61,6 +61,79 @@ describe('SQLiteAdapter', () => {
     assert.strictEqual(countRes[0].count, 3);
   });
 
+  test('supports named parameters for execute, query, and executeMany', async () => {
+    await adapter.connect();
+    await adapter.initializeSchema();
+
+    await adapter.execute(
+      `INSERT INTO tenants (id, name, tier) VALUES (:id, :name, :tier)`,
+      { id: 'named-tenant-1', name: 'Named Tenant', tier: 'enterprise' }
+    );
+
+    const tenants = await adapter.query<{ id: string; name: string }>(
+      `SELECT id, name FROM tenants WHERE id = :id`,
+      { id: 'named-tenant-1' }
+    );
+    assert.deepStrictEqual(tenants, [{ id: 'named-tenant-1', name: 'Named Tenant' }]);
+
+    const result = await adapter.executeMany(
+      `INSERT INTO tenants (id, name, tier) VALUES (:id, :name, :tier)`,
+      [
+        { id: 'named-tenant-2', name: 'Named Tenant 2', tier: 'free' },
+        { id: 'named-tenant-3', name: 'Named Tenant 3', tier: 'free' },
+      ]
+    );
+    assert.strictEqual(result.rowsAffected, 2);
+  });
+
+  test('named INSERT with more binds than columns does not throw (dream-memory regression)', async () => {
+    await adapter.connect();
+    await adapter.initializeSchema();
+
+    // Mirrors OracleDreamingService.saveDreamMemory's SQLite path: many named binds,
+    // some reused across the ON CONFLICT clause. Previously threw
+    // "Too many parameter values were provided" when binds were spread positionally.
+    const embedding = new Uint8Array(new Float32Array([0.1, 0.2, 0.3]).buffer);
+    const sql = `
+      INSERT INTO ai_dreaming_memory (
+        id, session_id, project, provider, memory_type, content, embedding,
+        importance, content_hash, confidence, status, evidence_count,
+        access_count, version, tenant_id, scope, tags, related_ids
+      ) VALUES (
+        :id, :sessionId, :project, :provider, :memoryType, :content, :embedding,
+        :importance, :contentHash, :initialConfidence, 'active', 1, 0, 1,
+        :tenantId, :scope, :tagsJson, :relatedIdsJson
+      )
+      ON CONFLICT(project, memory_type, content_hash, tenant_id) DO UPDATE SET
+        embedding = :embedding,
+        content   = :content
+    `;
+
+    await adapter.execute(sql, {
+      id: 'd1',
+      sessionId: 's1',
+      project: 'proj1',
+      provider: 'claude',
+      memoryType: 'KNOWLEDGE',
+      content: 'A learning worth persisting across sessions.',
+      embedding,
+      importance: 6,
+      contentHash: 'hash-1',
+      initialConfidence: 0.6,
+      tenantId: 't1',
+      scope: null,
+      tagsJson: null,
+      relatedIdsJson: null,
+    });
+
+    const rows = await adapter.query<{ id: string; content: string }>(
+      `SELECT id, content FROM ai_dreaming_memory WHERE id = :id`,
+      { id: 'd1' }
+    );
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0].content, 'A learning worth persisting across sessions.');
+  });
+
   test('searchVector and BLOB operations', async () => {
     await adapter.connect();
     await adapter.initializeSchema();
