@@ -181,4 +181,137 @@ describe('SQLiteAdapter', () => {
     const circular = await adapter.detectCircularDependencies('proj1', 't1');
     assert.ok(Array.isArray(circular));
   });
+
+  // These exercise the exact SQL shapes OracleDreamingService emits on the
+  // SQLite path, against a real in-memory DB — the migration to SQLite-default
+  // must keep query/delete working end-to-end, not just in mocks.
+  test('dream-memory query: named binds with LIMIT/OFFSET pagination', async () => {
+    await adapter.connect();
+    await adapter.initializeSchema();
+
+    const rows = [
+      { id: 'd1', mt: 'KNOWLEDGE', created: '2026-08-01', imp: 8 },
+      { id: 'd2', mt: 'PREFERENCE', created: '2026-08-02', imp: 5 },
+      { id: 'd3', mt: 'MISTAKE', created: '2026-08-03', imp: 9 },
+    ];
+    for (const r of rows) {
+      await adapter.execute(
+        `INSERT INTO ai_dreaming_memory (id, memory_type, content, importance, status, tenant_id, created_at)
+         VALUES (:id, :mt, :content, :imp, 'active', :tenantId, :created)`,
+        { id: r.id, mt: r.mt, content: `content for ${r.id} long enough`, imp: r.imp, tenantId: 't1', created: r.created }
+      );
+    }
+
+    // Page 1: newest first, 2 per page
+    const page1 = await adapter.query<{ id: string }>(
+      `SELECT id, memory_type, created_at FROM ai_dreaming_memory
+       WHERE tenant_id = :tenantId AND (status IS NULL OR status IN ('active', 'superseded'))
+       ORDER BY created_at DESC
+       LIMIT :limit OFFSET :offset`,
+      { tenantId: 't1', limit: 2, offset: 0 }
+    );
+    assert.deepStrictEqual(page1.map(r => r.id), ['d3', 'd2']);
+
+    // Page 2: remaining row
+    const page2 = await adapter.query<{ id: string }>(
+      `SELECT id FROM ai_dreaming_memory
+       WHERE tenant_id = :tenantId AND (status IS NULL OR status IN ('active', 'superseded'))
+       ORDER BY created_at DESC
+       LIMIT :limit OFFSET :offset`,
+      { tenantId: 't1', limit: 2, offset: 2 }
+    );
+    assert.deepStrictEqual(page2.map(r => r.id), ['d1']);
+  });
+
+  test('dream-memory query: id IN (:vecId0, :vecId1) vector-id filter', async () => {
+    await adapter.connect();
+    await adapter.initializeSchema();
+
+    for (const id of ['v1', 'v2', 'v3']) {
+      await adapter.execute(
+        `INSERT INTO ai_dreaming_memory (id, memory_type, content, status, tenant_id) VALUES (?, ?, ?, 'active', ?)`,
+        [id, 'KNOWLEDGE', `content ${id} padded out to forty chars minimum`, 't1']
+      );
+    }
+
+    const rows = await adapter.query<{ id: string }>(
+      `SELECT id FROM ai_dreaming_memory
+       WHERE tenant_id = :tenantId AND id IN (:vecId0, :vecId1)`,
+      { tenantId: 't1', vecId0: 'v1', vecId1: 'v3' }
+    );
+    assert.deepStrictEqual(rows.map(r => r.id).sort(), ['v1', 'v3']);
+  });
+
+  test('dream-memory query: scope, tags and memory_type IN filters', async () => {
+    await adapter.connect();
+    await adapter.initializeSchema();
+
+    await adapter.execute(
+      `INSERT INTO ai_dreaming_memory (id, memory_type, content, status, tenant_id, scope, tags)
+       VALUES (:id, :mt, :content, 'active', :tenantId, :scope, :tags)`,
+      { id: 's1', mt: 'KNOWLEDGE', content: 'scoped auth login knowledge entry here', tenantId: 't1', scope: 'auth/login', tags: '["jwt","security"]' }
+    );
+    await adapter.execute(
+      `INSERT INTO ai_dreaming_memory (id, memory_type, content, status, tenant_id, scope, tags)
+       VALUES (:id, :mt, :content, 'active', :tenantId, :scope, :tags)`,
+      { id: 's2', mt: 'PREFERENCE', content: 'unrelated preference entry padded out here', tenantId: 't1', scope: 'db/query', tags: '["sql"]' }
+    );
+
+    const rows = await adapter.query<{ id: string }>(
+      `SELECT id FROM ai_dreaming_memory
+       WHERE tenant_id = :tenantId
+         AND memory_type IN (:type0, :type1)
+         AND (scope = :scopeExact OR scope LIKE :scopeLike)
+         AND (tags LIKE :tag_like_0)`,
+      {
+        tenantId: 't1',
+        type0: 'KNOWLEDGE', type1: 'SESSION_SUMMARY',
+        scopeExact: 'auth', scopeLike: 'auth/%',
+        tag_like_0: '%"jwt"%',
+      }
+    );
+    assert.deepStrictEqual(rows.map(r => r.id), ['s1']);
+  });
+
+  test('dream-memory delete: named binds report rowsAffected', async () => {
+    await adapter.connect();
+    await adapter.initializeSchema();
+
+    await adapter.execute(
+      `INSERT INTO ai_dreaming_memory (id, content, status, tenant_id) VALUES (?, ?, 'active', ?)`,
+      ['del-1', 'a memory that will be deleted shortly here', 't1']
+    );
+
+    const hit = await adapter.execute(
+      `DELETE FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
+      { id: 'del-1', tenantId: 't1' }
+    );
+    assert.strictEqual(hit.rowsAffected, 1);
+
+    const miss = await adapter.execute(
+      `DELETE FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
+      { id: 'does-not-exist', tenantId: 't1' }
+    );
+    assert.strictEqual(miss.rowsAffected, 0);
+  });
+
+  test('dream-memory query: tenant isolation — cross-tenant rows never returned', async () => {
+    await adapter.connect();
+    await adapter.initializeSchema();
+
+    await adapter.execute(
+      `INSERT INTO ai_dreaming_memory (id, content, status, tenant_id) VALUES (?, ?, 'active', ?)`,
+      ['t1-row', 'tenant one private memory content here padded', 'tenant-1']
+    );
+    await adapter.execute(
+      `INSERT INTO ai_dreaming_memory (id, content, status, tenant_id) VALUES (?, ?, 'active', ?)`,
+      ['t2-row', 'tenant two private memory content here padded', 'tenant-2']
+    );
+
+    const rows = await adapter.query<{ id: string }>(
+      `SELECT id FROM ai_dreaming_memory WHERE tenant_id = :tenantId`,
+      { tenantId: 'tenant-1' }
+    );
+    assert.deepStrictEqual(rows.map(r => r.id), ['t1-row']);
+  });
 });

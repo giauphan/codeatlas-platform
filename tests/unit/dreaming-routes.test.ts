@@ -482,5 +482,91 @@ describe('Dreaming Routes', () => {
       assert.ok(Array.isArray(body.memories));
       assert.strictEqual(body.count, 0);
     });
+
+    // SQLite/Postgres return lowercase column keys; the route mapper must
+    // normalize them so the UI renders the same shape as the Oracle path.
+    test('maps lowercase SQLite row keys to response fields', async () => {
+      const sqliteMemories = [
+        {
+          id: 'mem-lc-1',
+          session_id: 'sess-lc',
+          project: 'proj',
+          provider: 'claude',
+          memory_type: 'KNOWLEDGE',
+          content: 'lowercase content from sqlite',
+          importance: 7,
+          created_at: '2026-08-10',
+          scope: 'auth/login',
+          tags: '["jwt","security"]',
+          related_ids: '["rel-1"]',
+        },
+      ];
+      mockQueryDreamMemories.mock.mockImplementation(async () => sqliteMemories);
+
+      const res = await fetch(
+        `${baseUrl}/api/dreams/query?apiKey=valid-key&query=lowercase`,
+      );
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.strictEqual(body.count, 1);
+      const m = (body.memories as Record<string, unknown>[])[0];
+      assert.strictEqual(m.id, 'mem-lc-1');
+      assert.strictEqual(m.session_id, 'sess-lc');
+      assert.strictEqual(m.memory_type, 'KNOWLEDGE');
+      assert.strictEqual(m.content, 'lowercase content from sqlite');
+      assert.strictEqual(m.scope, 'auth/login');
+      assert.deepStrictEqual(m.tags, ['jwt', 'security']);
+      assert.deepStrictEqual(m.related_ids, ['rel-1']);
+    });
+
+    // Guards against a regression where only Oracle uppercase keys were read,
+    // which would silently blank out every field under SQLite/Postgres.
+    test('still maps uppercase Oracle row keys', async () => {
+      const oracleMemories = [
+        {
+          ID: 'mem-uc-1',
+          SESSION_ID: 'sess-uc',
+          PROJECT: 'proj',
+          PROVIDER: 'claude',
+          MEMORY_TYPE: 'MISTAKE',
+          CONTENT: 'uppercase content from oracle',
+          IMPORTANCE: 9,
+          CREATED_AT: '2026-08-11',
+          SCOPE: null,
+          TAGS: null,
+          RELATED_IDS: null,
+        },
+      ];
+      mockQueryDreamMemories.mock.mockImplementation(async () => oracleMemories);
+
+      const res = await fetch(
+        `${baseUrl}/api/dreams/query?apiKey=valid-key&query=uppercase`,
+      );
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      const m = (body.memories as Record<string, unknown>[])[0];
+      assert.strictEqual(m.id, 'mem-uc-1');
+      assert.strictEqual(m.memory_type, 'MISTAKE');
+      assert.strictEqual(m.content, 'uppercase content from oracle');
+    });
+
+    // The DB-type migration must never surface Oracle credential errors in
+    // the UI: reproduces the "ORACLE_PASSWORD environment variable is required"
+    // failure as a 500 with the message propagated.
+    test('propagates ORACLE_PASSWORD error as 500 (dream-memory UI regression)', async () => {
+      mockQueryDreamMemories.mock.mockImplementation(async () => {
+        throw new Error('ORACLE_PASSWORD environment variable is required');
+      });
+
+      const res = await fetch(
+        `${baseUrl}/api/dreams/query?apiKey=valid-key&query=whatever`,
+      );
+
+      assert.strictEqual(res.status, 500);
+      const body = await res.json() as Record<string, unknown>;
+      assert.ok((body.error as string).includes('ORACLE_PASSWORD'));
+    });
   });
 });

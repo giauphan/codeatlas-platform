@@ -572,6 +572,8 @@ export class OracleDreamingService {
       let vectorSearchIds: string[] = [];
       let vectorScores: Record<string, number> = {};
 
+      const dbType = (process.env.CODEATLAS_DB_TYPE || 'oracle').toLowerCase();
+
       if (queryVector) {
         const db = createDatabaseAdapter();
         // Request limit + offset since we will paginate in memory after db search
@@ -583,6 +585,120 @@ export class OracleDreamingService {
         }
       }
 
+      // SQLite/Postgres path — avoid Oracle pool dependency
+      if (dbType === 'sqlite' || dbType === 'postgres') {
+        const db = createDatabaseAdapter();
+
+        const projectFilter = project ? 'AND project = :project' : '';
+        const providerFilter = provider ? 'AND provider = :provider' : '';
+        const startDateFilter = startDate ? 'AND created_at >= :startDate' : '';
+        const endDateFilter = endDate ? 'AND created_at <= :endDate' : '';
+        let scopeFilter = '';
+        if (scope) scopeFilter = 'AND (scope = :scopeExact OR scope LIKE :scopeLike)';
+
+        let tagsFilter = '';
+        if (tags && tags.length > 0) {
+          const tagsConditions = tags.map((_, idx) => `tags LIKE :tag_like_${idx}`);
+          tagsFilter = `AND (${tagsConditions.join(' OR ')})`;
+        }
+
+        let typeFilter = '';
+        const binds: Record<string, unknown> = { tenantId };
+
+        if (project) binds.project = project;
+        if (provider) binds.provider = provider;
+        if (startDate) binds.startDate = startDate;
+        if (endDate) binds.endDate = endDate;
+        if (scope) { binds.scopeExact = scope; binds.scopeLike = `${scope}/%`; }
+        if (tags && tags.length > 0) {
+          tags.forEach((tag, idx) => { binds[`tag_like_${idx}`] = `%"${tag}"%`; });
+        }
+        if (queryVector) {
+          const idBinds = vectorSearchIds.map((_, i) => `:vecId${i}`).join(', ');
+          typeFilter += ` AND id IN (${idBinds})`;
+          vectorSearchIds.forEach((id, i) => { binds[`vecId${i}`] = id; });
+        }
+        if (memoryType) {
+          const types = memoryType.split(',').map(t => t.trim().toUpperCase()).filter(t => t);
+          if (types.length > 0) {
+            const typeBinds = types.map((_, i) => `:type${i}`).join(', ');
+            typeFilter = `AND memory_type IN (${typeBinds})`;
+            types.forEach((type, i) => { binds[`type${i}`] = type; });
+          }
+        }
+
+        const statusFilter = `AND (status IS NULL OR status IN ('active', 'superseded'))`;
+        const selectCols = 'id, session_id, project, provider, memory_type, content, importance, created_at, confidence, status, evidence_count, access_count, version, scope, tags, related_ids';
+
+        let sql: string;
+        if (!queryVector) {
+          binds.limit = limit;
+          binds.offset = offset;
+          sql = `
+            SELECT ${selectCols}
+            FROM ai_dreaming_memory
+            WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter} ${statusFilter} ${startDateFilter} ${endDateFilter} ${scopeFilter} ${tagsFilter}
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+          `;
+        } else {
+          sql = `
+            SELECT ${selectCols}
+            FROM ai_dreaming_memory
+            WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter} ${statusFilter} ${startDateFilter} ${endDateFilter} ${scopeFilter} ${tagsFilter}
+          `;
+        }
+
+        const rows = await db.query<Record<string, unknown>>(sql, binds);
+
+        // Bump access_count non-critically
+        if (rows.length > 0) {
+          try {
+            const ids = rows.map(r => r['id'] as string).filter(Boolean);
+            for (const rid of ids) {
+              await db.execute(
+                `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
+                { id: rid, tenantId }
+              );
+            }
+          } catch (bumpErr) {
+            logger.warn('[Oracle Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
+          }
+        }
+
+        let processedRows: any[] = [...rows];
+
+        if (queryVector) {
+          // In-memory scoring identical to Oracle path
+          const scored = processedRows.map(row => {
+            const id = (row['id'] ?? row['ID']) as string;
+            const importance = Number(row['importance'] ?? row['IMPORTANCE']) || 0;
+            const rawDate = row['created_at'] ?? row['CREATED_AT'];
+            const createdAtDate = rawDate instanceof Date ? rawDate : new Date(String(rawDate ?? ''));
+            const scopeVal = row['scope'] ?? row['SCOPE'];
+            const confidence = Number(row['confidence'] ?? row['CONFIDENCE'] ?? 0.50);
+            const evidenceCount = Number(row['evidence_count'] ?? row['EVIDENCE_COUNT']) || 0;
+            const baseScore = vectorScores[id] ?? 0;
+            const lifecycleBonus = 0.20 * confidence + 0.05 * (evidenceCount > 0 ? Math.min(1.0, Math.log2(evidenceCount + 1) / 5) : 0);
+            let scopeBoost = 0;
+            if (scope) {
+              if (scopeVal === scope) scopeBoost = 0.30;
+              else if (typeof scopeVal === 'string' && scopeVal.startsWith(scope + '/')) scopeBoost = 0.15;
+            }
+            const freshnessDays = (Date.now() - createdAtDate.getTime()) / (1000 * 60 * 60 * 24);
+            const freshnessScore = 0.15 * (1.0 - Math.min(1.0, freshnessDays / 90));
+            const importanceScore = 0.10 * (importance / 10.0);
+            const finalScore = baseScore + lifecycleBonus + scopeBoost + freshnessScore + importanceScore;
+            return { row, finalScore };
+          });
+          scored.sort((a, b) => b.finalScore - a.finalScore);
+          processedRows = scored.slice(offset, offset + limit).map(item => item.row);
+        }
+
+        return processedRows;
+      }
+
+      // Oracle path below
       const pool = await initPool();
       connection = await pool.getConnection();
 
@@ -769,6 +885,20 @@ export class OracleDreamingService {
    * Deletes a dreaming memory by its ID.
    */
   static async deleteDreamMemory(id: string): Promise<boolean> {
+    const dbType = (process.env.CODEATLAS_DB_TYPE || 'oracle').toLowerCase();
+    if (dbType === 'sqlite' || dbType === 'postgres') {
+      const db = createDatabaseAdapter();
+      const tenantId = authStorage.getStore()!.uid;
+      const result = await db.execute(
+        `DELETE FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
+        { id, tenantId }
+      );
+      const wasDeleted = (result.rowsAffected ?? 0) > 0;
+      if (wasDeleted) logger.info(`[Oracle Dreaming] Deleted dream memory: ${id}`);
+      else logger.warn(`[Oracle Dreaming] Dream memory not found for deletion: ${id}`);
+      return wasDeleted;
+    }
+
     let connection;
     try {
       const pool = await initPool();
