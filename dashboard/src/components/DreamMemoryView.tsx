@@ -22,6 +22,18 @@ interface DreamMemory {
   created_at: string;
 }
 
+
+const LoadingButton = ({ onClick, disabled, loading, loadingText, defaultText, style, className }: any) => (
+  <button onClick={onClick} disabled={disabled} className={className} style={style}>
+    {loading ? (
+      <>
+        <Loader2 className="animate-spin" size={16} aria-hidden="true" style={{ marginRight: '0.25rem', verticalAlign: 'text-bottom' }} />
+        {loadingText}
+      </>
+    ) : defaultText}
+  </button>
+);
+
 export function DreamMemoryView() {
   const [memories, setMemories] = useState<DreamMemory[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,6 +56,7 @@ export function DreamMemoryView() {
   const [tempProvider, setTempProvider] = useState('');
   const [tempEnabled, setTempEnabled] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [runningDailyDreams, setRunningDailyDreams] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const dreamConfigRef = useRef<DreamConfig | null>(null);
 
@@ -335,12 +348,24 @@ export function DreamMemoryView() {
             <label htmlFor="config-provider">Provider:</label>
             <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem' }} />
           </div>
-          <button onClick={saveDreamConfig} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem' }}>
-            {savingConfig ? <><Loader2 className="animate-spin" size={16} aria-hidden="true" style={{ marginRight: '0.25rem', verticalAlign: 'text-bottom' }} /> Saving...</> : 'Save Config'}
-          </button>
-          <button onClick={runDailyDreamsNow} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
-            {savingConfig ? <><Loader2 className="animate-spin" size={16} aria-hidden="true" style={{ marginRight: '0.25rem', verticalAlign: 'text-bottom' }} /> Running...</> : 'Run Now'}
-          </button>
+          <LoadingButton
+            onClick={saveDreamConfig}
+            disabled={savingConfig || runningDailyDreams}
+            loading={savingConfig}
+            loadingText="Saving..."
+            defaultText="Save Config"
+            className={FOCUS_RING_CLASS}
+            style={{ padding: '0.5rem 1rem' }}
+          />
+          <LoadingButton
+            onClick={runDailyDreamsNow}
+            disabled={savingConfig || runningDailyDreams}
+            loading={runningDailyDreams}
+            loadingText="Running..."
+            defaultText="Run Now"
+            className={FOCUS_RING_CLASS}
+            style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}
+          />
         </div>
       </div>
 
