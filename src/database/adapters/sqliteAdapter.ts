@@ -130,7 +130,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     const sql = `
       SELECT id, 1 - vec_distance_cosine(embedding, ?) AS score
       FROM ${table}
-      WHERE tenant_id = ?
+      WHERE tenant_id = ? AND embedding IS NOT NULL
       ORDER BY vec_distance_cosine(embedding, ?) ASC
       LIMIT ?
     `;
@@ -167,6 +167,16 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         tenant_id TEXT NOT NULL,
         UNIQUE (project, memory_type, content_hash, tenant_id)
       );
+      DELETE FROM ai_dreaming_memory
+      WHERE content_hash IS NOT NULL
+        AND rowid NOT IN (
+          SELECT MAX(rowid)
+          FROM ai_dreaming_memory
+          WHERE content_hash IS NOT NULL
+          GROUP BY project, memory_type, content_hash, tenant_id
+        );
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_dreaming_dedup
+        ON ai_dreaming_memory(project, memory_type, content_hash, tenant_id);
       CREATE INDEX IF NOT EXISTS idx_dreaming_tenant_project ON ai_dreaming_memory(tenant_id, project);
       CREATE INDEX IF NOT EXISTS idx_dreaming_hash ON ai_dreaming_memory(content_hash);
 
