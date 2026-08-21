@@ -22,9 +22,14 @@ interface DreamMemory {
   created_at: string;
 }
 
+interface LoadingButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  loading: boolean;
+  loadingText: string;
+  defaultText: string;
+}
 
-const LoadingButton = ({ onClick, disabled, loading, loadingText, defaultText, style, className }: any) => (
-  <button onClick={onClick} disabled={disabled} className={className} style={style}>
+const LoadingButton = ({ onClick, disabled, loading, loadingText, defaultText, style, className, type = "button", ...rest }: LoadingButtonProps) => (
+  <button onClick={onClick} disabled={disabled} className={className} style={style} type={type} aria-busy={loading} {...rest}>
     {loading ? (
       <>
         <Loader2 className="animate-spin" size={16} aria-hidden="true" style={{ marginRight: '0.25rem', verticalAlign: 'text-bottom' }} />
