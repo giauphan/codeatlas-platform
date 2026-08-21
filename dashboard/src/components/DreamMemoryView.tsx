@@ -29,7 +29,7 @@ interface LoadingButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const LoadingButton = ({ onClick, disabled, loading, loadingText, defaultText, style, className, type = "button", ...rest }: LoadingButtonProps) => (
-  <button onClick={onClick} disabled={disabled || loading} className={className} style={style} type={type} {...rest}>
+  <button onClick={onClick} disabled={disabled || loading} className={className} style={style} type={type} aria-busy={loading} {...rest}>
     {loading ? (
       <span role="status" style={{ display: 'inline-flex', alignItems: 'center' }}>
         <Loader2 className="animate-spin" size={16} aria-hidden="true" style={{ marginRight: '0.25rem' }} />
