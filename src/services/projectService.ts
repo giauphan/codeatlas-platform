@@ -791,20 +791,25 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       if (await fileExists(tenantRoot)) {
         try {
           const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
-          await Promise.all(tenants.map(async (t) => {
-            if (t.name === tenantId) return;
-            const tDir = path.join(tenantRoot, t.name);
-            if (t.isDirectory()) {
-              try {
-                const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
-                tProjects.forEach((p) => {
-                  if (p.isDirectory()) {
-                    searchDirs.push(path.join(tDir, p.name));
-                  }
-                });
-              } catch { /* skip */ }
-            }
-          }));
+          // ⚡ Bolt: Chunked concurrency for multi-tenant directory scanning
+          // to prevent EMFILE exceptions and N+1 latency spikes when there are thousands of tenants.
+          for (let i = 0; i < tenants.length; i += FILE_EXISTS_CONCURRENCY) {
+            const chunk = tenants.slice(i, i + FILE_EXISTS_CONCURRENCY);
+            await Promise.all(chunk.map(async (t) => {
+              if (t.name === tenantId) return;
+              const tDir = path.join(tenantRoot, t.name);
+              if (t.isDirectory()) {
+                try {
+                  const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
+                  tProjects.forEach((p) => {
+                    if (p.isDirectory()) {
+                      searchDirs.push(path.join(tDir, p.name));
+                    }
+                  });
+                } catch { /* skip */ }
+              }
+            }));
+          }
         } catch { /* skip */ }
       }
     }
