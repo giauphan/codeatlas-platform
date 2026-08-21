@@ -62,36 +62,54 @@ export class ConsolidationEngine {
   /**
    * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
    */
-  private parseEmbedding(rawEmb: any): Float32Array | null {
+  private normalizeEmbedding(result: Float32Array): Float32Array {
+    let norm = 0;
+    for (let i = 0; i < result.length; i++) {
+      norm += result[i] * result[i];
+    }
+    if (norm > 0) {
+      const len = Math.sqrt(norm);
+      for (let i = 0; i < result.length; i++) {
+        result[i] /= len;
+      }
+    }
+    return result;
+  }
+
+  private parseEmbedding(rawEmb: Float32Array | number[] | Uint8Array | string | null | undefined): Float32Array | null {
+    let result: Float32Array | null = null;
     if (!rawEmb) return null;
 
     if (rawEmb instanceof Float32Array) {
-      return rawEmb;
-    }
-
-    if (Array.isArray(rawEmb)) {
-      return new Float32Array(rawEmb);
-    }
-
-    if (rawEmb instanceof Uint8Array || rawEmb instanceof Buffer) {
+      // Create a copy to avoid mutating the original input if it's cached or reused
+      result = new Float32Array(rawEmb);
+    } else if (Array.isArray(rawEmb)) {
+      result = new Float32Array(rawEmb);
+    } else if (rawEmb instanceof Uint8Array) {
       // Int8Array/Uint8Array containing Float32 raw bytes
       if (rawEmb.byteLength % 4 === 0) {
-        return new Float32Array(rawEmb.buffer, rawEmb.byteOffset, rawEmb.byteLength / 4);
+        // Deep copy the buffer to avoid mutating shared internal memory pools.
+        // Guard against SharedArrayBuffer which lacks .slice()
+        if (rawEmb.buffer instanceof ArrayBuffer) {
+          const copy = rawEmb.buffer.slice(rawEmb.byteOffset, rawEmb.byteOffset + rawEmb.byteLength);
+          result = new Float32Array(copy);
+        } else {
+          // Fallback for SharedArrayBuffer
+          result = new Float32Array(new Uint8Array(rawEmb.buffer, rawEmb.byteOffset, rawEmb.byteLength).slice().buffer);
+        }
       }
-    }
-
-    if (typeof rawEmb === "string") {
+    } else if (typeof rawEmb === "string") {
       try {
         const parsed = JSON.parse(rawEmb);
         if (Array.isArray(parsed)) {
-          return new Float32Array(parsed);
+          result = new Float32Array(parsed);
         }
       } catch {
-        return null;
+        // Ignoring JSON.parse SyntaxError: fallback to null if string is not a valid JSON array
       }
     }
 
-    return null;
+    return result;
   }
 
   /**
@@ -202,6 +220,7 @@ export class ConsolidationEngine {
         const embedding = this.parseEmbedding(rawEmb);
 
         if (!embedding) continue;
+        this.normalizeEmbedding(embedding);
 
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push({ id, importance, embedding });
@@ -475,6 +494,7 @@ export class ConsolidationEngine {
         const embedding = this.parseEmbedding(rawEmb);
 
         if (!embedding) continue;
+        this.normalizeEmbedding(embedding);
 
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push({ id, confidence, embedding });
@@ -523,25 +543,38 @@ export class ConsolidationEngine {
    * - Confidence decays exponentially with time (0.995 per day)
    * - Archived concepts get reduced confidence
    */
+  /**
+   * Computes the cosine similarity of two vectors using only their dot product.
+   * PRECONDITION: vecA and vecB must be pre-normalized to unit length (L2 norm = 1).
+   * Calling this with unnormalized vectors will return an incorrect result.
+   */
   private cosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
     if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) {
       return 0;
     }
 
-    let dot = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let i = 0; i < vecA.length; i++) {
-      dot += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
+    if (process.env.NODE_ENV !== 'production') {
+      let normA = 0;
+      let normB = 0;
+      for (let i = 0; i < vecA.length; i++) {
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
+      }
+      // Allow zero-vectors, which have norm 0. Otherwise check for unit length.
+      if (normA > 0 && Math.abs(normA - 1) > 0.01) {
+         throw new Error(`cosineSimilarity invariant violation: vecA is not unit normalized (norm=${normA})`);
+      }
+      if (normB > 0 && Math.abs(normB - 1) > 0.01) {
+         throw new Error(`cosineSimilarity invariant violation: vecB is not unit normalized (norm=${normB})`);
+      }
     }
 
-    const denom = Math.sqrt(normA) * Math.sqrt(normB);
-    if (denom === 0) return 0;
+    let dot = 0;
+    for (let i = 0; i < vecA.length; i++) {
+      dot += vecA[i] * vecB[i];
+    }
 
-    return dot / denom;
+    return dot;
   }
 }
 
