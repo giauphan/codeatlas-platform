@@ -37,3 +37,7 @@
 **Vulnerability:** A fetch call to an external or internal microservice bubbled up the raw response text directly into the thrown Error object.
 **Learning:** This is a classic Information Exposure vulnerability, as downstream APIs often return internal stack traces, container paths, or verbose context in the raw response body, which should never be exposed to users in a JSON-RPC response.
 **Prevention:** Rely strictly on HTTP Status (`res.status`) and Status Text (`res.statusText`) along with the URL (`res.url`) to build informative but sanitized error strings, and explicitly avoid interpolating `res.text()` or `res.json()` directly into exception messages.
+## 2026-08-21 - SQL Injection in Dynamic IN Clauses
+**Vulnerability:** User data and query results were being manually escaped (e.g., `id.replace(/'/g, "''")`) and concatenated directly into the SQL string to form `IN` clauses for execution via `connection.execute`.
+**Learning:** String concatenation for SQL, even when trying to manually escape characters, is highly prone to bypasses and violates the core defense-in-depth principles. The correct method for `IN` clauses when using `oracledb` or similar adapters is to dynamically generate bound parameter names (e.g., `:id0, :id1`) and pass the values cleanly through the bindings object.
+**Prevention:** Never use template literals to inject arrays of strings or IDs into a `WHERE id IN (...)` statement. Always map the array to named (or positional) bind variables and supply the actual array contents via the secondary `binds` object.
