@@ -19,15 +19,18 @@ CodeAtlas Platform is configured via environment variables. Copy `.env.example` 
 | `CODEATLAS_PROJECT_DIR` | `./` | Canonical project directory for single-tenant mode. |
 | `CODEATLAS_DISABLED_TOOLS` | unset | Comma-separated MCP tool names to disable (e.g., `scan_enterprise_vulnerabilities`). |
 
-## Oracle 26ai
+## SQLite + sqlite-vec
+
+SQLite is default database for local and current deployment flow. `sqlite-vec` loads automatically through the SQLite adapter.
 
 | Variable | Default | Description |
 |---|---|---|
-| `ORACLE_CONN_STRING` | required | Oracle connection string: `host:port/service_name` or TNS alias. |
-| `ORACLE_USER` | `ADMIN` | Oracle database username. |
-| `ORACLE_PASSWORD` | required | Oracle database password. |
-| `ORACLE_LIB_DIR` | `./instantclient` | Oracle Instant Client path (Thick mode). Leave empty for Thin mode. |
-| `ORACLE_WALLET_DIR` | `./wallet` | Oracle Wallet directory for mTLS auth. Leave empty if not using wallet. |
+| `CODEATLAS_DB_TYPE` | `sqlite` | Database backend selection. Keep `sqlite`. |
+| `CODEATLAS_SQLITE_PATH` | `./data/codeatlas.db` | SQLite database file path. |
+
+Initialize or seed database with `pnpm run db-seed`. To copy existing Oracle data into SQLite, run `pnpm run db-migrate-oracle-to-sqlite` with migration-only Oracle credentials configured outside this template.
+
+Oracle adapter configuration is intentionally omitted from `.env.example` and remains legacy migration/fallback code for now.
 
 ## Firebase
 

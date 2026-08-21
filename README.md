@@ -6,7 +6,7 @@
 [![npm version](https://img.shields.io/npm/v/codeatlas-ai.svg)](https://www.npmjs.com/package/codeatlas-ai)
 [![GitHub release](https://img.shields.io/github/v/release/giauphan/codeatlas-platform)](https://github.com/giauphan/codeatlas-platform/releases)
 
-AI-powered codebase intelligence platform — MCP Server, AST analysis, Knowledge Graph, and semantic memory with Oracle 26ai.
+AI-powered codebase intelligence platform — MCP Server, AST analysis, Knowledge Graph, and semantic memory with SQLite + sqlite-vec by default, with Oracle 26ai fallback.
 
 Ship a secure, multi-tenant codebase intelligence backend without rebuilding authentication, MCP tooling, semantic memory, and knowledge graph infrastructure from scratch. CodeAtlas Platform is an open-source foundation for developers who want a clear starting point for AI-native code analysis services.
 

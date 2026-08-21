@@ -130,7 +130,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     const sql = `
       SELECT id, 1 - vec_distance_cosine(embedding, ?) AS score
       FROM ${table}
-      WHERE tenant_id = ?
+      WHERE tenant_id = ? AND embedding IS NOT NULL
       ORDER BY vec_distance_cosine(embedding, ?) ASC
       LIMIT ?
     `;
@@ -161,8 +161,22 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         updated_at TEXT DEFAULT (datetime('now')),
         last_accessed_at TEXT,
         access_count INTEGER DEFAULT 0,
-        tenant_id TEXT NOT NULL
+        evidence_count INTEGER DEFAULT 0,
+        version INTEGER DEFAULT 1,
+        related_ids TEXT,
+        tenant_id TEXT NOT NULL,
+        UNIQUE (project, memory_type, content_hash, tenant_id)
       );
+      DELETE FROM ai_dreaming_memory
+      WHERE content_hash IS NOT NULL
+        AND rowid NOT IN (
+          SELECT MAX(rowid)
+          FROM ai_dreaming_memory
+          WHERE content_hash IS NOT NULL
+          GROUP BY project, memory_type, content_hash, tenant_id
+        );
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_dreaming_dedup
+        ON ai_dreaming_memory(project, memory_type, content_hash, tenant_id);
       CREATE INDEX IF NOT EXISTS idx_dreaming_tenant_project ON ai_dreaming_memory(tenant_id, project);
       CREATE INDEX IF NOT EXISTS idx_dreaming_hash ON ai_dreaming_memory(content_hash);
 
@@ -235,6 +249,26 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         updated_at TEXT DEFAULT (datetime('now')),
         tenant_id TEXT NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS idx_genome_tenant_project ON codeatlas_genome(tenant_id, project);
+
+      CREATE TABLE IF NOT EXISTS gene_mutations (
+        id TEXT PRIMARY KEY,
+        gene_id TEXT REFERENCES codeatlas_genome(id),
+        previous_version INTEGER,
+        new_version INTEGER,
+        change_reason TEXT,
+        diff_summary TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS gene_relationships (
+        source_id TEXT REFERENCES codeatlas_genome(id),
+        target_id TEXT REFERENCES codeatlas_genome(id),
+        relationship_type TEXT,
+        weight REAL DEFAULT 1.0,
+        created_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (source_id, target_id, relationship_type)
+      );
 
       CREATE TABLE IF NOT EXISTS ai_semantic_memory (
         id TEXT PRIMARY KEY,
@@ -260,6 +294,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
 
       CREATE TABLE IF NOT EXISTS ai_episodic_memory (
         id TEXT PRIMARY KEY,
+        project_name TEXT NOT NULL,
         event_type TEXT,
         event_data TEXT,
         created_at TEXT DEFAULT (datetime('now')),
@@ -284,6 +319,19 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         tenant_id TEXT NOT NULL
       );
     `);
+
+    const addColumnIfMissing = (table: string, column: string, definition: string): void => {
+      const columns = this.db!.pragma(`table_info(${table})`) as Array<{ name: string }>;
+      if (!columns.some((entry) => entry.name === column)) {
+        this.db!.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      }
+    };
+
+    addColumnIfMissing("ai_episodic_memory", "project_name", "TEXT");
+    addColumnIfMissing("ai_dreaming_memory", "evidence_count", "INTEGER DEFAULT 0");
+    addColumnIfMissing("ai_dreaming_memory", "version", "INTEGER DEFAULT 1");
+    addColumnIfMissing("ai_dreaming_memory", "related_ids", "TEXT");
+    this.db!.exec("CREATE INDEX IF NOT EXISTS idx_episodic_tenant_project ON ai_episodic_memory(tenant_id, project_name)");
 
     logger.info("[SQLiteAdapter] Schema initialized.");
   }

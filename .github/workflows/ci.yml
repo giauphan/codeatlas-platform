@@ -59,6 +59,45 @@ jobs:
         working-directory: ./
         run: pnpm test
 
+  sqlite:
+    name: SQLite + sqlite-vec
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      CODEATLAS_DB_TYPE: sqlite
+      CODEATLAS_SQLITE_PATH: ${{ github.workspace }}/.tmp/codeatlas-ci.db
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@9 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild SQLite native binding
+        run: pnpm rebuild better-sqlite3
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit --skipLibCheck
+
+      - name: Initialize and seed SQLite
+        run: |
+          mkdir -p "$(dirname "$CODEATLAS_SQLITE_PATH")"
+          pnpm run db-seed
+
+      - name: Run SQLite tests
+        run: pnpm test
+
   security:
     name: Security & Dependency Audit
     runs-on: ubuntu-latest
