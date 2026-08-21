@@ -28,13 +28,13 @@ interface LoadingButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   defaultText: string;
 }
 
-const LoadingButton = ({ onClick, disabled, loading, loadingText, defaultText, style, className, type = "button", ...rest }: LoadingButtonProps) => (
-  <button onClick={onClick} disabled={disabled || loading} className={className} style={style} type={type} aria-busy={loading} aria-live="polite" {...rest}>
+const LoadingButton = ({ onClick, disabled, loading, loadingText, defaultText, style, className, type = "button", children, ...rest }: LoadingButtonProps) => (
+  <button onClick={onClick} disabled={disabled || loading} className={className} style={style} type={type} {...rest}>
     {loading ? (
-      <>
-        <Loader2 className="animate-spin" size={16} aria-hidden="true" style={{ marginRight: '0.25rem', verticalAlign: 'text-bottom' }} />
+      <span role="status" style={{ display: 'inline-flex', alignItems: 'center' }}>
+        <Loader2 className="animate-spin" size={16} aria-hidden="true" style={{ marginRight: '0.25rem' }} />
         {loadingText}
-      </>
+      </span>
     ) : defaultText}
   </button>
 );
