@@ -28,7 +28,7 @@ interface LoadingButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   defaultText: string;
 }
 
-const LoadingButton = ({ onClick, disabled, loading, loadingText, defaultText, style, className, type = "button", children, ...rest }: LoadingButtonProps) => (
+const LoadingButton = ({ onClick, disabled, loading, loadingText, defaultText, style, className, type = "button", ...rest }: LoadingButtonProps) => (
   <button onClick={onClick} disabled={disabled || loading} className={className} style={style} type={type} {...rest}>
     {loading ? (
       <span role="status" style={{ display: 'inline-flex', alignItems: 'center' }}>
