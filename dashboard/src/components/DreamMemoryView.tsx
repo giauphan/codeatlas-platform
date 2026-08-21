@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
@@ -29,7 +29,7 @@ interface LoadingButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const LoadingButton = ({ onClick, disabled, loading, loadingText, defaultText, style, className, type = "button", ...rest }: LoadingButtonProps) => (
-  <button onClick={onClick} disabled={disabled || loading} className={className} style={style} type={type} aria-busy={loading} {...rest}>
+  <button onClick={onClick} disabled={disabled || loading} className={className} style={style} type={type} aria-busy={loading} aria-live="polite" {...rest}>
     {loading ? (
       <>
         <Loader2 className="animate-spin" size={16} aria-hidden="true" style={{ marginRight: '0.25rem', verticalAlign: 'text-bottom' }} />
