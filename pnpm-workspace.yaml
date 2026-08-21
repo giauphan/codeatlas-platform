@@ -3,7 +3,7 @@ packages:
   - "."
 allowBuilds:
   '@firebase/util': true
-  better-sqlite3: set this to true or false
+  better-sqlite3: false
   esbuild: true
   oracledb: true
   protobufjs: true
