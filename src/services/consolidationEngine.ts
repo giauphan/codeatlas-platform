@@ -532,8 +532,6 @@ export class ConsolidationEngine {
     let normA = 0;
     let normB = 0;
 
-    // Performance optimization: Cache array length and elements to local variables
-    // to avoid redundant property lookups and bounds checking in the hot loop.
     const len = vecA.length;
     for (let i = 0; i < len; i++) {
       const a = vecA[i];
