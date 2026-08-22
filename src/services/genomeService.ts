@@ -20,6 +20,23 @@ export function getTenantId(): string {
   return auth ? auth.uid : "admin";
 }
 
+// ─── Shared Helpers ───────────────────────────────────
+
+/**
+ * Helper to build an IN clause with parameterized bindings.
+ * @param ids Array of ID strings
+ * @param tenantId The current tenant ID context
+ */
+function buildInClause(ids: string[], tenantId: string): { clause: string; binds: Record<string, unknown> } {
+  const binds: Record<string, unknown> = { tenantId };
+  if (ids.length === 0) {
+    return { clause: "1=0", binds };
+  }
+  const clause = ids.map((_, i) => `:id${i}`).join(",");
+  ids.forEach((id, i) => { binds[`id${i}`] = String(id); });
+  return { clause, binds };
+}
+
 // ─── Row Index Constants ───────────────────────────────────
 function rowValue<T = unknown>(row: any, name: string): T | undefined {
   return (
@@ -235,9 +252,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const bindParams: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { bindParams[`id${i}`] = String(id); });
+      const { clause: idBinds, binds: bindParams } = buildInClause(ids, tenantId);
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -845,9 +860,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const bindParams: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { bindParams[`id${i}`] = String(id); });
+      const { clause: idBinds, binds: bindParams } = buildInClause(ids, tenantId);
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -988,14 +1001,12 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const bindParams: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { bindParams[`id${i}`] = String(id); });
+      const { clause: idBinds, binds: bindParams } = buildInClause(ids, tenantId);
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
-                usage_count, success_rate,embedding, status,
+                usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
@@ -1131,9 +1142,7 @@ Apply this knowledge when encountering similar problems.
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const bindParams: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { bindParams[`id${i}`] = String(id); });
+      const { clause: idBinds, binds: bindParams } = buildInClause(ids, tenantId);
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
