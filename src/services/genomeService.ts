@@ -13,28 +13,12 @@ import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
+import { buildInClause } from "../database/utils.js";
 
 /** Get authenticated tenant ID — fallback to admin for testing */
 export function getTenantId(): string {
   const auth = authStorage.getStore();
   return auth ? auth.uid : "admin";
-}
-
-// ─── Shared Helpers ───────────────────────────────────
-
-/**
- * Helper to build an IN clause with parameterized bindings.
- * @param ids Array of ID strings
- * @param tenantId The current tenant ID context
- */
-function buildInClause(ids: string[], tenantId: string): { clause: string; binds: Record<string, unknown> } {
-  const binds: Record<string, unknown> = { tenantId };
-  if (ids.length === 0) {
-    return { clause: "NULL", binds };
-  }
-  const clause = ids.map((_, i) => `:id${i}`).join(",");
-  ids.forEach((id, i) => { binds[`id${i}`] = String(id); });
-  return { clause, binds };
 }
 
 // ─── Row Index Constants ───────────────────────────────────
@@ -252,7 +236,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const { clause: idBinds, binds: bindParams } = buildInClause(ids, tenantId);
+      const { clause: idBinds, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -261,7 +245,7 @@ export class GenomeService {
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        bindParams as any,
+        bindParams as Record<string, unknown>,
       );
 
       const rows = result.rows || [];
@@ -860,7 +844,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const { clause: idBinds, binds: bindParams } = buildInClause(ids, tenantId);
+      const { clause: idBinds, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -869,7 +853,7 @@ export class GenomeService {
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        bindParams as any,
+        bindParams as Record<string, unknown>,
       );
 
       const rows = result.rows || [];
@@ -1001,7 +985,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const { clause: idBinds, binds: bindParams } = buildInClause(ids, tenantId);
+      const { clause: idBinds, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -1010,7 +994,7 @@ export class GenomeService {
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        bindParams as any,
+        bindParams as Record<string, unknown>,
       );
 
       const rows = result.rows || [];
@@ -1142,7 +1126,7 @@ Apply this knowledge when encountering similar problems.
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const { clause: idBinds, binds: bindParams } = buildInClause(ids, tenantId);
+      const { clause: idBinds, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -1151,7 +1135,7 @@ Apply this knowledge when encountering similar problems.
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        bindParams as any,
+        bindParams as Record<string, unknown>,
       );
 
       const rows = result.rows || [];
