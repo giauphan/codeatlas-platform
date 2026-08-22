@@ -13,6 +13,7 @@ import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
+import { buildInClause } from "../database/utils.js";
 
 /** Get authenticated tenant ID — fallback to admin for testing */
 export function getTenantId(): string {
@@ -235,7 +236,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+      const { clause: inClause, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -243,8 +244,8 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId } as any,
+         WHERE tenant_id = :tenantId AND id IN (${inClause})`,
+        bindParams,
       );
 
       const rows = result.rows || [];
@@ -843,7 +844,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+      const { clause: inClause, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -851,8 +852,8 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId } as any,
+         WHERE tenant_id = :tenantId AND id IN (${inClause})`,
+        bindParams,
       );
 
       const rows = result.rows || [];
@@ -984,16 +985,16 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+      const { clause: inClause, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
-                usage_count, success_rate,embedding, status,
+                usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId } as any,
+         WHERE tenant_id = :tenantId AND id IN (${inClause})`,
+        bindParams,
       );
 
       const rows = result.rows || [];
@@ -1125,7 +1126,7 @@ Apply this knowledge when encountering similar problems.
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+      const { clause: inClause, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -1133,8 +1134,8 @@ Apply this knowledge when encountering similar problems.
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId } as any,
+         WHERE tenant_id = :tenantId AND id IN (${inClause})`,
+        bindParams,
       );
 
       const rows = result.rows || [];
