@@ -472,14 +472,13 @@ export class GenomeService {
       await setSessionContext(connection);
 
       // Fetch all genes
+      const { clause: inClause, binds: bindParams } = buildInClause(geneIds, { tenantId: getTenantId() });
+
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, confidence, version, embedding
-         FROM codeatlas_genome WHERE tenant_id = :tenantId AND id IN (${geneIds.map((_, i) => `:id${i}`).join(",")})`,
-        {
-          tenantId: getTenantId(),
-          ...geneIds.reduce((acc, id, i) => ({ ...acc, [`id${i}`]: id }), {}),
-        } as any,
+         FROM codeatlas_genome WHERE tenant_id = :tenantId AND id IN (${inClause})`,
+        bindParams,
       );
 
       const genes = result.rows || [];
@@ -1177,16 +1176,14 @@ Apply this knowledge when encountering similar problems.
         const chunkSize = 900;
         for (let i = 0; i < nameList.length; i += chunkSize) {
           const chunk = nameList.slice(i, i + chunkSize);
-          const nameBinds: Record<string, string> = {
+          const { clause: inClause, binds: nameBinds } = buildInClause(chunk, {
             newProject,
             tenantId: getTenantId(),
-          };
-          const inClause = chunk.map((_, idx) => `:n${idx}`).join(",");
-          chunk.forEach((n, idx) => (nameBinds[`n${idx}`] = n));
+          });
 
           const existingQuery = await connection.execute<any[]>(
             `SELECT id, name, version FROM codeatlas_genome WHERE name IN (${inClause}) AND project = :newProject AND tenant_id = :tenantId`,
-            nameBinds as any,
+            nameBinds,
           );
           if (existingQuery.rows) {
             existingRows.push(...existingQuery.rows);
