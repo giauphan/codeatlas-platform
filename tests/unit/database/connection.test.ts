@@ -29,15 +29,16 @@ describe('Database Connection', async () => {
     mock.restoreAll();
   });
 
-  describe('getPool', () => {
-    test('returns null before initialization', () => {
-      assert.strictEqual(connectionModule.getPool(), null);
-    });
-
-    test('returns the pool after initialization', async () => {
+  describe('Adapter Pool', () => {
+    test('initPool returns a pool-like object', async () => {
       const pool = await connectionModule.initPool();
-      assert.deepStrictEqual(connectionModule.getPool(), pool);
-      assert.strictEqual(pool._mockPool, true);
+      assert.ok(pool.getConnection);
+      const conn = await pool.getConnection();
+      assert.ok(conn.execute);
+      assert.ok(conn.executeMany);
+      assert.ok(conn.commit);
+      assert.ok(conn.rollback);
+      assert.ok(conn.close);
     });
   });
 });

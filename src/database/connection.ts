@@ -1,127 +1,122 @@
-import oracledb from "oracledb";
-import * as path from "node:path";
+import { createDatabaseAdapter } from "./factory.js";
+import type { IDatabaseAdapter } from "./adapters/interface.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 
-// Connection pool singleton
-let pool: oracledb.Pool | null = null;
-
-const getDbConfig = () => {
-  const user = process.env.ORACLE_USER || "ADMIN";
-  const password = process.env.ORACLE_PASSWORD;
-  const connectString = process.env.ORACLE_CONN_STRING;
-  if (!password) throw new Error("ORACLE_PASSWORD environment variable is required");
-  if (!connectString) throw new Error("ORACLE_CONN_STRING environment variable is required");
-  return { user, password, connectString };
-};
+// Database adapter singleton
+let adapter: IDatabaseAdapter | null = null;
 
 /**
- * Returns the current connection pool (may be null if not yet initialized).
+ * Returns the current database adapter (may be null if not yet initialized).
  */
-export function getPool(): oracledb.Pool | null {
-  return pool;
+export function getAdapter(): IDatabaseAdapter | null {
+  return adapter;
 }
 
 /**
- * Initializes the Connection Pool (reuses existing pool if already created).
+ * Initializes the database adapter based on CODEATLAS_DB_TYPE environment variable.
+ * Defaults to SQLite.
  */
-export async function initPool(): Promise<oracledb.Pool> {
-  if (!pool) {
+export async function initAdapter(): Promise<IDatabaseAdapter> {
+  if (!adapter) {
     try {
-      // Activate Thick Mode — needed for TCPS (mTLS) wallet connections.
-      // Triggered by either ORACLE_LIB_DIR (explicit lib path) or ORACLE_WALLET_DIR (wallet config).
-      const walletDir = process.env.ORACLE_WALLET_DIR;
-      const libDir = process.env.ORACLE_LIB_DIR;
-      if (libDir || walletDir) {
-        logger.info("🚀 Initializing Oracle Client in Thick Mode...");
-        try {
-          const initOptions: oracledb.InitialiseOptions = {};
-          if (walletDir) {
-            // Resolve relative to project root
-            const absWalletDir = path.resolve(walletDir);
-            initOptions.configDir = absWalletDir;
-            // Also set TNS_ADMIN so sqlnet.ora and wallet files are found
-            process.env.TNS_ADMIN = absWalletDir;
-          }
-          // On Linux, cannot pass libDir to initOracleClient (causes DPI-1047).
-          // Must use LD_LIBRARY_PATH or ldconfig instead.
-          if (process.platform !== "linux" && libDir) {
-            initOptions.libDir = libDir;
-          }
-          oracledb.initOracleClient(initOptions);
-        } catch (initErr: unknown) {
-          const msg = initErr instanceof Error ? initErr.message : String(initErr);
-          if (msg.includes("already initialized")) {
-            logger.info("ℹ️ Oracle Client is already initialized.");
-          } else {
-            logger.warn("⚠️ Warning initializing Oracle Client in Thick Mode:", msg);
-          }
-        }
-      }
-
-      // Configure standard data formats for Oracle 26ai
-      oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
-      oracledb.fetchAsString = [oracledb.CLOB];
-
-      pool = await oracledb.createPool({
-        ...getDbConfig(),
-        poolMin: 0,
-        poolMax: 3,
-        poolIncrement: 1,
-        queueTimeout: 300000,
-      });
-
-      logger.info("✅ Oracle 26ai DB Pool initialized successfully (Thick Mode)");
+      adapter = createDatabaseAdapter();
+      await adapter.connect();
+      logger.info(`Database adapter initialized (${process.env.CODEATLAS_DB_TYPE || "sqlite"})`);
     } catch (err: unknown) {
-      logger.error("❌ Failed to initialize Oracle DB pool:", err instanceof Error ? err.message : String(err));
+      logger.error("Failed to initialize database adapter:", err instanceof Error ? err.message : String(err));
       throw err;
     }
   }
-  return pool;
+  return adapter;
 }
 
 /**
- * Configures the Session Context for Row-Level Security (Oracle Virtual Private Database)
+ * Connection-like façade over IDatabaseAdapter.
+ * The Second Brain services were written against the oracledb Connection API;
+ * this keeps them working on any adapter without a rewrite of every call site.
  */
-export async function setSessionContext(connection: oracledb.Connection) {
+export interface AdapterConnection {
+  execute<T = unknown>(
+    sql: string,
+    binds?: Record<string, unknown> | unknown[],
+    opts?: Record<string, unknown>
+  ): Promise<{ rows: T[]; rowsAffected: number }>;
+  executeMany(
+    sql: string,
+    binds: Array<Record<string, unknown>>,
+    opts?: Record<string, unknown>
+  ): Promise<{ rowsAffected: number; batchErrors?: Array<{ message: string }> }>;
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
+  close(): Promise<void>;
+}
+
+const READ_QUERY = /^\s*(?:WITH|SELECT)\b/i;
+
+function wrapAdapter(db: IDatabaseAdapter): AdapterConnection {
+  return {
+    async execute<T = unknown>(sql: string, binds = {}, _opts = {}) {
+      if (READ_QUERY.test(sql)) {
+        const rows = await db.query<T>(sql, binds);
+        return { rows, rowsAffected: rows.length };
+      }
+      const res = await db.execute(sql, binds);
+      return { rows: [] as T[], rowsAffected: res.rowsAffected };
+    },
+    async executeMany(sql: string, binds: Array<Record<string, unknown>>, _opts = {}) {
+      const res = await db.executeMany(sql, binds);
+      return { rowsAffected: res.rowsAffected };
+    },
+    async commit() {
+      // Adapters auto-commit each statement.
+    },
+    async rollback() {
+      // Adapters auto-commit each statement; no transaction to unwind.
+    },
+    async close() {
+      // The adapter owns the underlying pool/handle.
+    },
+  };
+}
+
+/**
+ * Backwards-compatible pool accessor for services written against oracledb.
+ * Returns a pool-like object whose getConnection() yields an adapter-backed façade.
+ */
+export async function initPool(): Promise<{ getConnection: () => Promise<AdapterConnection> }> {
+  const db = await initAdapter();
+  return { getConnection: async () => wrapAdapter(db) };
+}
+
+/**
+ * Configures the Session Context for Row-Level Security.
+ * Oracle applies VPD via a package call; SQLite/Postgres enforce tenant
+ * isolation through explicit tenant_id predicates, so this only validates auth.
+ */
+export async function setSessionContext(connection?: unknown): Promise<void> {
   const auth = authStorage.getStore();
   if (!auth) {
     throw new Error("Auth context required — call within authStorage.run()");
   }
-  const tenantId = auth.uid;
 
-  try {
-    // Invoke the context package to dynamically apply Row-Level Security row-filtering policies
-    const sql = `BEGIN ADMIN.codeatlas_ctx_pkg.set_tenant(:tenantId); END;`;
-    await connection.execute(sql, { tenantId });
-    logger.info(`[Oracle RLS] Security Context set for tenant: ${tenantId}`);
-  } catch (err: unknown) {
-    logger.error("[Oracle RLS] Failed to set security context:", err instanceof Error ? err.message : String(err));
-    throw err;
+  if ((process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase() === "oracle" && connection) {
+    await (connection as AdapterConnection).execute(
+      `BEGIN ADMIN.codeatlas_ctx_pkg.set_tenant(:tenantId); END;`,
+      { tenantId: auth.uid }
+    );
   }
 }
 
 /**
- * Health check ping to keep the Always Free Oracle Database active (prevents auto-stopping due to 7 days idle)
+ * Health check ping to keep the database active.
  */
-export async function ping() {
-  let connection;
+export async function ping(): Promise<void> {
   try {
-    const p = await initPool();
-    connection = await p.getConnection();
-    const result = await connection.execute("SELECT 1 FROM DUAL");
-    logger.info("[Oracle DB] Keep-alive ping executed successfully:", result.rows);
+    const db = await initAdapter();
+    const result = await db.query("SELECT 1 AS ping_result");
+    logger.info("[Database] Keep-alive ping executed successfully:", result);
   } catch (err) {
-    logger.error("[Oracle DB] Keep-alive ping failed:", err instanceof Error ? err.message : String(err));
-  } finally {
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (closeErr) {
-        logger.error("[Oracle DB] Keep-alive ping connection close error:", closeErr);
-      }
-    }
+    logger.error("[Database] Keep-alive ping failed:", err instanceof Error ? err.message : String(err));
   }
 }
-
-export { getDbConfig };

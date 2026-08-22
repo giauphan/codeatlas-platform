@@ -78,11 +78,11 @@ export class OracleDreamingService {
    * with Record<string, unknown>, so the cast is isolated in this single method.
    */
   private static async executeAsync(
-    connection: Connection,
+    connection: { execute: (sql: string, binds?: Record<string, unknown>) => Promise<{ rows: unknown[] }> },
     sql: string,
     binds: Record<string, unknown>
   ) {
-    return connection.execute(sql, binds as oracledb.BindParameters);
+    return connection.execute(sql, binds);
   }
 
   /** Cache of detected columns so we only check once per process lifetime */
@@ -93,15 +93,27 @@ export class OracleDreamingService {
    * Check if a column exists in the ai_dreaming_memory table.
    * Results are cached after first check.
    */
-  private static async checkColumn(connection: Connection, colName: string): Promise<boolean> {
+  private static async checkColumn(
+    connection: { execute: (sql: string, binds?: Record<string, unknown>) => Promise<{ rows: unknown[] }> },
+    colName: string,
+  ): Promise<boolean> {
+    const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
+    if (dbType !== "oracle") {
+      const adapter = createDatabaseAdapter();
+      await adapter.connect();
+      try {
+        return await adapter.checkColumnExists("ai_dreaming_memory", colName);
+      } finally {
+        await adapter.disconnect();
+      }
+    }
     const result = await connection.execute(
       `SELECT COUNT(*) AS cnt FROM USER_TAB_COLUMNS
        WHERE table_name = 'AI_DREAMING_MEMORY' AND column_name = :col`,
-      { col: colName.toUpperCase() }
+      { col: colName.toUpperCase() },
     );
-    // oracledb runs with OUT_FORMAT_OBJECT — rows are [{CNT: number}]
     const rows = result.rows as Array<Record<string, number>> | undefined;
-    return !!(rows && rows.length > 0 && (rows[0]['CNT'] ?? 0) > 0);
+    return !!(rows && rows.length > 0 && (rows[0].CNT ?? 0) > 0);
   }
 
   /**
