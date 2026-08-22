@@ -141,9 +141,30 @@ export const DocumentationView: React.FC = () => {
           { id: 'mcp', label: 'MCP Editor Config', icon: Settings },
           { id: 'architecture', label: 'Architecture', icon: Layers },
           { id: 'graph', label: 'Interactive Guide', icon: HelpCircle },
-        ].map((tab) => {
+        ].map((tab, index, array) => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
+
+          const handleKeyDown = (e: React.KeyboardEvent) => {
+            let nextIndex = -1;
+            if (e.key === 'ArrowRight') {
+              nextIndex = (index + 1) % array.length;
+            } else if (e.key === 'ArrowLeft') {
+              nextIndex = (index - 1 + array.length) % array.length;
+            } else if (e.key === 'Home') {
+              nextIndex = 0;
+            } else if (e.key === 'End') {
+              nextIndex = array.length - 1;
+            }
+
+            if (nextIndex !== -1) {
+              e.preventDefault();
+              setActiveSubTab(array[nextIndex].id as any);
+              const nextTab = document.getElementById(`tab-${array[nextIndex].id}`);
+              if (nextTab) nextTab.focus();
+            }
+          };
+
           return (
             <button
               key={tab.id}
@@ -151,7 +172,9 @@ export const DocumentationView: React.FC = () => {
               aria-selected={isActive}
               aria-controls={`panel-${tab.id}`}
               id={`tab-${tab.id}`}
+              tabIndex={isActive ? 0 : -1}
               onClick={() => setActiveSubTab(tab.id as any)}
+              onKeyDown={handleKeyDown}
               className={FOCUS_RING_CLASS}
               style={{
                 background: 'transparent',
