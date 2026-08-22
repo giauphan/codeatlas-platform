@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 
+type TabType = 'mcp' | 'architecture' | 'graph';
+
 export const DocumentationView: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'mcp' | 'architecture' | 'graph'>('mcp');
+  const [activeSubTab, setActiveSubTab] = useState<TabType>('mcp');
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   const backendUrl = window.location.origin.includes('localhost:5173')
@@ -159,7 +161,7 @@ export const DocumentationView: React.FC = () => {
 
             if (nextIndex !== -1) {
               e.preventDefault();
-              setActiveSubTab(array[nextIndex].id as 'mcp' | 'architecture' | 'graph');
+              setActiveSubTab(array[nextIndex].id as TabType);
               const nextTab = document.getElementById(`tab-${array[nextIndex].id}`);
               if (nextTab) nextTab.focus();
             }
@@ -173,7 +175,7 @@ export const DocumentationView: React.FC = () => {
               aria-controls={`panel-${tab.id}`}
               id={`tab-${tab.id}`}
               tabIndex={isActive ? 0 : -1}
-              onClick={() => setActiveSubTab(tab.id as 'mcp' | 'architecture' | 'graph')}
+              onClick={() => setActiveSubTab(tab.id as TabType)}
               onKeyDown={handleKeyDown}
               className={FOCUS_RING_CLASS}
               style={{
