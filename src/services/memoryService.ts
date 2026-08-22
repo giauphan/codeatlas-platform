@@ -164,12 +164,14 @@ export class MemoryService {
       if (queryVector) {
         const hits = await db.searchVector("ai_semantic_memory", queryVector, limit, tid);
         if (hits.length === 0) return [];
-        const ids = hits.map(h => `'${String(h.id).replace(/'/g, "''")}'`).join(",");
+        const idBinds = hits.map((_, i) => `:id${i}`).join(",");
+        const bindParams: Record<string, unknown> = { project, tenantId: tid };
+        hits.forEach((h, i) => { bindParams[`id${i}`] = String(h.id); });
         return await db.query<Record<string, unknown>>(
           `SELECT entity_name, entity_type, file_path, content
            FROM ai_semantic_memory
-           WHERE project_name = :project AND tenant_id = :tenantId AND id IN (${ids})`,
-          { project, tenantId: tid }
+           WHERE project_name = :project AND tenant_id = :tenantId AND id IN (${idBinds})`,
+          bindParams
         );
       }
 
