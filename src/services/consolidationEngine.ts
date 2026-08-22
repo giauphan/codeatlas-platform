@@ -531,11 +531,15 @@ export class ConsolidationEngine {
     let dot = 0;
     let normA = 0;
     let normB = 0;
+    const len = vecA.length;
 
-    for (let i = 0; i < vecA.length; i++) {
-      dot += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
+    // ⚡ Bolt: Cache array lengths and extract array elements to local variables inside the loop to avoid multiple lookups
+    for (let i = 0; i < len; i++) {
+      const vA = vecA[i];
+      const vB = vecB[i];
+      dot += vA * vB;
+      normA += vA * vA;
+      normB += vB * vB;
     }
 
     const denom = Math.sqrt(normA) * Math.sqrt(normB);

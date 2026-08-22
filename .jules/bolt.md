@@ -25,3 +25,7 @@
 ## 2026-08-19 - Pre-parsing vectors to avoid O(N^2) inner-loop allocations
 **Learning:** When calculating vector similarities or comparisons in $O(N^2)$ nested loops, repeatedly extracting properties (`getVal`) and parsing raw string/arrays into `Float32Array` within the inner loop causes massive, redundant CPU cycles and garbage collection pressure in V8.
 **Action:** When calculating similarity matrix distances or comparisons, pre-parse data structures (like converting raw arrays to `Float32Array`) and extract invariant lookups during an $O(N)$ preprocessing phase, mapping the valid subset to an array of objects to iterate over, effectively eliminating redundant type coercion in the inner loop.
+
+## 2026-08-21 - Extract array elements from loop in O(N^2) math operations
+**Learning:** When executing mathematical loops inside O(N^2) pairwise comparisons, array elements are looked up multiple times. In modern JavaScript/TypeScript (V8), looking up elements by index in a hot loop can slightly inflate bytecode and hinder execution.
+**Action:** Optimize hot loops by caching array lengths to local variables and extracting array elements to local variables inside the loop to avoid multiple lookups (`const vA = vecA[i]`).
