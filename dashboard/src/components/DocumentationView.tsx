@@ -159,7 +159,7 @@ export const DocumentationView: React.FC = () => {
 
             if (nextIndex !== -1) {
               e.preventDefault();
-              setActiveSubTab(array[nextIndex].id as any);
+              setActiveSubTab(array[nextIndex].id as 'mcp' | 'architecture' | 'graph');
               const nextTab = document.getElementById(`tab-${array[nextIndex].id}`);
               if (nextTab) nextTab.focus();
             }
@@ -173,7 +173,7 @@ export const DocumentationView: React.FC = () => {
               aria-controls={`panel-${tab.id}`}
               id={`tab-${tab.id}`}
               tabIndex={isActive ? 0 : -1}
-              onClick={() => setActiveSubTab(tab.id as any)}
+              onClick={() => setActiveSubTab(tab.id as 'mcp' | 'architecture' | 'graph')}
               onKeyDown={handleKeyDown}
               className={FOCUS_RING_CLASS}
               style={{
