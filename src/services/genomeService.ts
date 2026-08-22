@@ -30,7 +30,7 @@ export function getTenantId(): string {
 function buildInClause(ids: string[], tenantId: string): { clause: string; binds: Record<string, unknown> } {
   const binds: Record<string, unknown> = { tenantId };
   if (ids.length === 0) {
-    return { clause: "1=0", binds };
+    return { clause: "NULL", binds };
   }
   const clause = ids.map((_, i) => `:id${i}`).join(",");
   ids.forEach((id, i) => { binds[`id${i}`] = String(id); });

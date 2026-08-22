@@ -17,6 +17,21 @@ function tenantId(): string {
   return auth.uid;
 }
 
+/**
+ * Helper to build an IN clause with parameterized bindings.
+ * @param ids Array of ID strings
+ * @param baseBinds Base bind variables (e.g. project, tenantId)
+ */
+function buildInClause(ids: string[], baseBinds: Record<string, unknown>): { clause: string; binds: Record<string, unknown> } {
+  const binds = { ...baseBinds };
+  if (ids.length === 0) {
+    return { clause: "NULL", binds };
+  }
+  const clause = ids.map((_, i) => `:id${i}`).join(",");
+  ids.forEach((id, i) => { binds[`id${i}`] = String(id); });
+  return { clause, binds };
+}
+
 /** SQLite stores vectors as BLOB; Oracle/Postgres take the typed array directly. */
 function encodeEmbedding(vector: number[] | null | undefined): Uint8Array | Float32Array | null {
   if (!vector || vector.length === 0) return null;
@@ -164,9 +179,8 @@ export class MemoryService {
       if (queryVector) {
         const hits = await db.searchVector("ai_semantic_memory", queryVector, limit, tid);
         if (hits.length === 0) return [];
-        const idBinds = hits.map((_, i) => `:id${i}`).join(",");
-        const bindParams: Record<string, unknown> = { project, tenantId: tid };
-        hits.forEach((h, i) => { bindParams[`id${i}`] = String(h.id); });
+        const ids = hits.map((h) => String(h.id));
+        const { clause: idBinds, binds: bindParams } = buildInClause(ids, { project, tenantId: tid });
         return await db.query<Record<string, unknown>>(
           `SELECT entity_name, entity_type, file_path, content
            FROM ai_semantic_memory
