@@ -6,6 +6,7 @@ import { logger } from "../utils/logger.js";
 import { initPool, setSessionContext } from "../database/connection.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { createDatabaseAdapter } from "../database/factory.js";
+import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 
 /**
  * Stop words for noise gate — English + Vietnamese.
@@ -405,7 +406,30 @@ export class OracleDreamingService {
       return { isNoise: true, reason: `stop-word ratio ${stopRatio.toFixed(2)} > 0.80` };
     }
 
+    // Save-gate: reject known junk themes (English-study scraps, shopping
+    // lists, weather/lifestyle notes, scheduler retries) that pass the
+    // length/importance/stop-ratio checks.
+    const blocklist = checkNoiseBlocklist(trimmed);
+    if (blocklist.isNoise) {
+      return { isNoise: true, reason: blocklist.reason };
+    }
+
     return { isNoise: false, reason: null };
+  }
+
+  /**
+   * Inject-gate: strips blocklisted dreams from query results so junk already
+   * stored (or that slipped past save-gate) never reaches context injection.
+   * Handles both column-named rows (sqlite/postgres) and oracle array rows
+   * where content is column index 5.
+   */
+  private static filterNoiseRows(rows: any[]): any[] {
+    return rows.filter((row: any) => {
+      const content = row && typeof row === 'object'
+        ? String(row['content'] ?? row['CONTENT'] ?? row[5] ?? '')
+        : '';
+      return !checkNoiseBlocklist(content).isNoise;
+    });
   }
 
   /**
@@ -707,7 +731,11 @@ export class OracleDreamingService {
           processedRows = scored.slice(offset, offset + limit).map(item => item.row);
         }
 
-        return processedRows;
+        const cleanRows = OracleDreamingService.filterNoiseRows(processedRows);
+        if (cleanRows.length !== processedRows.length) {
+          logger.info(`[Oracle Dreaming] Inject-gate filtered ${processedRows.length - cleanRows.length} noisy dream(s)`);
+        }
+        return cleanRows;
       }
 
       // Oracle path below
@@ -878,7 +906,11 @@ export class OracleDreamingService {
         }
       }
 
-      return processedRows;
+      const cleanRows = OracleDreamingService.filterNoiseRows(processedRows);
+      if (cleanRows.length !== processedRows.length) {
+        logger.info(`[Oracle Dreaming] Inject-gate filtered ${processedRows.length - cleanRows.length} noisy dream(s)`);
+      }
+      return cleanRows;
     } catch (err) {
       logger.error("[Oracle Dreaming] Error querying dream memories:", err instanceof Error ? err.message : String(err));
       throw err;

@@ -1,5 +1,6 @@
 import { logger } from "../utils/logger.js";
 import { OracleDreamingService } from "./dreamingService.js";
+import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 
 /**
  * Local keyword-based dream extraction from conversation transcripts.
@@ -131,8 +132,20 @@ export async function loadContextAtSessionStart(
       return "";
     }
 
+    const cleanDreams = dreams.filter((dream) => {
+      const content = String((dream as any).content ?? "");
+      return !checkNoiseBlocklist(content).isNoise;
+    });
+    const blockedCount = dreams.length - cleanDreams.length;
+    if (blockedCount > 0) {
+      logger.info(`[Memory Loading] Inject-gate filtered ${blockedCount} noisy dream(s)`);
+    }
+    if (cleanDreams.length === 0) {
+      return "";
+    }
+
     const parts: string[] = ["\n# 🧠 Context from Previous Sessions\n"];
-    for (const dream of dreams) {
+    for (const dream of cleanDreams) {
       const d = dream as any;
       parts.push(`### ${d.memoryType || "DREAM"} (importance: ${d.importance || 5})`);
       parts.push(d.content);

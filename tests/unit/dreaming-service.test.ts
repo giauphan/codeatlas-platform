@@ -834,5 +834,76 @@ describe('OracleDreamingService', () => {
       assert.strictEqual(initPool.mock.calls.length, 0);
       assert.strictEqual(mockDbAdapter.query.mock.calls.length, 1);
     });
+
+    test('queryDreamMemories filters blocklisted content (inject-gate)', async () => {
+      process.env.CODEATLAS_DB_TYPE = 'sqlite';
+      const sqliteRows = [
+        {
+          id: '1',
+          session_id: 's1',
+          project: 'p',
+          provider: 'claude',
+          memory_type: 'KNOWLEDGE',
+          content: 'khi nào dùng raining and khi dùng rainy?',
+          importance: 6,
+          created_at: '2026-08-01T00:00:00.000Z',
+          confidence: 0.7,
+          status: 'active',
+          evidence_count: 1,
+          access_count: 0,
+          version: 1,
+          scope: null,
+          tags: null,
+          related_ids: null,
+        },
+        {
+          id: '2',
+          session_id: 's2',
+          project: 'p',
+          provider: 'claude',
+          memory_type: 'KNOWLEDGE',
+          content: 'Using a connection pool with initPool() avoids ORA-00001 collisions when upserting dream memories',
+          importance: 8,
+          created_at: '2026-08-02T00:00:00.000Z',
+          confidence: 0.8,
+          status: 'active',
+          evidence_count: 1,
+          access_count: 0,
+          version: 1,
+          scope: null,
+          tags: null,
+          related_ids: null,
+        },
+      ];
+      mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
+      mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 1 }));
+
+      const rows = await OracleDreamingService.queryDreamMemories('p', 'some task', 10);
+
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].id, '2');
+    });
+  });
+});
+
+describe('noise blocklist save-gate', () => {
+  test('blocks english word-choice content', () => {
+    const r = OracleDreamingService.checkNoise('KNOWLEDGE', 'Khi nào dùng raining and khi dùng rainy? Trong bài nói raining (adj)', 6);
+    assert.equal(r.isNoise, true);
+  });
+
+  test('blocks shopping list content with valid length/importance', () => {
+    const r = OracleDreamingService.checkNoise('KNOWLEDGE', 'write a shopping list before going to the store and buy low-fat milk and plain yogurt', 5);
+    assert.equal(r.isNoise, true);
+  });
+
+  test('blocks scheduler retry content', () => {
+    const r = OracleDreamingService.checkNoise('KNOWLEDGE', '`--retry-failed` for YouTube and clear the stuck `scheduling` records for IG/FB', 6);
+    assert.equal(r.isNoise, true);
+  });
+
+  test('keeps genuine code knowledge', () => {
+    const r = OracleDreamingService.checkNoise('KNOWLEDGE', 'Using a connection pool with initPool() avoids ORA-00001 collisions when upserting dream memories in Oracle', 8);
+    assert.equal(r.isNoise, false);
   });
 });

@@ -147,3 +147,7 @@ A: Ensure Oracle Instant Client is downloaded and `LD_LIBRARY_PATH` is set corre
 
 **Q: Port already in use?**
 A: Change the `PORT` environment variable or kill the existing process.
+
+## Second Brain Hooks (Optional)
+
+Claude Code can auto-load memory context and auto-save learnings via the brain hooks. See [AI-MEMORY-SETUP.md](./AI-MEMORY-SETUP.md) → **Second Brain Hooks (Claude Code)** for setup, verification, and uninstall instructions.
