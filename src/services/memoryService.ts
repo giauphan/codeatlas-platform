@@ -3,6 +3,7 @@ import { logger } from "../utils/logger.js";
 import { initAdapter } from "../database/connection.js";
 import { generateEmbedding, generateEmbeddingsBatch } from "./embeddingService.js";
 import type { GraphEntity, GraphLink, ArchSmells } from "../types/index.js";
+import { buildInClause } from "../database/utils.js";
 
 type Dialect = "sqlite" | "postgres" | "oracle";
 
@@ -15,21 +16,6 @@ function tenantId(): string {
   const auth = authStorage.getStore();
   if (!auth?.uid) throw new Error("Auth context required — call within authStorage.run()");
   return auth.uid;
-}
-
-/**
- * Helper to build an IN clause with parameterized bindings.
- * @param ids Array of ID strings
- * @param baseBinds Base bind variables (e.g. project, tenantId)
- */
-function buildInClause(ids: string[], baseBinds: Record<string, unknown>): { clause: string; binds: Record<string, unknown> } {
-  const binds = { ...baseBinds };
-  if (ids.length === 0) {
-    return { clause: "NULL", binds };
-  }
-  const clause = ids.map((_, i) => `:id${i}`).join(",");
-  ids.forEach((id, i) => { binds[`id${i}`] = String(id); });
-  return { clause, binds };
 }
 
 /** SQLite stores vectors as BLOB; Oracle/Postgres take the typed array directly. */

@@ -245,7 +245,7 @@ export class GenomeService {
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        bindParams as Record<string, unknown>,
+        bindParams,
       );
 
       const rows = result.rows || [];
@@ -853,7 +853,7 @@ export class GenomeService {
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        bindParams as Record<string, unknown>,
+        bindParams,
       );
 
       const rows = result.rows || [];
@@ -994,7 +994,7 @@ export class GenomeService {
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        bindParams as Record<string, unknown>,
+        bindParams,
       );
 
       const rows = result.rows || [];
@@ -1135,7 +1135,7 @@ Apply this knowledge when encountering similar problems.
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        bindParams as Record<string, unknown>,
+        bindParams,
       );
 
       const rows = result.rows || [];
