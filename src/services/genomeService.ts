@@ -236,7 +236,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const { clause: idBinds, binds: bindParams } = buildInClause(ids, { tenantId });
+      const { clause: inClause, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -244,7 +244,7 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
+         WHERE tenant_id = :tenantId AND id IN (${inClause})`,
         bindParams,
       );
 
@@ -844,7 +844,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const { clause: idBinds, binds: bindParams } = buildInClause(ids, { tenantId });
+      const { clause: inClause, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -852,7 +852,7 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
+         WHERE tenant_id = :tenantId AND id IN (${inClause})`,
         bindParams,
       );
 
@@ -985,7 +985,7 @@ export class GenomeService {
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const { clause: idBinds, binds: bindParams } = buildInClause(ids, { tenantId });
+      const { clause: inClause, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -993,7 +993,7 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
+         WHERE tenant_id = :tenantId AND id IN (${inClause})`,
         bindParams,
       );
 
@@ -1126,7 +1126,7 @@ Apply this knowledge when encountering similar problems.
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const { clause: idBinds, binds: bindParams } = buildInClause(ids, { tenantId });
+      const { clause: inClause, binds: bindParams } = buildInClause(ids, { tenantId });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -1134,7 +1134,7 @@ Apply this knowledge when encountering similar problems.
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
+         WHERE tenant_id = :tenantId AND id IN (${inClause})`,
         bindParams,
       );
 

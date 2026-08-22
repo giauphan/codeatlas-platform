@@ -166,11 +166,11 @@ export class MemoryService {
         const hits = await db.searchVector("ai_semantic_memory", queryVector, limit, tid);
         if (hits.length === 0) return [];
         const ids = hits.map((h) => String(h.id));
-        const { clause: idBinds, binds: bindParams } = buildInClause(ids, { project, tenantId: tid });
+        const { clause: inClause, binds: bindParams } = buildInClause(ids, { project, tenantId: tid });
         return await db.query<Record<string, unknown>>(
           `SELECT entity_name, entity_type, file_path, content
            FROM ai_semantic_memory
-           WHERE project_name = :project AND tenant_id = :tenantId AND id IN (${idBinds})`,
+           WHERE project_name = :project AND tenant_id = :tenantId AND id IN (${inClause})`,
           bindParams
         );
       }
