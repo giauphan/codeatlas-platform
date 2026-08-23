@@ -129,7 +129,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     return { rowsAffected: totalChanges };
   }
 
-  async searchVector(table: string, embedding: number[], limit: number, tenantId: string, binds?: Record<string, unknown>): Promise<VectorSearchResult[]> {
+  async searchVector(table: string, embedding: number[], limit: number, tenantId: string, filterBinds?: Record<string, unknown>): Promise<VectorSearchResult[]> {
     if (!this.db) await this.connect();
     const blob = new Uint8Array(new Float32Array(embedding).buffer);
 
@@ -142,7 +142,8 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       LIMIT :limit
     `;
 
-    return this.query<VectorSearchResult>(sql, { queryVector: blob, tenantId, limit, ...(binds || {}) });
+    const binds = { queryVector: blob, tenantId, limit, ...(filterBinds || {}) };
+    return this.query<VectorSearchResult>(sql, binds);
   }
 
   async initializeSchema(): Promise<void> {

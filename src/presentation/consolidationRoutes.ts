@@ -89,7 +89,7 @@ export function mountConsolidationRoutes(app: express.Application): void {
           try {
             const binds = concepts.map(c => ({ id: c.id, tenantId }));
             await adapter.executeMany(
-              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
+              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = ${(process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase() === "sqlite" ? "datetime('now')" : "CURRENT_TIMESTAMP"} WHERE id = :id AND tenant_id = :tenantId`,
               binds
             );
           } catch { /* skip */ }
