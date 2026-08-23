@@ -136,7 +136,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
   }
 
-  async searchVector(table: string, embedding: number[], limit: number, tenantId: string): Promise<VectorSearchResult[]> {
+  async searchVector(table: string, embedding: number[], limit: number, tenantId: string, binds: Record<string, unknown> = {}): Promise<VectorSearchResult[]> {
     if (!this.pool) await this.connect();
     const vectorSql = toSql ? toSql(embedding) : JSON.stringify(embedding);
     const sql = `
@@ -146,7 +146,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ORDER BY embedding <=> $1::vector ASC
       LIMIT $3
     `;
-    return this.query<VectorSearchResult>(sql, [vectorSql, tenantId, limit]);
+    return this.query<VectorSearchResult>(sql, [vectorSql, tenantId, limit, ...Object.values(binds)]);
   }
 
   async initializeSchema(): Promise<void> {

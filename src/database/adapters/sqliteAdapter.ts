@@ -129,20 +129,20 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     return { rowsAffected: totalChanges };
   }
 
-  async searchVector(table: string, embedding: number[], limit: number, tenantId: string): Promise<VectorSearchResult[]> {
+  async searchVector(table: string, embedding: number[], limit: number, tenantId: string, binds: Record<string, unknown> = {}): Promise<VectorSearchResult[]> {
     if (!this.db) await this.connect();
     const blob = new Uint8Array(new Float32Array(embedding).buffer);
 
     // sqlite-vec cosine distance function
     const sql = `
-      SELECT id, 1 - vec_distance_cosine(embedding, ?) AS score
+      SELECT id, 1 - vec_distance_cosine(embedding, :queryVector) AS score
       FROM ${table}
-      WHERE tenant_id = ? AND embedding IS NOT NULL
-      ORDER BY vec_distance_cosine(embedding, ?) ASC
-      LIMIT ?
+      WHERE tenant_id = :tenantId AND embedding IS NOT NULL
+      ORDER BY vec_distance_cosine(embedding, :queryVector) ASC
+      LIMIT :limit
     `;
 
-    return this.query<VectorSearchResult>(sql, [blob, tenantId, blob, limit]);
+    return this.query<VectorSearchResult>(sql, { ...binds, queryVector: blob, tenantId, limit });
   }
 
   async initializeSchema(): Promise<void> {

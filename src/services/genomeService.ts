@@ -214,11 +214,14 @@ export class GenomeService {
       if (!embedding) return [];
 
       let filterSql = "status = 'active'";
+      const filterBinds: Record<string, unknown> = {};
       if (project) {
-        filterSql += ` AND project = '${project.replace(/'/g, "''")}'`;
+        filterSql += ` AND project = :project`;
+        filterBinds.project = project;
       }
       if (category) {
-        filterSql += ` AND category = '${category.replace(/'/g, "''")}'`;
+        filterSql += ` AND category = :category`;
+        filterBinds.category = category;
       }
 
       const tableSubquery = `(SELECT * FROM codeatlas_genome WHERE ${filterSql}) tbl`;
@@ -229,13 +232,20 @@ export class GenomeService {
         embedding,
         limit,
         tenantId,
+        filterBinds
       );
 
       if (searchResults.length === 0) return [];
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+
+      const idBinds: Record<string, unknown> = {};
+      const idList = ids.map((id, index) => {
+        const key = `id${index}`;
+        idBinds[key] = id;
+        return `:${key}`;
+      }).join(",");
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -244,7 +254,7 @@ export class GenomeService {
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId } as any,
+        { tenantId, ...idBinds } as any,
       );
 
       const rows = result.rows || [];
@@ -822,8 +832,10 @@ export class GenomeService {
       if (!embedding) return [];
 
       let filterSql = "status = 'active'";
+      const filterBinds: Record<string, unknown> = {};
       if (project) {
-        filterSql += ` AND project = '${project.replace(/'/g, "''")}'`;
+        filterSql += ` AND project = :project`;
+        filterBinds.project = project;
       }
       filterSql += ` AND (category = 'immune' OR category = 'pattern' OR category = 'lesson')`;
       filterSql += ` AND (confidence > 0.2 OR problem LIKE '%immune%' OR problem LIKE '%prevent%' OR problem LIKE '%failure%')`;
@@ -837,13 +849,20 @@ export class GenomeService {
         embedding,
         limit,
         tenantId,
+        filterBinds
       );
 
       if (searchResults.length === 0) return [];
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+
+      const idBinds: Record<string, unknown> = {};
+      const idList = ids.map((id, index) => {
+        const key = `id${index}`;
+        idBinds[key] = id;
+        return `:${key}`;
+      }).join(",");
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -852,7 +871,7 @@ export class GenomeService {
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId } as any,
+        { tenantId, ...idBinds } as any,
       );
 
       const rows = result.rows || [];
@@ -965,9 +984,11 @@ export class GenomeService {
       const embedding = await generateEmbedding(context, "query");
       if (!embedding) return [];
 
-      let filterSql = `status = 'active' AND confidence >= ${minConfidence}`;
+      let filterSql = `status = 'active' AND confidence >= :minConf`;
+      const filterBinds: Record<string, unknown> = { minConf: minConfidence };
       if (project) {
-        filterSql += ` AND project = '${project.replace(/'/g, "''")}'`;
+        filterSql += ` AND project = :project`;
+        filterBinds.project = project;
       }
 
       const tableSubquery = `(SELECT * FROM codeatlas_genome WHERE ${filterSql}) tbl`;
@@ -978,13 +999,20 @@ export class GenomeService {
         embedding,
         limit,
         tenantId,
+        filterBinds
       );
 
       if (searchResults.length === 0) return [];
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+
+      const idBinds: Record<string, unknown> = {};
+      const idList = ids.map((id, index) => {
+        const key = `id${index}`;
+        idBinds[key] = id;
+        return `:${key}`;
+      }).join(",");
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -993,7 +1021,7 @@ export class GenomeService {
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId } as any,
+        { tenantId, ...idBinds } as any,
       );
 
       const rows = result.rows || [];
@@ -1102,13 +1130,16 @@ Apply this knowledge when encountering similar problems.
 
       const safeLimit = Math.min(limit, 50);
       let filterSql = `status = 'active'`;
+      const filterBinds: Record<string, unknown> = {};
       if (sourceProjects && sourceProjects.length > 0) {
-        const inClause = sourceProjects
-          .map((p) => `'${p.replace(/'/g, "''")}'`)
-          .join(",");
+        const inClause = sourceProjects.map((_, i) => `:sp${i}`).join(",");
         filterSql += ` AND project IN (${inClause})`;
+        sourceProjects.forEach((p, i) => {
+          filterBinds[`sp${i}`] = p;
+        });
       } else {
-        filterSql += ` AND project != '${newProject.replace(/'/g, "''")}'`;
+        filterSql += ` AND project != :newProject`;
+        filterBinds.newProject = newProject;
       }
 
       const tableSubquery = `(SELECT * FROM codeatlas_genome WHERE ${filterSql}) tbl`;
@@ -1119,13 +1150,20 @@ Apply this knowledge when encountering similar problems.
         embedding,
         safeLimit,
         tenantId,
+        filterBinds
       );
 
       if (searchResults.length === 0) return { inherited: 0, genes: [] };
 
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-      const idList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+
+      const idBinds: Record<string, unknown> = {};
+      const idList = ids.map((id, index) => {
+        const key = `id${index}`;
+        idBinds[key] = id;
+        return `:${key}`;
+      }).join(",");
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -1134,7 +1172,7 @@ Apply this knowledge when encountering similar problems.
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId } as any,
+        { tenantId, ...idBinds } as any,
       );
 
       const rows = result.rows || [];
