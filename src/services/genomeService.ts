@@ -978,8 +978,8 @@ export class GenomeService {
       const embedding = await generateEmbedding(context, "query");
       if (!embedding) return [];
 
-      let filterSql = `status = 'active' AND confidence >= ${minConfidence}`;
-      const filterBinds: Record<string, unknown> = {};
+      let filterSql = `status = 'active' AND confidence >= :minConfidence`;
+      const filterBinds: Record<string, unknown> = { minConfidence };
       if (project) {
         filterSql += ` AND project = :project`;
         filterBinds.project = project;

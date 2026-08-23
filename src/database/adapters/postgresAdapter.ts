@@ -146,11 +146,12 @@ export class PostgresAdapter implements IDatabaseAdapter {
     if (filterBinds) {
       let currentParamIndex = 4;
       for (const [key, value] of Object.entries(filterBinds)) {
-        const regex = new RegExp(`:${key}\\b`, 'g');
-        if (regex.test(finalTable)) {
-           finalTable = finalTable.replace(regex, `$${currentParamIndex}`);
-           params.push(value);
-           currentParamIndex++;
+        const searchStr = `:${key}`;
+        // Using split and join to safely replace all occurrences without regex vulnerabilities
+        if (finalTable.includes(searchStr)) {
+          finalTable = finalTable.split(searchStr).join(`$${currentParamIndex}`);
+          params.push(value);
+          currentParamIndex++;
         }
       }
     }
