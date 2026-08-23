@@ -532,7 +532,6 @@ export class ConsolidationEngine {
     let normA = 0;
     let normB = 0;
 
-    // V8 optimization: Cache length and array lookups.
     const len = vecA.length;
     for (let i = 0; i < len; i++) {
       const a = vecA[i];
