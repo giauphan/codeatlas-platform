@@ -552,9 +552,9 @@ export class ConsolidationEngine {
     let normA = 0;
     let normB = 0;
 
-    // Optimization: Cache array length and elements locally to minimize
+    // Optimization: Extract array elements locally to minimize
     // property lookups inside this inner loop. In O(N^2) similarity calculations,
-    // this significantly reduces V8 overhead and GC pressure.
+    // this reduces V8 overhead and GC pressure by avoiding repeated element loads.
     const len = vecA.length;
     for (let i = 0; i < len; i++) {
       const vA = vecA[i];
