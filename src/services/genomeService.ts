@@ -214,7 +214,7 @@ export class GenomeService {
       if (!embedding) return [];
 
       let filterSql = "status = 'active'";
-      const binds: Record<string, any> = {};
+      const binds: Record<string, unknown> = {};
 
       if (project) {
         filterSql += ` AND project = :proj`;
@@ -241,7 +241,7 @@ export class GenomeService {
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const queryBinds: Record<string, any> = { tenantId };
+      const queryBinds: Record<string, unknown> = { tenantId };
       const inClause = ids.map((_, i) => `:id${i}`).join(",");
       ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
@@ -591,7 +591,7 @@ export class GenomeService {
       const sourceConfidence = Number(rowValue(g, "confidence"));
 
       const childIds: string[] = [];
-      const relBinds: Record<string, any>[] = [];
+      const relBinds: Record<string, unknown>[] = [];
       for (let i = 0; i < childNames.length; i++) {
         const childId = await this.upsertGene({
           name: childNames[i],
@@ -735,7 +735,7 @@ export class GenomeService {
 
       // Update gene
       const updates: string[] = [];
-      const binds: Record<string, any> = {
+      const binds: Record<string, unknown> = {
         id: geneId,
         tenantId: getTenantId(),
       };
@@ -830,7 +830,7 @@ export class GenomeService {
       if (!embedding) return [];
 
       let filterSql = "status = 'active'";
-      const binds: Record<string, any> = {};
+      const binds: Record<string, unknown> = {};
 
       if (project) {
         filterSql += ` AND project = :proj`;
@@ -856,7 +856,7 @@ export class GenomeService {
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const queryBinds: Record<string, any> = { tenantId };
+      const queryBinds: Record<string, unknown> = { tenantId };
       const inClause = ids.map((_, i) => `:id${i}`).join(",");
       ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
@@ -981,7 +981,7 @@ export class GenomeService {
       if (!embedding) return [];
 
       let filterSql = `status = 'active' AND confidence >= ${minConfidence}`;
-      const binds: Record<string, any> = {};
+      const binds: Record<string, unknown> = {};
 
       if (project) {
         filterSql += ` AND project = :proj`;
@@ -1004,7 +1004,7 @@ export class GenomeService {
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const queryBinds: Record<string, any> = { tenantId };
+      const queryBinds: Record<string, unknown> = { tenantId };
       const inClause = ids.map((_, i) => `:id${i}`).join(",");
       ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
@@ -1124,7 +1124,7 @@ Apply this knowledge when encountering similar problems.
 
       const safeLimit = Math.min(limit, 50);
       let filterSql = `status = 'active'`;
-      const binds: Record<string, any> = {};
+      const binds: Record<string, unknown> = {};
 
       if (sourceProjects && sourceProjects.length > 0) {
         const projInClause = sourceProjects.map((_, i) => `:sp${i}`).join(",");
@@ -1151,7 +1151,7 @@ Apply this knowledge when encountering similar problems.
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const queryBinds: Record<string, any> = { tenantId };
+      const queryBinds: Record<string, unknown> = { tenantId };
       const inClause = ids.map((_, i) => `:id${i}`).join(",");
       ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
@@ -1445,7 +1445,7 @@ Apply this knowledge when encountering similar problems.
     try {
       await setSessionContext(connection);
       const sets: string[] = [];
-      const binds: Record<string, any> = {
+      const binds: Record<string, unknown> = {
         id: geneId,
         tenantId: getTenantId(),
       };

@@ -38,12 +38,22 @@ function findExportFn<T>(obj: unknown, prop: string): T | undefined {
 
 function processNamedParams(sql: string, params: Record<string, unknown> | unknown[]): { sql: string; params: unknown[] } {
   if (Array.isArray(params)) return { sql, params };
+
+  // If the SQL uses positional parameters (e.g. $1) but params is an object,
+  // we fallback to positional array extraction to avoid breaking legacy queries.
+  if (/\$[1-9][0-9]*/.test(sql) && !/(^|[^:]):[a-zA-Z0-9_]+/.test(sql)) {
+    return { sql, params: Object.values(params) };
+  }
+
   const outParams: unknown[] = [];
   const paramNameToIndex = new Map<string, number>();
   let paramIndex = 1;
 
   // Match :paramName but ignore ::type casts
   const newSql = sql.replace(/(^|[^:]):([a-zA-Z0-9_]+)/g, (match, prefix, key) => {
+    if (!(key in params)) {
+      throw new Error(`Missing named parameter: :${key}`);
+    }
     if (paramNameToIndex.has(key)) {
       return `${prefix}$${paramNameToIndex.get(key)}`;
     }
