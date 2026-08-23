@@ -80,6 +80,19 @@ export interface ExtractRequest {
 // ─── Service ─────────────────────────────────────────────────
 export class GenomeService {
   /**
+   * Helper to construct IN clause bindings
+   */
+  private static buildInClauseBinds(ids: string[], tenantId: string): { idBinds: string, queryBinds: Record<string, unknown> } {
+    const queryBinds: Record<string, unknown> = { tenantId };
+    const idBinds = ids.map((id, i) => {
+      const key = `id${i}`;
+      queryBinds[key] = id;
+      return `:${key}`;
+    }).join(",");
+    return { idBinds, queryBinds };
+  }
+
+  /**
    * Create or update a Gene.
    */
   static async upsertGene(input: GeneInput): Promise<string> {
@@ -240,18 +253,16 @@ export class GenomeService {
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const queryBinds: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
+      const { idBinds, queryBinds } = this.buildInClauseBinds(ids, tenantId);
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        queryBinds as any,
+        queryBinds,
       );
 
       const rows = result.rows || [];
@@ -854,18 +865,16 @@ export class GenomeService {
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const queryBinds: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
+      const { idBinds, queryBinds } = this.buildInClauseBinds(ids, tenantId);
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        queryBinds as any,
+        queryBinds,
       );
 
       const rows = result.rows || [];
@@ -1001,18 +1010,16 @@ export class GenomeService {
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const queryBinds: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
+      const { idBinds, queryBinds } = this.buildInClauseBinds(ids, tenantId);
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate,embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        queryBinds as any,
+        queryBinds,
       );
 
       const rows = result.rows || [];
@@ -1148,18 +1155,16 @@ Apply this knowledge when encountering similar problems.
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const queryBinds: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
+      const { idBinds, queryBinds } = this.buildInClauseBinds(ids, tenantId);
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        queryBinds as any,
+        queryBinds,
       );
 
       const rows = result.rows || [];

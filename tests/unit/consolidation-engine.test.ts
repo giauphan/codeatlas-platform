@@ -43,6 +43,8 @@ const mockDbAdapter = {
 
 safeMockModule(path.join(srcDir, 'database/factory.js'), {
   createDatabaseAdapter: () => mockDbAdapter,
+  getDbType: () => (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase(),
+  getCurrentTimestampSql: () => (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase() === "sqlite" ? "datetime('now')" : "CURRENT_TIMESTAMP",
 });
 
 safeMockModule(path.join(srcDir, 'utils/context.js'), {

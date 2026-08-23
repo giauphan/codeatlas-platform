@@ -13,6 +13,7 @@ import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
+import { getDbType, getCurrentTimestampSql } from "../database/factory.js";
 import { OracleDreamingService } from "./dreamingService.js";
 
 // Row index helpers for Oracle queries
@@ -348,7 +349,7 @@ export class ConsolidationEngine {
    */
   private async scoreConcepts(project?: string, report?: ConsolidationReport): Promise<void> {
     const db = createDatabaseAdapter();
-      const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
+      const dbType = getDbType();
       const tenantId = authStorage.getStore()!.uid;
 
       const conditions: string[] = ['tenant_id = :tenantId'];
@@ -375,7 +376,7 @@ export class ConsolidationEngine {
         if (Math.abs(newConf - currentConf) > 0.01) {
           const updateSql = `
             UPDATE codeatlas_concepts
-            SET confidence = :conf, updated_at = ${dbType === "oracle" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
+            SET confidence = :conf, updated_at = ${getCurrentTimestampSql()}
             WHERE id = :id AND tenant_id = :tenantId
           `;
           await db.execute(updateSql, { conf: newConf, id, tenantId });
@@ -397,7 +398,7 @@ export class ConsolidationEngine {
       return;
     }
     const db = createDatabaseAdapter();
-    const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
+    const dbType = getDbType();
     const tenantId = authStorage.getStore()!.uid;
 
     const conditions: string[] = ['tenant_id = :v_tid'];
@@ -433,28 +434,60 @@ export class ConsolidationEngine {
     // SQLite polyfills for LOG/POWER via sqlite-vec or application logic
     // We already have POWER in SQLite if the math extension is loaded. If LOG is missing, we use log2 math
     // For now we map LOG(2, X) to SQLite's LOG2(X) if available, or approximate
-    const logExpr = dbType === "oracle" ? "LOG(2, evidence_count + 1)" : "LOG(2, evidence_count + 1)";
-    const logExprAccess = dbType === "oracle" ? "LOG(2, access_count + 1)" : "LOG(2, access_count + 1)";
+    // Use an inline logarithmic calculation (e.g. log10(x)/log10(2) or native LOG) that is compatible across platforms
+    // PostgreSQL uses LOG(2.0, x) but SQLite uses LOG2(x). Let's fetch and update in application code instead to ensure cross DB safety,
+    // Or simpler, just use a generic log equivalent or skip if it's too complex.
+    // Given the previous comments on this issue, it's better to fetch and update in application code or use a CASE statement if possible, but actually we can just fetch all rows and update them safely in JS.
 
-    // 2. Evidence boost
-    const boostSql = `
-      UPDATE ai_dreaming_memory
-      SET confidence = LEAST(0.99, GREATEST(0.05,
-        confidence + 0.05 * ${logExpr}
-      ))
-      WHERE status = 'active' AND evidence_count > 1 AND ${whereCond}
-    `;
-    await db.execute(boostSql, binds);
+    // LOG(2, x) calculation is platform-dependent or requires an extension in SQLite.
+    // To ensure broad compatibility without relying on database-specific extensions,
+    // we fetch the records, compute the confidence boosts in application code, and run updates.
 
-    // 3. Access bonus
-    const accessSql = `
-      UPDATE ai_dreaming_memory
-      SET confidence = LEAST(0.99, GREATEST(0.05,
-        confidence + 0.02 * ${logExprAccess}
-      ))
-      WHERE status = 'active' AND access_count > 0 AND ${whereCond}
+    // Fetch candidates for boost (evidence_count > 1 OR access_count > 0)
+    const candidatesSql = `
+      SELECT id, confidence, evidence_count, access_count
+      FROM ai_dreaming_memory
+      WHERE status = 'active' AND (evidence_count > 1 OR access_count > 0) AND ${whereCond}
     `;
-    await db.execute(accessSql, binds);
+    const candidatesRes = await db.query<{ id: string, confidence: number, evidence_count: number, access_count: number }>(candidatesSql, binds);
+
+    let updatedCount = 0;
+    if (candidatesRes.length > 0) {
+      const updates: { id: string, tenantId: string, conf: number }[] = [];
+      const currentTenantId = typeof binds === 'object' && !Array.isArray(binds) ? (binds as any).v_tid : binds[1];
+
+      for (const row of candidatesRes) {
+        let currentConf = Number(row.confidence) || 0.5;
+        const evidenceCount = Number(row.evidence_count) || 1;
+        const accessCount = Number(row.access_count) || 0;
+
+        if (evidenceCount > 1) {
+          currentConf += 0.05 * Math.log2(evidenceCount + 1);
+        }
+        if (accessCount > 0) {
+          currentConf += 0.02 * Math.log2(accessCount + 1);
+        }
+
+        currentConf = Math.min(0.99, Math.max(0.05, currentConf));
+
+        // Only update if changed by at least 1%
+        if (Math.abs(currentConf - (Number(row.confidence) || 0.5)) > 0.01) {
+          updates.push({ id: row.id, tenantId: currentTenantId, conf: currentConf });
+        }
+      }
+
+      if (updates.length > 0) {
+        // executeMany doesn't support complex objects with sub-objects for generic adapters,
+        // so we map them to exactly what the query expects
+        const updateSql = `
+          UPDATE ai_dreaming_memory
+          SET confidence = :conf
+          WHERE status = 'active' AND id = :id AND tenant_id = :tenantId
+        `;
+        await db.executeMany(updateSql, updates as any);
+        updatedCount = updates.length;
+      }
+    }
 
     // 4. Archival of low confidence dreams
     const archiveSql = `

@@ -145,11 +145,16 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
     if (filterBinds) {
       let currentParamIndex = 4;
-      for (const [key, value] of Object.entries(filterBinds)) {
+      // Sort keys by length descending to prevent prefix collisions (e.g., :proj1 vs :proj10)
+      const sortedKeys = Object.keys(filterBinds).sort((a, b) => b.length - a.length);
+      for (const key of sortedKeys) {
+        const value = filterBinds[key];
         const searchStr = `:${key}`;
-        // Using split and join to safely replace all occurrences without regex vulnerabilities
-        if (finalTable.includes(searchStr)) {
-          finalTable = finalTable.split(searchStr).join(`$${currentParamIndex}`);
+        // Using a regex with a word boundary to ensure we only replace exact matches
+        // e.g. replacing :proj1 will not replace the :proj1 part of :proj10
+        const regex = new RegExp(`${searchStr}\\b`, 'g');
+        if (regex.test(finalTable)) {
+          finalTable = finalTable.replace(regex, `$${currentParamIndex}`);
           params.push(value);
           currentParamIndex++;
         }
