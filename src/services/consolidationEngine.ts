@@ -532,7 +532,7 @@ export class ConsolidationEngine {
     let normA = 0;
     let normB = 0;
 
-    // Bolt optimization: Cache length and array lookups.
+    // V8 optimization: Cache length and array lookups.
     // In V8, hoisting length evaluation outside of the innermost O(N) math loop and extracting unboxed
     // Float32Array elements to local variables reduces GC pressure and repetitive element access time,
     // speeding up matrix/similarity comparisons by ~10-15% on large 4096-dimensional vectors.
