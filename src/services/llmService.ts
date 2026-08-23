@@ -92,6 +92,7 @@ export async function summarizeConversationForDreams(
   const finalSeen = new Set<string>();
   let noiseDetected = false;
   for (const d of top) {
+    if (checkNoiseBlocklist(d.content).isNoise) continue;
     const dk = `${d.memoryType}:${d.content.slice(0, 40)}`;
     if (finalSeen.has(dk)) continue;
     finalSeen.add(dk);
@@ -133,7 +134,8 @@ export async function loadContextAtSessionStart(
     }
 
     const cleanDreams = dreams.filter((dream) => {
-      const content = String((dream as any).content ?? "");
+      const row = dream as Record<string, unknown>;
+      const content = String(row.content ?? row.CONTENT ?? "");
       return !checkNoiseBlocklist(content).isNoise;
     });
     const blockedCount = dreams.length - cleanDreams.length;
@@ -146,9 +148,12 @@ export async function loadContextAtSessionStart(
 
     const parts: string[] = ["\n# 🧠 Context from Previous Sessions\n"];
     for (const dream of cleanDreams) {
-      const d = dream as any;
-      parts.push(`### ${d.memoryType || "DREAM"} (importance: ${d.importance || 5})`);
-      parts.push(d.content);
+      const d = dream as Record<string, unknown>;
+      const memoryType = String(d.memoryType ?? d.memory_type ?? d.MEMORY_TYPE ?? "DREAM");
+      const importance = d.importance ?? d.IMPORTANCE ?? 5;
+      const content = String(d.content ?? d.CONTENT ?? "");
+      parts.push(`### ${memoryType} (importance: ${importance})`);
+      parts.push(content);
       parts.push("");
     }
 
