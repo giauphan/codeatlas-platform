@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import oracledb from "oracledb";
 import type { Connection } from "oracledb";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
@@ -892,6 +891,7 @@ export class OracleDreamingService {
           try {
             // Oracle doesn't support UPDATE ... WHERE id IN (...) with array bind easily,
             // so use executeMany for batch update of access_count + last_accessed_at
+            const oracledb = await import("oracledb").then(m => m.default || m);
             const bumpBinds = fetchedIds.map((id: string) => ({ id, tenantId: authStorage.getStore()!.uid }));
             await connection.executeMany(
               `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP
