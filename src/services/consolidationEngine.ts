@@ -552,10 +552,16 @@ export class ConsolidationEngine {
     let normA = 0;
     let normB = 0;
 
-    for (let i = 0; i < vecA.length; i++) {
-      dot += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
+    // Optimization: Cache array length and elements locally to minimize
+    // property lookups inside this inner loop. In O(N^2) similarity calculations,
+    // this significantly reduces V8 overhead and GC pressure.
+    const len = vecA.length;
+    for (let i = 0; i < len; i++) {
+      const vA = vecA[i];
+      const vB = vecB[i];
+      dot += vA * vB;
+      normA += vA * vA;
+      normB += vB * vB;
     }
 
     const denom = Math.sqrt(normA) * Math.sqrt(normB);

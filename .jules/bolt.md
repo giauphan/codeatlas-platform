@@ -25,3 +25,7 @@
 ## 2026-08-19 - Pre-parsing vectors to avoid O(N^2) inner-loop allocations
 **Learning:** When calculating vector similarities or comparisons in $O(N^2)$ nested loops, repeatedly extracting properties (`getVal`) and parsing raw string/arrays into `Float32Array` within the inner loop causes massive, redundant CPU cycles and garbage collection pressure in V8.
 **Action:** When calculating similarity matrix distances or comparisons, pre-parse data structures (like converting raw arrays to `Float32Array`) and extract invariant lookups during an $O(N)$ preprocessing phase, mapping the valid subset to an array of objects to iterate over, effectively eliminating redundant type coercion in the inner loop.
+
+## 2026-08-23 - Inner loop array indexing optimization
+**Learning:** In extremely hot math loops (like cosine similarity), even if arrays are strongly typed (Float32Array), repeatedly accessing elements via index `vec[i]` on every operation can add significant overhead compared to extracting the values `vecA[i]` and `vecB[i]` into local variables first before math ops.
+**Action:** Extract array accesses to local variables in hot inner loops before applying multiple mathematical operations on them.
