@@ -240,12 +240,9 @@ export class GenomeService {
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const idBinds: Record<string, unknown> = {};
-      const idList = ids.map((id, index) => {
-        const key = `id${index}`;
-        idBinds[key] = id;
-        return `:${key}`;
-      }).join(",");
+      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
+      const queryBinds: Record<string, unknown> = { tenantId };
+      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -253,8 +250,8 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId, ...idBinds } as any,
+         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
+        queryBinds as any,
       );
 
       const rows = result.rows || [];
@@ -857,12 +854,9 @@ export class GenomeService {
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const idBinds: Record<string, unknown> = {};
-      const idList = ids.map((id, index) => {
-        const key = `id${index}`;
-        idBinds[key] = id;
-        return `:${key}`;
-      }).join(",");
+      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
+      const queryBinds: Record<string, unknown> = { tenantId };
+      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -870,8 +864,8 @@ export class GenomeService {
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId, ...idBinds } as any,
+         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
+        queryBinds as any,
       );
 
       const rows = result.rows || [];
@@ -984,8 +978,8 @@ export class GenomeService {
       const embedding = await generateEmbedding(context, "query");
       if (!embedding) return [];
 
-      let filterSql = `status = 'active' AND confidence >= :minConf`;
-      const filterBinds: Record<string, unknown> = { minConf: minConfidence };
+      let filterSql = `status = 'active' AND confidence >= :minConfidence`;
+      const filterBinds: Record<string, unknown> = { minConfidence };
       if (project) {
         filterSql += ` AND project = :project`;
         filterBinds.project = project;
@@ -1007,12 +1001,9 @@ export class GenomeService {
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const idBinds: Record<string, unknown> = {};
-      const idList = ids.map((id, index) => {
-        const key = `id${index}`;
-        idBinds[key] = id;
-        return `:${key}`;
-      }).join(",");
+      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
+      const queryBinds: Record<string, unknown> = { tenantId };
+      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -1020,8 +1011,8 @@ export class GenomeService {
                 usage_count, success_rate,embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId, ...idBinds } as any,
+         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
+        queryBinds as any,
       );
 
       const rows = result.rows || [];
@@ -1131,12 +1122,11 @@ Apply this knowledge when encountering similar problems.
       const safeLimit = Math.min(limit, 50);
       let filterSql = `status = 'active'`;
       const filterBinds: Record<string, unknown> = {};
+
       if (sourceProjects && sourceProjects.length > 0) {
-        const inClause = sourceProjects.map((_, i) => `:sp${i}`).join(",");
-        filterSql += ` AND project IN (${inClause})`;
-        sourceProjects.forEach((p, i) => {
-          filterBinds[`sp${i}`] = p;
-        });
+        const projBinds = sourceProjects.map((_, i) => `:proj${i}`).join(",");
+        filterSql += ` AND project IN (${projBinds})`;
+        sourceProjects.forEach((p, i) => { filterBinds[`proj${i}`] = p; });
       } else {
         filterSql += ` AND project != :newProject`;
         filterBinds.newProject = newProject;
@@ -1158,12 +1148,9 @@ Apply this knowledge when encountering similar problems.
       const ids = searchResults.map((r) => r.id);
       const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
 
-      const idBinds: Record<string, unknown> = {};
-      const idList = ids.map((id, index) => {
-        const key = `id${index}`;
-        idBinds[key] = id;
-        return `:${key}`;
-      }).join(",");
+      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
+      const queryBinds: Record<string, unknown> = { tenantId };
+      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
       const result = await connection.execute<any[]>(
         `SELECT id, name, description, problem, solution, architecture,
@@ -1171,8 +1158,8 @@ Apply this knowledge when encountering similar problems.
                 usage_count, success_rate, embedding, status,
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idList})`,
-        { tenantId, ...idBinds } as any,
+         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
+        queryBinds as any,
       );
 
       const rows = result.rows || [];

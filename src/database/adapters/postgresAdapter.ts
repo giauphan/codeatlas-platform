@@ -136,17 +136,34 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
   }
 
-  async searchVector(table: string, embedding: number[], limit: number, tenantId: string, binds: Record<string, unknown> = {}): Promise<VectorSearchResult[]> {
+  async searchVector(table: string, embedding: number[], limit: number, tenantId: string, filterBinds?: Record<string, unknown>): Promise<VectorSearchResult[]> {
     if (!this.pool) await this.connect();
     const vectorSql = toSql ? toSql(embedding) : JSON.stringify(embedding);
+
+    const params: unknown[] = [vectorSql, tenantId, limit];
+    let finalTable = table;
+
+    if (filterBinds) {
+      let currentParamIndex = 4;
+      for (const [key, value] of Object.entries(filterBinds)) {
+        const searchStr = `:${key}`;
+        // Using split and join to safely replace all occurrences without regex vulnerabilities
+        if (finalTable.includes(searchStr)) {
+          finalTable = finalTable.split(searchStr).join(`$${currentParamIndex}`);
+          params.push(value);
+          currentParamIndex++;
+        }
+      }
+    }
+
     const sql = `
       SELECT id, 1 - (embedding <=> $1::vector) AS score
-      FROM ${table}
+      FROM ${finalTable}
       WHERE tenant_id = $2
       ORDER BY embedding <=> $1::vector ASC
       LIMIT $3
     `;
-    return this.query<VectorSearchResult>(sql, [vectorSql, tenantId, limit, ...Object.values(binds)]);
+    return this.query<VectorSearchResult>(sql, params);
   }
 
   async initializeSchema(): Promise<void> {

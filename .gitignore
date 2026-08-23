@@ -32,8 +32,13 @@ instantclient/
 .codegraph/
 
 # Claude Code local state
-.claude/
-CLAUDE.md
+.claude/*
+!.claude/CLAUDE.md
+!.claude/settings.json
+!.claude/agents/
+!.claude/agents/**
+!.claude/skills/
+!.claude/skills/**
 
 # OS / editor
 .DS_Store
