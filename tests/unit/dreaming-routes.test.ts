@@ -78,6 +78,7 @@ const mockLogActivity = mock.fn();
 const mockLoadAnalysis = mock.fn();
 const mockSaveDreamMemory = mock.fn();
 const mockQueryDreamMemories = mock.fn();
+const mockSummarizeConversation = mock.fn();
 
 // Mock authService
 const authServiceMock = { checkAuth: mockCheckAuth, logActivity: mockLogActivity };
@@ -91,6 +92,10 @@ const dreamingServiceMock = {
   },
 };
 safeMockModule(path.join(srcDir, 'services/dreamingService.js'), dreamingServiceMock);
+
+safeMockModule(path.join(srcDir, 'services/llmService.js'), {
+  summarizeConversationForDreams: mockSummarizeConversation,
+});
 
 // Mock projectService
 const projectServiceMock = { loadAnalysisAsync: mockLoadAnalysis };
@@ -193,6 +198,7 @@ describe('Dreaming Routes', () => {
     mockLoadAnalysis.mock.resetCalls();
     mockSaveDreamMemory.mock.resetCalls();
     mockQueryDreamMemories.mock.resetCalls();
+    mockSummarizeConversation.mock.resetCalls();
     mockAuthStore.getStore.mock.resetCalls();
     mockAuthStore.run.mock.resetCalls();
     mockLogger.error.mock.resetCalls();
@@ -567,6 +573,86 @@ describe('Dreaming Routes', () => {
       assert.strictEqual(res.status, 500);
       const body = await res.json() as Record<string, unknown>;
       assert.ok((body.error as string).includes('ORACLE_PASSWORD'));
+    });
+  });
+
+  describe('POST /api/dreams/ingest-session', () => {
+    test('successfully ingests transcripts and filters noise-blocked saves', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => [
+        { memoryType: 'KNOWLEDGE', content: 'Node is fast', importance: 7 },
+        { memoryType: 'MISTAKE', content: 'Bad query', importance: 8 },
+      ]);
+      let saveCount = 0;
+      mockSaveDreamMemory.mock.mockImplementation(async (project, sessionId, memoryType, content, importance, provider) => {
+        saveCount++;
+        if (content === 'Bad query') return '__noise_blocked__';
+        return `saved-${saveCount}`;
+      });
+
+      const res = await fetch(`${baseUrl}/api/dreams/ingest-session?apiKey=valid-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: '[USER]\nValid sentence pattern test database pooling.',
+          session_id: 's-ingest-1',
+          project: 'proj-ingest-1',
+          provider: 'hermes',
+        }),
+      });
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.strictEqual(body.success, true);
+      assert.strictEqual(body.session_id, 's-ingest-1');
+      assert.strictEqual(body.dreamsExtracted, 1);
+      assert.strictEqual(body.noiseBlocked, 1);
+
+      assert.strictEqual(mockSummarizeConversation.mock.calls.length, 1);
+      const sumArgs = mockSummarizeConversation.mock.calls[0].arguments;
+      assert.strictEqual(sumArgs[0], '[USER]\nValid sentence pattern test database pooling.');
+      assert.strictEqual(sumArgs[1], 'hermes');
+      assert.strictEqual(sumArgs[2], 'proj-ingest-1');
+      assert.strictEqual(sumArgs[3], 's-ingest-1');
+
+      assert.strictEqual(mockSaveDreamMemory.mock.calls.length, 2);
+      const save1Args = mockSaveDreamMemory.mock.calls[0].arguments;
+      assert.strictEqual(save1Args[0], 'proj-ingest-1');
+      assert.strictEqual(save1Args[1], 's-ingest-1');
+      assert.strictEqual(save1Args[2], 'KNOWLEDGE');
+      assert.strictEqual(save1Args[3], 'Node is fast');
+      assert.strictEqual(save1Args[4], 7);
+      assert.strictEqual(save1Args[5], 'hermes');
+    });
+
+    test('returns 400 for empty or invalid content', async () => {
+      const res = await fetch(`${baseUrl}/api/dreams/ingest-session?apiKey=valid-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: '',
+        }),
+      });
+
+      assert.strictEqual(res.status, 400);
+      const body = await res.json() as Record<string, unknown>;
+      assert.ok(String(body.error).includes('content'));
+    });
+
+    test('returns 200 with 0 dreams extracted if summarizer returns empty', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => []);
+
+      const res = await fetch(`${baseUrl}/api/dreams/ingest-session?apiKey=valid-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: 'some non-matching transcript',
+        }),
+      });
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.strictEqual(body.success, true);
+      assert.strictEqual(body.dreamsExtracted, 0);
     });
   });
 });

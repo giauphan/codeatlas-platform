@@ -39,6 +39,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/src/index.js",
     "dev": "tsx watch src/index.ts",
     "test": "node --experimental-test-module-mocks --test-concurrency=1 --import tsx --test 'tests/**/*.test.ts'",

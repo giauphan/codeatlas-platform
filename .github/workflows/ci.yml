@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build & Test
@@ -26,6 +30,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install Oracle Instant Client
         run: |
@@ -44,19 +50,26 @@ jobs:
       - name: Install dependencies (Root)
         run: pnpm install --frozen-lockfile
 
-      - name: TypeScript type check
-        run: npx tsc --noEmit --skipLibCheck
+      - name: Typecheck Root
+        run: pnpm run typecheck
 
       - name: Build Main Server
         run: pnpm run build
 
+      - name: Typecheck Dashboard
+        working-directory: dashboard
+        run: pnpm run typecheck
+
       - name: Build Dashboard
-        run: |
-          cd dashboard
-          pnpm run build
+        working-directory: dashboard
+        run: pnpm run build
 
       - name: Run analyzer tests
         working-directory: ./
+        run: pnpm test
+
+      - name: Run dashboard tests
+        working-directory: dashboard
         run: pnpm test
 
   sqlite:
@@ -77,6 +90,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Enable pnpm via corepack
         run: corepack enable && corepack prepare pnpm@10 --activate
@@ -87,8 +102,8 @@ jobs:
       - name: Rebuild SQLite native binding
         run: pnpm rebuild better-sqlite3
 
-      - name: TypeScript type check
-        run: npx tsc --noEmit --skipLibCheck
+      - name: Typecheck Root
+        run: pnpm run typecheck
 
       - name: Initialize and seed SQLite
         run: |
@@ -104,6 +119,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -112,6 +128,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Enable pnpm via corepack
         run: corepack enable && corepack prepare pnpm@10 --activate
@@ -121,10 +139,8 @@ jobs:
 
       - name: pnpm audit (prod deps only)
         run: pnpm audit --prod --audit-level=high
-        continue-on-error: true
 
       - name: Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
