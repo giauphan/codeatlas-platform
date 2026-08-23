@@ -26,6 +26,11 @@ jobs:
         with:
           submodules: false
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v7
         with:
@@ -43,9 +48,6 @@ jobs:
           echo "/opt/oracle/instantclient_19_19" | sudo tee /etc/ld.so.conf.d/oracle-instantclient.conf
           sudo ldconfig
           rm /tmp/ic.zip
-
-      - name: Enable pnpm via corepack
-        run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: Install dependencies (Root)
         run: pnpm install --frozen-lockfile
@@ -86,15 +88,17 @@ jobs:
         with:
           submodules: false
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-
-      - name: Enable pnpm via corepack
-        run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -124,15 +128,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-
-      - name: Enable pnpm via corepack
-        run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prod
