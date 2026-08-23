@@ -148,7 +148,7 @@ export class OracleAdapter implements IDatabaseAdapter {
     }
   }
 
-  async searchVector(table: string, embedding: number[], limit: number, tenantId: string): Promise<VectorSearchResult[]> {
+  async searchVector(table: string, embedding: number[], limit: number, tenantId: string, binds?: Record<string, unknown>): Promise<VectorSearchResult[]> {
     const queryVector = new Float32Array(embedding);
     const sql = `
       SELECT id, 0.5 * (1 - VECTOR_DISTANCE(embedding, :queryVector, COSINE)) AS score
@@ -157,7 +157,7 @@ export class OracleAdapter implements IDatabaseAdapter {
       ORDER BY score DESC
       FETCH FIRST :limit ROWS ONLY
     `;
-    return this.query<VectorSearchResult>(sql, { queryVector, tenantId, limit });
+    return this.query<VectorSearchResult>(sql, { queryVector, tenantId, limit, ...(binds || {}) });
   }
 
   async initializeSchema(): Promise<void> {

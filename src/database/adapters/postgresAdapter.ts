@@ -36,6 +36,25 @@ function findExportFn<T>(obj: unknown, prop: string): T | undefined {
   return undefined;
 }
 
+function processNamedParams(sql: string, params: Record<string, unknown> | unknown[]): { sql: string; params: unknown[] } {
+  if (Array.isArray(params)) return { sql, params };
+  const outParams: unknown[] = [];
+  const paramNameToIndex = new Map<string, number>();
+  let paramIndex = 1;
+
+  // Match :paramName but ignore ::type casts
+  const newSql = sql.replace(/(^|[^:]):([a-zA-Z0-9_]+)/g, (match, prefix, key) => {
+    if (paramNameToIndex.has(key)) {
+      return `${prefix}$${paramNameToIndex.get(key)}`;
+    }
+    const idx = paramIndex++;
+    paramNameToIndex.set(key, idx);
+    outParams.push(params[key]);
+    return `${prefix}$${idx}`;
+  });
+  return { sql: newSql, params: outParams };
+}
+
 export class PostgresAdapter implements IDatabaseAdapter {
   private pool: PgPool | null = null;
   private connectPromise: Promise<void> | null = null;
@@ -104,15 +123,15 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   async query<T>(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<T[]> {
     if (!this.pool) await this.connect();
-    const paramArray = Array.isArray(params) ? params : Object.values(params);
-    const res = await this.pool!.query(sql, paramArray);
+    const processed = processNamedParams(sql, params);
+    const res = await this.pool!.query(processed.sql, processed.params);
     return res.rows as T[];
   }
 
   async execute(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<{ rowsAffected: number }> {
     if (!this.pool) await this.connect();
-    const paramArray = Array.isArray(params) ? params : Object.values(params);
-    const res = await this.pool!.query(sql, paramArray);
+    const processed = processNamedParams(sql, params);
+    const res = await this.pool!.query(processed.sql, processed.params);
     return { rowsAffected: res.rowCount ?? 0 };
   }
 
@@ -123,7 +142,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
       await client.query("BEGIN");
       let totalChanges = 0;
       for (const p of params) {
-        const res = await client.query(sql, Object.values(p));
+        const processed = processNamedParams(sql, p);
+        const res = await client.query(processed.sql, processed.params);
         totalChanges += res.rowCount ?? 0;
       }
       await client.query("COMMIT");
@@ -136,17 +156,17 @@ export class PostgresAdapter implements IDatabaseAdapter {
     }
   }
 
-  async searchVector(table: string, embedding: number[], limit: number, tenantId: string): Promise<VectorSearchResult[]> {
+  async searchVector(table: string, embedding: number[], limit: number, tenantId: string, binds?: Record<string, unknown>): Promise<VectorSearchResult[]> {
     if (!this.pool) await this.connect();
     const vectorSql = toSql ? toSql(embedding) : JSON.stringify(embedding);
     const sql = `
-      SELECT id, 1 - (embedding <=> $1::vector) AS score
+      SELECT id, 1 - (embedding <=> :queryVector::vector) AS score
       FROM ${table}
-      WHERE tenant_id = $2
-      ORDER BY embedding <=> $1::vector ASC
-      LIMIT $3
+      WHERE tenant_id = :tenantId
+      ORDER BY embedding <=> :queryVector::vector ASC
+      LIMIT :limit
     `;
-    return this.query<VectorSearchResult>(sql, [vectorSql, tenantId, limit]);
+    return this.query<VectorSearchResult>(sql, { queryVector: vectorSql, tenantId, limit, ...(binds || {}) });
   }
 
   async initializeSchema(): Promise<void> {
