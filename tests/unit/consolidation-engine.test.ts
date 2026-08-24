@@ -120,4 +120,23 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     const decaySql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
     assert.ok(decaySql.includes("julianday('now')"), 'Decay SQL should use julianday for SQLite');
   });
+
+  test('normalizeVectorInPlace correctly normalizes and handles zero-norm vectors', () => {
+    // Access private method for testing
+    const normalize = (consolidationEngine as any).normalizeVectorInPlace.bind(consolidationEngine);
+
+    // Normal vector
+    const vec1 = new Float32Array([3, 4]); // Norm = 5
+    const norm1 = normalize(vec1, 'id-1');
+    assert.ok(Math.abs(norm1[0] - 0.6) < 0.00001);
+    assert.ok(Math.abs(norm1[1] - 0.8) < 0.00001);
+    // Ensure original vector wasn't mutated directly
+    assert.equal(vec1[0], 3);
+
+    // Zero-norm vector
+    const vec2 = new Float32Array([0, 0]);
+    const norm2 = normalize(vec2, 'id-zero');
+    assert.equal(norm2[0], 0);
+    assert.equal(norm2[1], 0);
+  });
 });
