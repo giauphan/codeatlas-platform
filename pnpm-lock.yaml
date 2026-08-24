@@ -71,7 +71,7 @@ importers:
         version: 7.3.1
       py-ast:
         specifier: ^1.9.0
-        version: 1.15.1
+        version: 1.16.0
       zod:
         specifier: ^3.22.4
         version: 3.25.76
@@ -2566,8 +2566,8 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
-  py-ast@1.15.1:
-    resolution: {integrity: sha512-RDoB/SAtziVwsUS5gGphTxjj106vX/tS5AlegM2LbJIJy1P1mKqJxpqKA7daJJI80MU/91h3/Jvbd3sihZS8ug==}
+  py-ast@1.16.0:
+    resolution: {integrity: sha512-gwt7YEf5Y3umHCWh413G03s67lwtupfbuVt+NoeoH1HbhWjNa+9wQMEL/Gn+8mdKahhXDYLHpSBJsu2+GG5OzQ==}
 
   qs@6.15.3:
     resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
@@ -5608,7 +5608,7 @@ snapshots:
 
   punycode@2.3.1: {}
 
-  py-ast@1.15.1: {}
+  py-ast@1.16.0: {}
 
   qs@6.15.3:
     dependencies:
