@@ -109,10 +109,10 @@ export class ConsolidationEngine {
   }
 
   /**
-   * Deep copies and pre-normalizes a vector in-place.
-   * If the vector norm is 0, it logs a warning and returns the original (copied) vector.
+   * Deep copies and pre-normalizes a vector.
+   * If the vector norm is 0, it logs a debug message and returns the original (copied) vector.
    */
-  private normalizeVectorInPlace(embedding: Float32Array, id: string): Float32Array {
+  private normalizeVector(embedding: Float32Array, id: string): Float32Array {
     const vec = embedding.slice();
     let norm = 0;
     const len = vec.length;
@@ -125,7 +125,7 @@ export class ConsolidationEngine {
         vec[k] /= denom;
       }
     } else {
-      logger.warn(`[Consolidation] Vector normalization: norm is 0 for id ${id}. Using raw vector.`);
+      logger.debug(`[Consolidation] Vector normalization: norm is 0 for id ${id}. Using raw vector.`);
     }
     return vec;
   }
@@ -227,7 +227,7 @@ export class ConsolidationEngine {
 
         // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
         // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
-        embedding = this.normalizeVectorInPlace(embedding, id);
+        embedding = this.normalizeVector(embedding, id);
 
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push({ id, importance, embedding });
@@ -524,7 +524,7 @@ export class ConsolidationEngine {
 
         // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
         // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
-        embedding = this.normalizeVectorInPlace(embedding, id);
+        embedding = this.normalizeVector(embedding, id);
 
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push({ id, confidence, embedding });
@@ -580,6 +580,14 @@ export class ConsolidationEngine {
 
     // ⚡ Bolt: Both vectors are pre-normalized during extraction, so cosine similarity
     // reduces to a simple dot product, eliminating expensive O(N^2) Math.sqrt/division.
+    if (process.env.NODE_ENV !== 'production' && vecA.length > 0) {
+      // Cheap debug-only heuristic to warn if vectors somehow bypassed normalization
+      const heuristicNormSq = vecA[0] * vecA[0] + vecA[vecA.length - 1] * vecA[vecA.length - 1];
+      if (heuristicNormSq > 1.01) {
+         logger.warn(`[Consolidation] Un-normalized vector detected in cosineSimilarity! Optimization may yield incorrect results.`);
+      }
+    }
+
     let dot = 0;
     const len = vecA.length;
     for (let i = 0; i < len; i++) {
