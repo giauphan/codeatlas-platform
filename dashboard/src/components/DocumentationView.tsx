@@ -12,9 +12,12 @@ import {
   Code,
   Sparkles
 } from 'lucide-react';
+import { FOCUS_RING_CLASS } from '../lib/constants';
+
+type TabType = 'mcp' | 'architecture' | 'graph';
 
 export const DocumentationView: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'mcp' | 'architecture' | 'graph'>('mcp');
+  const [activeSubTab, setActiveSubTab] = useState<TabType>('mcp');
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   const backendUrl = window.location.origin.includes('localhost:5173')
@@ -48,7 +51,7 @@ export const DocumentationView: React.FC = () => {
         fontWeight: 600,
         transition: 'all 0.2s ease',
       }}
-      className="copy-btn-hover"
+      className={`copy-btn-hover ${FOCUS_RING_CLASS}`}
     >
       {copiedText === id ? (
         <>
@@ -105,7 +108,7 @@ export const DocumentationView: React.FC = () => {
               textDecoration: 'none',
               transition: 'all 0.2s ease',
             }}
-            className="docs-btn-hover"
+            className={`docs-btn-hover ${FOCUS_RING_CLASS}`}
           >
             <BookOpen size={18} /> Quick Setup Guide <ExternalLink size={14} />
           </a>
@@ -127,7 +130,7 @@ export const DocumentationView: React.FC = () => {
               textDecoration: 'none',
               transition: 'all 0.2s ease',
             }}
-            className="docs-btn-hover"
+            className={`docs-btn-hover ${FOCUS_RING_CLASS}`}
           >
             <BookOpen size={18} /> AI Memory Guide <ExternalLink size={14} />
           </a>
@@ -135,18 +138,46 @@ export const DocumentationView: React.FC = () => {
       </div>
 
       {/* TABS SELECTOR */}
-      <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '2px', gap: '2rem' }}>
+      <div role="tablist" aria-label="Documentation sections" style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '2px', gap: '2rem' }}>
         {[
           { id: 'mcp', label: 'MCP Editor Config', icon: Settings },
           { id: 'architecture', label: 'Architecture', icon: Layers },
           { id: 'graph', label: 'Interactive Guide', icon: HelpCircle },
-        ].map((tab) => {
+        ].map((tab, index, array) => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
+
+          const handleKeyDown = (e: React.KeyboardEvent) => {
+            let nextIndex = -1;
+            if (e.key === 'ArrowRight') {
+              nextIndex = (index + 1) % array.length;
+            } else if (e.key === 'ArrowLeft') {
+              nextIndex = (index - 1 + array.length) % array.length;
+            } else if (e.key === 'Home') {
+              nextIndex = 0;
+            } else if (e.key === 'End') {
+              nextIndex = array.length - 1;
+            }
+
+            if (nextIndex !== -1) {
+              e.preventDefault();
+              setActiveSubTab(array[nextIndex].id as TabType);
+              const nextTab = document.getElementById(`tab-${array[nextIndex].id}`);
+              if (nextTab) nextTab.focus();
+            }
+          };
+
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveSubTab(tab.id as any)}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`panel-${tab.id}`}
+              id={`tab-${tab.id}`}
+              tabIndex={isActive ? 0 : -1}
+              onClick={() => setActiveSubTab(tab.id as TabType)}
+              onKeyDown={handleKeyDown}
+              className={FOCUS_RING_CLASS}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -174,7 +205,7 @@ export const DocumentationView: React.FC = () => {
       <div style={{ background: 'rgba(13, 17, 23, 0.45)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px', padding: '2.5rem', minHeight: '400px' }}>
         
         {activeSubTab === 'architecture' && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <motion.div role="tabpanel" id="panel-architecture" aria-labelledby="tab-architecture" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <div>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginBottom: '0.75rem' }}>CodeAtlas Tri-Layer Memory</h2>
               <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '2rem' }}>
@@ -216,7 +247,7 @@ export const DocumentationView: React.FC = () => {
         )}
 
         {activeSubTab === 'mcp' && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          <motion.div role="tabpanel" id="panel-mcp" aria-labelledby="tab-mcp" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
             <div>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginBottom: '0.5rem' }}>MCP Server Configuration</h2>
               <p style={{ color: 'var(--text-muted)', lineHeight: '1.5', marginBottom: '1.5rem' }}>
@@ -419,7 +450,7 @@ Use the CodeAtlas MCP tools to query or search relationships, dependencies, and 
         )}
 
         {activeSubTab === 'graph' && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <motion.div role="tabpanel" id="panel-graph" aria-labelledby="tab-graph" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <div>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginBottom: '0.75rem' }}>Interactive Canvas Manual</h2>
               <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '1.5rem' }}>
