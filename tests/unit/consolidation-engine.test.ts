@@ -51,13 +51,15 @@ safeMockModule(path.join(srcDir, 'utils/context.js'), {
   },
 });
 
-safeMockModule(path.join(srcDir, 'utils/logger.js'), {
-  logger: {
+  const mockLogger = {
     info: mock.fn(),
     warn: mock.fn(),
     error: mock.fn(),
     debug: mock.fn(),
-  },
+  };
+
+safeMockModule(path.join(srcDir, 'utils/logger.js'), {
+    logger: mockLogger,
 });
 
 safeMockModule(path.join(srcDir, 'services/embeddingService.js'), {
@@ -155,5 +157,19 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
 
     // Dot product with zero vector is 0
     assert.equal(cosineSim(norm1, norm2), 0);
+  });
+
+  test('cosineSimilarity heuristic triggers warning on unnormalized vectors in test mode', () => {
+    mockLogger.warn.mock.resetCalls();
+
+    const cosineSim = (consolidationEngine as any).cosineSimilarity.bind(consolidationEngine);
+    const unnormalizedVec = new Float32Array([10, 20]); // Squares sum to 500
+    const normalVec = new Float32Array([0.6, 0.8]);
+
+    cosineSim(unnormalizedVec, normalVec);
+
+    assert.equal(mockLogger.warn.mock.calls.length, 1);
+    const warnMsg = mockLogger.warn.mock.calls[0].arguments[0] as string;
+    assert.ok(warnMsg.includes('Un-normalized vector detected'));
   });
 });

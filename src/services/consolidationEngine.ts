@@ -583,7 +583,8 @@ export class ConsolidationEngine {
     if (process.env.NODE_ENV !== 'production' && vecA.length > 0) {
       // Cheap debug-only heuristic to warn if vectors somehow bypassed normalization
       const heuristicNormSq = vecA[0] * vecA[0] + vecA[vecA.length - 1] * vecA[vecA.length - 1];
-      if (heuristicNormSq > 1.01) {
+      const HEURISTIC_UNNORMALIZED_THRESHOLD = 1.01;
+      if (heuristicNormSq > HEURISTIC_UNNORMALIZED_THRESHOLD) {
          logger.warn(`[Consolidation] Un-normalized vector detected in cosineSimilarity! Optimization may yield incorrect results.`);
       }
     }
