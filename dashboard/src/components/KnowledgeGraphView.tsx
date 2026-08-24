@@ -257,6 +257,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               id="project-selector"
               value={selectedProjectDir}
               onChange={(e) => onProjectChange?.(e.target.value)}
+              className={FOCUS_RING_CLASS}
               style={{
                 width: '100%', padding: '0.6rem 1rem', borderRadius: '10px',
                 border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.4)',
@@ -273,7 +274,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         {/* Delete */}
         {selectedProjectDir && onDeleteProject && (
           <button
-            aria-label="Delete project"
+            className={FOCUS_RING_CLASS}
             onClick={() => {
               if (window.confirm("Delete project index data?")) onDeleteProject();
             }}
@@ -281,9 +282,10 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               width: '100%', padding: '0.6rem', borderRadius: '10px',
               background: 'rgba(255,75,75,0.1)', border: '1px solid #FF4B4B',
               color: '#FF4B4B', fontWeight: 700, cursor: 'pointer', fontSize: '0.8rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'
             }}
           >
-            Delete Project Index
+            <Trash2 size={16} /> Delete Project Index
           </button>
         )}
       </div>

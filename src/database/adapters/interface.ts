@@ -11,7 +11,7 @@ export interface IDatabaseAdapter {
   executeMany(sql: string, params: Array<Record<string, unknown>>): Promise<{ rowsAffected: number }>;
 
   // Vector search
-  searchVector(table: string, embedding: number[], limit: number, tenantId: string): Promise<VectorSearchResult[]>;
+  searchVector(table: string, embedding: number[], limit: number, tenantId: string, filterBinds?: Record<string, unknown>): Promise<VectorSearchResult[]>;
 
   // Schema migration
   initializeSchema(): Promise<void>;

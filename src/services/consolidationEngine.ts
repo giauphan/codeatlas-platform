@@ -348,6 +348,7 @@ export class ConsolidationEngine {
    */
   private async scoreConcepts(project?: string, report?: ConsolidationReport): Promise<void> {
     const db = createDatabaseAdapter();
+      const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
       const tenantId = authStorage.getStore()!.uid;
 
       const conditions: string[] = ['tenant_id = :tenantId'];
@@ -374,7 +375,7 @@ export class ConsolidationEngine {
         if (Math.abs(newConf - currentConf) > 0.01) {
           const updateSql = `
             UPDATE codeatlas_concepts
-            SET confidence = :conf, updated_at = CURRENT_TIMESTAMP
+            SET confidence = :conf, updated_at = ${dbType === "oracle" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
             WHERE id = :id AND tenant_id = :tenantId
           `;
           await db.execute(updateSql, { conf: newConf, id, tenantId });
@@ -396,6 +397,7 @@ export class ConsolidationEngine {
       return;
     }
     const db = createDatabaseAdapter();
+    const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
     const tenantId = authStorage.getStore()!.uid;
 
     const conditions: string[] = ['tenant_id = :v_tid'];
@@ -406,21 +408,39 @@ export class ConsolidationEngine {
     const whereCond = conditions.join(' AND ');
 
     // 1. Time decay
+    const decayExpr = dbType === "oracle"
+      ? `CASE
+          WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_accessed_at)))
+          ELSE POWER(0.997, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - created_at)))
+         END`
+      : dbType === "postgres"
+        ? `CASE
+            WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_accessed_at)) / 86400)
+            ELSE POWER(0.997, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) / 86400)
+           END`
+        : `CASE
+            WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, CAST(julianday('now') - julianday(last_accessed_at) AS INTEGER))
+            ELSE POWER(0.997, CAST(julianday('now') - julianday(created_at) AS INTEGER))
+           END`;
+
     const decaySql = `
       UPDATE ai_dreaming_memory
-      SET confidence = GREATEST(0.05, confidence * CASE
-        WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_accessed_at)))
-        ELSE POWER(0.997, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - created_at)))
-      END)
+      SET confidence = GREATEST(0.05, confidence * ${decayExpr})
       WHERE status = 'active' AND ${whereCond}
     `;
     await db.execute(decaySql, binds);
+
+    // SQLite polyfills for LOG/POWER via sqlite-vec or application logic
+    // We already have POWER in SQLite if the math extension is loaded. If LOG is missing, we use log2 math
+    // For now we map LOG(2, X) to SQLite's LOG2(X) if available, or approximate
+    const logExpr = dbType === "oracle" ? "LOG(2, evidence_count + 1)" : "LOG(2, evidence_count + 1)";
+    const logExprAccess = dbType === "oracle" ? "LOG(2, access_count + 1)" : "LOG(2, access_count + 1)";
 
     // 2. Evidence boost
     const boostSql = `
       UPDATE ai_dreaming_memory
       SET confidence = LEAST(0.99, GREATEST(0.05,
-        confidence + 0.05 * LOG(2, evidence_count + 1)
+        confidence + 0.05 * ${logExpr}
       ))
       WHERE status = 'active' AND evidence_count > 1 AND ${whereCond}
     `;
@@ -430,7 +450,7 @@ export class ConsolidationEngine {
     const accessSql = `
       UPDATE ai_dreaming_memory
       SET confidence = LEAST(0.99, GREATEST(0.05,
-        confidence + 0.02 * LOG(2, access_count + 1)
+        confidence + 0.02 * ${logExprAccess}
       ))
       WHERE status = 'active' AND access_count > 0 AND ${whereCond}
     `;
@@ -532,10 +552,13 @@ export class ConsolidationEngine {
     let normA = 0;
     let normB = 0;
 
-    for (let i = 0; i < vecA.length; i++) {
-      dot += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
+    const len = vecA.length;
+    for (let i = 0; i < len; i++) {
+      const a = vecA[i];
+      const b = vecB[i];
+      dot += a * b;
+      normA += a * a;
+      normB += b * b;
     }
 
     const denom = Math.sqrt(normA) * Math.sqrt(normB);

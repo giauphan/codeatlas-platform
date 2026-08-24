@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rtk tsc *)"
+    ]
+  },
+  "project": {
+    "name": "CodeAtlas Platform",
+    "description": "AI-powered codebase intelligence platform with MCP Server, AST analysis, and semantic memory",
+    "language": "typescript",
+    "frameworks": [
+      "express",
+      "mcp",
+      "sqlite",
+      "sqlite-vec",
+      "firebase-optional"
+    ],
+    "workflows": [
+      "codeatlas-onboard",
+      "codeatlas-implement",
+      "codeatlas-verify"
+    ]
+  },
+  "autoUpdate": false
+}
