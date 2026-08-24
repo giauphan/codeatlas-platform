@@ -196,6 +196,12 @@ export function DreamMemoryView() {
   const hasPrev = page > 0;
   const hasNext = memories.length >= PAGE_SIZE;
 
+  const clearSearch = () => {
+    setSearchQuery('');
+    setPage(0);
+    fetchMemories('', 0, dreamConfig);
+  };
+
   // No client-side filtering needed, as it's now handled by the API
   // const filteredMemories = memories.filter(m => selectedTypes.includes(m.memory_type));
 
@@ -231,18 +237,8 @@ export function DreamMemoryView() {
             <button
               type="button"
               aria-label="Clear search"
-              onClick={() => {
-                setSearchQuery('');
-                setPage(0);
-                fetchMemories('', 0, dreamConfig);
-              }}
-              className={FOCUS_RING_CLASS}
-              style={{
-                position: 'absolute', right: '0.5rem', top: '0.85rem',
-                background: 'transparent', border: 'none', color: 'var(--text-muted)',
-                cursor: 'pointer', padding: '0.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                borderRadius: '50%'
-              }}
+              onClick={clearSearch}
+              className={`clear-search-btn ${FOCUS_RING_CLASS}`}
             >
               <X size={16} />
             </button>
