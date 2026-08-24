@@ -427,7 +427,7 @@ export function DreamMemoryView() {
 
         {!loading && memories.map((mem) => (
           <motion.div
-            key={mem.id} layout
+            key={mem.id} layout="true"
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
             className="glass-panel" style={{
               padding: '1.5rem', borderRadius: '16px',
