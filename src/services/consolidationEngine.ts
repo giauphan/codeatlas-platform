@@ -552,13 +552,10 @@ export class ConsolidationEngine {
     let normA = 0;
     let normB = 0;
 
-    const len = vecA.length;
-    for (let i = 0; i < len; i++) {
-      const a = vecA[i];
-      const b = vecB[i];
-      dot += a * b;
-      normA += a * a;
-      normB += b * b;
+    for (let i = 0; i < vecA.length; i++) {
+      dot += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
     }
 
     const denom = Math.sqrt(normA) * Math.sqrt(normB);
