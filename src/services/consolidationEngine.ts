@@ -109,6 +109,28 @@ export class ConsolidationEngine {
   }
 
   /**
+   * Deep copies and pre-normalizes a vector in-place.
+   * If the vector norm is 0, it logs a warning and returns the original (copied) vector.
+   */
+  private normalizeVectorInPlace(embedding: Float32Array, id: string): Float32Array {
+    const vec = embedding.slice();
+    let norm = 0;
+    const len = vec.length;
+    for (let k = 0; k < len; k++) {
+      norm += vec[k] * vec[k];
+    }
+    if (norm > 0) {
+      const denom = Math.sqrt(norm);
+      for (let k = 0; k < len; k++) {
+        vec[k] /= denom;
+      }
+    } else {
+      logger.warn(`[Consolidation] Vector normalization: norm is 0 for id ${id}. Using raw vector.`);
+    }
+    return vec;
+  }
+
+  /**
    * Alias for runJob to maintain backward compatibility with consolidationEngine.run(...)
    */
   async run(job: ConsolidationJob): Promise<ConsolidationReport> {
@@ -205,18 +227,7 @@ export class ConsolidationEngine {
 
         // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
         // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
-        embedding = embedding.slice();
-        let norm = 0;
-        const len = embedding.length;
-        for (let k = 0; k < len; k++) {
-          norm += embedding[k] * embedding[k];
-        }
-        if (norm > 0) {
-          const denom = Math.sqrt(norm);
-          for (let k = 0; k < len; k++) {
-            embedding[k] /= denom;
-          }
-        }
+        embedding = this.normalizeVectorInPlace(embedding, id);
 
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push({ id, importance, embedding });
@@ -513,18 +524,7 @@ export class ConsolidationEngine {
 
         // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
         // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
-        embedding = embedding.slice();
-        let norm = 0;
-        const len = embedding.length;
-        for (let k = 0; k < len; k++) {
-          norm += embedding[k] * embedding[k];
-        }
-        if (norm > 0) {
-          const denom = Math.sqrt(norm);
-          for (let k = 0; k < len; k++) {
-            embedding[k] /= denom;
-          }
-        }
+        embedding = this.normalizeVectorInPlace(embedding, id);
 
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push({ id, confidence, embedding });
