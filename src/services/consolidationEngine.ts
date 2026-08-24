@@ -552,8 +552,7 @@ export class ConsolidationEngine {
     let normA = 0;
     let normB = 0;
 
-    // Optimization: Cache array length locally to avoid a .length property
-    // lookup per iteration in this hot O(N^2) math loop.
+    // Optimization: Cache length/elements locally to minimize lookups.
     const len = vecA.length;
     for (let i = 0; i < len; i++) {
       const vA = vecA[i];
