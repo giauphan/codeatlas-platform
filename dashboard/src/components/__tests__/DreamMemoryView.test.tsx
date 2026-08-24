@@ -19,7 +19,7 @@ vi.mock('lucide-react', () => {
   const Icon = ({ size, style }: any) => <span data-testid="lucide-icon" data-size={size} style={style} />;
   return {
     Brain: Icon, Search: Icon, Trash2: Icon, AlertCircle: Icon,
-    Loader2: Icon, Database: Icon, Clock: Icon, Settings: Icon,
+    Loader2: Icon, Database: Icon, Clock: Icon, Settings: Icon, X: Icon
   };
 });
 
