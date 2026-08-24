@@ -199,9 +199,24 @@ export class ConsolidationEngine {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const importance = Number(this.getVal(row, R_IDX.IMPORTANCE, 'IMPORTANCE'));
         const rawEmb = this.getVal(row, R_IDX.EMBEDDING, 'EMBEDDING');
-        const embedding = this.parseEmbedding(rawEmb);
+        let embedding = this.parseEmbedding(rawEmb);
 
         if (!embedding) continue;
+
+        // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
+        // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
+        embedding = embedding.slice();
+        let norm = 0;
+        const len = embedding.length;
+        for (let k = 0; k < len; k++) {
+          norm += embedding[k] * embedding[k];
+        }
+        if (norm > 0) {
+          const denom = Math.sqrt(norm);
+          for (let k = 0; k < len; k++) {
+            embedding[k] /= denom;
+          }
+        }
 
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push({ id, importance, embedding });
@@ -492,9 +507,24 @@ export class ConsolidationEngine {
         const id = String(this.getVal(row, SCORE_IDX.ID, 'ID'));
         const confidence = Number(this.getVal(row, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
         const rawEmb = this.getVal(row, SCORE_IDX.EMBEDDING, 'EMBEDDING');
-        const embedding = this.parseEmbedding(rawEmb);
+        let embedding = this.parseEmbedding(rawEmb);
 
         if (!embedding) continue;
+
+        // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
+        // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
+        embedding = embedding.slice();
+        let norm = 0;
+        const len = embedding.length;
+        for (let k = 0; k < len; k++) {
+          norm += embedding[k] * embedding[k];
+        }
+        if (norm > 0) {
+          const denom = Math.sqrt(norm);
+          for (let k = 0; k < len; k++) {
+            embedding[k] /= denom;
+          }
+        }
 
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push({ id, confidence, embedding });
@@ -548,23 +578,14 @@ export class ConsolidationEngine {
       return 0;
     }
 
+    // ⚡ Bolt: Both vectors are pre-normalized during extraction, so cosine similarity
+    // reduces to a simple dot product, eliminating expensive O(N^2) Math.sqrt/division.
     let dot = 0;
-    let normA = 0;
-    let normB = 0;
-
     const len = vecA.length;
     for (let i = 0; i < len; i++) {
-      const a = vecA[i];
-      const b = vecB[i];
-      dot += a * b;
-      normA += a * a;
-      normB += b * b;
+      dot += vecA[i] * vecB[i];
     }
-
-    const denom = Math.sqrt(normA) * Math.sqrt(normB);
-    if (denom === 0) return 0;
-
-    return dot / denom;
+    return dot;
   }
 }
 
