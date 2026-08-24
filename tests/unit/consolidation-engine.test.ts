@@ -124,6 +124,7 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
   test('getNormalizedVector correctly normalizes and handles zero-norm vectors', () => {
     // Access private method for testing
     const normalize = (consolidationEngine as any).getNormalizedVector.bind(consolidationEngine);
+    const cosineSim = (consolidationEngine as any).cosineSimilarity.bind(consolidationEngine);
 
     // Normal vector
     const vec1 = new Float32Array([3, 4]); // Norm = 5
@@ -146,5 +147,13 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     const norm3 = normalize(vec3, 'id-neg');
     assert.ok(Math.abs(norm3[0] + 0.6) < 0.00001);
     assert.ok(Math.abs(norm3[1] + 0.8) < 0.00001);
+
+    // Test cosine similarity on normalized vectors
+    // Dot product of (0.6, 0.8) and (-0.6, -0.8) should be -1
+    const sim = cosineSim(norm1, norm3);
+    assert.ok(Math.abs(sim - (-1.0)) < 0.00001);
+
+    // Dot product with zero vector is 0
+    assert.equal(cosineSim(norm1, norm2), 0);
   });
 });

@@ -33,3 +33,7 @@
 ## 2026-08-24 - Math optimizations for O(N^2) distance calculations
 **Learning:** When computing cosine similarity in an $O(N^2)$ inner loop, recalculating the magnitudes (norms) using `Math.sqrt` and dividing repeatedly scales quadratically.
 **Action:** Pre-normalize the embedding vectors (divide each component by its magnitude) during the $O(N)$ data extraction phase. This allows reducing the similarity calculation in the inner loop to a simple dot product, bypassing the expensive divisions and `Math.sqrt` calculations entirely.
+
+## 2026-08-24 - O(1) Validation Heuristics inside O(N^2) Math Loops
+**Learning:** Validating vector normalization in development inside an $O(N^2)$ inner loop using full calculations (e.g. `sum(vec^2) ≈ 1`) introduces unacceptable $O(N)$ math overhead per comparison, destroying the original optimization's intent even in dev/test environments.
+**Action:** Use an $O(1)$ constant-time heuristic check (e.g. `vec[0]^2 + vec[len-1]^2 > 1.01`) to assert bounds without iterating the entire array. Because a truly normalized vector's sum-of-squares is $1$, any partial sum of its squared elements must logically be $\le 1$. If a partial sum exceeds $1$, the vector is guaranteed to be unnormalized, providing a cheap, zero-false-positive safety net against regressions.
