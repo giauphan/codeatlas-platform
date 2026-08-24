@@ -32,7 +32,6 @@ const decode = (stored: string): string => {
 
 export const safeSessionStorageSetItem = (key: string, value: string) => {
     if (value === undefined || value === null) return;
-    if (value === undefined || value === null) return;
     const payload = encode(value);
     try {
       sessionStorage.setItem(key, payload);
