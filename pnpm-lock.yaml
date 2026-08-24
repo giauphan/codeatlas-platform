@@ -93,7 +93,7 @@ importers:
         version: 7.0.2
       '@types/pg':
         specifier: ^8.11.10
-        version: 8.21.0
+        version: 8.23.1
       better-sqlite3:
         specifier: ^11.3.0
         version: 11.10.0
@@ -969,8 +969,8 @@ packages:
   '@types/oracledb@7.0.2':
     resolution: {integrity: sha512-yAMn1N+yTyKpJpJ4EDf5Mfgas81dF3pchxZXlK0A4FG6+Jhvv5jaXdl0KmHbdg1ookCqPEYjzLo+7UBmsz9QWg==}
 
-  '@types/pg@8.21.0':
-    resolution: {integrity: sha512-AYdtudzabjLZgVgRZmAnU8bAnVUXzuJX2IYHeSIiIHm68olD+LgQYCGWdtcNYnP0uq9c4S4NibVG3Ni7VbKW7Q==}
+  '@types/pg@8.23.1':
+    resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
@@ -3903,7 +3903,7 @@ snapshots:
     dependencies:
       '@types/node': 26.2.0
 
-  '@types/pg@8.21.0':
+  '@types/pg@8.23.1':
     dependencies:
       '@types/node': 26.2.0
       pg-protocol: 1.16.0
