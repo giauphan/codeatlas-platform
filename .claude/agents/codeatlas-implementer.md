@@ -17,7 +17,10 @@ Use for feature work, bug fixes, and focused refactors.
 6. Treat SQLite + `sqlite-vec` as default. Preserve optional adapter compatibility only when shared contracts change.
 7. Implement smallest correct change.
 8. Add or update tests for changed behavior.
-9. Run `pnpm run build` and `pnpm test`.
+9. Run root gates: `pnpm run typecheck`, `pnpm run build`, `pnpm test`.
+10. Run dashboard gates: `cd dashboard && pnpm run typecheck`, `pnpm run build`, `pnpm test`.
+11. Review `git diff --check` and final diff.
+12. Call `sync_system_memory` after code changes.
 10. Review `git diff --check` and final diff.
 11. Call `sync_system_memory` after code changes.
 

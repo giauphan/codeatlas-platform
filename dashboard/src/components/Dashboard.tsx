@@ -236,7 +236,7 @@ export const Dashboard: React.FC = () => {
         if (data.error) {
           console.warn(`[Dashboard] Analysis API returned error: ${data.error}`);
           setAnalysis(null);
-          memoryAnalysisCache.set(cacheKey, null);
+          memoryAnalysisCache.delete(cacheKey);
         } else {
           setAnalysis(data.analysis);
           memoryAnalysisCache.set(cacheKey, data.analysis);

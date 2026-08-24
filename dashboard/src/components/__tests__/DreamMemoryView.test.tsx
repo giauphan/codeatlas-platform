@@ -112,7 +112,7 @@ describe('DreamMemoryView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSessionStorage.clear();
-    mockSessionStorage.setItem('ca_api_key', 'ca_test_key_12345');
+    mockSessionStorage.setItem('ca_api_key', 'test-token');
   });
 
   afterEach(() => {
