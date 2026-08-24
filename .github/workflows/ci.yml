@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Cancelled runs never reach the cache-save post step, so main must run to
+  # completion to repopulate the caches that PR runs restore from.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   build:
     name: Build & Test
@@ -22,10 +28,28 @@ jobs:
         with:
           submodules: false
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v7
         with:
           node-version: 22
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        id: pnpm-cache
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install Oracle Instant Client
         run: |
@@ -38,25 +62,83 @@ jobs:
           sudo ldconfig
           rm /tmp/ic.zip
 
-      - name: Enable pnpm via corepack
-        run: corepack enable && corepack prepare pnpm --activate
-
       - name: Install dependencies (Root)
         run: pnpm install --frozen-lockfile
 
-      - name: TypeScript type check
-        run: npx tsc --noEmit --skipLibCheck
+      - name: Typecheck Root
+        run: pnpm run typecheck
 
       - name: Build Main Server
         run: pnpm run build
 
+      - name: Typecheck Dashboard
+        working-directory: dashboard
+        run: pnpm run typecheck
+
       - name: Build Dashboard
-        run: |
-          cd dashboard
-          pnpm run build
+        working-directory: dashboard
+        run: pnpm run build
 
       - name: Run analyzer tests
         working-directory: ./
+        run: pnpm test
+
+      - name: Run dashboard tests
+        working-directory: dashboard
+        run: pnpm test
+
+  sqlite:
+    name: SQLite + sqlite-vec
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      CODEATLAS_DB_TYPE: sqlite
+      CODEATLAS_SQLITE_PATH: ${{ github.workspace }}/.tmp/codeatlas-ci.db
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        id: pnpm-cache
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild SQLite native binding
+        run: pnpm rebuild better-sqlite3
+
+      - name: Typecheck Root
+        run: pnpm run typecheck
+
+      - name: Initialize and seed SQLite
+        run: |
+          mkdir -p "$(dirname "$CODEATLAS_SQLITE_PATH")"
+          pnpm run db-seed
+
+      - name: Run SQLite tests
         run: pnpm test
 
   security:
@@ -65,27 +147,43 @@ jobs:
     permissions:
       contents: read
       security-events: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v7
         with:
           node-version: 22
 
-      - name: Enable pnpm via corepack
-        run: corepack enable && corepack prepare pnpm --activate
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        id: pnpm-cache
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prod
 
       - name: pnpm audit (prod deps only)
         run: pnpm audit --prod --audit-level=high
-        continue-on-error: true
 
       - name: Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true

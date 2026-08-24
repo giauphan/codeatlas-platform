@@ -5,7 +5,7 @@ import { SQLiteAdapter } from "./adapters/sqliteAdapter.js";
 import { PostgresAdapter } from "./adapters/postgresAdapter.js";
 
 export function createDatabaseAdapter(): IDatabaseAdapter {
-  const dbType = process.env.CODEATLAS_DB_TYPE || "oracle";
+  const dbType = process.env.CODEATLAS_DB_TYPE || "sqlite";
 
   switch (dbType.toLowerCase()) {
     case "sqlite":

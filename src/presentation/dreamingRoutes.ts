@@ -161,21 +161,24 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
       const memories = rawMemories.map((r: Record<string, unknown>) => {
+        const get = (upper: string, lower: string) => r[upper] ?? r[lower];
         let tags: string[] | undefined;
         let relatedIds: string[] | undefined;
-        try { if (typeof r.TAGS === 'string') tags = JSON.parse(r.TAGS); } catch {}
-        try { if (typeof r.RELATED_IDS === 'string') relatedIds = JSON.parse(r.RELATED_IDS); } catch {}
+        const tagsRaw = get('TAGS', 'tags');
+        const relatedIdsRaw = get('RELATED_IDS', 'related_ids');
+        try { if (typeof tagsRaw === 'string') tags = JSON.parse(tagsRaw); } catch {}
+        try { if (typeof relatedIdsRaw === 'string') relatedIds = JSON.parse(relatedIdsRaw); } catch {}
 
         return {
-          id: r.ID,
-          session_id: r.SESSION_ID,
-          project: r.PROJECT,
-          provider: r.PROVIDER,
-          memory_type: r.MEMORY_TYPE,
-          content: r.CONTENT,
-          importance: r.IMPORTANCE,
-          created_at: r.CREATED_AT,
-          scope: r.SCOPE,
+          id: get('ID', 'id'),
+          session_id: get('SESSION_ID', 'session_id'),
+          project: get('PROJECT', 'project'),
+          provider: get('PROVIDER', 'provider'),
+          memory_type: get('MEMORY_TYPE', 'memory_type'),
+          content: get('CONTENT', 'content'),
+          importance: get('IMPORTANCE', 'importance'),
+          created_at: get('CREATED_AT', 'created_at'),
+          scope: get('SCOPE', 'scope'),
           tags,
           related_ids: relatedIds,
         };

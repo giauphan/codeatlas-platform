@@ -683,15 +683,18 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         const projectName = loaded ? loaded.projectName : (project || "global");
         const rows = await OracleDreamingService.queryDreamMemories(projectName, query, limit ?? 10, 0, undefined, provider);
         const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
-        const memories = rawMemories.map((r: Record<string, unknown>) => ({
-          id: r.ID,
-          session_id: r.SESSION_ID,
-          provider: r.PROVIDER,
-          memory_type: r.MEMORY_TYPE,
-          content: r.CONTENT,
-          importance: r.IMPORTANCE,
-          created_at: r.CREATED_AT instanceof Date ? r.CREATED_AT.toISOString() : String(r.CREATED_AT ?? ""),
-        }));
+        const memories = rawMemories.map((r: Record<string, unknown>) => {
+          const get = (upper: string, lower: string) => r[upper] ?? r[lower];
+          return {
+            id: get('ID', 'id'),
+            session_id: get('SESSION_ID', 'session_id'),
+            provider: get('PROVIDER', 'provider'),
+            memory_type: get('MEMORY_TYPE', 'memory_type'),
+            content: get('CONTENT', 'content'),
+            importance: get('IMPORTANCE', 'importance'),
+            created_at: (() => { const v = get('CREATED_AT', 'created_at'); return v instanceof Date ? v.toISOString() : String(v ?? ''); })(),
+          };
+        });
         return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, count: memories.length, memories }, null, 2) }] };
       } catch (err: unknown) {
         return { content: [{ type: "text" as const, text: `Failed to query dream memories: ${err instanceof Error ? err.message : String(err)}` }], isError: true };

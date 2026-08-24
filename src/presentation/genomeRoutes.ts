@@ -85,10 +85,8 @@ export function mountGenomeRoutes(app: express.Application): void {
   // GET /api/genome/list — List genes (paginated, no vector search)
   app.get("/api/genome/list", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
-      const { initPool, setSessionContext } = await import("../database/connection.js");
-      const connection = await (await initPool()).getConnection();
-      try {
-        await setSessionContext(connection);
+      const { initAdapter, setSessionContext } = await import("../database/connection.js");
+      const adapter = await initAdapter();
         const project = req.query.project as string | undefined;
         const category = req.query.category as string | undefined;
         const limit = Math.min(Number(req.query.limit) || 50, 100);
@@ -100,31 +98,28 @@ export function mountGenomeRoutes(app: express.Application): void {
         if (project) binds.project = project;
         if (category) binds.category = category;
 
-        const result = await connection.execute<any[]>(
+        const result = await adapter.query<any>(
           `SELECT id, name, description, problem, solution, architecture,
                   category, project, confidence, version, evolution_score,
                   usage_count, success_rate, status, source_type, created_at, updated_at
            FROM codeatlas_genome ${pFilter} ${catFilter}
            ORDER BY evolution_score DESC
-           FETCH FIRST :limit ROWS ONLY`,
-          binds as any
+           LIMIT :limit OFFSET :offset`,
+          binds
         );
 
-        const genes = (result.rows || []).map((r: any[]) => ({
-          id: String(r[0]), name: String(r[1]), description: String(r[2] || ""),
-          problem: String(r[3] || ""), solution: String(r[4] || ""),
-          architecture: String(r[5] || ""), category: String(r[6]),
-          project: String(r[7] || ""), confidence: Number(r[8]),
-          version: Number(r[9]), evolutionScore: Number(r[10]),
-          usageCount: Number(r[11]), successRate: Number(r[12]),
-          status: String(r[13]), sourceType: String(r[14] || ""),
-          createdAt: String(r[15]), updatedAt: String(r[16]),
+        const genes = (result || []).map((r: any) => ({
+          id: String(r.id), name: String(r.name), description: String(r.description || ""),
+          problem: String(r.problem || ""), solution: String(r.solution || ""),
+          architecture: String(r.architecture || ""), category: String(r.category),
+          project: String(r.project || ""), confidence: Number(r.confidence),
+          version: Number(r.version), evolutionScore: Number(r.evolution_score),
+          usageCount: Number(r.usage_count), successRate: Number(r.success_rate),
+          status: String(r.status), sourceType: String(r.source_type || ""),
+          createdAt: String(r.created_at), updatedAt: String(r.updated_at),
         }));
 
         res.json({ genes, offset, limit });
-      } finally {
-        try { await connection.close(); } catch { /* ignore */ }
-      }
     } catch (err) {
       logger.error(`[Genome] ${err}`);
       res.status(500).json({ error: String(err) });

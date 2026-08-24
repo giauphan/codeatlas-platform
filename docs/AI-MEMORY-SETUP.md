@@ -180,3 +180,107 @@ Patterns that achieve 100% model compliance:
 
 > ⚠️ Avoid comparative language like "instead of" or "faster than" — use absolute prohibitions like "NEVER" or "MUST" for reliable compliance.
 
+---
+
+## Second Brain Hooks (Claude Code)
+
+The optional **Brain hooks** wire Claude Code to the CodeAtlas brain so every session is primed with relevant memory and new learnings are saved back automatically.
+
+### What the hooks do
+
+| Hook event | Script | Effect |
+|------------|--------|--------|
+| `UserPromptSubmit` | `brain-context.sh` | Query the brain for context relevant to the incoming prompt; prepend a "Second Brain Context" block |
+| `PostToolUse` | `brain-save.sh` | Save key model calls / learnings to the brain |
+| `PostToolUseFailure` | `brain-save.sh` | Record what went wrong so the same mistake is less likely to recur |
+
+Hooks are **global** (`~/.claude/hooks/` + `~/.claude/settings.json`) so they fire for **all** Claude Code projects, not just this repo.
+
+### Requirements
+
+- **CodeAtlas server running** — the hooks call the HTTP API, so `codeatlas` must be up (default `http://localhost:3381`).
+- **`CODEATLAS_API_KEY`** — the hooks no-op (exit silently) if this is unset, so nothing works until you set it.
+- **`python3`** on `PATH` — used by the installer to patch `settings.json`.
+
+### Environment variables
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `CODEATLAS_API_KEY` | Yes | — | Auth token for the CodeAtlas API. Set in your shell profile (`.bashrc` / `.zshrc`) so hooks inherit it. |
+| `CODEATLAS_API_URL` | No | `http://localhost:3381` | Base URL of the CodeAtlas server. Override for remote/hosted deployments. |
+| `PORT` | No | `3381` | Server listen port (env for the server side, mirrors `CODEATLAS_API_URL`). |
+
+Example shell profile lines:
+
+```bash
+export CODEATLAS_API_KEY="your-api-key"
+export CODEATLAS_API_URL="http://localhost:3381"
+```
+
+> ⚠️ Restart Claude Code after changing these so the running session picks the new values up.
+
+### Install
+
+The installer ships inside the **codeatlas-mcp-server** package (`src/cli/hooks/install-brain-hooks.sh`) and runs as a CLI command:
+
+```bash
+# From the installed package (npm / npx):
+codeatlas-mcp install-hooks
+
+# From a source checkout of codeatlas-mcp-server:
+node dist/index.js install-hooks
+```
+
+Preview without writing anything:
+
+```bash
+codeatlas-mcp install-hooks --dry-run
+```
+
+This is **idempotent** — safe to re-run. What it does:
+
+1. Copies `brain-save.sh` + `brain-context.sh` into `~/.claude/hooks/` (overwrites older versions) and `chmod +x` them.
+2. Backs up `~/.claude/settings.json` to `~/.claude/settings.json.bak-install-<timestamp>`.
+3. Patches the global hook commands in `~/.claude/settings.json`, using `$HOME`-based paths (`~/.claude/hooks/...`) so it works on any machine/user.
+4. Never touches a project's `.claude/settings.json` or global `CLAUDE.md`.
+
+### Verify
+
+After a **restart**, check:
+
+```bash
+# Hooks are installed and commands point at current $HOME
+grep -n 'brain-' ~/.claude/settings.json
+ls -la ~/.claude/hooks/brain-*.sh
+
+# Save hook is actively logging (each line tagged with your project)
+tail -f ~/.claude/brain-save.log
+```
+
+You should also see a **"Second Brain Context"** block in the system reminder at the top of any new conversation (requires `CODEATLAS_API_KEY` to be set).
+
+### Uninstall / rollback
+
+The installer does **not** provide an uninstall flag — roll back manually:
+
+1. **Restore settings.json** from the installer backup:
+   ```bash
+   cp ~/.claude/settings.json.bak-install-<timestamp> ~/.claude/settings.json
+   ```
+   (If a backup is missing, remove the `UserPromptSubmit` / `PostToolUse` / `PostToolUseFailure` entries under `"hooks"` from `~/.claude/settings.json`.)
+
+2. **Remove the hook scripts:**
+   ```bash
+   rm ~/.claude/hooks/brain-context.sh ~/.claude/hooks/brain-save.sh
+   ```
+
+3. **Restart Claude Code.**
+
+### Troubleshooting
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| No "Second Brain Context" block appears | `CODEATLAS_API_KEY` unset in the shell profile; or the CodeAtlas server isn't reachable at `$CODEATLAS_API_URL`. |
+| `ERROR: /home/.../settings.json not found` | Installer expects `~/.claude/settings.json` to exist. Create it first (`{}` is fine) or run `claude` once to generate it. |
+| Hooks fire but log nothing | Check the server and restart Claude Code — hooks load settings at startup. |
+| Contaminated context in tool output | Old/duplicate `brain-context.sh` hook output may be polluting sessions. Re-run the installer (overwrites the hook) and restart, or remove the hook per **Uninstall / rollback**. |

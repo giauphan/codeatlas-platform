@@ -78,6 +78,7 @@ const mockLogActivity = mock.fn();
 const mockLoadAnalysis = mock.fn();
 const mockSaveDreamMemory = mock.fn();
 const mockQueryDreamMemories = mock.fn();
+const mockSummarizeConversation = mock.fn();
 
 // Mock authService
 const authServiceMock = { checkAuth: mockCheckAuth, logActivity: mockLogActivity };
@@ -91,6 +92,10 @@ const dreamingServiceMock = {
   },
 };
 safeMockModule(path.join(srcDir, 'services/dreamingService.js'), dreamingServiceMock);
+
+safeMockModule(path.join(srcDir, 'services/llmService.js'), {
+  summarizeConversationForDreams: mockSummarizeConversation,
+});
 
 // Mock projectService
 const projectServiceMock = { loadAnalysisAsync: mockLoadAnalysis };
@@ -193,6 +198,7 @@ describe('Dreaming Routes', () => {
     mockLoadAnalysis.mock.resetCalls();
     mockSaveDreamMemory.mock.resetCalls();
     mockQueryDreamMemories.mock.resetCalls();
+    mockSummarizeConversation.mock.resetCalls();
     mockAuthStore.getStore.mock.resetCalls();
     mockAuthStore.run.mock.resetCalls();
     mockLogger.error.mock.resetCalls();
@@ -481,6 +487,172 @@ describe('Dreaming Routes', () => {
       const body = await res.json() as Record<string, unknown>;
       assert.ok(Array.isArray(body.memories));
       assert.strictEqual(body.count, 0);
+    });
+
+    // SQLite/Postgres return lowercase column keys; the route mapper must
+    // normalize them so the UI renders the same shape as the Oracle path.
+    test('maps lowercase SQLite row keys to response fields', async () => {
+      const sqliteMemories = [
+        {
+          id: 'mem-lc-1',
+          session_id: 'sess-lc',
+          project: 'proj',
+          provider: 'claude',
+          memory_type: 'KNOWLEDGE',
+          content: 'lowercase content from sqlite',
+          importance: 7,
+          created_at: '2026-08-10',
+          scope: 'auth/login',
+          tags: '["jwt","security"]',
+          related_ids: '["rel-1"]',
+        },
+      ];
+      mockQueryDreamMemories.mock.mockImplementation(async () => sqliteMemories);
+
+      const res = await fetch(
+        `${baseUrl}/api/dreams/query?apiKey=valid-key&query=lowercase`,
+      );
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.strictEqual(body.count, 1);
+      const m = (body.memories as Record<string, unknown>[])[0];
+      assert.strictEqual(m.id, 'mem-lc-1');
+      assert.strictEqual(m.session_id, 'sess-lc');
+      assert.strictEqual(m.memory_type, 'KNOWLEDGE');
+      assert.strictEqual(m.content, 'lowercase content from sqlite');
+      assert.strictEqual(m.scope, 'auth/login');
+      assert.deepStrictEqual(m.tags, ['jwt', 'security']);
+      assert.deepStrictEqual(m.related_ids, ['rel-1']);
+    });
+
+    // Guards against a regression where only Oracle uppercase keys were read,
+    // which would silently blank out every field under SQLite/Postgres.
+    test('still maps uppercase Oracle row keys', async () => {
+      const oracleMemories = [
+        {
+          ID: 'mem-uc-1',
+          SESSION_ID: 'sess-uc',
+          PROJECT: 'proj',
+          PROVIDER: 'claude',
+          MEMORY_TYPE: 'MISTAKE',
+          CONTENT: 'uppercase content from oracle',
+          IMPORTANCE: 9,
+          CREATED_AT: '2026-08-11',
+          SCOPE: null,
+          TAGS: null,
+          RELATED_IDS: null,
+        },
+      ];
+      mockQueryDreamMemories.mock.mockImplementation(async () => oracleMemories);
+
+      const res = await fetch(
+        `${baseUrl}/api/dreams/query?apiKey=valid-key&query=uppercase`,
+      );
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      const m = (body.memories as Record<string, unknown>[])[0];
+      assert.strictEqual(m.id, 'mem-uc-1');
+      assert.strictEqual(m.memory_type, 'MISTAKE');
+      assert.strictEqual(m.content, 'uppercase content from oracle');
+    });
+
+    // The DB-type migration must never surface Oracle credential errors in
+    // the UI: reproduces the "ORACLE_PASSWORD environment variable is required"
+    // failure as a 500 with the message propagated.
+    test('propagates ORACLE_PASSWORD error as 500 (dream-memory UI regression)', async () => {
+      mockQueryDreamMemories.mock.mockImplementation(async () => {
+        throw new Error('ORACLE_PASSWORD environment variable is required');
+      });
+
+      const res = await fetch(
+        `${baseUrl}/api/dreams/query?apiKey=valid-key&query=whatever`,
+      );
+
+      assert.strictEqual(res.status, 500);
+      const body = await res.json() as Record<string, unknown>;
+      assert.ok((body.error as string).includes('ORACLE_PASSWORD'));
+    });
+  });
+
+  describe('POST /api/dreams/ingest-session', () => {
+    test('successfully ingests transcripts and filters noise-blocked saves', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => [
+        { memoryType: 'KNOWLEDGE', content: 'Node is fast', importance: 7 },
+        { memoryType: 'MISTAKE', content: 'Bad query', importance: 8 },
+      ]);
+      let saveCount = 0;
+      mockSaveDreamMemory.mock.mockImplementation(async (project, sessionId, memoryType, content, importance, provider) => {
+        saveCount++;
+        if (content === 'Bad query') return '__noise_blocked__';
+        return `saved-${saveCount}`;
+      });
+
+      const res = await fetch(`${baseUrl}/api/dreams/ingest-session?apiKey=valid-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: '[USER]\nValid sentence pattern test database pooling.',
+          session_id: 's-ingest-1',
+          project: 'proj-ingest-1',
+          provider: 'hermes',
+        }),
+      });
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.strictEqual(body.success, true);
+      assert.strictEqual(body.session_id, 's-ingest-1');
+      assert.strictEqual(body.dreamsExtracted, 1);
+      assert.strictEqual(body.noiseBlocked, 1);
+
+      assert.strictEqual(mockSummarizeConversation.mock.calls.length, 1);
+      const sumArgs = mockSummarizeConversation.mock.calls[0].arguments;
+      assert.strictEqual(sumArgs[0], '[USER]\nValid sentence pattern test database pooling.');
+      assert.strictEqual(sumArgs[1], 'hermes');
+      assert.strictEqual(sumArgs[2], 'proj-ingest-1');
+      assert.strictEqual(sumArgs[3], 's-ingest-1');
+
+      assert.strictEqual(mockSaveDreamMemory.mock.calls.length, 2);
+      const save1Args = mockSaveDreamMemory.mock.calls[0].arguments;
+      assert.strictEqual(save1Args[0], 'proj-ingest-1');
+      assert.strictEqual(save1Args[1], 's-ingest-1');
+      assert.strictEqual(save1Args[2], 'KNOWLEDGE');
+      assert.strictEqual(save1Args[3], 'Node is fast');
+      assert.strictEqual(save1Args[4], 7);
+      assert.strictEqual(save1Args[5], 'hermes');
+    });
+
+    test('returns 400 for empty or invalid content', async () => {
+      const res = await fetch(`${baseUrl}/api/dreams/ingest-session?apiKey=valid-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: '',
+        }),
+      });
+
+      assert.strictEqual(res.status, 400);
+      const body = await res.json() as Record<string, unknown>;
+      assert.ok(String(body.error).includes('content'));
+    });
+
+    test('returns 200 with 0 dreams extracted if summarizer returns empty', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => []);
+
+      const res = await fetch(`${baseUrl}/api/dreams/ingest-session?apiKey=valid-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: 'some non-matching transcript',
+        }),
+      });
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.strictEqual(body.success, true);
+      assert.strictEqual(body.dreamsExtracted, 0);
     });
   });
 });

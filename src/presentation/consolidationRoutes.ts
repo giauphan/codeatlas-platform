@@ -43,7 +43,7 @@ export function mountConsolidationRoutes(app: express.Application): void {
         return;
       }
 
-      const { initPool, setSessionContext } = await import("../database/connection.js");
+      const { initAdapter, setSessionContext } = await import("../database/connection.js");
       const { generateEmbedding } = await import("../services/embeddingService.js");
 
       const embedding = await generateEmbedding(query, "query");
@@ -56,34 +56,30 @@ export function mountConsolidationRoutes(app: express.Application): void {
       const auth = authStorage.getStore();
       const tenantId = authStorage.getStore()!.uid;
 
-      let connection;
-      try {
-        const pool = await initPool();
-        connection = await pool.getConnection();
-        await setSessionContext(connection);
+      const adapter = await initAdapter();
 
         const projectFilter = project ? "AND project = :project" : "";
         const whereClause = `WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter}`;
-        
-        const binds: Record<string, unknown> = { tenantId: authStorage.getStore()!.uid, limit, queryVector: new Float32Array(embedding) };
+
+        const binds: Record<string, unknown> = { tenantId: authStorage.getStore()!.uid, limit, queryVector: embedding };
         if (project) binds.project = project;
 
-        const result = await connection.execute<any[]>(
+        const result = await adapter.query(
           `SELECT id, label, description, category, confidence, evidence_count, project
            FROM codeatlas_concepts ${whereClause}
            ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
-           FETCH FIRST :limit ROWS ONLY`,
-          binds as any
+           LIMIT :limit`,
+          binds
         );
 
-        const concepts = (result.rows || []).map((r: any[]) => ({
-          id: String(r[0]),
-          label: String(r[1]),
-          description: String(r[2] || ""),
-          category: String(r[3] || "lesson"),
-          confidence: Number(r[4]),
-          evidenceCount: Number(r[5]),
-          project: String(r[6] || ""),
+        const concepts = (result || []).map((r: any) => ({
+          id: String(r.id),
+          label: String(r.label),
+          description: String(r.description || ""),
+          category: String(r.category || "lesson"),
+          confidence: Number(r.confidence),
+          evidenceCount: Number(r.evidence_count),
+          project: String(r.project || ""),
         }));
 
         res.json({ concepts });
@@ -92,18 +88,12 @@ export function mountConsolidationRoutes(app: express.Application): void {
         if (concepts.length > 0) {
           try {
             const binds = concepts.map(c => ({ id: c.id, tenantId }));
-            await connection.executeMany(
-              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-              binds,
-              { autoCommit: true, batchErrors: true }
+            await adapter.executeMany(
+              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = ${(process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase() === "sqlite" ? "datetime('now')" : "CURRENT_TIMESTAMP"} WHERE id = :id AND tenant_id = :tenantId`,
+              binds
             );
           } catch { /* skip */ }
         }
-      } finally {
-        if (connection) {
-          try { await connection.close(); } catch { /* ignore */ }
-        }
-      }
     } catch (err) {
       logger.error(`[Concepts API] ${err}`);
       res.status(500).json({ error: String(err) });

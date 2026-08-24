@@ -19,6 +19,15 @@ interface SqliteDatabase {
 type DatabaseConstructor = new (filename: string) => SqliteDatabase;
 type SqliteVecLoad = (db: unknown) => void;
 
+type SqliteParams = Record<string, unknown> | unknown[];
+
+const NAMED_PLACEHOLDER = /[:@$][a-zA-Z_][a-zA-Z0-9_]*/;
+
+function bindArgs(sql: string, params: SqliteParams): unknown[] {
+  if (Array.isArray(params)) return params;
+  return NAMED_PLACEHOLDER.test(sql) ? [params] : Object.values(params);
+}
+
 let DatabaseClass: DatabaseConstructor | undefined;
 let sqliteVecLoad: SqliteVecLoad | undefined;
 
@@ -95,16 +104,14 @@ export class SQLiteAdapter implements IDatabaseAdapter {
 
   async query<T>(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<T[]> {
     if (!this.db) await this.connect();
-    const paramArray = Array.isArray(params) ? params : Object.values(params);
     const stmt = this.db!.prepare(sql);
-    return stmt.all(...paramArray) as T[];
+    return stmt.all(...bindArgs(sql, params)) as T[];
   }
 
   async execute(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<{ rowsAffected: number }> {
     if (!this.db) await this.connect();
-    const paramArray = Array.isArray(params) ? params : Object.values(params);
     const stmt = this.db!.prepare(sql);
-    const result = stmt.run(...paramArray);
+    const result = stmt.run(...bindArgs(sql, params));
     return { rowsAffected: result.changes };
   }
 
@@ -114,7 +121,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     let totalChanges = 0;
     const transaction = this.db!.transaction((rows: Array<Record<string, unknown>>) => {
       for (const row of rows) {
-        const result = stmt.run(...Object.values(row));
+        const result = stmt.run(...bindArgs(sql, row));
         totalChanges += result.changes;
       }
     });
@@ -122,20 +129,21 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     return { rowsAffected: totalChanges };
   }
 
-  async searchVector(table: string, embedding: number[], limit: number, tenantId: string): Promise<VectorSearchResult[]> {
+  async searchVector(table: string, embedding: number[], limit: number, tenantId: string, filterBinds?: Record<string, unknown>): Promise<VectorSearchResult[]> {
     if (!this.db) await this.connect();
     const blob = new Uint8Array(new Float32Array(embedding).buffer);
 
     // sqlite-vec cosine distance function
     const sql = `
-      SELECT id, 1 - vec_distance_cosine(embedding, ?) AS score
+      SELECT id, 1 - vec_distance_cosine(embedding, :queryVector) AS score
       FROM ${table}
-      WHERE tenant_id = ?
-      ORDER BY vec_distance_cosine(embedding, ?) ASC
-      LIMIT ?
+      WHERE tenant_id = :tenantId AND embedding IS NOT NULL
+      ORDER BY vec_distance_cosine(embedding, :queryVector) ASC
+      LIMIT :limit
     `;
 
-    return this.query<VectorSearchResult>(sql, [blob, tenantId, blob, limit]);
+    const binds = { queryVector: blob, tenantId, limit, ...(filterBinds || {}) };
+    return this.query<VectorSearchResult>(sql, binds);
   }
 
   async initializeSchema(): Promise<void> {
@@ -161,8 +169,22 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         updated_at TEXT DEFAULT (datetime('now')),
         last_accessed_at TEXT,
         access_count INTEGER DEFAULT 0,
-        tenant_id TEXT NOT NULL
+        evidence_count INTEGER DEFAULT 0,
+        version INTEGER DEFAULT 1,
+        related_ids TEXT,
+        tenant_id TEXT NOT NULL,
+        UNIQUE (project, memory_type, content_hash, tenant_id)
       );
+      DELETE FROM ai_dreaming_memory
+      WHERE content_hash IS NOT NULL
+        AND rowid NOT IN (
+          SELECT MAX(rowid)
+          FROM ai_dreaming_memory
+          WHERE content_hash IS NOT NULL
+          GROUP BY project, memory_type, content_hash, tenant_id
+        );
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_dreaming_dedup
+        ON ai_dreaming_memory(project, memory_type, content_hash, tenant_id);
       CREATE INDEX IF NOT EXISTS idx_dreaming_tenant_project ON ai_dreaming_memory(tenant_id, project);
       CREATE INDEX IF NOT EXISTS idx_dreaming_hash ON ai_dreaming_memory(content_hash);
 
@@ -235,6 +257,26 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         updated_at TEXT DEFAULT (datetime('now')),
         tenant_id TEXT NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS idx_genome_tenant_project ON codeatlas_genome(tenant_id, project);
+
+      CREATE TABLE IF NOT EXISTS gene_mutations (
+        id TEXT PRIMARY KEY,
+        gene_id TEXT REFERENCES codeatlas_genome(id),
+        previous_version INTEGER,
+        new_version INTEGER,
+        change_reason TEXT,
+        diff_summary TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS gene_relationships (
+        source_id TEXT REFERENCES codeatlas_genome(id),
+        target_id TEXT REFERENCES codeatlas_genome(id),
+        relationship_type TEXT,
+        weight REAL DEFAULT 1.0,
+        created_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (source_id, target_id, relationship_type)
+      );
 
       CREATE TABLE IF NOT EXISTS ai_semantic_memory (
         id TEXT PRIMARY KEY,
@@ -260,6 +302,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
 
       CREATE TABLE IF NOT EXISTS ai_episodic_memory (
         id TEXT PRIMARY KEY,
+        project_name TEXT NOT NULL,
         event_type TEXT,
         event_data TEXT,
         created_at TEXT DEFAULT (datetime('now')),
@@ -284,6 +327,19 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         tenant_id TEXT NOT NULL
       );
     `);
+
+    const addColumnIfMissing = (table: string, column: string, definition: string): void => {
+      const columns = this.db!.pragma(`table_info(${table})`) as Array<{ name: string }>;
+      if (!columns.some((entry) => entry.name === column)) {
+        this.db!.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      }
+    };
+
+    addColumnIfMissing("ai_episodic_memory", "project_name", "TEXT");
+    addColumnIfMissing("ai_dreaming_memory", "evidence_count", "INTEGER DEFAULT 0");
+    addColumnIfMissing("ai_dreaming_memory", "version", "INTEGER DEFAULT 1");
+    addColumnIfMissing("ai_dreaming_memory", "related_ids", "TEXT");
+    this.db!.exec("CREATE INDEX IF NOT EXISTS idx_episodic_tenant_project ON ai_episodic_memory(tenant_id, project_name)");
 
     logger.info("[SQLiteAdapter] Schema initialized.");
   }

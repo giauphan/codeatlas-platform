@@ -6,8 +6,7 @@ This guide covers the supported setup path, everyday contributor commands, and c
 
 - Node.js 20 or newer
 - pnpm 9+ (enable via Corepack: `corepack enable && corepack prepare pnpm@9 --activate`)
-- Oracle 26ai (Autonomous Database or self-hosted with VECTOR support)
-- Optional: Oracle Instant Client (for Thick mode)
+- SQLite + sqlite-vec (included in project dependencies)
 - Optional: Firebase service account JSON (for multi-tenant auth)
 - Optional: NVIDIA NIM API key (for embeddings)
 
@@ -30,31 +29,24 @@ pnpm install
 
 ```bash
 cp .env.example .env
-# Edit .env with your Oracle, Firebase, and NVIDIA credentials
+# Set Firebase and NVIDIA credentials only when those integrations are enabled.
 ```
 
-### 3. Set up Oracle Instant Client (Thick mode only)
-
-If using Oracle Thick mode, download [Oracle Instant Client](https://www.oracle.com/database/technologies/instant-client/linux-x86-64-downloads.html) Basic Light package and extract it:
+### 3. Initialize SQLite
 
 ```bash
-mkdir -p /opt/oracle
-cd /opt/oracle
-unzip instantclient-basiclite-linux.x64-21.16.0.0.0dbru.zip
-export LD_LIBRARY_PATH=/opt/oracle/instantclient_21_16:$LD_LIBRARY_PATH
+pnpm run db-seed
 ```
 
-Then set `ORACLE_LIB_DIR` in `.env` to the Instant Client path. Leave `ORACLE_LIB_DIR` empty to use Thin mode (no Instant Client required).
+This creates and seeds `CODEATLAS_SQLITE_PATH` with SQLite + sqlite-vec schema. Safe to rerun.
 
-### 4. Initialize database
+To import existing Oracle data once, configure migration-only Oracle credentials and run:
 
 ```bash
-pnpm run db-init
+pnpm run db-migrate-oracle-to-sqlite
 ```
 
-This creates the `ai_dreaming_memory` table, applies column migrations (`scope`, `tags`, `related_ids`), and initializes the genome/immune schema. Idempotent — safe to run on every start.
-
-### 5. Run the server
+### 4. Run the server
 
 ```bash
 # Production mode (SSE on :3381)

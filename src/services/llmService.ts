@@ -1,5 +1,6 @@
 import { logger } from "../utils/logger.js";
 import { OracleDreamingService } from "./dreamingService.js";
+import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 
 /**
  * Local keyword-based dream extraction from conversation transcripts.
@@ -91,6 +92,7 @@ export async function summarizeConversationForDreams(
   const finalSeen = new Set<string>();
   let noiseDetected = false;
   for (const d of top) {
+    if (checkNoiseBlocklist(d.content).isNoise) continue;
     const dk = `${d.memoryType}:${d.content.slice(0, 40)}`;
     if (finalSeen.has(dk)) continue;
     finalSeen.add(dk);
@@ -131,11 +133,27 @@ export async function loadContextAtSessionStart(
       return "";
     }
 
+    const cleanDreams = dreams.filter((dream) => {
+      const row = dream as Record<string, unknown>;
+      const content = String(row.content ?? row.CONTENT ?? "");
+      return !checkNoiseBlocklist(content).isNoise;
+    });
+    const blockedCount = dreams.length - cleanDreams.length;
+    if (blockedCount > 0) {
+      logger.info(`[Memory Loading] Inject-gate filtered ${blockedCount} noisy dream(s)`);
+    }
+    if (cleanDreams.length === 0) {
+      return "";
+    }
+
     const parts: string[] = ["\n# 🧠 Context from Previous Sessions\n"];
-    for (const dream of dreams) {
-      const d = dream as any;
-      parts.push(`### ${d.memoryType || "DREAM"} (importance: ${d.importance || 5})`);
-      parts.push(d.content);
+    for (const dream of cleanDreams) {
+      const d = dream as Record<string, unknown>;
+      const memoryType = String(d.memoryType ?? d.memory_type ?? d.MEMORY_TYPE ?? "DREAM");
+      const importance = d.importance ?? d.IMPORTANCE ?? 5;
+      const content = String(d.content ?? d.CONTENT ?? "");
+      parts.push(`### ${memoryType} (importance: ${importance})`);
+      parts.push(content);
       parts.push("");
     }
 
