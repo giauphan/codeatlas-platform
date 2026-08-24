@@ -121,9 +121,9 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     assert.ok(decaySql.includes("julianday('now')"), 'Decay SQL should use julianday for SQLite');
   });
 
-  test('normalizeVector correctly normalizes and handles zero-norm vectors', () => {
+  test('getNormalizedVector correctly normalizes and handles zero-norm vectors', () => {
     // Access private method for testing
-    const normalize = (consolidationEngine as any).normalizeVector.bind(consolidationEngine);
+    const normalize = (consolidationEngine as any).getNormalizedVector.bind(consolidationEngine);
 
     // Normal vector
     const vec1 = new Float32Array([3, 4]); // Norm = 5
@@ -134,9 +134,17 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     assert.equal(vec1[0], 3);
 
     // Zero-norm vector
-    const vec2 = new Float32Array([0, 0]);
+    const vec2 = new Float32Array([0, 0, 0]);
     const norm2 = normalize(vec2, 'id-zero');
     assert.equal(norm2[0], 0);
     assert.equal(norm2[1], 0);
+    assert.equal(norm2[2], 0);
+    assert.equal(vec2[0], 0);
+
+    // Negative vector
+    const vec3 = new Float32Array([-3, -4]); // Norm = 5
+    const norm3 = normalize(vec3, 'id-neg');
+    assert.ok(Math.abs(norm3[0] + 0.6) < 0.00001);
+    assert.ok(Math.abs(norm3[1] + 0.8) < 0.00001);
   });
 });

@@ -110,9 +110,9 @@ export class ConsolidationEngine {
 
   /**
    * Deep copies and pre-normalizes a vector.
-   * If the vector norm is 0, it logs a debug message and returns the original (copied) vector.
+   * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private normalizeVector(embedding: Float32Array, id: string): Float32Array {
+  private getNormalizedVector(embedding: Float32Array, id: string): Float32Array {
     const vec = embedding.slice();
     let norm = 0;
     const len = vec.length;
@@ -227,7 +227,7 @@ export class ConsolidationEngine {
 
         // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
         // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
-        embedding = this.normalizeVector(embedding, id);
+        embedding = this.getNormalizedVector(embedding, id);
 
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push({ id, importance, embedding });
@@ -524,7 +524,7 @@ export class ConsolidationEngine {
 
         // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
         // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
-        embedding = this.normalizeVector(embedding, id);
+        embedding = this.getNormalizedVector(embedding, id);
 
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push({ id, confidence, embedding });
