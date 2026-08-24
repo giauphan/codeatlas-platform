@@ -57,7 +57,7 @@
     "@types/node": "^26.2.0",
     "@types/oracledb": "^7.0.2",
     "@types/pg": "^8.11.10",
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^13.0.3",
     "pg": "^8.13.0",
     "pgvector": "^0.1.8",
     "playwright": "^1.61.1",
