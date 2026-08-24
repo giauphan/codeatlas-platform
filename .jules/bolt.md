@@ -25,3 +25,7 @@
 ## 2026-08-19 - Pre-parsing vectors to avoid O(N^2) inner-loop allocations
 **Learning:** When calculating vector similarities or comparisons in $O(N^2)$ nested loops, repeatedly extracting properties (`getVal`) and parsing raw string/arrays into `Float32Array` within the inner loop causes massive, redundant CPU cycles and garbage collection pressure in V8.
 **Action:** When calculating similarity matrix distances or comparisons, pre-parse data structures (like converting raw arrays to `Float32Array`) and extract invariant lookups during an $O(N)$ preprocessing phase, mapping the valid subset to an array of objects to iterate over, effectively eliminating redundant type coercion in the inner loop.
+
+## 2026-08-21 - Array processing in N+1 loops (Tenant Discovery)
+**Learning:** Checking `await fs.promises.readdir()` inside unchunked `Promise.all` across unbounded tenants mapping causes an N+1 latency bottleneck and `EMFILE` in project discovery.
+**Action:** Replace unchunked parallel file system operations with bounded `Promise.all` chunking (e.g., `chunkSize = FILE_EXISTS_CONCURRENCY = 50`) to maximize I/O throughput safely without hitting `EMFILE` limits.
