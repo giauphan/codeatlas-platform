@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
