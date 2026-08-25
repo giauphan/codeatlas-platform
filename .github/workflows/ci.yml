@@ -141,6 +141,49 @@ jobs:
       - name: Run SQLite tests
         run: pnpm test
 
+  context-hygiene:
+    name: Context Hygiene Gate
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        id: pnpm-cache
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Strict gate: the retrieval inject-gate must reject the known
+      # context-polluting corpus and keep genuine engineering memories. Run in
+      # isolation so a weakened blocklist fails the pipeline visibly.
+      - name: Verify inject-gate blocklist corpus
+        run: node --experimental-test-module-mocks --import tsx --test 'tests/unit/context-hygiene.test.ts'
+
   security:
     name: Security & Dependency Audit
     runs-on: ubuntu-latest

@@ -883,6 +883,48 @@ describe('OracleDreamingService', () => {
       assert.equal(rows.length, 1);
       assert.equal(rows[0].id, '2');
     });
+
+    test('queryDreamMemories drops dreams below CODEATLAS_DREAM_MIN_SCORE (relevance gate)', async () => {
+      process.env.CODEATLAS_DB_TYPE = 'sqlite';
+      mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
+      mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 1 }));
+      // memory_1 baseScore 0.9, memory_2 baseScore 0.8 (from beforeEach searchVector mock)
+      mockDbAdapter.searchVector.mock.mockImplementation(() => Promise.resolve([
+        { id: 'memory_1', score: 0.9 },
+        { id: 'memory_2', score: 0.2 },
+      ]));
+
+      const origMinScore = process.env.CODEATLAS_DREAM_MIN_SCORE;
+      process.env.CODEATLAS_DREAM_MIN_SCORE = '0.8';
+      try {
+        const rows = await OracleDreamingService.queryDreamMemories('test-project', 'event loop', 10);
+        assert.equal(rows.length, 1, 'only the high-score dream survives the relevance gate');
+        assert.equal(rows[0].id, 'memory_1');
+      } finally {
+        if (origMinScore === undefined) delete process.env.CODEATLAS_DREAM_MIN_SCORE;
+        else process.env.CODEATLAS_DREAM_MIN_SCORE = origMinScore;
+      }
+    });
+
+    test('queryDreamMemories keeps all dreams when CODEATLAS_DREAM_MIN_SCORE unset', async () => {
+      process.env.CODEATLAS_DB_TYPE = 'sqlite';
+      mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
+      mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 1 }));
+      mockDbAdapter.searchVector.mock.mockImplementation(() => Promise.resolve([
+        { id: 'memory_1', score: 0.9 },
+        { id: 'memory_2', score: 0.2 },
+      ]));
+
+      const origMinScore = process.env.CODEATLAS_DREAM_MIN_SCORE;
+      delete process.env.CODEATLAS_DREAM_MIN_SCORE;
+      try {
+        const rows = await OracleDreamingService.queryDreamMemories('test-project', 'event loop', 10);
+        assert.equal(rows.length, 2, 'no relevance floor means both dreams are returned');
+      } finally {
+        if (origMinScore === undefined) delete process.env.CODEATLAS_DREAM_MIN_SCORE;
+        else process.env.CODEATLAS_DREAM_MIN_SCORE = origMinScore;
+      }
+    });
   });
 });
 

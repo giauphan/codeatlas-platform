@@ -358,6 +358,19 @@ export class OracleDreamingService {
   }
 
   /**
+   * Relevance floor for vector-scored dream retrieval. Reads
+   * CODEATLAS_DREAM_MIN_SCORE (0 disables). Dreams whose blended finalScore
+   * falls below this are dropped before injection, so weak/off-topic memories
+   * (e.g. historical notes surfaced by a broad query) never reach the prompt.
+   */
+  static dreamMinScore(): number {
+    const raw = process.env.CODEATLAS_DREAM_MIN_SCORE;
+    if (!raw) return 0;
+    const val = Number(raw);
+    return Number.isFinite(val) && val > 0 ? val : 0;
+  }
+
+  /**
    * Noise gate: reject low-value dreams before saving.
    * Checks content quality, minimum importance thresholds, and stop-word ratio.
    * Returns { isNoise, reason } for logging.
@@ -727,7 +740,12 @@ export class OracleDreamingService {
             return { row, finalScore };
           });
           scored.sort((a, b) => b.finalScore - a.finalScore);
-          processedRows = scored.slice(offset, offset + limit).map(item => item.row);
+          const minScore = OracleDreamingService.dreamMinScore();
+          const relevant = minScore > 0 ? scored.filter(s => s.finalScore >= minScore) : scored;
+          if (relevant.length !== scored.length) {
+            logger.info(`[Oracle Dreaming] Relevance gate dropped ${scored.length - relevant.length} dream(s) below min score ${minScore}`);
+          }
+          processedRows = relevant.slice(offset, offset + limit).map(item => item.row);
         }
 
         const cleanRows = OracleDreamingService.filterNoiseRows(processedRows);
@@ -878,6 +896,14 @@ export class OracleDreamingService {
         });
 
         processedRows.sort((a, b) => b.finalScore - a.finalScore);
+        const minScore = OracleDreamingService.dreamMinScore();
+        if (minScore > 0) {
+          const before = processedRows.length;
+          processedRows = processedRows.filter((item: { finalScore: number }) => item.finalScore >= minScore);
+          if (processedRows.length !== before) {
+            logger.info(`[Oracle Dreaming] Relevance gate dropped ${before - processedRows.length} dream(s) below min score ${minScore}`);
+          }
+        }
         processedRows = processedRows.slice(offset, offset + limit).map(item => item.row);
       }
 
