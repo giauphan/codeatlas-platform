@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
-import { FOCUS_RING_CLASS } from '../lib/constants';
+import { FOCUS_RING_CLASS, DREAM_CONFIG_LOADING_BUTTON_STYLE } from '../lib/constants';
 
 interface DreamConfig {
   dreams_schedule: string;
@@ -45,8 +45,7 @@ export function DreamMemoryView() {
   const [tempEnabled, setTempEnabled] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
   const [runningDailyDreams, setRunningDailyDreams] = useState(false);
-  const buttonStyle = { padding: '0.5rem 1rem' };
-  const loadingButtonStyle = { ...buttonStyle, display: 'inline-flex', alignItems: 'center', gap: '0.4rem' };
+  const [configStatus, setConfigStatus] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const dreamConfigRef = useRef<DreamConfig | null>(null);
 
@@ -75,6 +74,7 @@ export function DreamMemoryView() {
   const saveDreamConfig = useCallback(async () => {
     setSavingConfig(true);
     setConfigError(null);
+    setConfigStatus(null);
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch('/api/settings/cron', {
@@ -102,6 +102,8 @@ export function DreamMemoryView() {
 
   const runDailyDreamsNow = useCallback(async () => {
     setRunningDailyDreams(true);
+    setConfigError(null);
+    setConfigStatus(null);
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch('/api/dreams/generate-daily-dreams', {
@@ -110,9 +112,11 @@ export function DreamMemoryView() {
         body: JSON.stringify({ provider: tempProvider }),
       });
       if (!resp.ok) throw new Error(`Run failed (HTTP ${resp.status})`);
-      alert('Daily dream generation triggered successfully.');
-    } catch (err: any) {
-      alert(`Failed to run daily dreams: ${err.message}`);
+      setConfigStatus('Daily dream generation triggered successfully.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Failed to run daily dreams:', err);
+      setConfigError(`Failed to run daily dreams: ${message}`);
     } finally {
       setRunningDailyDreams(false);
     }
@@ -338,13 +342,23 @@ export function DreamMemoryView() {
             <label htmlFor="config-provider">Provider:</label>
             <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem' }} />
           </div>
-          <button onClick={saveDreamConfig} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={loadingButtonStyle}>
+          <button onClick={saveDreamConfig} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={DREAM_CONFIG_LOADING_BUTTON_STYLE}>
             {savingConfig ? (<><Loader2 className="animate-spin" size={14} /> Saving...</>) : 'Save Config'}
           </button>
-          <button onClick={runDailyDreamsNow} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={{ ...loadingButtonStyle, background: 'var(--primary-neon)', color: '#000' }}>
+          <button onClick={runDailyDreamsNow} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={{ ...DREAM_CONFIG_LOADING_BUTTON_STYLE, background: 'var(--primary-neon)', color: '#000' }}>
             {runningDailyDreams ? (<><Loader2 className="animate-spin" size={14} /> Running...</>) : 'Run Now'}
           </button>
         </div>
+        {configError && (
+          <div role="alert" style={{ marginTop: '0.75rem', color: '#FF4B4B', fontSize: '0.85rem', fontWeight: 600 }}>
+            {configError}
+          </div>
+        )}
+        {configStatus && !configError && (
+          <div role="status" style={{ marginTop: '0.75rem', color: 'var(--primary-neon)', fontSize: '0.85rem', fontWeight: 600 }}>
+            {configStatus}
+          </div>
+        )}
       </div>
 
       <div role="group" aria-label="Filter by memory type" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
