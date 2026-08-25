@@ -51,13 +51,15 @@ safeMockModule(path.join(srcDir, 'utils/context.js'), {
   },
 });
 
-safeMockModule(path.join(srcDir, 'utils/logger.js'), {
-  logger: {
+  const mockLogger = {
     info: mock.fn(),
     warn: mock.fn(),
     error: mock.fn(),
     debug: mock.fn(),
-  },
+  };
+
+safeMockModule(path.join(srcDir, 'utils/logger.js'), {
+    logger: mockLogger,
 });
 
 safeMockModule(path.join(srcDir, 'services/embeddingService.js'), {
@@ -119,5 +121,55 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     assert.ok(mockDbAdapter.execute.mock.calls.length > 0);
     const decaySql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
     assert.ok(decaySql.includes("julianday('now')"), 'Decay SQL should use julianday for SQLite');
+  });
+
+  test('getNormalizedVector correctly normalizes and handles zero-norm vectors', () => {
+    // Access private method for testing
+    const normalize = (consolidationEngine as any).getNormalizedVector.bind(consolidationEngine);
+    const cosineSim = (consolidationEngine as any).cosineSimilarity.bind(consolidationEngine);
+
+    // Normal vector
+    const vec1 = new Float32Array([3, 4]); // Norm = 5
+    const norm1 = normalize(vec1, 'id-1');
+    assert.ok(Math.abs(norm1[0] - 0.6) < 0.00001);
+    assert.ok(Math.abs(norm1[1] - 0.8) < 0.00001);
+    // Ensure original vector wasn't mutated directly
+    assert.equal(vec1[0], 3);
+
+    // Zero-norm vector
+    const vec2 = new Float32Array([0, 0, 0]);
+    const norm2 = normalize(vec2, 'id-zero');
+    assert.equal(norm2[0], 0);
+    assert.equal(norm2[1], 0);
+    assert.equal(norm2[2], 0);
+    assert.equal(vec2[0], 0);
+
+    // Negative vector
+    const vec3 = new Float32Array([-3, -4]); // Norm = 5
+    const norm3 = normalize(vec3, 'id-neg');
+    assert.ok(Math.abs(norm3[0] + 0.6) < 0.00001);
+    assert.ok(Math.abs(norm3[1] + 0.8) < 0.00001);
+
+    // Test cosine similarity on normalized vectors
+    // Dot product of (0.6, 0.8) and (-0.6, -0.8) should be -1
+    const sim = cosineSim(norm1, norm3);
+    assert.ok(Math.abs(sim - (-1.0)) < 0.00001);
+
+    // Dot product with zero vector is 0
+    assert.equal(cosineSim(norm1, norm2), 0);
+  });
+
+  test('cosineSimilarity heuristic triggers warning on unnormalized vectors in test mode', () => {
+    mockLogger.warn.mock.resetCalls();
+
+    const cosineSim = (consolidationEngine as any).cosineSimilarity.bind(consolidationEngine);
+    const unnormalizedVec = new Float32Array([10, 20]); // Squares sum to 500
+    const normalVec = new Float32Array([0.6, 0.8]);
+
+    cosineSim(unnormalizedVec, normalVec);
+
+    assert.equal(mockLogger.warn.mock.calls.length, 1);
+    const warnMsg = mockLogger.warn.mock.calls[0].arguments[0] as string;
+    assert.ok(warnMsg.includes('Un-normalized vector detected'));
   });
 });

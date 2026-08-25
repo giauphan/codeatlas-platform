@@ -109,6 +109,28 @@ export class ConsolidationEngine {
   }
 
   /**
+   * Deep copies and pre-normalizes a vector.
+   * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
+   */
+  private getNormalizedVector(embedding: Float32Array, id: string): Float32Array {
+    const vec = embedding.slice();
+    let norm = 0;
+    const len = vec.length;
+    for (let k = 0; k < len; k++) {
+      norm += vec[k] * vec[k];
+    }
+    if (norm > 0) {
+      const denom = Math.sqrt(norm);
+      for (let k = 0; k < len; k++) {
+        vec[k] /= denom;
+      }
+    } else {
+      logger.debug(`[Consolidation] Vector normalization: norm is 0 for id ${id}. Using raw vector.`);
+    }
+    return vec;
+  }
+
+  /**
    * Alias for runJob to maintain backward compatibility with consolidationEngine.run(...)
    */
   async run(job: ConsolidationJob): Promise<ConsolidationReport> {
@@ -199,9 +221,13 @@ export class ConsolidationEngine {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const importance = Number(this.getVal(row, R_IDX.IMPORTANCE, 'IMPORTANCE'));
         const rawEmb = this.getVal(row, R_IDX.EMBEDDING, 'EMBEDDING');
-        const embedding = this.parseEmbedding(rawEmb);
+        let embedding = this.parseEmbedding(rawEmb);
 
         if (!embedding) continue;
+
+        // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
+        // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
+        embedding = this.getNormalizedVector(embedding, id);
 
         if (!byProject.has(proj)) byProject.set(proj, []);
         byProject.get(proj)!.push({ id, importance, embedding });
@@ -492,9 +518,13 @@ export class ConsolidationEngine {
         const id = String(this.getVal(row, SCORE_IDX.ID, 'ID'));
         const confidence = Number(this.getVal(row, SCORE_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
         const rawEmb = this.getVal(row, SCORE_IDX.EMBEDDING, 'EMBEDDING');
-        const embedding = this.parseEmbedding(rawEmb);
+        let embedding = this.parseEmbedding(rawEmb);
 
         if (!embedding) continue;
+
+        // ⚡ Bolt: Deep copy and pre-normalize vector during O(N) extraction to avoid
+        // expensive O(N^2) magnitude calculations inside the cosine similarity loop.
+        embedding = this.getNormalizedVector(embedding, id);
 
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push({ id, confidence, embedding });
@@ -548,23 +578,23 @@ export class ConsolidationEngine {
       return 0;
     }
 
-    let dot = 0;
-    let normA = 0;
-    let normB = 0;
-
-    const len = vecA.length;
-    for (let i = 0; i < len; i++) {
-      const a = vecA[i];
-      const b = vecB[i];
-      dot += a * b;
-      normA += a * a;
-      normB += b * b;
+    // ⚡ Bolt: Both vectors are pre-normalized during extraction, so cosine similarity
+    // reduces to a simple dot product, eliminating expensive O(N^2) Math.sqrt/division.
+    if (process.env.NODE_ENV !== 'production' && vecA.length > 0) {
+      // Cheap debug-only heuristic to warn if vectors somehow bypassed normalization
+      const heuristicNormSq = vecA[0] * vecA[0] + vecA[vecA.length - 1] * vecA[vecA.length - 1];
+      const HEURISTIC_UNNORMALIZED_THRESHOLD = 1.01;
+      if (heuristicNormSq > HEURISTIC_UNNORMALIZED_THRESHOLD) {
+         logger.warn(`[Consolidation] Un-normalized vector detected in cosineSimilarity! Optimization may yield incorrect results.`);
+      }
     }
 
-    const denom = Math.sqrt(normA) * Math.sqrt(normB);
-    if (denom === 0) return 0;
-
-    return dot / denom;
+    let dot = 0;
+    const len = vecA.length;
+    for (let i = 0; i < len; i++) {
+      dot += vecA[i] * vecB[i];
+    }
+    return dot;
   }
 }
 
