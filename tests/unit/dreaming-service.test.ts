@@ -713,7 +713,7 @@ describe('DreamingService', () => {
       const origMinScore = process.env.CODEATLAS_DREAM_MIN_SCORE;
       process.env.CODEATLAS_DREAM_MIN_SCORE = '0.8';
       try {
-        const rows = await OracleDreamingService.queryDreamMemories('test-project', 'event loop', 10);
+        const rows = await DreamingService.queryDreamMemories('test-project', 'event loop', 10);
         assert.equal(rows.length, 1, 'only the high-score dream survives the relevance gate');
         assert.equal(rows[0].id, 'memory_1');
       } finally {
@@ -734,7 +734,7 @@ describe('DreamingService', () => {
       const origMinScore = process.env.CODEATLAS_DREAM_MIN_SCORE;
       delete process.env.CODEATLAS_DREAM_MIN_SCORE;
       try {
-        const rows = await OracleDreamingService.queryDreamMemories('test-project', 'event loop', 10);
+        const rows = await DreamingService.queryDreamMemories('test-project', 'event loop', 10);
         assert.equal(rows.length, 2, 'no relevance floor means both dreams are returned');
       } finally {
         if (origMinScore === undefined) delete process.env.CODEATLAS_DREAM_MIN_SCORE;
