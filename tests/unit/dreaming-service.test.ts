@@ -83,18 +83,30 @@ const mockPool = {
 };
 
 // Mock database/factory.ts
+type SqlBinds = Record<string, unknown>;
+type SqlRows = Record<string, unknown>[];
+type VectorSearchResult = { id: string; score: number };
+
 const mockDbAdapter = {
-  execute: mock.fn(() => Promise.resolve({ rowsAffected: 1 })),
-  query: mock.fn(() => Promise.resolve([])),
-  searchVector: mock.fn(() => Promise.resolve([
-    { id: 'memory_1', score: 0.9 },
-    { id: 'memory_2', score: 0.8 },
-  ])),
-  connect: mock.fn(() => Promise.resolve()),
-  initializeSchema: mock.fn(() => Promise.resolve()),
-  checkColumnExists: mock.fn(() => Promise.resolve(true)),
-  disconnect: mock.fn(() => Promise.resolve()),
-  executeMany: mock.fn(() => Promise.resolve({ rowsAffected: 1 })),
+  execute: mock.fn<(sql: string, binds?: SqlBinds) => Promise<{ rowsAffected: number }>>(
+    () => Promise.resolve({ rowsAffected: 1 }),
+  ),
+  query: mock.fn<(sql: string, binds?: SqlBinds) => Promise<SqlRows>>(
+    () => Promise.resolve([]),
+  ),
+  searchVector: mock.fn<(table: string, vector: number[], limit: number) => Promise<VectorSearchResult[]>>(
+    () => Promise.resolve([
+      { id: 'memory_1', score: 0.9 },
+      { id: 'memory_2', score: 0.8 },
+    ]),
+  ),
+  connect: mock.fn<() => Promise<void>>(() => Promise.resolve()),
+  initializeSchema: mock.fn<() => Promise<void>>(() => Promise.resolve()),
+  checkColumnExists: mock.fn<() => Promise<boolean>>(() => Promise.resolve(true)),
+  disconnect: mock.fn<() => Promise<void>>(() => Promise.resolve()),
+  executeMany: mock.fn<(sql: string, binds: SqlBinds[]) => Promise<{ rowsAffected: number }>>(
+    () => Promise.resolve({ rowsAffected: 1 }),
+  ),
 };
 const factoryMock = {
   createDatabaseAdapter: mock.fn(() => mockDbAdapter),
@@ -102,7 +114,9 @@ const factoryMock = {
 safeMockModule(path.join(srcDir, 'database/factory.js'), factoryMock);
 
 // Mock embeddingService
-const mockGenerateEmbedding = mock.fn(() => Promise.resolve([0.1, 0.2, 0.3]));
+const mockGenerateEmbedding = mock.fn<
+  (text: string, mode?: 'passage' | 'query') => Promise<number[] | null>
+>(() => Promise.resolve([0.1, 0.2, 0.3]));
 const embeddingMock = {
   generateEmbedding: mockGenerateEmbedding,
 };
