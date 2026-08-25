@@ -44,6 +44,7 @@ export function DreamMemoryView() {
   const [tempProvider, setTempProvider] = useState('');
   const [tempEnabled, setTempEnabled] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [runningDailyDreams, setRunningDailyDreams] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const dreamConfigRef = useRef<DreamConfig | null>(null);
 
@@ -98,7 +99,7 @@ export function DreamMemoryView() {
   }, [tempSchedule, tempEnabled, tempProvider]);
 
   const runDailyDreamsNow = useCallback(async () => {
-    setSavingConfig(true);
+    setRunningDailyDreams(true);
     try {
       const headers = await getAuthHeaders();
       const resp = await fetch('/api/dreams/generate-daily-dreams', {
@@ -111,7 +112,7 @@ export function DreamMemoryView() {
     } catch (err: any) {
       alert(`Failed to run daily dreams: ${err.message}`);
     } finally {
-      setSavingConfig(false);
+      setRunningDailyDreams(false);
     }
   }, [tempProvider]);
 
@@ -335,11 +336,11 @@ export function DreamMemoryView() {
             <label htmlFor="config-provider">Provider:</label>
             <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem' }} />
           </div>
-          <button onClick={saveDreamConfig} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem' }}>
-            {savingConfig ? 'Saving...' : 'Save Config'}
+          <button onClick={saveDreamConfig} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            {savingConfig ? (<><Loader2 className="animate-spin" size={14} /> Saving...</>) : 'Save Config'}
           </button>
-          <button onClick={runDailyDreamsNow} disabled={savingConfig} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000' }}>
-            Run Now
+          <button onClick={runDailyDreamsNow} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem 1rem', background: 'var(--primary-neon)', color: '#000', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            {runningDailyDreams ? (<><Loader2 className="animate-spin" size={14} /> Running...</>) : 'Run Now'}
           </button>
         </div>
       </div>
