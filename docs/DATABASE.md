@@ -1,12 +1,12 @@
 # Database Configuration
 
-CodeAtlas Platform supports **three database backends** via the `IDatabaseAdapter` interface:
+CodeAtlas Platform supports **two database backends** via the `IDatabaseAdapter` interface:
 
 | Database | Use Case | Setup Difficulty |
 | :--- | :--- | :--- |
 | **SQLite + sqlite-vec** | Local dev / single-user (default) | 🟢 Zero-config |
 | **PostgreSQL + pgvector** | Self-hosted production | 🟡 Easy (Supabase/Neon) |
-| **Oracle 26ai** | Cloud production (optional) | 🔴 Hard (Wallet + Instant Client) |
+
 
 ## Quick Start
 
@@ -21,14 +21,6 @@ pnpm install
 pnpm run db-seed
 pnpm start
 ```
-
-To copy existing Oracle data into SQLite, configure `ORACLE_USER`, `ORACLE_PASSWORD`, and `ORACLE_CONN_STRING`, then run:
-
-```bash
-pnpm run db-migrate-oracle-to-sqlite
-```
-
-Migration is idempotent and preserves IDs, tenant metadata, JSON values, and vector embeddings as SQLite BLOBs.
 
 ### Option 2: PostgreSQL (Self-hosted Production)
 
@@ -51,20 +43,6 @@ pnpm run db-seed
 pnpm start
 ```
 
-### Option 3: Oracle 26ai (Default, Cloud Production)
-
-```bash
-# Set environment variables (existing)
-export CODEATLAS_DB_TYPE=oracle  # or leave unset (default)
-export ORACLE_CONN_STRING=host:port/service_name
-export ORACLE_USER=ADMIN
-export ORACLE_PASSWORD=your_password
-export ORACLE_WALLET_DIR=./wallet  # optional, for mTLS
-
-# Start server
-pnpm start
-```
-
 ## Architecture
 
 ### Adapter Pattern
@@ -74,7 +52,6 @@ src/database/
 ├── factory.ts                    # Creates adapter based on CODEATLAS_DB_TYPE
 └── adapters/
     ├── interface.ts              # IDatabaseAdapter interface
-    ├── oracleAdapter.ts          # Oracle 26ai implementation
     ├── sqliteAdapter.ts          # SQLite + sqlite-vec implementation
     └── postgresAdapter.ts        # PostgreSQL + pgvector implementation
 ```
@@ -96,7 +73,7 @@ await db.disconnect();
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `CODEATLAS_DB_TYPE` | `oracle` | Database type: `oracle`, `sqlite`, or `postgres` |
+| `CODEATLAS_DB_TYPE` | `sqlite` | Database type: `sqlite` or `postgres` |
 | `CODEATLAS_SQLITE_PATH` | `./data/codeatlas.db` | Path to SQLite database file |
 | `PGHOST` | (none) | PostgreSQL host |
 | `PGPORT` | `5432` | PostgreSQL port |
@@ -106,11 +83,6 @@ await db.disconnect();
 
 ## Migration Path
 
-### From Oracle to SQLite (Local Dev)
-
-1. Set `CODEATLAS_DB_TYPE=sqlite`
-2. Run `pnpm run db-seed` to populate initial data
-3. Existing Oracle data is **not** migrated automatically — fresh start
 
 ### From SQLite to PostgreSQL (Production)
 
@@ -154,18 +126,8 @@ pnpm add sqlite-vec
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-### Oracle: "DPI-1047: Cannot locate a 64-bit Oracle Client library"
-
-Use Thin Mode (remove `ORACLE_LIB_DIR` and `ORACLE_WALLET_DIR`):
-```bash
-unset ORACLE_LIB_DIR
-unset ORACLE_WALLET_DIR
-```
-
 ## Future Improvements (P2)
 
 - [ ] Add Knex.js or Drizzle for schema migrations
-- [ ] Implement dual-write mode for Oracle → Postgres migration
 - [ ] Add HNSW index for Postgres (better recall than IVF)
 - [ ] Add connection pooling config for SQLite (WAL + busy_timeout)
-- [ ] Add data migration script (Oracle → SQLite/Postgres)

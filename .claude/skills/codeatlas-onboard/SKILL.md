@@ -41,4 +41,4 @@ Use for first setup or a new development session.
    pnpm run dev
    ```
 
-Normal onboarding does not require Oracle, PostgreSQL, Firebase credentials, or an external database. Configure those only for work explicitly using those integrations. Never print secrets from `.env` or credential files.
+Normal onboarding does not require PostgreSQL, Firebase credentials, or an external database. Configure those only for work explicitly using those integrations. Never print secrets from `.env` or credential files.

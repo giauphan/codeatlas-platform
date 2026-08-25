@@ -35,22 +35,13 @@ FROM node:20-bookworm-slim AS runtime
 RUN groupadd --system --gid 10001 codeatlas \
  && useradd  --system --uid 10001 --gid codeatlas --create-home --home-dir /home/codeatlas codeatlas
 
-# Install Oracle Instant Client (Thick mode) + tini for PID 1 signal handling
+# Install tini for PID 1 signal handling
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      libaio1t64 \
-      unzip \
       ca-certificates \
       tini \
- && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /opt/oracle \
- && curl -sL "https://download.oracle.com/otn_software/linux/instantclient/1919000/instantclient-basiclite-linux.x64-19.19.0.0.0dbru.zip" -o /tmp/ic.zip \
- && unzip -q /tmp/ic.zip -d /opt/oracle/ \
- && rm /tmp/ic.zip \
- && echo /opt/oracle/instantclient_19_19 > /etc/ld.so.conf.d/oracle-instantclient.conf \
- && ldconfig
+ && rm -rf /var/lib/apt/lists/*
 
-ENV LD_LIBRARY_PATH=/opt/oracle/instantclient_19_19:${LD_LIBRARY_PATH}
 ENV NODE_ENV=production
 ENV PORT=3381
 

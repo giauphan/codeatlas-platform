@@ -25,7 +25,7 @@ An MCP server named `codeatlas` is available. It provides code analysis data inc
 
 ### Memory & Telemetry Sync
 
-**After completing code changes**, ALWAYS call the `sync_system_memory` tool to push details to the remote server and Oracle 26ai DB:
+**After completing code changes**, ALWAYS call the `sync_system_memory` tool to push details to the remote server and SQLite + sqlite-vec database:
 - `changeDescription` (ALWAYS required): Description of the changes made
 - `businessRule` (Optional): Extract and save any new business logic rules mentioned by the user
 
@@ -42,7 +42,7 @@ An MCP server named `codeatlas` is available. It provides code analysis data inc
 | `get_file_entities` | All entities inside a specific file |
 | `generate_system_flow` | Mermaid diagram of system architecture (module imports) |
 | `generate_feature_flow_diagram` | Mermaid diagram of feature execution flow (call chains) |
-| `detect_architectural_smells` | Run Oracle 26ai Graph Reasoning to detect tight coupling, god objects, or dead code |
+| `detect_architectural_smells` | Run CodeAtlas graph analysis to detect tight coupling, god objects, or dead code |
 | `scan_enterprise_vulnerabilities` | Run Security Scanner for hardcoded secrets, unsafe functions, and bugs |
 | `sync_system_memory` | Update .agents/memory/ after code changes |
 | `trace_feature_flow` | Trace feature flow before working on it |

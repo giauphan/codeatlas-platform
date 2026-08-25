@@ -11,8 +11,8 @@ import {
   getStats,
 } from "../services/projectService.js";
 import { loadAnalysisAsync, AnalysisResultLocal } from "../services/projectService.js";
-import { OracleMemoryService } from "../services/memoryService.js";
-import { OracleDreamingService, DreamMemoryType } from "../services/dreamingService.js";
+import { MemoryService } from "../services/memoryService.js";
+import { DreamingService, DreamMemoryType } from "../services/dreamingService.js";
 import { SecurityScanner } from "../services/scanner/securityScanner.js";
 import { GenomeService } from "../services/genomeService.js";
 import { SecondBrainService } from "../services/secondBrainService.js";
@@ -529,7 +529,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       project: z.string().optional().describe("Project name or path"),
       businessRule: z.string().optional().describe("Optional: A new business rule to add to the memory (e.g. 'VIP users get free shipping')"),
       changeDescription: z.string().optional().describe("Optional: Description of what was just changed (for the changelog)"),
-      enableEnterpriseSync: z.boolean().optional().default(true).describe("If true, syncs data to Oracle 26ai Knowledge Graph (Pro/Plus feature). Default is true."),
+      enableEnterpriseSync: z.boolean().optional().default(true).describe("If true, syncs data to the SQLite Knowledge Graph. Default is true."),
     },
     async ({ project, businessRule, changeDescription, enableEnterpriseSync }: { project?: string; businessRule?: string; changeDescription?: string; enableEnterpriseSync?: boolean }) => {
       const auth = await checkAuth();
@@ -547,34 +547,30 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       let businessRuleSaved = false;
       let changeDescriptionSaved = false;
 
-      // Sync to Oracle 26ai
-      if (enableEnterpriseSync !== false && process.env.ORACLE_CONN_STRING) {
+      // Persist to the SQLite knowledge graph
+      if (enableEnterpriseSync !== false) {
         try {
-          logger.info(`Syncing Knowledge Graph for ${loaded.projectName} to Oracle 26ai...`);
-          await OracleMemoryService.saveSemanticMemory(loaded.projectName, nodes);
-          await OracleMemoryService.saveRelationalMemory(loaded.projectName, links);
+          logger.info(`Syncing Knowledge Graph for ${loaded.projectName} to the database...`);
+          await MemoryService.saveSemanticMemory(loaded.projectName, nodes);
+          await MemoryService.saveRelationalMemory(loaded.projectName, links);
           if (businessRule) {
-            await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "BUSINESS_RULE", { text: businessRule });
+            await MemoryService.saveEpisodicMemory(loaded.projectName, "BUSINESS_RULE", { text: businessRule });
             businessRuleSaved = true;
           }
           if (changeDescription) {
-            await OracleMemoryService.saveEpisodicMemory(loaded.projectName, "CHANGE_LOG", { text: changeDescription });
+            await MemoryService.saveEpisodicMemory(loaded.projectName, "CHANGE_LOG", { text: changeDescription });
             changeDescriptionSaved = true;
           }
           syncSuccess = true;
-        } catch (oracleErr: unknown) {
-          syncError = oracleErr instanceof Error ? oracleErr.message : String(oracleErr);
-          logger.error("Failed to sync to Oracle:", oracleErr);
+        } catch (dbErr: unknown) {
+          syncError = dbErr instanceof Error ? dbErr.message : String(dbErr);
+          logger.error("Failed to sync to database:", dbErr);
         }
       } else {
-        if (enableEnterpriseSync === false) {
-          if (businessRule || changeDescription) {
-            syncError = "Sync skipped (enableEnterpriseSync is false), cannot save episodic memory.";
-          } else {
-            syncSuccess = true; // No episodic memory requested, so no-op is successful
-          }
+        if (businessRule || changeDescription) {
+          syncError = "Sync skipped (enableEnterpriseSync is false), cannot save episodic memory.";
         } else {
-          syncError = "Oracle DB connection string is not configured.";
+          syncSuccess = true; // No episodic memory requested, so no-op is successful
         }
       }
 
@@ -601,7 +597,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   // Tool 7.5: Get System Memory (Episodic memories like business rules and change logs)
   server.tool(
     "get_system_memory",
-    "Retrieve the auto-generated system documentation and episodic memories (business rules and change logs) for a project from the Oracle 26ai Knowledge Graph database.",
+    "Retrieve the auto-generated system documentation and episodic memories (business rules and change logs) for a project from the SQLite Knowledge Graph database.",
     {
       project: z.string().optional().describe("Project name or path"),
       eventType: z.enum(["all", "BUSINESS_RULE", "CHANGE_LOG"]).optional().default("all").describe("Filter by event type"),
@@ -614,16 +610,12 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
       }
 
-      if (!process.env.ORACLE_CONN_STRING) {
-        return { content: [{ type: "text" as const, text: "Oracle DB connection string is not configured." }] };
-      }
-
       try {
         const filterType = eventType === "all" ? undefined : eventType;
-        const memories = await OracleMemoryService.getEpisodicMemories(loaded.projectName, filterType);
+        const memories = await MemoryService.getEpisodicMemories(loaded.projectName, filterType);
 
         const rawMemories = (memories ?? []) as unknown as Array<Record<string, unknown>>;
-        const parsedMemories = OracleMemoryService.parseEpisodicMemories(rawMemories);
+        const parsedMemories = MemoryService.parseEpisodicMemories(rawMemories);
 
         const result = {
           success: true,
@@ -642,7 +634,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   // Tool 7.6: Save Dream Memory
   server.tool(
     "save_dream_memory",
-    "Save a dreaming memory entry (mistake, user preference, project knowledge, or pattern) extracted from session analysis into Oracle 26ai Knowledge Graph. Call this after the dreaming system analyzes conversations.",
+    "Save a dreaming memory entry (mistake, user preference, project knowledge, or pattern) extracted from session analysis into the SQLite Knowledge Graph. Call this after the dreaming system analyzes conversations.",
     {
       memory_type: z.enum(['MISTAKE','PREFERENCE','KNOWLEDGE','PATTERN']).describe("Type of dreaming memory entry"),
       content: z.string().describe("The dream entry content — what was learned or observed"),
@@ -657,7 +649,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       try {
         const loaded = project ? await loadAnalysisAsync(project) : null;
         const projectName = loaded ? loaded.projectName : (project || "global");
-        const memId = await OracleDreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, Math.min(9, Math.max(1, importance ?? 5)), provider);
+        const memId = await DreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, Math.min(9, Math.max(1, importance ?? 5)), provider);
         return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, id: memId, memory_type }, null, 2) }] };
       } catch (err: unknown) {
         return { content: [{ type: "text" as const, text: `Failed to save dream memory: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
@@ -681,7 +673,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       try {
         const loaded = project ? await loadAnalysisAsync(project) : null;
         const projectName = loaded ? loaded.projectName : (project || "global");
-        const rows = await OracleDreamingService.queryDreamMemories(projectName, query, limit ?? 10, 0, undefined, provider);
+        const rows = await DreamingService.queryDreamMemories(projectName, query, limit ?? 10, 0, undefined, provider);
         const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
         const memories = rawMemories.map((r: Record<string, unknown>) => {
           const get = (upper: string, lower: string) => r[upper] ?? r[lower];
@@ -731,7 +723,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         const savedDreams: Array<{ id: string; memory_type: string; content: string }> = [];
         for (const dream of dreams) {
           const memId = await authStorage.run(auth, () =>
-            OracleDreamingService.saveDreamMemory(
+            DreamingService.saveDreamMemory(
               projectName, sessId, dream.memoryType as DreamMemoryType, dream.content, dream.importance, provider
             )
           );
@@ -1272,7 +1264,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   // Tool 11: Detect Architectural Smells
   server.tool(
     "detect_architectural_smells",
-    "Knowledge Graph Reasoning: Use Oracle 26ai Graph features to automatically detect architectural weaknesses, circular dependencies, God objects, and dead code.",
+    "Knowledge Graph Reasoning: Use knowledge-graph reasoning to automatically detect architectural weaknesses, circular dependencies, God objects, and dead code.",
     {
       project: z.string().optional().describe("Project name or path"),
     },
@@ -1285,9 +1277,9 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       try {
-        const smells = await OracleMemoryService.detectArchitecturalSmells(loaded.projectName);
+        const smells = await MemoryService.detectArchitecturalSmells(loaded.projectName);
         if (!smells) {
-          return { content: [{ type: "text" as const, text: "Failed to run graph reasoning on Oracle 26ai. Ensure graph tables are initialized." }] };
+          return { content: [{ type: "text" as const, text: "Failed to run graph reasoning. Ensure graph tables are initialized. Ensure graph tables are initialized." }] };
         }
 
         const result = {
@@ -1315,7 +1307,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
       } catch (err: unknown) {
-        return { content: [{ type: "text" as const, text: `Oracle Graph Reasoning failed: ${(err instanceof Error ? err.message : String(err))}` }] };
+        return { content: [{ type: "text" as const, text: `Graph reasoning failed: ${(err instanceof Error ? err.message : String(err))}` }] };
       }
     }
   );
@@ -1417,14 +1409,14 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   a2a("sync_system_memory", "Create or update the .agents/memory/ folder with auto-generated documentation and rules.", ["project", "businessRule", "changeDescription", "enableEnterpriseSync"]);
   a2a("get_system_memory", "Retrieve auto-generated system documentation and episodic memories for a project.", ["project", "eventType"]);
   a2a("save_dream_memory", "Save a dreaming memory entry (mistake, preference, knowledge, pattern) with vector embedding.", ["memory_type", "content", "importance", "session_id", "project", "provider"]);
-  a2a("query_dream_memories", "Query dreaming memories by semantic similarity using Oracle 26ai vector search.", ["query", "project", "limit", "provider"]);
+  a2a("query_dream_memories", "Query dreaming memories by semantic similarity using sqlite-vec vector search.", ["query", "project", "limit", "provider"]);
   a2a("ingest_session_transcript", "Ingest conversation transcript, extract dreams per provider.", ["transcript", "session_id", "project", "provider"]);
   a2a("load_context_at_session_start", "Load relevant context from dream memories at session start.", ["session_id", "project", "task"]);
   a2a("reload_context_mid_session", "Reload cleaned context mid-session after noise filtering.", ["session_id", "project", "task"]);
   a2a("generate_daily_dreams", "Trigger daily dream generation and consolidation.", ["project", "provider"]);
   a2a("trace_feature_flow", "Trace the complete execution flow of a feature through the codebase.", ["project", "keyword", "depth"]);
   a2a("generate_feature_flow_diagram", "Generate a Mermaid diagram showing the execution flow of a feature (call chains).", ["project", "keyword", "diagramType", "depth", "maxNodes"]);
-  a2a("detect_architectural_smells", "Knowledge Graph Reasoning: Use Oracle 26ai to detect circular dependencies, god objects, and dead code.", ["project"]);
+  a2a("detect_architectural_smells", "Knowledge Graph Reasoning: Use knowledge-graph reasoning to detect circular dependencies, god objects, and dead code.", ["project"]);
   a2a("scan_enterprise_vulnerabilities", "Enterprise Scanner: Automatically scan all projects for security vulnerabilities and code smells.", ["maxProjects"]);
 
   // ── Phase 6: Genome MCP Tools ──
@@ -1561,7 +1553,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
   server.tool(
     "memory_search",
-    "Search semantic memory (graph entities) by query using Oracle 26ai vector search.",
+    "Search semantic memory (graph entities) by query using sqlite-vec vector search.",
     {
       project: z.string().min(1).max(200).describe("Project name"),
       query: z.string().max(2000).describe("Search query"),
@@ -1570,7 +1562,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     mcpHandler(async ({ project, query, limit }) => {
       const auth = await checkAuth();
       await logActivity(auth, "memory_search", { project, query });
-      const results = await OracleMemoryService.searchSemanticMemory(project, query, limit ?? 5);
+      const results = await MemoryService.searchSemanticMemory(project, query, limit ?? 5);
       return { content: [{ type: "text" as const, text: truncateJson(results) }] };
     })
   );
@@ -1585,7 +1577,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     mcpHandler(async ({ project, eventType }) => {
       const auth = await checkAuth();
       await logActivity(auth, "memory_recall_episodic", { project, eventType });
-      const entries = await OracleMemoryService.getEpisodicMemories(project, eventType);
+      const entries = await MemoryService.getEpisodicMemories(project, eventType);
       return { content: [{ type: "text" as const, text: truncateJson(entries) }] };
     })
   );
@@ -1606,7 +1598,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     mcpHandler(async ({ project, entities }) => {
       const auth = await checkAuth();
       await logActivity(auth, "memory_save_semantic", { project });
-      await OracleMemoryService.saveSemanticMemory(project, entities);
+      await MemoryService.saveSemanticMemory(project, entities);
       return { content: [{ type: "text" as const, text: `Saved ${entities.length} entities to semantic memory.` }] };
     })
   );

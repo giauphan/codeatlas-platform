@@ -209,25 +209,25 @@ export const DocumentationView: React.FC = () => {
             <div>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginBottom: '0.75rem' }}>CodeAtlas Tri-Layer Memory</h2>
               <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '2rem' }}>
-                The engine utilizes a sophisticated multi-tier memory layout, isolating telemetry and codebase structures directly on Oracle 26ai Cloud Database:
+                The engine utilizes a sophisticated multi-tier memory layout, isolating telemetry and codebase structures in a local SQLite + sqlite-vec database:
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 {[
                   {
                     tier: 'Tier 1: Episodic Memory',
-                    tech: 'Firebase / Oracle native JSON',
+                    tech: 'Firebase / SQLite JSON',
                     desc: 'Preserves chat transcripts, telemetry rules, user preferences, and manual business rules without database footprint overhead.'
                   },
                   {
                     tier: 'Tier 2: Semantic Memory',
-                    tech: 'Oracle 26ai AI Vector Search',
+                    tech: 'sqlite-vec AI Vector Search',
                     desc: 'Converts codebase entities (functions, parameters, algorithms) into multidimensional Vector Embeddings to perform high-speed context matching.'
                   },
                   {
                     tier: 'Tier 3: Relational Memory',
-                    tech: 'Oracle Property Graph (VPD)',
-                    desc: 'Builds secure virtual private databases to track module dependencies, class containment, and execution flows in a native Graph structure.'
+                    tech: 'SQLite Relational Graph',
+                    desc: 'Tracks module dependencies, class containment, and execution flows using tenant-scoped relational tables.'
                   }
                 ].map((t, idx) => (
                   <div key={idx} style={{ display: 'flex', gap: '1.5rem', padding: '1.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '18px' }}>
@@ -421,7 +421,7 @@ trigger: always_on
 ## AI System Memory — Auto-Read & Auto-Sync
 
 ### 🧠 MANDATORY: Remote Memory & Telemetry System
-All system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas telemetry server and Oracle 26ai Knowledge Graph database. The local \`.agents/memory\` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance. 
+All system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas SQLite Knowledge Graph database. The local \`.agents/memory\` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance. 
 Use the CodeAtlas MCP tools to query or search relationships, dependencies, and insights directly from the indexed system knowledge.
 
 ### 🔎 MANDATORY: Use CodeAtlas MCP to Understand Code BEFORE Making Changes
@@ -439,7 +439,7 @@ Use the CodeAtlas MCP tools to query or search relationships, dependencies, and 
 2. **\`businessRule\`** (ALWAYS extract if user mentions ANY domain logic):
    - ALWAYS save when user mentions Conditions, Permissions, Limits, or Filters.
    - If you are unsure whether something is a business rule, SAVE IT ANYWAY.`}</pre>
-                        {renderCopyButton(`---\ntrigger: always_on\n---\n\n## AI System Memory — Auto-Read & Auto-Sync\n\n### 🧠 MANDATORY: Remote Memory & Telemetry System\nAll system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas telemetry server and Oracle 26ai Knowledge Graph database. The local \`.agents/memory\` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance. \nUse the CodeAtlas MCP tools to query or search relationships, dependencies, and insights directly from the indexed system knowledge.\n\n### 🔎 MANDATORY: Use CodeAtlas MCP to Understand Code BEFORE Making Changes\n**NEVER start coding without understanding the codebase first.** Follow this flow:\n1. **User describes a problem/feature** → FIRST call \`trace_feature_flow\` with a keyword\n2. **Need to find a specific function/class** → call \`search_entities\`. NEVER use grep or find commands.\n3. **Need to understand how things connect** → call \`get_dependencies\`\n4. **Need a high-level overview** → call \`generate_system_flow\`\n5. **Need to see execution flow of a feature** → call \`generate_feature_flow_diagram\`\n6. **Need to know what's in a specific file** → call \`get_file_entities\`\n\n### 🔄 MANDATORY: Sync Memory After Changes\n**After completing ANY code changes, you MUST call \`sync_system_memory\`:**\n1. **\`changeDescription\`** (ALWAYS required): What you just changed\n2. **\`businessRule\`** (ALWAYS extract if user mentions ANY domain logic):\n   - ALWAYS save when user mentions Conditions, Permissions, Limits, or Filters.\n   - If you are unsure whether something is a business rule, SAVE IT ANYWAY.`, 'auto_memory_rules_md')}
+                        {renderCopyButton(`---\ntrigger: always_on\n---\n\n## AI System Memory — Auto-Read & Auto-Sync\n\n### 🧠 MANDATORY: Remote Memory & Telemetry System\nAll system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas SQLite Knowledge Graph database. The local \`.agents/memory\` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance. \nUse the CodeAtlas MCP tools to query or search relationships, dependencies, and insights directly from the indexed system knowledge.\n\n### 🔎 MANDATORY: Use CodeAtlas MCP to Understand Code BEFORE Making Changes\n**NEVER start coding without understanding the codebase first.** Follow this flow:\n1. **User describes a problem/feature** → FIRST call \`trace_feature_flow\` with a keyword\n2. **Need to find a specific function/class** → call \`search_entities\`. NEVER use grep or find commands.\n3. **Need to understand how things connect** → call \`get_dependencies\`\n4. **Need a high-level overview** → call \`generate_system_flow\`\n5. **Need to see execution flow of a feature** → call \`generate_feature_flow_diagram\`\n6. **Need to know what's in a specific file** → call \`get_file_entities\`\n\n### 🔄 MANDATORY: Sync Memory After Changes\n**After completing ANY code changes, you MUST call \`sync_system_memory\`:**\n1. **\`changeDescription\`** (ALWAYS required): What you just changed\n2. **\`businessRule\`** (ALWAYS extract if user mentions ANY domain logic):\n   - ALWAYS save when user mentions Conditions, Permissions, Limits, or Filters.\n   - If you are unsure whether something is a business rule, SAVE IT ANYWAY.`, 'auto_memory_rules_md')}
                       </div>
                     </div>
                   </div>

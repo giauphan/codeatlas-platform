@@ -8,13 +8,13 @@ stateDiagram-v2
     Archived --> [*]
 
     state Created {
-        [*] --> OracleStore: INSERT INTO ai_dreaming_memory
-        OracleStore --> Embedded: NVIDIA embed()
-        Embedded --> [*]: VECTOR_DISTANCE index
+        [*] --> SQLiteStore: INSERT INTO ai_dreaming_memory
+        SQLiteStore --> Embedded: NVIDIA embed()
+        Embedded --> [*]: sqlite-vec index
     }
 
     state Retrieved {
-        [*] --> VectorSearch: VECTOR_DISTANCE query
+        [*] --> VectorSearch: sqlite-vec similarity query
         VectorSearch --> GuestFallback: No auth → admin tenant
         GuestFallback --> VPDFilter: Tenant isolation
         VPDFilter --> Results: Paginated

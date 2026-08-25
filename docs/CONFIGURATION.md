@@ -28,9 +28,7 @@ SQLite is default database for local and current deployment flow. `sqlite-vec` l
 | `CODEATLAS_DB_TYPE` | `sqlite` | Database backend selection. Keep `sqlite`. |
 | `CODEATLAS_SQLITE_PATH` | `./data/codeatlas.db` | SQLite database file path. |
 
-Initialize or seed database with `pnpm run db-seed`. To copy existing Oracle data into SQLite, run `pnpm run db-migrate-oracle-to-sqlite` with migration-only Oracle credentials configured outside this template.
-
-Oracle adapter configuration is intentionally omitted from `.env.example` and remains legacy migration/fallback code for now.
+Initialize or seed database with `pnpm run db-seed`. SQLite is the default and requires no external database server.
 
 ## Firebase
 

@@ -39,11 +39,11 @@ curl --request POST "$BASE_URL/api/dreams/save" \
   --header "Content-Type: application/json" \
   --data '{
     "memory_type": "KNOWLEDGE",
-    "content": "Oracle 26ai MERGE requires TO_CLOB() when COALESCE-ing a VARCHAR2 bind with a CLOB column to avoid ORA-00932.",
+    "content": "Use sqlite-vec `vec_distance_cosine` for semantic dream memory search.",
     "importance": 7,
     "project": "codeatlas-platform",
-    "scope": "db/oracle",
-    "tags": ["oracle", "clob", "merge"],
+    "scope": "db/vector-search",
+    "tags": ["sqlite", "vector-search"],
     "related_ids": ["dream-123"]
   }'
 ```
@@ -83,7 +83,7 @@ curl --request POST "$BASE_URL/api/dreams/save" \
   --header "Content-Type: application/json" \
   --data '{
     "memory_type": "SESSION_SUMMARY",
-    "content": "Implemented context retention across sessions: added scope, tags, related_ids metadata to ai_dreaming_memory in Oracle 26ai. Updated MCP server schemas and brain-context.sh hook to auto-load latest SESSION_SUMMARY.",
+    "content": "Implemented context retention across sessions: added scope, tags, related_ids metadata to ai_dreaming_memory in SQLite + sqlite-vec. Updated MCP server schemas and brain-context.sh hook to auto-load latest SESSION_SUMMARY.",
     "importance": 8,
     "project": "codeatlas-platform",
     "scope": "memory/session-summary"
@@ -95,7 +95,7 @@ curl --request POST "$BASE_URL/api/dreams/save" \
 ### Semantic search
 
 ```bash
-curl "$BASE_URL/api/dreams/query?project=codeatlas-platform&query=oracle%20clob&limit=5" \
+curl "$BASE_URL/api/dreams/query?project=codeatlas-platform&query=vector%20search&limit=5" \
   --header "x-api-key: $API_KEY"
 ```
 
@@ -107,10 +107,10 @@ Example response:
     {
       "id": "codeatlas-platform_KNOWLEDGE_...",
       "memory_type": "KNOWLEDGE",
-      "content": "Oracle 26ai MERGE requires TO_CLOB()...",
+      "content": "Use sqlite-vec vec_distance_cosine for semantic dream memory search.",
       "importance": 7,
-      "scope": "db/oracle",
-      "tags": ["oracle", "clob", "merge"],
+      "scope": "db/vector-search",
+      "tags": ["sqlite", "vector-search"],
       "related_ids": ["dream-123"],
       "created_at": "2026-08-14T05:00:00.000Z"
     }

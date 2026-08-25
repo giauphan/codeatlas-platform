@@ -2,11 +2,11 @@
  * A2A Client Service — wraps A2A client operations
  * 
  * Handles agent discovery, task delegation, and shared context.
- * Uses Oracle Dreaming Memory for shared context persistence.
+ * Uses Dreaming Memory for shared context persistence.
  */
 
 import { randomUUID } from "node:crypto";
-import { OracleDreamingService, type DreamMemoryType } from "./dreamingService.js";
+import { DreamingService, type DreamMemoryType } from "./dreamingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 
@@ -39,7 +39,7 @@ export class A2AClientService {
 
   /**
    * Discover A2A agents. In Phase 2, reads from in-memory cache.
-   * Phase 3 adds Oracle agent_registry query.
+   * Phase 3 adds a persistent agent_registry query.
    */
   async discover(filter: A2ADiscoverFilter): Promise<A2AAgentInfo[]> {
     const tenantCache = this.getTenantCache();
@@ -125,7 +125,7 @@ export class A2AClientService {
    * Share context via Dreaming Memory.
    */
   async shareContext(project: string, key: string, value: string, visibility: string): Promise<void> {
-    await OracleDreamingService.saveDreamMemory(
+    await DreamingService.saveDreamMemory(
       project,
       randomUUID(),
       "A2A_SHARED_CONTEXT" as DreamMemoryType,

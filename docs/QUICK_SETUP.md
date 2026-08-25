@@ -6,7 +6,7 @@ This guide will help you get CodeAtlas AI up and running in minutes.
 
 - **Node.js** v20.0.0 or higher
 - **npm** or **pnpm** (recommended)
-- **Oracle Instant Client** (optional — for Thick Mode database connectivity)
+- **SQLite + sqlite-vec** (included; no external database server required)
 
 ## Installation
 
@@ -27,12 +27,6 @@ Copy the example environment file and fill in your details:
 cp .env.example .env
 ```
 
-Required variables:
-```
-ORACLE_PASSWORD=your_oracle_password
-ORACLE_CONN_STRING=your_oracle_connection_string
-```
-
 Optional variables:
 ```
 PORT=3381
@@ -41,25 +35,15 @@ NVIDIA_API_KEY=nvapi-your_nvidia_key
 CODEATLAS_MULTI_TENANT=true
 ```
 
-### 3. Set Up Oracle Instant Client (if using Thick Mode)
+### 3. Initialize SQLite
 
-Download [Oracle Instant Client](https://www.oracle.com/database/technologies/instant-client/linux-x86-64-downloads.html) Basic Light package and extract it:
-
-```bash
-mkdir -p /opt/oracle
-cd /opt/oracle
-unzip instantclient-basiclite-linux.x64-21.16.0.0.0dbru.zip
-# Set the library path
-export LD_LIBRARY_PATH=/opt/oracle/instantclient_21_16:$LD_LIBRARY_PATH
-```
-
-### 4. Initialize Database
+SQLite + sqlite-vec is configured by default. No external database setup is required.
 
 ```bash
 npm run db-init
 ```
 
-### 5. Start the Server
+### 4. Start the Server
 
 ```bash
 # Development mode with hot reload
@@ -139,11 +123,6 @@ node --experimental-test-coverage --import tsx --test tests/**/*.test.ts
 
 ## Troubleshooting
 
-**Q: `ORA-12514` TNS listener error?**
-A: Verify your `ORACLE_CONN_STRING` format: `host:port/service_name`
-
-**Q: `LD_LIBRARY_PATH` not found?**
-A: Ensure Oracle Instant Client is downloaded and `LD_LIBRARY_PATH` is set correctly.
 
 **Q: Port already in use?**
 A: Change the `PORT` environment variable or kill the existing process.

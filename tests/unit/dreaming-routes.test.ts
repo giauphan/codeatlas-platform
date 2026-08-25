@@ -86,7 +86,7 @@ safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 
 // Mock dreamingService
 const dreamingServiceMock = {
-  OracleDreamingService: {
+  DreamingService: {
     saveDreamMemory: mockSaveDreamMemory,
     queryDreamMemories: mockQueryDreamMemories,
   },
@@ -490,7 +490,7 @@ describe('Dreaming Routes', () => {
     });
 
     // SQLite/Postgres return lowercase column keys; the route mapper must
-    // normalize them so the UI renders the same shape as the Oracle path.
+    // normalize them so the UI renders a stable shape.
     test('maps lowercase SQLite row keys to response fields', async () => {
       const sqliteMemories = [
         {
@@ -526,17 +526,17 @@ describe('Dreaming Routes', () => {
       assert.deepStrictEqual(m.related_ids, ['rel-1']);
     });
 
-    // Guards against a regression where only Oracle uppercase keys were read,
+    // Guards against a regression where only uppercase keys were read,
     // which would silently blank out every field under SQLite/Postgres.
-    test('still maps uppercase Oracle row keys', async () => {
-      const oracleMemories = [
+    test('still maps uppercase row keys', async () => {
+      const uppercaseMemories = [
         {
           ID: 'mem-uc-1',
           SESSION_ID: 'sess-uc',
           PROJECT: 'proj',
           PROVIDER: 'claude',
           MEMORY_TYPE: 'MISTAKE',
-          CONTENT: 'uppercase content from oracle',
+          CONTENT: 'uppercase content',
           IMPORTANCE: 9,
           CREATED_AT: '2026-08-11',
           SCOPE: null,
@@ -544,7 +544,7 @@ describe('Dreaming Routes', () => {
           RELATED_IDS: null,
         },
       ];
-      mockQueryDreamMemories.mock.mockImplementation(async () => oracleMemories);
+      mockQueryDreamMemories.mock.mockImplementation(async () => uppercaseMemories);
 
       const res = await fetch(
         `${baseUrl}/api/dreams/query?apiKey=valid-key&query=uppercase`,
@@ -555,15 +555,12 @@ describe('Dreaming Routes', () => {
       const m = (body.memories as Record<string, unknown>[])[0];
       assert.strictEqual(m.id, 'mem-uc-1');
       assert.strictEqual(m.memory_type, 'MISTAKE');
-      assert.strictEqual(m.content, 'uppercase content from oracle');
+      assert.strictEqual(m.content, 'uppercase content');
     });
 
-    // The DB-type migration must never surface Oracle credential errors in
-    // the UI: reproduces the "ORACLE_PASSWORD environment variable is required"
-    // failure as a 500 with the message propagated.
-    test('propagates ORACLE_PASSWORD error as 500 (dream-memory UI regression)', async () => {
+    test('propagates database errors as 500', async () => {
       mockQueryDreamMemories.mock.mockImplementation(async () => {
-        throw new Error('ORACLE_PASSWORD environment variable is required');
+        throw new Error('database is locked');
       });
 
       const res = await fetch(
@@ -572,7 +569,7 @@ describe('Dreaming Routes', () => {
 
       assert.strictEqual(res.status, 500);
       const body = await res.json() as Record<string, unknown>;
-      assert.ok((body.error as string).includes('ORACLE_PASSWORD'));
+      assert.ok((body.error as string).includes('database is locked'));
     });
   });
 

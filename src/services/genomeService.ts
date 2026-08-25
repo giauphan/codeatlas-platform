@@ -4,7 +4,7 @@
  * - Stores knowledge as atomic "Genes" instead of raw documents
  * - Each Gene: problem → solution → context → confidence → version
  * - Gene extraction from dreams, concepts, skills, feedback
- * - Vector search via Oracle 26ai NVIDIA embeddings
+ * - Vector search via sqlite-vec with NVIDIA embeddings
  */
 
 import { randomUUID } from "node:crypto";
@@ -147,7 +147,7 @@ export class GenomeService {
             cat: input.category,
             conf: input.confidence || 0.5,
             ver: newVersion,
-            emb: embedding ? new Float32Array(embedding) : null,
+            emb: embedding ? new Uint8Array(new Float32Array(embedding).buffer) : null,
             tenantId: getTenantId(),
           } as any,
           { autoCommit: true },
@@ -177,7 +177,7 @@ export class GenomeService {
             cat: input.category,
             project: input.project,
             conf: input.confidence || 0.5,
-            emb: embedding ? new Float32Array(embedding) : null,
+            emb: embedding ? new Uint8Array(new Float32Array(embedding).buffer) : null,
             srcType: input.sourceType,
             srcId: input.sourceId || "",
             deps: JSON.stringify(input.dependencies || []),
@@ -1197,7 +1197,7 @@ Apply this knowledge when encountering similar problems.
         const nameList = genes.map((g) => g.name);
         let existingRows: any[] = [];
 
-        // Oracle limits IN clause to 1000 items, batch it
+        // SQLite limits bound parameters, so batch the IN clause
         const chunkSize = 900;
         for (let i = 0; i < nameList.length; i += chunkSize) {
           const chunk = nameList.slice(i, i + chunkSize);
@@ -1349,7 +1349,7 @@ Apply this knowledge when encountering similar problems.
                 source_type, source_id, dependencies, created_at, updated_at
          FROM codeatlas_genome
          WHERE tenant_id = :tenantId AND name = :name AND category = :cat AND status = 'active'
-         FETCH FIRST 1 ROWS ONLY`,
+         LIMIT 1`,
         { tenantId: getTenantId(), name, cat: category } as any,
       );
       const row = result.rows?.[0];
@@ -1494,7 +1494,7 @@ Apply this knowledge when encountering similar problems.
           const embedding = await generateEmbedding(embedText, "passage");
           if (embedding) {
             sets.push("embedding = :emb");
-            binds.emb = new Float32Array(embedding);
+            binds.emb = new Uint8Array(new Float32Array(embedding).buffer);
           }
         }
       }

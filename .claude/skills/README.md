@@ -10,4 +10,4 @@ Project skills use Claude Code’s `SKILL.md` format.
 
 Run a skill by name, for example: `/codeatlas-onboard`.
 
-SQLite + `sqlite-vec` is default for local development and tests. Firebase, PostgreSQL, and Oracle only need configuration for work explicitly involving those integrations.
+SQLite + `sqlite-vec` is default for local development and tests. Firebase and PostgreSQL only need configuration for work explicitly involving those integrations.

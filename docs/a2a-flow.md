@@ -8,16 +8,16 @@ sequenceDiagram
     participant A2A_MCP as mcpTools (a2a_discover_agents)
     participant Registry as A2ARegistry
     participant MemStore as memoryStore (tenant-isolated)
-    participant Oracle as Oracle 26ai
+    participant SQLite as SQLite + sqlite-vec
 
     Claude->>A2A_MCP: a2a_discover_agents({capability, status})
     A2A_MCP->>Registry: query(filter)
     Registry->>MemStore: scan agents
     alt tenantId filter
         MemStore-->>Registry: agents WHERE tenantId = requestorTenantId
-    else Oracle enabled
-        Registry->>Oracle: SELECT * FROM agent_registry WHERE tenant_id = :tid
-        Oracle-->>Registry: tenant-scoped results
+    else SQLite enabled
+        Registry->>SQLite: SELECT * FROM agent_registry WHERE tenant_id = :tid
+        SQLite-->>Registry: tenant-scoped results
     end
     Registry-->>A2A_MCP: A2AAgentRecord[]
     A2A_MCP-->>Claude: A2AAgentInfo[] (name, url, capabilities)
@@ -56,7 +56,7 @@ sequenceDiagram
     participant Routes as a2aRoutes.ts
     participant Executor as A2AExecutor
     participant Tool as MCP Tool Handler
-    participant DB as Oracle DB
+    participant DB as SQLite DB
 
     Client->>Routes: POST /a2a/jsonrpc
     Auth->>Auth: verify x-api-key / Bearer token
@@ -109,8 +109,8 @@ sequenceDiagram
 sequenceDiagram
     participant Agent as A2A Agent
     participant ClientSvc as A2AClientService
-    participant DreamSvc as OracleDreamingService
-    participant DB as Oracle DB (ai_dreaming_memory)
+    participant DreamSvc as DreamingService
+    participant DB as SQLite DB (ai_dreaming_memory)
 
     Agent->>ClientSvc: shareContext(project, key, value, visibility)
     ClientSvc->>DreamSvc: saveDreamMemory(project, uuid, "A2A_SHARED_CONTEXT", data, 5)
@@ -143,7 +143,7 @@ graph TD
 
     subgraph "Data Layer"
         REG[A2ARegistry - tenantId filter]
-        MEMORY[OracleDreamingService - tenant_id column]
+        MEMORY[DreamingService - tenant_id column]
         MCP[MCP Tools - tenant_id in SQL]
     end
 
@@ -184,13 +184,13 @@ sequenceDiagram
     participant MCP as MCP Server (codeatlas)
     participant Service as CodeAtlas Service
     participant A2A as A2A Endpoint
-    participant Oracle as Oracle 26ai
+    participant SQLite as SQLite + sqlite-vec
 
     User->>Claude: query or task
     Claude->>MCP: use MCP tool (e.g., analyze, search_genome)
     MCP->>Service: route to handler
-    Service->>Oracle: query with tenant_id filter
-    Oracle-->>Service: tenant-scoped data
+    Service->>SQLite: query with tenant_id filter
+    SQLite-->>Service: tenant-scoped data
     Service-->>MCP: result
     MCP-->>Claude: JSON response
     Claude-->>User: answer

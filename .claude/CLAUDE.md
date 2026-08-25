@@ -18,7 +18,7 @@ Read the root [CLAUDE.md](../CLAUDE.md) first. It is project source of truth for
 - `CODEATLAS_DB_TYPE=sqlite` by default.
 - `CODEATLAS_SQLITE_PATH=./data/codeatlas.db` by default.
 - Firebase is optional for authenticated or multi-tenant deployments.
-- PostgreSQL and Oracle adapters are optional. Do not require their credentials for normal local onboarding.
+- PostgreSQL adapter is optional. Do not require its credentials for normal local onboarding.
 
 ## Project Automation
 

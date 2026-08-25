@@ -389,7 +389,7 @@ export function DreamMemoryView() {
 
         {loading && (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', gap: '1rem', color: 'var(--primary-neon)' }}>
-            <Loader2 className="animate-spin" size={24} /> Querying Oracle 26ai + NVIDIA embeddings...
+            <Loader2 className="animate-spin" size={24} /> Querying sqlite-vec + NVIDIA embeddings...
           </div>
         )}
 

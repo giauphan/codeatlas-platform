@@ -5,11 +5,10 @@ import { generateEmbedding, generateEmbeddingsBatch } from "./embeddingService.j
 import type { GraphEntity, GraphLink, ArchSmells } from "../types/index.js";
 import { buildInClause } from "../database/utils.js";
 
-type Dialect = "sqlite" | "postgres" | "oracle";
+type Dialect = "sqlite" | "postgres";
 
 export function activeDialect(): Dialect {
-  const configured = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
-  return configured === "oracle" || configured === "postgres" ? configured : "sqlite";
+  return (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase() === "postgres" ? "postgres" : "sqlite";
 }
 
 function tenantId(): string {
@@ -18,14 +17,14 @@ function tenantId(): string {
   return auth.uid;
 }
 
-/** SQLite stores vectors as BLOB; Oracle/Postgres take the typed array directly. */
+/** SQLite stores vectors as a BLOB; Postgres takes the typed array directly. */
 function encodeEmbedding(vector: number[] | null | undefined): Uint8Array | Float32Array | null {
   if (!vector || vector.length === 0) return null;
   const floats = new Float32Array(vector);
   return activeDialect() === "sqlite" ? new Uint8Array(floats.buffer) : floats;
 }
 
-/** Oracle returns upper-cased column keys, SQLite/Postgres lower-cased ones. */
+/** Row keys come back lower-cased from SQLite; tolerate other casings defensively. */
 function col<T = unknown>(row: Record<string, unknown>, name: string): T | undefined {
   if (name in row) return row[name] as T;
   const upper = name.toUpperCase();
@@ -37,7 +36,7 @@ function col<T = unknown>(row: Record<string, unknown>, name: string): T | undef
 /**
  * AI Memory across three tiers: episodic events, semantic entity embeddings,
  * and relational knowledge-graph edges. Every statement goes through the
- * configured database adapter, so the same code runs on SQLite, Postgres, or Oracle.
+ * configured database adapter (SQLite + sqlite-vec by default).
  */
 export class MemoryService {
   /** Tier 1: Episodic — business rules and change logs. */
@@ -228,7 +227,7 @@ export class MemoryService {
     }
   }
 
-  /** Normalizes episodic rows across dialects (Oracle upper-cases columns). */
+  /** Normalizes episodic rows across dialects (column casing can vary). */
   static parseEpisodicMemories(
     memories: Array<Record<string, unknown>>
   ): Array<{ id: unknown; eventType: unknown; data: unknown; createdAt: unknown }> {
@@ -255,6 +254,3 @@ export class MemoryService {
     });
   }
 }
-
-/** @deprecated Use MemoryService. Alias kept for existing import sites. */
-export const OracleMemoryService = MemoryService;

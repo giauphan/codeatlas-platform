@@ -1,14 +1,12 @@
 /**
  * A2A Agent Registry Service
- * Oracle 26ai-backed registry for A2A agent discovery.
- * 
+ * In-memory registry for A2A agent discovery.
+ *
  * Features:
  * - Register agents by URL + AgentCard
  * - Heartbeat tracking for liveness
  * - Query by capability keyword
  * - Auto-mark stale agents offline
- * 
- * Fallback: in-memory if Oracle is not configured.
  */
 
 import { randomUUID } from "node:crypto";
@@ -34,22 +32,15 @@ export interface A2ADiscoverQuery {
   limit?: number;
 }
 
-/** In-memory fallback when Oracle is unavailable */
+/** In-memory agent store */
 const memoryStore = new Map<string, A2AAgentRecord>();
 
 /** Timeout after which agents are considered offline */
 const STALE_TIMEOUT_MS = 120_000; // 2 minutes
 
 export class A2ARegistry {
-  private useOracle = false;
-
   constructor() {
-    if (process.env.ORACLE_CONN_STRING) {
-      this.useOracle = true;
-      logger.info("[A2A Registry] Oracle backend available for agent registry");
-    } else {
-      logger.info("[A2A Registry] Using in-memory store (Oracle not configured)");
-    }
+    logger.info("[A2A Registry] Using in-memory store");
   }
 
   /**
@@ -63,15 +54,7 @@ export class A2ARegistry {
     // Clone to avoid mutating the caller's object
     const safeRecord = { ...record, tenantId };
 
-    if (this.useOracle) {
-      try {
-        await this.oracleUpsert(agentId, safeRecord);
-      } catch (err) {
-        logger.error(`[A2A Registry] Oracle upsert failed, falling back to memory: ${err}`);
-      }
-    }
-
-    // Always update in-memory cache
+    // Update in-memory cache
     const existing = memoryStore.get(agentId);
     memoryStore.set(agentId, {
       ...safeRecord,
@@ -166,18 +149,6 @@ export class A2ARegistry {
       }
     }
   }
-
-  /**
-   * Oracle upsert (placeholder — actual implementation depends on connection setup).
-   */
-  private async oracleUpsert(agentId: string, record: A2AAgentRecord): Promise<void> {
-    // Oracle integration — uses same connection pool as other services
-    // MERGE INTO agent_registry (agentId, tenantId, agentUrl, agentName, capabilities, status, lastHeartbeat, registeredAt, agentCardJson, metadata)
-    // VALUES (:agentId, :tenantId, :agentUrl, :agentName, :capabilities_json, :status, :lastHeartbeat, :registeredAt, :agentCardJson, :metadata_json)
-    logger.debug(`[A2A Registry] Oracle upsert: ${agentId}, Tenant: ${record.tenantId}`);
-    // Actual Oracle upsert logic would go here, ensuring tenantId is stored.
-  }
-
 
   /**
    * Create a URL-safe slug from a name.

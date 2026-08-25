@@ -1,6 +1,6 @@
 import express from "express";
 import { checkAuth, logActivity } from "../services/authService.js";
-import { OracleDreamingService, DreamMemoryType } from "../services/dreamingService.js";
+import { DreamingService, DreamMemoryType } from "../services/dreamingService.js";
 import { loadAnalysisAsync } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
@@ -50,7 +50,7 @@ export function registerDreamingRoutes(app: express.Application): void {
       if (!id?.trim()) return res.status(400).json({ error: "Missing or invalid id parameter" });
 
       await logActivity(auth, "delete_dream_memory", { id });
-      const deleted = await authStorage.run(auth, () => OracleDreamingService.deleteDreamMemory(id));
+      const deleted = await authStorage.run(auth, () => DreamingService.deleteDreamMemory(id));
       deleted
         ? res.json({ success: true, id, message: "Dream memory deleted" })
         : res.status(404).json({ error: "Dream memory not found", id });
@@ -100,7 +100,7 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       await logActivity(auth, "save_dream_memory", { memory_type, content, importance: importanceVal, session_id, project: projectName, provider, scope, tags, related_ids });
       const memId = await authStorage.run(auth, () =>
-        OracleDreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, importanceVal, provider, scope, tags, related_ids)
+        DreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, importanceVal, provider, scope, tags, related_ids)
       );
       res.json({ success: true, id: memId, memory_type });
     } catch (err) {
@@ -156,7 +156,7 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       const rows = await authStorage.run(
         auth,
-        () => OracleDreamingService.queryDreamMemories(projectName, queryText, limit, offset, memoryType, provider, startDate, endDate, scope, tags)
+        () => DreamingService.queryDreamMemories(projectName, queryText, limit, offset, memoryType, provider, startDate, endDate, scope, tags)
       );
 
       const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
@@ -221,7 +221,7 @@ export function registerDreamingRoutes(app: express.Application): void {
       const skipped: string[] = [];
       for (const dream of dreams) {
         const memId = await authStorage.run(auth, () =>
-          OracleDreamingService.saveDreamMemory(
+          DreamingService.saveDreamMemory(
             projectName, sessId, dream.memoryType as DreamMemoryType, dream.content, dream.importance, prov
           )
         );

@@ -1,5 +1,5 @@
 import { logger } from "../utils/logger.js";
-import { OracleDreamingService } from "./dreamingService.js";
+import { DreamingService } from "./dreamingService.js";
 import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 
 /**
@@ -123,7 +123,7 @@ export async function loadContextAtSessionStart(
   task: string
 ): Promise<string> {
   try {
-    const dreams = await OracleDreamingService.queryDreamMemories(
+    const dreams = await DreamingService.queryDreamMemories(
       project,
       task,
       10

@@ -67,7 +67,7 @@ safeMockModule(path.join(srcDir, 'services/embeddingService.js'), {
 });
 
 safeMockModule(path.join(srcDir, 'services/dreamingService.js'), {
-  OracleDreamingService: {
+  DreamingService: {
     _hasLifecycleColumns: true,
   },
 });

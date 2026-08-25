@@ -366,28 +366,14 @@ app.delete("/api/projects", localRateLimiter, authMiddleware, async (req, res) =
       errors.push(`Firestore cleanup failed: ${firebaseErr instanceof Error ? firebaseErr.message : String(firebaseErr)}`);
     }
 
-    // 2. Remove semantic/relational/episodic memory from Oracle DB (if Oracle DB is configured)
+    // 2. Remove semantic/relational/episodic memory from the database
     try {
-      if (process.env.ORACLE_CONN_STRING) {
-        const { OracleMemoryService } = await import("../services/memoryService.js");
-        await OracleMemoryService.deleteProjectMemory(cleanProjectName);
-      }
-    } catch (oracleErr: unknown) {
-      logger.error(`[Delete Project] Failed to delete from Oracle DB: ${oracleErr}`);
-      const errMsg = oracleErr instanceof Error ? oracleErr.message : String(oracleErr);
-      // If it's a driver/library loading error (e.g. DPI-1047) or connection/network failure,
-      // log as a warning and do not block local cleanup, since the DB is unreachable anyway.
-      if (
-        errMsg.includes("DPI-1047") ||
-        errMsg.includes("NJS-511") ||
-        errMsg.includes("NJS-040") ||
-        errMsg.includes("connection") ||
-        errMsg.includes("connect")
-      ) {
-        logger.warn(`[Delete Project] Non-blocking Oracle library/connection warning during delete: ${errMsg}`);
-      } else {
-        errors.push(`Oracle DB cleanup failed: ${errMsg}`);
-      }
+      const { MemoryService } = await import("../services/memoryService.js");
+      await MemoryService.deleteProjectMemory(cleanProjectName);
+    } catch (dbErr: unknown) {
+      logger.error(`[Delete Project] Failed to delete from database: ${dbErr}`);
+      const errMsg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      errors.push(`Database cleanup failed: ${errMsg}`);
     }
 
     const isForce = req.query.force === "true";
@@ -476,22 +462,13 @@ app.get("/api/projects/memory", localRateLimiter, authMiddleware, async (req, re
 
     const cleanProjectName = path.basename(projectName.trim());
 
-    if (!process.env.ORACLE_CONN_STRING) {
-      return res.json({
-        success: true,
-        projectName: cleanProjectName,
-        memories: [],
-        message: "Oracle DB connection string is not configured."
-      });
-    }
-
-    const { OracleMemoryService } = await import("../services/memoryService.js");
+    const { MemoryService } = await import("../services/memoryService.js");
     const memories = await authStorage.run(auth, async () => {
-      return await OracleMemoryService.getEpisodicMemories(cleanProjectName, eventType || undefined);
+      return await MemoryService.getEpisodicMemories(cleanProjectName, eventType || undefined);
     });
 
     const rawMemories = (memories ?? []) as Array<Record<string, unknown>>;
-    const parsedMemories = OracleMemoryService.parseEpisodicMemories(rawMemories);
+    const parsedMemories = MemoryService.parseEpisodicMemories(rawMemories);
 
     res.json({
       success: true,
@@ -868,21 +845,21 @@ app.post("/api/projects/sync", localRateLimiter, authMiddleware, async (req, res
         let changeDescriptionSaved = false;
         let syncError: string | undefined = undefined;
 
-        // Sync to Oracle 26ai (episodic memory is processed synchronously to expose failures to callers)
-        if (auth && process.env.ORACLE_CONN_STRING) {
+        // Persist episodic memory synchronously to expose failures to callers
+        if (auth) {
           try {
-            const { OracleMemoryService } = await import("../services/memoryService.js");
+            const { MemoryService } = await import("../services/memoryService.js");
             if (businessRule) {
               await authStorage.run(auth, async () => {
-                logger.info(`[Sync API] Saving business rule for ${cleanProjectName} to Oracle 26ai (length: ${businessRule.length})...`);
-                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", { text: businessRule });
+                logger.info(`[Sync API] Saving business rule for ${cleanProjectName} (length: ${businessRule.length})...`);
+                await MemoryService.saveEpisodicMemory(cleanProjectName, "BUSINESS_RULE", { text: businessRule });
                 businessRuleSaved = true;
               });
             }
             if (changeDescription) {
               await authStorage.run(auth, async () => {
-                logger.info(`[Sync API] Saving change log for ${cleanProjectName} to Oracle 26ai (length: ${changeDescription.length})...`);
-                await OracleMemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", { text: changeDescription });
+                logger.info(`[Sync API] Saving change log for ${cleanProjectName} (length: ${changeDescription.length})...`);
+                await MemoryService.saveEpisodicMemory(cleanProjectName, "CHANGE_LOG", { text: changeDescription });
                 changeDescriptionSaved = true;
               });
             }
@@ -894,23 +871,23 @@ app.post("/api/projects/sync", localRateLimiter, authMiddleware, async (req, res
               Promise.resolve().then(async () => {
                 try {
                   await authStorage.run(auth, async () => {
-                    logger.info(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName} to Oracle 26ai...`);
-                    await OracleMemoryService.saveSemanticMemory(cleanProjectName, nodes);
-                    await OracleMemoryService.saveRelationalMemory(cleanProjectName, links);
-                    logger.info(`[Sync API] Async Knowledge Graph sync to Oracle 26ai completed successfully for ${cleanProjectName}!`);
+                    logger.info(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName}...`);
+                    await MemoryService.saveSemanticMemory(cleanProjectName, nodes);
+                    await MemoryService.saveRelationalMemory(cleanProjectName, links);
+                    logger.info(`[Sync API] Async Knowledge Graph sync completed successfully for ${cleanProjectName}!`);
                   });
-                } catch (oracleErr) {
-                  logger.error(`[Sync API] Failed to async sync Knowledge Graph to Oracle 26ai:`, oracleErr);
+                } catch (graphErr) {
+                  logger.error(`[Sync API] Failed to async sync Knowledge Graph:`, graphErr);
                 }
               });
             }
           } catch (e: unknown) {
-            logger.error(`[Sync API] Failed to initialize/sync Oracle DB connection: ${e}`);
+            logger.error(`[Sync API] Failed to sync to database: ${e}`);
             syncError = e instanceof Error ? e.message : String(e);
           }
         } else {
           if (businessRule || changeDescription) {
-            syncError = "Oracle DB is not configured or authenticated.";
+            syncError = "Not authenticated — cannot save episodic memory.";
           }
         }
 
@@ -1175,28 +1152,6 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
   mountA2ARoutes(app, a2aExecutor, `http://localhost:${port}`);
   mountHeartbeatRoutes(app);
   mountCronSettingsRoutes(app);
-
-  // Start a keep-alive database ping every 12 hours to prevent Oracle Free Tier auto-stop
-  // Jitter ±15 minutes to prevent thundering herd if multiple instances restart simultaneously
-  const DB_PING_INTERVAL_MS = 12 * 60 * 60 * 1000;
-  const JITTER_MS = 15 * 60 * 1000;
-  const scheduleNextPing = () => {
-    const jitter = Math.floor(Math.random() * JITTER_MS * 2 - JITTER_MS);
-    setTimeout(async () => {
-      try {
-        const { ping } = await import("../database/connection.js");
-        if (process.env.ORACLE_CONN_STRING) {
-          logger.info("[Keep-Alive] Pinging Oracle DB to prevent idle auto-stop...");
-          await ping();
-        }
-      } catch (err) {
-        logger.error("[Keep-Alive] Failed to ping Oracle DB:", err);
-      }
-      scheduleNextPing();
-    }, DB_PING_INTERVAL_MS + jitter);
-  };
-  const initialDelay = Math.floor(Math.random() * JITTER_MS * 2);
-  setTimeout(scheduleNextPing, initialDelay);
 
   // --- Daily Dream Generation Scheduler ---
   let lastDreamRunDate: string | null = null;

@@ -11,7 +11,7 @@ Check:
 
 - Behavior against existing tests and API contracts.
 - SQLite-first behavior and `sqlite-vec` compatibility.
-- PostgreSQL and Oracle adapter boundaries when shared code changes.
+- PostgreSQL adapter boundaries when shared code changes.
 - SQL bind variables and transaction/resource cleanup.
 - Authentication, tenant isolation, secrets, and external input validation.
 - Missing regression tests.

@@ -4,8 +4,8 @@
  * Deduplicates similar dreams, extracts concepts, updates knowledge base.
  * Designed to run both on-demand (API) and as a nightly cron job.
  *
- * NOTE: Oracle `execute()` returns rows as `any[][]` (array of arrays).
- * All row access uses positional indexes, not property names.
+ * NOTE: SQLite `query()` returns rows as objects keyed by column name.
+ * Some helpers still accept positional indexes for backward compatibility.
  */
 
 import { randomUUID } from "node:crypto";
@@ -13,9 +13,9 @@ import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
-import { OracleDreamingService } from "./dreamingService.js";
+import { DreamingService } from "./dreamingService.js";
 
-// Row index helpers for Oracle queries
+// Row index helpers for concept/dream queries
 const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.85;
 
 const R_IDX = Object.freeze({
@@ -24,7 +24,7 @@ const R_IDX = Object.freeze({
   CATEGORY: 8, CONFIDENCE: 9, EVIDENCE_COUNT: 10, STATUS: 11,
 });
 
-// Row index helpers for scoreDreams Oracle queries
+// Row index helpers for scoreDreams queries
 // Query: SELECT id, project, memory_type, embedding, confidence, created_at FROM ai_dreaming_memory
 const SCORE_IDX = Object.freeze({
   ID: 0, PROJECT: 1, MEMORY_TYPE: 2, EMBEDDING: 3, CONFIDENCE: 4, CREATED_AT: 5
@@ -354,7 +354,7 @@ export class ConsolidationEngine {
             label: conceptLabel.slice(0, 255),
             description: conceptDesc,
             category: mtype,
-            embedding: new Float32Array(embedding),
+            embedding: new Uint8Array(new Float32Array(embedding).buffer),
             project: proj,
             confidence: 0.70,
             sourceIds,
@@ -401,7 +401,7 @@ export class ConsolidationEngine {
         if (Math.abs(newConf - currentConf) > 0.01) {
           const updateSql = `
             UPDATE codeatlas_concepts
-            SET confidence = :conf, updated_at = ${dbType === "oracle" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
+            SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
             WHERE id = :id AND tenant_id = :tenantId
           `;
           await db.execute(updateSql, { conf: newConf, id, tenantId });
@@ -418,7 +418,7 @@ export class ConsolidationEngine {
    * - Phase 4: Supersession when a newer high-confidence dream overlaps an old one
    */
   private async scoreDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
-    if (!OracleDreamingService._hasLifecycleColumns) {
+    if (!DreamingService._hasLifecycleColumns) {
       logger.info("[Consolidation] Lifecycle columns missing — skipping dream scoring");
       return;
     }
@@ -434,20 +434,15 @@ export class ConsolidationEngine {
     const whereCond = conditions.join(' AND ');
 
     // 1. Time decay
-    const decayExpr = dbType === "oracle"
+    const decayExpr = dbType === "postgres"
       ? `CASE
-          WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - last_accessed_at)))
-          ELSE POWER(0.997, EXTRACT(DAY FROM (CURRENT_TIMESTAMP - created_at)))
+          WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_accessed_at)) / 86400)
+          ELSE POWER(0.997, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) / 86400)
          END`
-      : dbType === "postgres"
-        ? `CASE
-            WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_accessed_at)) / 86400)
-            ELSE POWER(0.997, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) / 86400)
-           END`
-        : `CASE
-            WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, CAST(julianday('now') - julianday(last_accessed_at) AS INTEGER))
-            ELSE POWER(0.997, CAST(julianday('now') - julianday(created_at) AS INTEGER))
-           END`;
+      : `CASE
+          WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, CAST(julianday('now') - julianday(last_accessed_at) AS INTEGER))
+          ELSE POWER(0.997, CAST(julianday('now') - julianday(created_at) AS INTEGER))
+         END`;
 
     const decaySql = `
       UPDATE ai_dreaming_memory
@@ -456,11 +451,10 @@ export class ConsolidationEngine {
     `;
     await db.execute(decaySql, binds);
 
-    // SQLite polyfills for LOG/POWER via sqlite-vec or application logic
-    // We already have POWER in SQLite if the math extension is loaded. If LOG is missing, we use log2 math
-    // For now we map LOG(2, X) to SQLite's LOG2(X) if available, or approximate
-    const logExpr = dbType === "oracle" ? "LOG(2, evidence_count + 1)" : "LOG(2, evidence_count + 1)";
-    const logExprAccess = dbType === "oracle" ? "LOG(2, access_count + 1)" : "LOG(2, access_count + 1)";
+    // POWER/LOG are available in SQLite builds with the math extension enabled;
+    // Postgres provides both natively.
+    const logExpr = "LOG(2, evidence_count + 1)";
+    const logExprAccess = "LOG(2, access_count + 1)";
 
     // 2. Evidence boost
     const boostSql = `

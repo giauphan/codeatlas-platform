@@ -95,19 +95,6 @@ const mockPool = {
   getConnection: mock.fn(() => Promise.resolve(mockConnection)),
 };
 
-const oracleMock = {
-  OUT_FORMAT_OBJECT: 4001,
-  CLOB: 2011,
-  STRING: 2001,
-  DB_TYPE_JSON: 2007,
-  createPool: mock.fn(() => Promise.resolve(mockPool)),
-  initOracleClient: mock.fn(),
-  outFormat: undefined as unknown,
-  fetchAsString: [] as number[],
-  default: {},
-};
-safeMockModule('oracledb', oracleMock);
-
 const connMock = {
   initPool: mock.fn(() => Promise.resolve(mockPool)),
   setSessionContext: mock.fn(() => Promise.resolve()),
@@ -171,4 +158,4 @@ const mockCheckAuth = async () => ({ tier: 'enterprise', uid: 'test-user', keyId
 const authServiceMock = { checkAuth: mockCheckAuth };
 safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 
-const { OracleDreamingService } = await import(path.join(srcDir, 'services/dreamingService.js'));
+const { DreamingService } = await import(path.join(srcDir, 'services/dreamingService.js'));

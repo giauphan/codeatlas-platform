@@ -33,8 +33,8 @@ export async function initAdapter(): Promise<IDatabaseAdapter> {
 
 /**
  * Connection-like façade over IDatabaseAdapter.
- * The Second Brain services were written against the oracledb Connection API;
- * this keeps them working on any adapter without a rewrite of every call site.
+ * The Second Brain services were written against a Connection-style API;
+ * this keeps them working on the adapter without a rewrite of every call site.
  */
 export interface AdapterConnection {
   execute<T = unknown>(
@@ -81,7 +81,7 @@ function wrapAdapter(db: IDatabaseAdapter): AdapterConnection {
 }
 
 /**
- * Backwards-compatible pool accessor for services written against oracledb.
+ * Backwards-compatible pool accessor for services written against a pool API.
  * Returns a pool-like object whose getConnection() yields an adapter-backed façade.
  */
 export async function initPool(): Promise<{ getConnection: () => Promise<AdapterConnection> }> {
@@ -91,20 +91,13 @@ export async function initPool(): Promise<{ getConnection: () => Promise<Adapter
 
 /**
  * Configures the Session Context for Row-Level Security.
- * Oracle applies VPD via a package call; SQLite/Postgres enforce tenant
- * isolation through explicit tenant_id predicates, so this only validates auth.
+ * SQLite enforces tenant isolation through explicit tenant_id predicates,
+ * so this only validates that an auth context is present.
  */
-export async function setSessionContext(connection?: unknown): Promise<void> {
+export async function setSessionContext(_connection?: unknown): Promise<void> {
   const auth = authStorage.getStore();
   if (!auth) {
     throw new Error("Auth context required — call within authStorage.run()");
-  }
-
-  if ((process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase() === "oracle" && connection) {
-    await (connection as AdapterConnection).execute(
-      `BEGIN ADMIN.codeatlas_ctx_pkg.set_tenant(:tenantId); END;`,
-      { tenantId: auth.uid }
-    );
   }
 }
 

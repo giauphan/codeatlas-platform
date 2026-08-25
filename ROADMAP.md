@@ -4,7 +4,7 @@ This document tracks planned work for CodeAtlas Platform. Items move from **Plan
 
 ## Shipped
 
-- **v2.14.x** — Multi-tenant isolation, Oracle 26ai integration, MCP SSE transport, Dream Memory with scope/tags/related_ids, SESSION_SUMMARY type, brain-context.sh auto-load, A2A orchestration.
+- **v2.14.x** — Multi-tenant isolation, SQLite + sqlite-vec migration, MCP SSE transport, Dream Memory with scope/tags/related_ids, SESSION_SUMMARY type, brain-context.sh auto-load, A2A orchestration.
 - **Public repository optimization** — `files` field in package.json, `.npmignore`, rewritten README/CONTRIBUTING, new DEVELOPMENT/DEPLOYMENT/API_EXAMPLES/CONFIGURATION docs, CODE_OF_CONDUCT, Dockerfile, docker-compose, `.gitignore` hardening, PAT removal from git remote.
 
 ## In Progress
@@ -16,7 +16,7 @@ This document tracks planned work for CodeAtlas Platform. Items move from **Plan
 
 ### Near-term (next quarter)
 
-- **PostgreSQL backend support** — Optional DB backend for users without Oracle 26ai. Abstracts `dreamingService` behind a DB-agnostic interface.
+- **PostgreSQL backend support** — Optional DB backend alongside the SQLite default. Abstracts `dreamingService` behind a DB-agnostic interface.
 - **Docker image publishing** — Publish to GitHub Container Registry on release tags. Multi-arch (amd64 + arm64).
 - **OpenAPI spec export** — Generate OpenAPI 3.1 document from REST routes for client SDK generation.
 - **MCP tool versioning** — Version MCP tool schemas so clients can negotiate capabilities.
@@ -31,7 +31,7 @@ This document tracks planned work for CodeAtlas Platform. Items move from **Plan
 
 ### Long-term
 
-- **Multi-region** — Active-active deployment across Oracle regions with cross-region sync.
+- **Multi-region** — Active-active deployment across PostgreSQL regions with cross-region sync.
 - **Streaming AST analysis** — Incremental indexing via file-watch events instead of full re-scan.
 - **Skill marketplace** — Public registry for CodeAtlas skills (install/publish/version).
 

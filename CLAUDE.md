@@ -14,7 +14,7 @@ Primary capabilities:
 - Provide MCP tools for codebase exploration and AI-assisted development.
 - Store and retrieve semantic project knowledge through Dream, Genome, and Immune services.
 - Persist codebase and memory data locally with SQLite and `sqlite-vec`.
-- Support optional PostgreSQL and legacy Oracle adapter paths where explicitly configured.
+- Support SQLite by default with optional PostgreSQL configuration.
 - Integrate the dashboard with Firebase services where required.
 - Expose Express.js HTTP routes and MCP server endpoints.
 
@@ -24,7 +24,7 @@ Primary capabilities:
 src/
 ├── presentation/    # Express routes, MCP server, request/response contracts
 ├── services/        # Domain and application logic
-├── repositories/    # Oracle, SQLite, and other persistence access
+├── repositories/    # SQLite, PostgreSQL, and other persistence access
 ├── database/        # Database initialization, adapters, connections
 ├── middleware/      # Express middleware and error handling
 ├── utils/           # Shared utilities
@@ -113,16 +113,14 @@ sync_system_memory(changeDescription: "Concise description of the implemented ch
 - Use the `IDatabaseAdapter` factory and adapter interface instead of coupling business logic to a single database driver.
 - Always bind query values. Never interpolate values into SQL strings.
 - Manage transactions and roll back failed work where a transaction is required.
-- Preserve SQLite behavior and coverage first; maintain optional PostgreSQL or Oracle adapter compatibility only when changing shared adapter contracts.
-- Treat Oracle as a legacy or explicitly configured backend, not the default onboarding or development path.
+- Preserve SQLite behavior and coverage first; maintain optional PostgreSQL compatibility when changing shared adapter contracts.
 - Do not expose credentials, connection strings, or database data in source code or logs.
 
 ### Optional integrations
 
 - Firebase Admin is optional and supports authenticated or multi-tenant deployments; keep credentials in environment variables only.
 - Treat Firestore rules as defense in depth; validate requests on the server as well.
-- PostgreSQL and Oracle are optional adapter backends selected with `CODEATLAS_DB_TYPE`.
-- If an Oracle-specific change is requested, use connection pooling, initialize the required driver mode, and reliably release all resources.
+- PostgreSQL is an optional adapter backend selected with `CODEATLAS_DB_TYPE`.
 
 ## 6. Safe Git and Collaboration Practices
 
@@ -169,7 +167,7 @@ NODE_ENV
 PORT
 ```
 
-Firebase credentials are only needed for authenticated or multi-tenant integrations. PostgreSQL and Oracle configuration is not required for normal onboarding and development.
+Firebase credentials are only needed for authenticated or multi-tenant integrations. PostgreSQL configuration is not required for normal onboarding and development.
 
 Configure the CodeAtlas MCP server when it is not already available:
 
