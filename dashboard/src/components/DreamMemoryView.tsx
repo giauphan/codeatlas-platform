@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings } from 'lucide-react';
+import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
 import { FOCUS_RING_CLASS } from '../lib/constants';
@@ -196,6 +196,12 @@ export function DreamMemoryView() {
   const hasPrev = page > 0;
   const hasNext = memories.length >= PAGE_SIZE;
 
+  const clearSearch = () => {
+    setSearchQuery('');
+    setPage(0);
+    fetchMemories('', 0, dreamConfig);
+  };
+
   // No client-side filtering needed, as it's now handled by the API
   // const filteredMemories = memories.filter(m => selectedTypes.includes(m.memory_type));
 
@@ -224,9 +230,19 @@ export function DreamMemoryView() {
           <input
             type="text" className="glass-input" placeholder="Search memories semantically..."
             aria-label="Search memories semantically"
-            style={{ paddingLeft: '3.25rem', width: '100%' }}
+            style={{ paddingLeft: '3.25rem', paddingRight: searchQuery ? '2.5rem' : '1rem', width: '100%' }}
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={clearSearch}
+              className={`clear-search-btn ${FOCUS_RING_CLASS}`}
+            >
+              <X size={16} />
+            </button>
+          )}
         </form>
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.25rem 0.75rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
