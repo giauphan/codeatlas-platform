@@ -37,3 +37,7 @@
 **Vulnerability:** A fetch call to an external or internal microservice bubbled up the raw response text directly into the thrown Error object.
 **Learning:** This is a classic Information Exposure vulnerability, as downstream APIs often return internal stack traces, container paths, or verbose context in the raw response body, which should never be exposed to users in a JSON-RPC response.
 **Prevention:** Rely strictly on HTTP Status (`res.status`) and Status Text (`res.statusText`) along with the URL (`res.url`) to build informative but sanitized error strings, and explicitly avoid interpolating `res.text()` or `res.json()` directly into exception messages.
+## 2026-08-25 - [Undefined Variable Reference in Security Scanner]
+**Vulnerability:** The SecurityScanner was crashing with a ReferenceError (`labelLower is not defined`) because it attempted to use a variable that was not initialized in the scope when checking for SQL injection keywords.
+**Learning:** Adding new heuristic string matches to security tools without running unit tests covering the specific condition can introduce critical availability bugs, crashing the security pipeline itself.
+**Prevention:** Always verify that referenced variables are defined in the current scope, and ensure that new logic paths within security scanners are covered by specific unit tests before merging.

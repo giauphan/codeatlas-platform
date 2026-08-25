@@ -224,7 +224,10 @@ export class SecurityScanner {
 
         // 3. Detect Potential SQL Injection
         if (
-          (node.label.includes("Query") || node.label.includes("execute")) &&
+          (node.label.includes("Query") || node.label.includes("execute") ||
+           labelLower.includes("select") || labelLower.includes("insert") ||
+           labelLower.includes("update") || labelLower.includes("delete") ||
+           labelLower.includes("drop") || labelLower.includes("alter")) &&
           node.label !== "execute" &&
           !node.label.endsWith("UseCase") &&
           isSqlRelated(node)

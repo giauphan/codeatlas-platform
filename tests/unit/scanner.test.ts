@@ -45,15 +45,18 @@ describe('SecurityScanner', () => {
     const mockAnalysis: any = {
       graph: {
         nodes: [
-          { type: 'function', label: 'executeQuery', filePath: 'db.ts', line: 30 }
+          { type: 'function', label: 'executeQuery', filePath: 'db.ts', line: 30 },
+          { type: 'function', label: 'selectData', filePath: 'database.ts', line: 40 }
         ],
         links: []
       }
     };
 
     const findings = SecurityScanner.scan(mockAnalysis as AnalysisResult);
-    const sqlFinding = findings.find(f => f.type === 'SQL_INJECTION_RISK');
+    const sqlFindings = findings.filter(f => f.type === 'SQL_INJECTION_RISK');
     
-    assert.ok(sqlFinding, 'Should have flagged SQL injection risk');
+    assert.strictEqual(sqlFindings.length, 2, 'Should have flagged both SQL injection risks');
+    assert.ok(sqlFindings.some(f => f.message.includes('executeQuery')), 'Should flag executeQuery');
+    assert.ok(sqlFindings.some(f => f.message.includes('selectData')), 'Should flag selectData');
   });
 });
