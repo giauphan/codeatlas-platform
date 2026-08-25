@@ -187,7 +187,7 @@ export class ConsolidationEngine {
       }
 
       // Group by project to avoid cross-project false positives
-      const byProject = new Map<string, { id: string, importance: number, embedding: Float32Array }[]>();
+      const byProject = new Map<string, { id: string, importance: number, embedding: Float32Array, magnitude: number }[]>();
       for (const row of rows) {
         const proj = String(this.getVal(row, R_IDX.PROJECT, 'PROJECT') || "default");
 
@@ -203,8 +203,18 @@ export class ConsolidationEngine {
 
         if (!embedding) continue;
 
+        // ⚡ Bolt Optimization: Pre-calculate magnitude once to avoid redundant work in the O(N^2) similarity loop
+        // ⚡ Bolt Optimization: Pre-calculate magnitude once to avoid redundant work in the O(N^2) similarity loop
+        let norm = 0;
+        const len = embedding.length;
+        for (let i = 0; i < len; i++) {
+          const v = embedding[i];
+          norm += v * v;
+        }
+        const magnitude = Math.sqrt(norm);
+
         if (!byProject.has(proj)) byProject.set(proj, []);
-        byProject.get(proj)!.push({ id, importance, embedding });
+        byProject.get(proj)!.push({ id, importance, embedding, magnitude });
       }
 
       let merged = 0;
@@ -219,7 +229,19 @@ export class ConsolidationEngine {
             const itemJ = group[j];
             if (toRemove.has(itemJ.id)) continue;
 
-            const similarity = this.cosineSimilarity(itemI.embedding, itemJ.embedding);
+            const denom = itemI.magnitude * itemJ.magnitude;
+            let similarity = 0;
+            // ⚡ Bolt Optimization: Inline dot product calculation avoiding function call overhead
+            if (denom !== 0) {
+              let dot = 0;
+              const vI = itemI.embedding;
+              const vJ = itemJ.embedding;
+              const len = vI.length;
+              for (let k = 0; k < len; k++) {
+                dot += vI[k] * vJ[k];
+              }
+              similarity = dot / denom;
+            }
 
             if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD) {
               // Merge: keep the one with higher importance
@@ -478,7 +500,7 @@ export class ConsolidationEngine {
     let supersededCount = 0;
 
     if (rows.length > 1) {
-      const groups = new Map<string, { id: string, confidence: number, embedding: Float32Array }[]>();
+      const groups = new Map<string, { id: string, confidence: number, embedding: Float32Array, magnitude: number }[]>();
       for (const row of rows) {
         const proj = String(this.getVal(row, SCORE_IDX.PROJECT, 'PROJECT') || "default");
         const mtype = String(this.getVal(row, SCORE_IDX.MEMORY_TYPE, 'MEMORY_TYPE') || "GENERAL");
@@ -496,8 +518,17 @@ export class ConsolidationEngine {
 
         if (!embedding) continue;
 
+        // ⚡ Bolt Optimization: Pre-calculate magnitude once to avoid redundant work in the O(N^2) similarity loop
+        let norm = 0;
+        const len = embedding.length;
+        for (let i = 0; i < len; i++) {
+          const v = embedding[i];
+          norm += v * v;
+        }
+        const magnitude = Math.sqrt(norm);
+
         if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push({ id, confidence, embedding });
+        groups.get(key)!.push({ id, confidence, embedding, magnitude });
       }
 
       const toSupersede = new Set<string>();
@@ -511,7 +542,19 @@ export class ConsolidationEngine {
             const newer = group[j];
             if (toSupersede.has(newer.id)) continue;
 
-            const similarity = this.cosineSimilarity(older.embedding, newer.embedding);
+            const denom = older.magnitude * newer.magnitude;
+            let similarity = 0;
+            // ⚡ Bolt Optimization: Inline dot product calculation avoiding function call overhead
+            if (denom !== 0) {
+              let dot = 0;
+              const vI = older.embedding;
+              const vJ = newer.embedding;
+              const len = vI.length;
+              for (let k = 0; k < len; k++) {
+                dot += vI[k] * vJ[k];
+              }
+              similarity = dot / denom;
+            }
 
             if (similarity > CONSOLIDATION_SIMILARITY_THRESHOLD && newer.confidence > older.confidence) {
               toSupersede.add(older.id);
@@ -543,29 +586,6 @@ export class ConsolidationEngine {
    * - Confidence decays exponentially with time (0.995 per day)
    * - Archived concepts get reduced confidence
    */
-  private cosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
-    if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) {
-      return 0;
-    }
-
-    let dot = 0;
-    let normA = 0;
-    let normB = 0;
-
-    const len = vecA.length;
-    for (let i = 0; i < len; i++) {
-      const a = vecA[i];
-      const b = vecB[i];
-      dot += a * b;
-      normA += a * a;
-      normB += b * b;
-    }
-
-    const denom = Math.sqrt(normA) * Math.sqrt(normB);
-    if (denom === 0) return 0;
-
-    return dot / denom;
-  }
 }
 
 export const consolidationEngine = new ConsolidationEngine();

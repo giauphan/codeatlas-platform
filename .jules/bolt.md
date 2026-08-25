@@ -29,3 +29,6 @@
 ## 2026-08-21 - Array processing in N+1 loops (Tenant Discovery)
 **Learning:** Checking `await fs.promises.readdir()` inside unchunked `Promise.all` across unbounded tenants mapping causes an N+1 latency bottleneck and `EMFILE` in project discovery.
 **Action:** Replace unchunked parallel file system operations with bounded `Promise.all` chunking (e.g., `chunkSize = FILE_EXISTS_CONCURRENCY = 50`) to maximize I/O throughput safely without hitting `EMFILE` limits.
+## 2024-05-18 - Pre-calculating Vector Magnitudes in O(N^2) Similarity Loops
+**Learning:** In heavily nested loops performing pairwise comparisons of large embedding vectors (like deduplication and semantic search), repeatedly calculating vector magnitudes inside the inner O(N^2) loop is a massive performance bottleneck.
+**Action:** When working with pairwise vector comparisons, always loop over the set once in O(N) to calculate and cache the magnitude of each vector alongside its embedding data *before* entering the O(N^2) inner comparison loop. In addition, inlining the dot product calculation instead of delegating to a separate class method avoids function call overhead.
