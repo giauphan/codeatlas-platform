@@ -553,7 +553,9 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
               searchDirs.push(path.join(userDir, p.name));
             }
           }
-        } catch { /* Skip non-accessible directories */ }
+        } catch (err: unknown) {
+          logger.debug(`[Project-Discovery] Skipped non-accessible directory ${userDir}: ${extractErrorMessage(err)}`);
+        }
       }
     }
 
@@ -774,7 +776,9 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
               searchDirs.push(path.join(userDir, p.name));
             }
           }
-        } catch { /* Skip non-accessible directories */ }
+        } catch (err: unknown) {
+          logger.debug(`[Project-Discovery] Skipped non-accessible directory ${userDir}: ${extractErrorMessage(err)}`);
+        }
       }
     }
 
@@ -806,7 +810,9 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
                       searchDirs.push(path.join(tDir, p.name));
                     }
                   }
-                } catch { /* Skip non-accessible directories */ }
+                } catch (err: unknown) {
+                  logger.debug(`[Project-Discovery] Skipped non-accessible directory ${tDir}: ${extractErrorMessage(err)}`);
+                }
               }
             }));
           }
@@ -834,13 +840,15 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     const projectsDir = path.join(process.cwd(), "projects");
     if (await fileExists(projectsDir)) {
       try {
-        const subDirs = await fs.promises.readdir(projectsDir, { withFileTypes: true });
-        for (const p of subDirs) {
+        const subDirectories = await fs.promises.readdir(projectsDir, { withFileTypes: true });
+        for (const p of subDirectories) {
           if (p.isDirectory()) {
             searchDirs.push(path.join(projectsDir, p.name));
           }
         }
-      } catch { /* Skip non-accessible directories */ }
+      } catch (err: unknown) {
+        logger.debug(`[Project-Discovery] Skipped non-accessible directory ${projectsDir}: ${extractErrorMessage(err)}`);
+      }
     }
 
     // Load globally registered projects
