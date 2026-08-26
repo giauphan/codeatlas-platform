@@ -80,7 +80,7 @@ const mockLogger = {
 };
 
 safeMockModule(path.join(srcDir, 'services/dreamingService.js'), {
-  OracleDreamingService: {
+  DreamingService: {
     queryDreamMemories: mockQueryDreamMemories,
     saveDreamMemory: mockSaveDreamMemory,
   },

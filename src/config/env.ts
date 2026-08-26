@@ -1,8 +1,7 @@
-export function validateEnv() {
-  const required = ["ORACLE_PASSWORD", "ORACLE_CONN_STRING"];
-  const missing = required.filter(k => !process.env[k]);
-  if (missing.length > 0) {
-    throw new Error(`Missing required env vars: ${missing.join(", ")}`);
+export function validateEnv(): void {
+  const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
+  if (dbType !== "sqlite" && dbType !== "postgres") {
+    throw new Error(`Unsupported CODEATLAS_DB_TYPE "${dbType}". Use sqlite (default) or postgres.`);
   }
 }
 

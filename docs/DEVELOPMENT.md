@@ -40,12 +40,6 @@ pnpm run db-seed
 
 This creates and seeds `CODEATLAS_SQLITE_PATH` with SQLite + sqlite-vec schema. Safe to rerun.
 
-To import existing Oracle data once, configure migration-only Oracle credentials and run:
-
-```bash
-pnpm run db-migrate-oracle-to-sqlite
-```
-
 ### 4. Run the server
 
 ```bash
@@ -70,7 +64,7 @@ Open <http://localhost:3381/health> to verify the server is running.
 | `pnpm start` | Run compiled server (`node dist/src/index.js`) |
 | `pnpm run dev` | Run with hot reload (`tsx watch`) |
 | `pnpm test` | Run unit tests (`node --test`) |
-| `pnpm run db-init` | Initialize Oracle schema |
+| `pnpm run db-init` | Initialize SQLite schema |
 | `npx tsc --noEmit` | Type-check without emitting |
 
 ## Dashboard development
@@ -100,31 +94,10 @@ pnpm test
 node --experimental-test-coverage --import tsx --test tests/**/*.test.ts
 ```
 
-Tests use Node's native test runner (`node:test`) with `tsx` for TypeScript transpilation. Mocks via `mock.module()` for `oracledb`, `firebase-admin`, and internal services.
+Tests use Node's native test runner (`node:test`) with `tsx` for TypeScript transpilation. Mocks via `mock.module()` for Firebase and internal services.
 
 ## Troubleshooting
 
-### `ORA-12506: TNS:listener rejected connection`
-
-Oracle Autonomous Database ACL is blocking your IP. Add your subnet to the ACL in Oracle Cloud Console → Autonomous Database → Network → Access Control List.
-
-### `ORA-12514: TNS:listener does not currently know of service`
-
-Verify `ORACLE_CONN_STRING` format: `host:port/service_name`. The service name must match the database's service name (e.g., `atlas_medium` for Autonomous Database).
-
-### `NJS-040: connection request timeout`
-
-Connection pool starvation. The platform generates embeddings **before** acquiring Oracle connections to prevent this. If it persists, increase pool size in `src/database/connection.ts` or reduce concurrent requests.
-
-### `DPI-1047: 64-bit Oracle Client library cannot be loaded`
-
-Oracle Instant Client not found. Either:
-- Set `ORACLE_LIB_DIR` to the correct path, or
-- Remove `ORACLE_LIB_DIR` to use Thin mode (no Instant Client required for Oracle 23ai+).
-
-### `LD_LIBRARY_PATH not found`
-
-Ensure Oracle Instant Client is extracted and `LD_LIBRARY_PATH` includes the Instant Client directory.
 
 ### `Firebase Service Account not found`
 

@@ -19,7 +19,7 @@ Issues labeled `good first issue` are intentionally small and suitable for a fir
 
 - Node.js 20 or newer
 - pnpm 9+ (enable via Corepack: `corepack enable && corepack prepare pnpm@9 --activate`)
-- Oracle 26ai (Autonomous Database or self-hosted with VECTOR support)
+- SQLite + sqlite-vec (included; no external database server required)
 - Firebase service account JSON (for multi-tenant auth)
 
 ### Install and build
@@ -32,7 +32,7 @@ pnpm install
 pnpm run build
 ```
 
-Read [DEVELOPMENT.md](docs/DEVELOPMENT.md) for external Oracle setup, individual commands, and troubleshooting.
+Read [DEVELOPMENT.md](docs/DEVELOPMENT.md) for SQLite setup, individual commands, and troubleshooting.
 
 ### Dashboard development
 
@@ -105,7 +105,7 @@ Maintainers may ask for a smaller scope when a pull request mixes unrelated chan
 ```
 src/
   config/          — Environment validation
-  database/        — Oracle 26ai connection + schema
+  database/        — SQLite + sqlite-vec connection + schema
   middleware/      — Express middleware (auth, rate limiting)
   presentation/    — HTTP server, MCP tools, REST routes, A2A
   services/        — Business logic (project, embedding, auth, memory)

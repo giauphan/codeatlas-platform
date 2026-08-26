@@ -19,13 +19,13 @@ CodeAtlas plugin saves dreams (post_llm_call)  ← local-only
 ```
 Hermes Turn
   ↓
-MemoryManager → CodeAtlas MemoryProvider  ← PRIMARY (Dreams/Genome/Immune from Oracle)
+MemoryManager → CodeAtlas MemoryProvider  ← PRIMARY (Dreams/Genome/Immune from SQLite + sqlite-vec)
   ↓
 state.db → Local cache only (read-through, write-through)
   ↓
 LLM → Response
   ↓
-Save to CodeAtlas Oracle ← source of truth
+Save to CodeAtlas SQLite ← source of truth
   ↓
 Update state.db cache asynchronously
 ```

@@ -31,7 +31,7 @@ An MCP server named `codeatlas` is available. It provides code analysis data inc
 
 ## Memory & Telemetry Sync
 
-**After completing code changes**, ALWAYS call the `sync_system_memory` tool to push details to the remote server and Oracle 26ai DB:
+**After completing code changes**, ALWAYS call the `sync_system_memory` tool to push details to the remote server and SQLite + sqlite-vec database:
 - `changeDescription` (ALWAYS required): Description of the changes made
 - `businessRule` (Optional): Extract and save any new business logic rules mentioned by the user
 

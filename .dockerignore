@@ -36,8 +36,6 @@ scripts/ssh-sandbox.sh
 !.env.example
 serviceAccountKey.json
 atlas-intelligence-node-firebase-adminsdk-*.json
-wallet
-instantclient
 
 # Docs and misc
 docs

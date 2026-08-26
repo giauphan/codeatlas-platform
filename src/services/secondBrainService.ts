@@ -4,7 +4,7 @@
 
 import { randomUUID } from "node:crypto";
 import { logger } from "../utils/logger.js";
-import { OracleDreamingService } from "./dreamingService.js";
+import { DreamingService } from "./dreamingService.js";
 
 export interface TaskOutcome {
   task: string;
@@ -24,7 +24,7 @@ export class SecondBrainService {
    * Record task outcome as FEEDBACK dream memory.
    */
   async recordOutcome(outcome: TaskOutcome): Promise<string> {
-    const dreamId = await OracleDreamingService.saveDreamMemory(
+    const dreamId = await DreamingService.saveDreamMemory(
       outcome.project || "default",
       randomUUID(),
       "FEEDBACK",
@@ -46,7 +46,7 @@ export class SecondBrainService {
   async buildContext(task: string, project?: string, limit: number = 5): Promise<InjectedContext> {
     try {
       const projectName = project || "default";
-      const dreams = await OracleDreamingService.queryDreamMemories(
+      const dreams = await DreamingService.queryDreamMemories(
         projectName,
         task,
         limit

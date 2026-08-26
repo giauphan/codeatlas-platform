@@ -5,7 +5,7 @@ trigger: always_on
 ## AI System Memory — Auto-Read & Auto-Sync
 
 ### 🧠 MANDATORY: Remote Memory & Telemetry System
-All system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas telemetry server and Oracle 26ai Knowledge Graph database. The local `.agents/memory` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance. 
+All system mapping, business rules, coding conventions, and change logs are automatically synchronized to the central CodeAtlas telemetry server and SQLite-backed knowledge database. The local `.agents/memory` directory is no longer stored on disk to avoid redundant files and simplify codebase maintenance.
 Use the CodeAtlas MCP tools to query or search relationships, dependencies, and insights directly from the indexed system knowledge.
 
 

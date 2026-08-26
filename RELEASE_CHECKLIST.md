@@ -17,12 +17,12 @@ Run through this checklist before tagging a release. Each item is a gate — if 
 
 - [ ] `pnpm pack --dry-run` shows only: `dist/src`, `README.md`, `LICENSE`, `CHANGELOG.md`, `.env.example`
 - [ ] No `tests/`, `src/`, `scripts/`, `benchmark_*.ts`, `*.sh` in pack output
-- [ ] No secret files in pack output (`.env`, `serviceAccountKey.json`, `wallet/`)
+- [ ] No secret files in pack output (`.env`, `serviceAccountKey.json`)
 
 ## 3. Security review
 
 - [ ] `git remote -v` shows no embedded credentials in URL
-- [ ] `git log --all --source --remotes -- serviceAccountKey.json wallet/ .env` returns nothing on `main`
+- [ ] `git log --all --source --remotes -- serviceAccountKey.json .env` returns nothing on `main`
 - [ ] No new `.sh` files with hardcoded tokens tracked in git
 - [ ] `.gitignore` covers all secret-bearing files
 - [ ] Dependencies audited: `pnpm audit --prod` (no high/critical vulnerabilities)

@@ -1,6 +1,6 @@
 # Production deployment guide
 
-This guide describes a conventional self-hosted Linux deployment using PM2 or systemd, Nginx as a TLS reverse proxy, and Oracle 26ai. Adapt it to your infrastructure and threat model.
+This guide describes a conventional self-hosted Linux deployment using PM2 or systemd, Nginx as a TLS reverse proxy, and SQLite + sqlite-vec. Adapt it to your infrastructure and threat model.
 
 ## Reference architecture
 
@@ -11,7 +11,7 @@ Nginx (TLS + trusted proxy headers)
    |
 CodeAtlas Platform (Express :3381, SSE)
    |
-Oracle 26ai + Firebase + NVIDIA NIM
+SQLite + sqlite-vec + Firebase + NVIDIA NIM
 ```
 
 For container orchestration, prefer one Uvicorn/Node process per container and scale at the container level.
@@ -21,7 +21,7 @@ For container orchestration, prefer one Uvicorn/Node process per container and s
 - Linux server (Ubuntu 22.04+ recommended)
 - Node.js 20+
 - pnpm 9+
-- Oracle 26ai (Autonomous Database or self-hosted)
+- SQLite + sqlite-vec (included; no external database server required)
 - Domain with TLS certificate (Let's Encrypt or commercial CA)
 - Firebase service account JSON
 - NVIDIA NIM API key
@@ -35,7 +35,7 @@ cp .env.example .env
 # Edit .env with production credentials
 pnpm install --frozen-lockfile --prod
 pnpm run build
-pnpm run db-init
+pnpm run db-init # Initialize the SQLite schema
 ```
 
 Verify the build:
@@ -198,7 +198,7 @@ Set `VITE_FIREBASE_*` env vars before build. The dashboard calls the platform AP
 
 ## Database migrations
 
-Run `pnpm run db-init` before starting the server after any schema change. The script is idempotent and safe to run on every deploy:
+Run `pnpm run db-init` to initialize the SQLite schema before starting the server after any schema change. The script is idempotent and safe to run on every deploy:
 
 ```bash
 pnpm run db-init

@@ -13,7 +13,7 @@ import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { server } from "./presentation/mcpServer.js";
 import { app, startHttpServer } from "./presentation/httpServer.js";
 
-// Domain services: Oracle DB, Security Scanner, Consolidation.
+// Domain services: memory, security scanner, consolidation.
 import { checkAuth } from "./services/authService.js";
 import { logger } from "./utils/logger.js";
 import { 
@@ -26,7 +26,7 @@ import {
   registerProjectAsync
 } from "./services/projectService.js";
 import { indexingService } from "./services/indexingService.js";
-import { OracleDreamingService } from "./services/dreamingService.js";
+import { DreamingService } from "./services/dreamingService.js";
 
 // Initialize Firebase Admin (Infrastructure Configuration at Composition Root)
 const apps = getApps();
@@ -61,13 +61,11 @@ async function main() {
   await indexingService.init();
   await indexingService.indexAll();
 
-  // Initialize Oracle dreaming/memory schema (idempotent — safe to run every start)
-  if (process.env.ORACLE_CONN_STRING) {
-    try {
-      await OracleDreamingService.initialize();
-    } catch (initErr) {
-      logger.warn("[Startup] Oracle Dreaming schema init skipped:", initErr instanceof Error ? initErr.message : String(initErr));
-    }
+  // Initialize dreaming/memory schema (idempotent — safe to run every start)
+  try {
+    await DreamingService.initialize();
+  } catch (initErr) {
+    logger.warn("[Startup] Dreaming schema init skipped:", initErr instanceof Error ? initErr.message : String(initErr));
   }
 
   if (port) {

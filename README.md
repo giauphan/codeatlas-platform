@@ -6,7 +6,7 @@
 [![npm version](https://img.shields.io/npm/v/codeatlas-ai.svg)](https://www.npmjs.com/package/codeatlas-ai)
 [![GitHub release](https://img.shields.io/github/v/release/giauphan/codeatlas-platform)](https://github.com/giauphan/codeatlas-platform/releases)
 
-AI-powered codebase intelligence platform — MCP Server, AST analysis, Knowledge Graph, and semantic memory with SQLite + sqlite-vec by default, with Oracle 26ai fallback.
+AI-powered codebase intelligence platform — MCP Server, AST analysis, Knowledge Graph, and semantic memory with SQLite + sqlite-vec as the default database.
 
 Ship a secure, multi-tenant codebase intelligence backend without rebuilding authentication, MCP tooling, semantic memory, and knowledge graph infrastructure from scratch. CodeAtlas Platform is an open-source foundation for developers who want a clear starting point for AI-native code analysis services.
 
@@ -18,7 +18,7 @@ Ship a secure, multi-tenant codebase intelligence backend without rebuilding aut
 | Concern | Included foundation |
 | --- | --- |
 | **MCP Server** | 30+ tools via stdio or SSE transport (Claude, Cursor, VSCode) |
-| **Semantic memory** | Dream memory store with Oracle 26ai vector search |
+| **Semantic memory** | Dream memory store with SQLite + sqlite-vec vector search |
 | **Knowledge graph** | Genome DNA + immune system patterns, consolidation engine |
 | **Multi-tenant** | Tenant isolation via `authStorage.run` + Firebase auth |
 | **AST analysis** | TypeScript/Python/JS parsing via `@typescript-eslint/typescript-estree` and `py-ast` |
@@ -29,14 +29,14 @@ Ship a secure, multi-tenant codebase intelligence backend without rebuilding aut
 ## Architecture
 
 ```
-AI IDE (Claude/Cursor) → MCP (stdio/SSE) → Platform :3381 → Oracle 26ai + Firebase + NVIDIA
+AI IDE (Claude/Cursor) → MCP (stdio/SSE) → Platform :3381 → SQLite + sqlite-vec + Firebase + NVIDIA
 ```
 
 | Layer | Components |
 |---|---|
 | **Presentation** | Express HTTP, MCP SSE, A2A Agent Protocol, REST API |
 | **Services** | Dream Memory, Genome DNA, Second Brain, Consolidation Engine, Security Scanner |
-| **Data** | Oracle 26ai Autonomous DB, Firebase Firestore, NVIDIA NIM embeddings |
+| **Data** | SQLite + `sqlite-vec` (PostgreSQL optional), Firebase Firestore, NVIDIA NIM embeddings |
 
 ### Architecture diagrams
 
@@ -56,7 +56,7 @@ AI IDE (Claude/Cursor) → MCP (stdio/SSE) → Platform :3381 → Oracle 26ai + 
 
 - Node.js 20+
 - pnpm 9+ (`corepack enable && corepack prepare pnpm@9 --activate`)
-- Oracle 26ai (Autonomous Database or self-hosted)
+- SQLite + `sqlite-vec` (bundled — no external database server required)
 - Firebase service account (for multi-tenant auth)
 - NVIDIA NIM API key (for embeddings)
 
@@ -72,7 +72,7 @@ pnpm install
 
 ```bash
 cp .env.example .env
-# Edit .env with your Oracle, Firebase, and NVIDIA credentials
+# Edit .env with your Firebase and NVIDIA credentials
 ```
 
 See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) or [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for the full env var reference.
@@ -165,11 +165,10 @@ Full tool reference: [`docs/architecture/mcp.md`](docs/architecture/mcp.md).
 
 ## Known limitations
 
-- **Oracle dependency**: Requires Oracle 26ai with VECTOR support. Not portable to PostgreSQL/MySQL without migration.
+- **SQLite dependency**: Data lives in a local SQLite file (default `./data/codeatlas.db`) with `sqlite-vec` for vector search. Postgres is available as an opt-in backend.
 - **Firebase auth**: Multi-tenant mode requires Firebase Admin SDK + service account. API-key-only mode supported for single-tenant.
 - **NVIDIA embeddings**: Vector search depends on NVIDIA NIM API. Without `NVIDIA_API_KEY`, queries fall back to date-ordered results.
 - **Local indexing**: Pure cloud deployments cannot index local code — run the `codeatlas-ai` client locally to sync AST data.
-- **Oracle Instant Client**: Thick mode requires downloading Oracle Instant Client separately (not bundled due to license).
 - **Dashboard**: Management UI ships separately in `dashboard/` — build and deploy independently.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.

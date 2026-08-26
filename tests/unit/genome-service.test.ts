@@ -1,7 +1,7 @@
 /**
  * Unit tests for GenomeService — CodeAtlas AI DNA Engine
  *
- * Tests all gene lifecycle operations with mocked Oracle DB.
+ * Tests all gene lifecycle operations with a mocked database adapter.
  */
 
 import { test, describe, before, after, beforeEach, mock } from "node:test";
@@ -88,17 +88,6 @@ const mockConnection = {
 const mockPool = {
   getConnection: mock.fn(() => Promise.resolve(mockConnection)),
 };
-
-const oracleMock = {
-  OUT_FORMAT_OBJECT: 4001,
-  CLOB: 2011,
-  createPool: mock.fn(() => Promise.resolve(mockPool)),
-  initOracleClient: mock.fn(),
-  outFormat: undefined as unknown,
-  fetchAsString: [] as number[],
-  default: {},
-};
-safeMockModule("oracledb", oracleMock);
 
 // Mock generateEmbedding
 const mockGenerateEmbedding = mock.fn(async () => {

@@ -19,40 +19,26 @@ describe('Config Environment Utility', () => {
   });
 
   describe('validateEnv()', () => {
-    test('should succeed when all required variables are present', () => {
-      process.env.ORACLE_PASSWORD = 'test_password';
-      process.env.ORACLE_CONN_STRING = 'test_conn_string';
-
+    test('should succeed with default (sqlite) configuration', () => {
+      delete process.env.CODEATLAS_DB_TYPE;
       assert.doesNotThrow(() => validateEnv());
     });
 
-    test('should throw error when ORACLE_PASSWORD is missing', () => {
-      delete process.env.ORACLE_PASSWORD;
-      process.env.ORACLE_CONN_STRING = 'test_conn_string';
-
-      assert.throws(
-        () => validateEnv(),
-        /Missing required env vars: ORACLE_PASSWORD/
-      );
+    test('should succeed when CODEATLAS_DB_TYPE is sqlite', () => {
+      process.env.CODEATLAS_DB_TYPE = 'sqlite';
+      assert.doesNotThrow(() => validateEnv());
     });
 
-    test('should throw error when ORACLE_CONN_STRING is missing', () => {
-      process.env.ORACLE_PASSWORD = 'test_password';
-      delete process.env.ORACLE_CONN_STRING;
-
-      assert.throws(
-        () => validateEnv(),
-        /Missing required env vars: ORACLE_CONN_STRING/
-      );
+    test('should succeed when CODEATLAS_DB_TYPE is postgres', () => {
+      process.env.CODEATLAS_DB_TYPE = 'postgres';
+      assert.doesNotThrow(() => validateEnv());
     });
 
-    test('should list all missing required variables in the error', () => {
-      delete process.env.ORACLE_PASSWORD;
-      delete process.env.ORACLE_CONN_STRING;
-
+    test('should throw error for an unsupported CODEATLAS_DB_TYPE', () => {
+      process.env.CODEATLAS_DB_TYPE = 'oracle';
       assert.throws(
         () => validateEnv(),
-        /Missing required env vars: ORACLE_PASSWORD, ORACLE_CONN_STRING/
+        /Unsupported CODEATLAS_DB_TYPE/
       );
     });
   });

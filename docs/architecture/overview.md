@@ -4,7 +4,7 @@
 
 | Repo | Role |
 |---|---|
-| **codeatlas-platform** | Central API server (Express + MCP SSE) with Oracle 26ai, Firebase, NVIDIA embeddings |
+| **codeatlas-platform** | Central API server (Express + MCP SSE) with SQLite + sqlite-vec, Firebase, NVIDIA embeddings |
 | **codeatlas-mcp-server** | Local-first MCP server for codebase intelligence — AST analysis, dependency graphs, semantic search |
 
 ## Platform Architecture Layers
@@ -25,7 +25,7 @@
 │  scanner/securityScanner                  │
 ├──────────────────────────────────────────┤
 │  Data Layer                               │
-│  database/connection.ts  Oracle 26ai      │
+│  database/connection.ts  SQLite + sqlite-vec      │
 │  Firebase Admin SDK  NVIDIA NIM API       │
 └──────────────────────────────────────────┘
 ```
@@ -34,10 +34,10 @@
 
 | Service | Purpose | External Deps |
 |---|---|---|
-| `dreamingService` | Dream memory CRUD + Oracle queries | Oracle 26ai |
-| `consolidationEngine` | Knowledge graph consolidation | Oracle |
-| `secondBrainService` | Second Brain memory store | Oracle |
-| `genomeService` | Immune system gene store | Oracle |
+| `dreamingService` | Dream memory CRUD + SQLite queries | SQLite + sqlite-vec |
+| `consolidationEngine` | Knowledge graph consolidation | SQLite + sqlite-vec |
+| `secondBrainService` | Second Brain memory store | SQLite + sqlite-vec |
+| `genomeService` | Immune system gene store | SQLite + sqlite-vec |
 | `embeddingService` | NVIDIA vector embeddings | NVIDIA NIM API |
 | `authService` | Firebase auth + API key validation | Firebase |
 | `projectService` | Multi-tenant project management | FS |
@@ -57,11 +57,12 @@
                                             │ MCP (stdio/SSE)
 ┌──────────────────────┐        ┌───────────▼──────────────┐
 │  codeatlas-mcp-server │◄──────►│   codeatlas-platform    │
-│  (AST, graphs, search) │  HTTP  │   (API + Oracle + AI)   │
+│  (AST, graphs, search) │  HTTP  │   (API + SQLite + AI)   │
 └──────────────────────┘        └────┬───────┬─────┬──────┘
                                      │       │     │
                               ┌──────▼┐ ┌───▼──┐ ┌▼──────┐
-                              │Oracle │ │Fire- │ │NVIDIA │
-                              │ 26ai  │ │base  │ │ NIM   │
+                              │SQLite │ │Fire- │ │NVIDIA │
+                              │sqlite-│ │base  │ │ NIM   │
+                              │ vec   │ │      │ │       │
                               └───────┘ └──────┘ └───────┘
 ```

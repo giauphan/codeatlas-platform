@@ -4,9 +4,9 @@ flowchart TB
         IDE["AI IDE (Claude/Cursor)"]
     end
 
-    subgraph Cloud["Oracle Cloud (Singapore)"]
+    subgraph Cloud["Deployment Environment"]
         Platform["codeatlas-platform<br/>Express :3381"]
-        OracleDB["Oracle 26ai<br/>Autonomous DB"]
+        SQLiteDB["SQLite + sqlite-vec<br/>Database"]
         CF["Cloudflare Tunnel"]
     end
 
@@ -18,7 +18,7 @@ flowchart TB
     IDE <-->|"MCP stdio"| MCPSrv
     MCPSrv -->|"HTTP API<br/>CODEATLAS_API_URL"| CF
     CF --> Platform
-    Platform --> OracleDB
+    Platform --> SQLiteDB
     Platform --> FireBase
     Platform --> NVIDIANIM
 

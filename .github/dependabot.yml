@@ -20,9 +20,6 @@ updates:
           - "typescript"
           - "tsx"
           - "@types/*"
-      oracle:
-        patterns:
-          - "oracledb"
       mcp:
         patterns:
           - "@modelcontextprotocol/*"

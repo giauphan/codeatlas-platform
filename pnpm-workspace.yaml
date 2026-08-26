@@ -5,7 +5,6 @@ allowBuilds:
   '@firebase/util': true
   better-sqlite3: true
   esbuild: true
-  oracledb: true
   protobufjs: true
 overrides:
   websocket-driver: "^0.7.5"

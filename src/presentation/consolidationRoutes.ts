@@ -58,18 +58,33 @@ export function mountConsolidationRoutes(app: express.Application): void {
 
       const adapter = await initAdapter();
 
-        const projectFilter = project ? "AND project = :project" : "";
-        const whereClause = `WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter}`;
+        const searchResults = await adapter.searchVector(
+          "codeatlas_concepts",
+          embedding,
+          limit,
+          tenantId,
+          project ? { project } : undefined
+        );
 
-        const binds: Record<string, unknown> = { tenantId: authStorage.getStore()!.uid, limit, queryVector: embedding };
-        if (project) binds.project = project;
+        if (searchResults.length === 0) {
+          res.json({ concepts: [] });
+          return;
+        }
+
+        const ids = searchResults.map((r) => r.id);
+        const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
+        const idBinds = ids.map((_, i) => `:cid${i}`).join(", ");
+        const metaBinds: Record<string, unknown> = { tenantId };
+        ids.forEach((id, i) => { metaBinds[`cid${i}`] = id; });
+
+        const projectFilter = project ? "AND project = :project" : "";
+        if (project) metaBinds.project = project;
 
         const result = await adapter.query(
           `SELECT id, label, description, category, confidence, evidence_count, project
-           FROM codeatlas_concepts ${whereClause}
-           ORDER BY VECTOR_DISTANCE(embedding, :queryVector, COSINE)
-           LIMIT :limit`,
-          binds
+           FROM codeatlas_concepts
+           WHERE tenant_id = :tenantId AND status = 'active' ${projectFilter} AND id IN (${idBinds})`,
+          metaBinds
         );
 
         const concepts = (result || []).map((r: any) => ({
@@ -80,7 +95,10 @@ export function mountConsolidationRoutes(app: express.Application): void {
           confidence: Number(r.confidence),
           evidenceCount: Number(r.evidence_count),
           project: String(r.project || ""),
+          score: scoreMap.get(String(r.id)) ?? 0,
         }));
+
+        concepts.sort((a, b) => b.score - a.score);
 
         res.json({ concepts });
 
@@ -89,7 +107,7 @@ export function mountConsolidationRoutes(app: express.Application): void {
           try {
             const binds = concepts.map(c => ({ id: c.id, tenantId }));
             await adapter.executeMany(
-              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = ${(process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase() === "sqlite" ? "datetime('now')" : "CURRENT_TIMESTAMP"} WHERE id = :id AND tenant_id = :tenantId`,
+              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = datetime('now') WHERE id = :id AND tenant_id = :tenantId`,
               binds
             );
           } catch { /* skip */ }

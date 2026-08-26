@@ -34,8 +34,6 @@ docs/
 !.env.example
 serviceAccountKey.json
 atlas-intelligence-node-firebase-adminsdk-*.json
-wallet/
-instantclient/
 
 # CI / tooling
 .github/

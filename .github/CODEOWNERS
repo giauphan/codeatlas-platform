@@ -11,7 +11,7 @@
 /tsconfig.json              @giauphan
 /scripts/                   @giauphan
 
-# Database layer (Oracle 26ai) — high blast radius
+# Database layer (SQLite + sqlite-vec) — high blast radius
 /src/database/              @giauphan
 /scripts/db-init.ts         @giauphan
 

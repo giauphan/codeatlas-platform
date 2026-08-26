@@ -4,12 +4,11 @@ import * as path from "path";
 import * as fs from "fs";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { initPool, setSessionContext } from "../dist/src/database/connection.js";
-import { logger } from "../dist/src/utils/logger.js";
+import { createDatabaseAdapter } from "../src/database/factory.js";
 
 /**
  * Migrate existing dreams: change tenant_id from 'admin' to the user's actual uid.
- * Resolves uid from CODEATLAS_API_KEY, then updates Oracle.
+ * Resolves uid from CODEATLAS_API_KEY, then updates the CodeAtlas database.
  */
 async function migrateTenant() {
   const apiKey = process.env.CODEATLAS_API_KEY;
@@ -33,15 +32,15 @@ async function migrateTenant() {
   const API_KEY_PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
   const salt = Buffer.from(API_KEY_PEPPER, 'utf8');
   const keyHash = crypto.pbkdf2Sync(apiKey, salt, 100000, 64, 'sha256').toString('hex');
-  const db = getFirestore();
+  const firestore = getFirestore();
 
-  let keysSnapshot = await db.collectionGroup("keys")
+  let keysSnapshot = await firestore.collectionGroup("keys")
     .where("keyHash", "==", keyHash)
     .limit(1)
     .get();
 
   if (keysSnapshot.empty) {
-    keysSnapshot = await db.collectionGroup("keys")
+    keysSnapshot = await firestore.collectionGroup("keys")
       .where("key", "==", apiKey)
       .limit(1)
       .get();
@@ -62,22 +61,13 @@ async function migrateTenant() {
   const uid = userRef.id;
   console.log(`Resolved user uid: ${uid}`);
 
-  // 2. Update Oracle tables
-  const pool = await initPool();
-  const conn = await pool.getConnection();
-  await setSessionContext(conn, uid);
+  // 2. Update database tables
+  const db = createDatabaseAdapter();
+  await db.connect();
 
   try {
-    // ai_dreaming_memory (primary target)
-    const dreamResult = await conn.execute(
-      `UPDATE ai_dreaming_memory SET tenant_id = :p_uid WHERE tenant_id = 'admin'`,
-      { p_uid: uid },
-      { autoCommit: true }
-    );
-    console.log(`ai_dreaming_memory: ${dreamResult.rowsAffected ?? 0} rows updated`);
-
-    // Other tables (best-effort)
     const tables = [
+      "ai_dreaming_memory",
       "codeatlas_concepts",
       "ai_episodic_memory",
       "ai_semantic_memory",
@@ -85,21 +75,19 @@ async function migrateTenant() {
     ];
     for (const table of tables) {
       try {
-        const result = await conn.execute(
-          `UPDATE ${table} SET tenant_id = :p_uid WHERE tenant_id = 'admin'`,
-          { p_uid: uid },
-          { autoCommit: true }
+        const result = await db.execute(
+          `UPDATE ${table} SET tenant_id = :uid WHERE tenant_id = 'admin'`,
+          { uid }
         );
         console.log(`${table}: ${result.rowsAffected ?? 0} rows updated`);
-      } catch (e: any) {
-        console.log(`${table}: skipped (${e.message})`);
+      } catch (e: unknown) {
+        console.log(`${table}: skipped (${e instanceof Error ? e.message : String(e)})`);
       }
     }
 
     console.log("Migration complete");
   } finally {
-    await conn.close();
-    await pool.close(10);
+    await db.disconnect();
   }
 }
 

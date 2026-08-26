@@ -1,6 +1,7 @@
-import { test, describe, beforeEach, afterEach, mock } from 'node:test';
+import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import oracledb from 'oracledb';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 describe('Database Connection', async () => {
   let connectionModule: any;
@@ -10,23 +11,17 @@ describe('Database Connection', async () => {
     originalEnv = process.env;
     process.env = { ...originalEnv };
 
-    process.env.ORACLE_USER = 'TEST_USER';
-    process.env.ORACLE_PASSWORD = 'TEST_PASSWORD';
-    process.env.ORACLE_CONN_STRING = 'TEST_CONN_STRING';
-
-    mock.method(oracledb, 'createPool', async () => {
-      return { _mockPool: true };
-    });
+    process.env.CODEATLAS_DB_TYPE = 'sqlite';
+    process.env.CODEATLAS_SQLITE_PATH = path.join(os.tmpdir(), `codeatlas-conn-${Date.now()}.db`);
 
     // We need to bust the cache to ensure we get a fresh instance of the connection module
-    // which allows us to test the initial `null` state of the pool
+    // which allows us to test the initial `null` state of the adapter
     const cacheBuster = `?update=${Date.now()}`;
     connectionModule = await import(`../../../src/database/connection.ts${cacheBuster}`);
   });
 
   afterEach(() => {
     process.env = originalEnv;
-    mock.restoreAll();
   });
 
   describe('Adapter Pool', () => {

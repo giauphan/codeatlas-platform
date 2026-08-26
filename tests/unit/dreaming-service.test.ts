@@ -82,33 +82,31 @@ const mockPool = {
   getConnection: mock.fn(() => Promise.resolve(mockConnection)),
 };
 
-// Mock oracledb
-const oracleMock = {
-  OUT_FORMAT_OBJECT: 4001,
-  CLOB: 2011,
-  createPool: mock.fn(() => Promise.resolve(mockPool)),
-  initOracleClient: mock.fn(),
-  outFormat: undefined as unknown,
-  fetchAsString: [] as number[],
-  default: {},
-};
-safeMockModule('oracledb', oracleMock);
-
-// Mock database/connection.ts
-const connMock = {
-  initPool: mock.fn(() => Promise.resolve(mockPool)),
-  setSessionContext: mock.fn(() => Promise.resolve()),
-};
-safeMockModule(path.join(srcDir, 'database/connection.js'), connMock);
-
 // Mock database/factory.ts
+type SqlBinds = Record<string, unknown>;
+type SqlRows = Record<string, unknown>[];
+type VectorSearchResult = { id: string; score: number };
+
 const mockDbAdapter = {
-  execute: mock.fn(() => Promise.resolve({ rowsAffected: 1 })),
-  query: mock.fn(() => Promise.resolve([])),
-  searchVector: mock.fn(() => Promise.resolve([
-    { id: 'memory_1', score: 0.9 },
-    { id: 'memory_2', score: 0.8 },
-  ])),
+  execute: mock.fn<(sql: string, binds?: SqlBinds) => Promise<{ rowsAffected: number }>>(
+    () => Promise.resolve({ rowsAffected: 1 }),
+  ),
+  query: mock.fn<(sql: string, binds?: SqlBinds) => Promise<SqlRows>>(
+    () => Promise.resolve([]),
+  ),
+  searchVector: mock.fn<(table: string, vector: number[], limit: number) => Promise<VectorSearchResult[]>>(
+    () => Promise.resolve([
+      { id: 'memory_1', score: 0.9 },
+      { id: 'memory_2', score: 0.8 },
+    ]),
+  ),
+  connect: mock.fn<() => Promise<void>>(() => Promise.resolve()),
+  initializeSchema: mock.fn<() => Promise<void>>(() => Promise.resolve()),
+  checkColumnExists: mock.fn<() => Promise<boolean>>(() => Promise.resolve(true)),
+  disconnect: mock.fn<() => Promise<void>>(() => Promise.resolve()),
+  executeMany: mock.fn<(sql: string, binds: SqlBinds[]) => Promise<{ rowsAffected: number }>>(
+    () => Promise.resolve({ rowsAffected: 1 }),
+  ),
 };
 const factoryMock = {
   createDatabaseAdapter: mock.fn(() => mockDbAdapter),
@@ -116,7 +114,9 @@ const factoryMock = {
 safeMockModule(path.join(srcDir, 'database/factory.js'), factoryMock);
 
 // Mock embeddingService
-const mockGenerateEmbedding = mock.fn(() => Promise.resolve([0.1, 0.2, 0.3]));
+const mockGenerateEmbedding = mock.fn<
+  (text: string, mode?: 'passage' | 'query') => Promise<number[] | null>
+>(() => Promise.resolve([0.1, 0.2, 0.3]));
 const embeddingMock = {
   generateEmbedding: mockGenerateEmbedding,
 };
@@ -144,7 +144,7 @@ const loggerMock = {
 safeMockModule(path.join(srcDir, 'utils/logger.js'), loggerMock);
 
 // ── Import module under test ─────────────────────────────────────────
-const { OracleDreamingService } = await import(
+const { DreamingService } = await import(
   path.join(srcDir, 'services/dreamingService.js')
 );
 
@@ -152,7 +152,7 @@ const { OracleDreamingService } = await import(
 // Tests
 // ═════════════════════════════════════════════════════════════════════
 
-describe('OracleDreamingService', () => {
+describe('DreamingService', () => {
   const _origDbTypeForFile = process.env.CODEATLAS_DB_TYPE;
 
   after(() => {
@@ -161,39 +161,34 @@ describe('OracleDreamingService', () => {
   });
 
   beforeEach(async () => {
-    // Default every test to the Oracle path. CI's SQLite job sets
-    // CODEATLAS_DB_TYPE=sqlite in the environment, which would otherwise
-    // reroute these Oracle-targeted tests through the adapter branch and
-    // break their connection-level assertions. The non-Oracle suite below
-    // overrides this per-test.
-    process.env.CODEATLAS_DB_TYPE = 'oracle';
+    process.env.CODEATLAS_DB_TYPE = 'sqlite';
 
     // Reset all mock call history between tests
-    mockConnection.execute.mock.resetCalls();
-    mockConnection.close.mock.resetCalls();
-    mockPool.getConnection.mock.resetCalls();
     mockDbAdapter.execute.mock.resetCalls();
     mockDbAdapter.query.mock.resetCalls();
     mockDbAdapter.searchVector.mock.resetCalls();
+    mockDbAdapter.connect.mock.resetCalls();
+    mockDbAdapter.initializeSchema.mock.resetCalls();
+    mockDbAdapter.checkColumnExists.mock.resetCalls();
+    mockDbAdapter.disconnect.mock.resetCalls();
     mockGenerateEmbedding.mock.resetCalls();
+    mockGenerateEmbedding.mock.mockImplementation(() => Promise.resolve([0.1, 0.2, 0.3]));
     mockAuthStore.getStore.mock.resetCalls();
     mockAuthStore.run.mock.resetCalls();
     mockLogger.info.mock.resetCalls();
     mockLogger.error.mock.resetCalls();
     mockLogger.warn.mock.resetCalls();
 
-    // Restore initPool to default (success) state
-    const { initPool } = await import(
-      path.join(srcDir, 'database/connection.js')
-    );
-    initPool.mock.resetCalls();
-    initPool.mock.mockImplementation(() => Promise.resolve(mockPool));
-
-    const { setSessionContext } = await import(
-      path.join(srcDir, 'database/connection.js')
-    );
-    setSessionContext.mock.resetCalls();
-    setSessionContext.mock.mockImplementation(() => Promise.resolve());
+    mockDbAdapter.execute.mock.mockImplementation(() => Promise.resolve({ rowsAffected: 1 }));
+    mockDbAdapter.query.mock.mockImplementation(() => Promise.resolve([]));
+    mockDbAdapter.searchVector.mock.mockImplementation(() => Promise.resolve([
+      { id: 'memory_1', score: 0.9 },
+      { id: 'memory_2', score: 0.8 },
+    ]));
+    mockDbAdapter.connect.mock.mockImplementation(() => Promise.resolve());
+    mockDbAdapter.initializeSchema.mock.mockImplementation(() => Promise.resolve());
+    mockDbAdapter.checkColumnExists.mock.mockImplementation(() => Promise.resolve(true));
+    mockDbAdapter.disconnect.mock.mockImplementation(() => Promise.resolve());
   });
 
   // ── saveDreamMemory ────────────────────────────────────────────────
@@ -203,7 +198,7 @@ describe('OracleDreamingService', () => {
         return { rowsAffected: 1 };
       });
 
-      const id = await OracleDreamingService.saveDreamMemory(
+      const id = await DreamingService.saveDreamMemory(
         'test-project', 'session-1', 'KNOWLEDGE', 'This is a long enough test content to pass the forty character noise gate threshold.', 5,
       );
 
@@ -234,7 +229,7 @@ describe('OracleDreamingService', () => {
         return { rowsAffected: 1 };
       });
 
-      const id = await OracleDreamingService.saveDreamMemory(
+      const id = await DreamingService.saveDreamMemory(
         'p2', 's2', 'PREFERENCE', 'no embedding content content that is definitely longer than forty characters to pass noise gate test.', 3,
       );
 
@@ -257,7 +252,7 @@ describe('OracleDreamingService', () => {
       });
 
       await assert.rejects(
-        () => OracleDreamingService.saveDreamMemory(
+        () => DreamingService.saveDreamMemory(
           'p', 's', 'MISTAKE', 'This is a sufficiently long content to pass the noise gate threshold of at least forty characters.', 7,
         ),
         (err: Error) => {
@@ -275,8 +270,8 @@ describe('OracleDreamingService', () => {
         return { rowsAffected: 1 };
       });
 
-      const longSummary = 'This is a detailed summary of the current working session. We implemented context retention across sessions by supporting scope, tags, and related_ids metadata fields in Oracle 26ai database and MCP server.'.repeat(2);
-      const id = await OracleDreamingService.saveDreamMemory(
+      const longSummary = 'This is a detailed summary of the current working session. We implemented context retention across sessions by supporting scope, tags, and related_ids metadata fields in the SQLite database and MCP server.'.repeat(2);
+      const id = await DreamingService.saveDreamMemory(
         'codeatlas-platform', 'session-99', 'SESSION_SUMMARY', longSummary, 8, 'claude-3-5-sonnet',
         'auth/login', ['jwt', 'security'], ['rel-1', 'rel-2']
       );
@@ -292,237 +287,95 @@ describe('OracleDreamingService', () => {
     });
   });
 
-  // ── queryDreamMemories ─────────────────────────────────────────────
+  // ── queryDreamMemories ──────────────────────────────────────────────
   describe('queryDreamMemories()', () => {
     const sampleRows = [
-      {
-        ID: 'mem-1',
-        SESSION_ID: 's1',
-        PROJECT: 'test-project',
-        MEMORY_TYPE: 'KNOWLEDGE',
-        CONTENT: 'Node.js uses event loop',
-        IMPORTANCE: 8,
-        CREATED_AT: new Date('2025-01-01'),
-      },
-      {
-        ID: 'mem-2',
-        SESSION_ID: 's2',
-        PROJECT: 'test-project',
-        MEMORY_TYPE: 'PREFERENCE',
-        CONTENT: 'Use TypeScript strict mode',
-        IMPORTANCE: 5,
-        CREATED_AT: new Date('2025-01-02'),
-      },
+      { id: 'mem-1', session_id: 's1', project: 'test-project', memory_type: 'KNOWLEDGE', content: 'Node.js uses event loop', importance: 8, created_at: new Date('2025-01-01') },
+      { id: 'mem-2', session_id: 's2', project: 'test-project', memory_type: 'PREFERENCE', content: 'Use TypeScript strict mode', importance: 5, created_at: new Date('2025-01-02') },
     ];
 
-    test('returns array of memories', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
-        return { rows: sampleRows };
-      });
-
-      const rows = await OracleDreamingService.queryDreamMemories(
-        'test-project', 'how does Node work?', 10,
-      );
-
-      assert.ok(Array.isArray(rows));
-      assert.strictEqual(rows.length, 2);
+    test('returns adapter query results after vector search', async () => {
+      mockDbAdapter.searchVector.mock.mockImplementation(async () => [
+        { id: 'mem-1', score: 0.9 },
+        { id: 'mem-2', score: 0.8 },
+      ]);
+      mockDbAdapter.query.mock.mockImplementation(async () => sampleRows);
+      const rows = await DreamingService.queryDreamMemories('test-project', 'how does Node work?', 10);
       assert.deepStrictEqual(rows, sampleRows);
-
-      // Should have generated query embedding
-      assert.strictEqual(mockGenerateEmbedding.mock.calls.length, 1);
-      assert.strictEqual(
-        mockGenerateEmbedding.mock.calls[0].arguments[1],
-        'query',
-      );
+      assert.strictEqual(mockGenerateEmbedding.mock.calls[0].arguments[1], 'query');
+      assert.strictEqual(mockDbAdapter.searchVector.mock.calls.length, 1);
+      assert.strictEqual(mockDbAdapter.query.mock.calls.length, 1);
     });
 
-    test('with empty results returns empty array', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
-        return { rows: [] };
-      });
-
-      const rows = await OracleDreamingService.queryDreamMemories(
-        'test-project', 'nothing matches this', 5,
-      );
-
-      assert.ok(Array.isArray(rows));
-      assert.strictEqual(rows.length, 0);
-    });
-
-    test('respects limit parameter', async () => {
+    test('uses LIMIT/OFFSET when no embedding is available', async () => {
       mockGenerateEmbedding.mock.mockImplementationOnce(() => Promise.resolve(null));
-      mockConnection.execute.mock.mockImplementation(async () => {
-        return { rows: sampleRows };
-      });
-
-      const rows = await OracleDreamingService.queryDreamMemories(
-        'test-project', 'search', 3,
-      );
-
-      // Verify the limit was passed to the SQL query
-      const binds = mockConnection.execute.mock.calls[0].arguments[1] as Record<string, unknown>;
+      mockDbAdapter.query.mock.mockImplementation(async () => sampleRows);
+      await DreamingService.queryDreamMemories('test-project', 'search', 3, 2);
+      const [sql, binds] = mockDbAdapter.query.mock.calls[0].arguments as [string, Record<string, unknown>];
+      assert.ok(sql.includes('LIMIT :limit OFFSET :offset'));
       assert.strictEqual(binds.limit, 3);
+      assert.strictEqual(binds.offset, 2);
     });
 
-    test('supports scope, tags and memory_type filtering', async () => {
-      // Setup column existence check to true for TAGS column
-      const origExecute = mockConnection.execute.mock.mockImplementation(async (sql: string) => {
-        if (sql.includes('USER_TAB_COLUMNS')) {
-          return { rows: [{ CNT: 1 }] };
-        }
-        return { rows: sampleRows };
-      });
-
-      const rows = await OracleDreamingService.queryDreamMemories(
-        'test-project', 'query filter', 10, 0, 'SESSION_SUMMARY, KNOWLEDGE', undefined, undefined, undefined, 'auth', ['jwt', 'login']
-      );
-
-      assert.strictEqual(rows.length, 2);
-      // Main query + USER_TAB_COLUMNS check + connection context + bump access count
-      const executeCalls = mockConnection.execute.mock.calls;
-      const mainQueryCall = executeCalls.find(c => (c.arguments[0] as string).includes('FROM ai_dreaming_memory'));
-      assert.ok(mainQueryCall);
-
-      const sql = mainQueryCall.arguments[0] as string;
-      const binds = mainQueryCall.arguments[1] as Record<string, unknown>;
-
-      // Check binds
-      assert.strictEqual(binds.scopeExact, 'auth');
-      assert.strictEqual(binds.scopeLike, 'auth/%');
-      assert.strictEqual(binds.tag_like_0, '%"jwt"%');
-      assert.strictEqual(binds.tag_like_1, '%"login"%');
-      assert.strictEqual(binds.type0, 'SESSION_SUMMARY');
-      assert.strictEqual(binds.type1, 'KNOWLEDGE');
-
-      // Check SQL generated filters
-      assert.ok(sql.includes('scope = :scopeExact OR scope LIKE :scopeLike'));
-      assert.ok(sql.includes('tags LIKE :tag_like_0 OR tags LIKE :tag_like_1'));
-      assert.ok(sql.includes('memory_type IN (:type0, :type1)'));
-    });
-
-    test('with null embedding (no API key) still queries, ordered by date', async () => {
+    test('binds SQLite scope, tags, and memory-type filters', async () => {
       mockGenerateEmbedding.mock.mockImplementation(() => Promise.resolve(null));
-      mockConnection.execute.mock.mockImplementation(async () => {
-        return { rows: sampleRows };
-      });
-
-      const rows = await OracleDreamingService.queryDreamMemories(
-        'test-project', 'some query', 5,
-      );
-
-      assert.ok(Array.isArray(rows));
-      assert.strictEqual(rows.length, 2);
-
-      // When embedding is null, no queryVector bind should be present
-      const binds = mockConnection.execute.mock.calls[0].arguments[1] as Record<string, unknown>;
-      assert.strictEqual(binds.queryVector, undefined);
+      mockDbAdapter.query.mock.mockImplementation(async () => sampleRows);
+      await DreamingService.queryDreamMemories('test-project', 'query filter', 10, 0, 'SESSION_SUMMARY, KNOWLEDGE', undefined, undefined, undefined, 'auth', ['jwt', 'login']);
+      const [sql, binds] = mockDbAdapter.query.mock.calls[0].arguments as [string, Record<string, unknown>];
+      assert.strictEqual(binds.scopeExact, 'auth');
+      assert.strictEqual(binds.tag_like_0, '%"jwt"%');
+      assert.strictEqual(binds.type1, 'KNOWLEDGE');
+      assert.ok(sql.includes('memory_type IN (:type0, :type1)'));
+      assert.ok(!sql.includes('USER_TAB_COLUMNS'));
     });
   });
 
   // ── deleteDreamMemory ──────────────────────────────────────────────
   describe('deleteDreamMemory()', () => {
-    test('with valid existing id returns true', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
-        return { rowsAffected: 1 };
-      });
-
-      const result = await OracleDreamingService.deleteDreamMemory('mem-123');
-
-      assert.strictEqual(result, true);
-
-      // Verify SQL
-      const sql = mockConnection.execute.mock.calls[0].arguments[0] as string;
+    test('returns true when adapter deletes a row', async () => {
+      mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 1 }));
+      assert.strictEqual(await DreamingService.deleteDreamMemory('mem-123'), true);
+      const [sql, binds] = mockDbAdapter.execute.mock.calls[0].arguments as [string, Record<string, unknown>];
       assert.ok(sql.includes('DELETE FROM ai_dreaming_memory'));
-      const binds = mockConnection.execute.mock.calls[0].arguments[1] as Record<string, unknown>;
       assert.strictEqual(binds.id, 'mem-123');
     });
 
-    test('with non-existent id returns false', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
-        return { rowsAffected: 0 };
-      });
-
-      const result = await OracleDreamingService.deleteDreamMemory('nonexistent-id');
-
-      assert.strictEqual(result, false);
+    test('returns false when no row matches', async () => {
+      mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 0 }));
+      assert.strictEqual(await DreamingService.deleteDreamMemory('nonexistent-id'), false);
     });
 
-    test('with DB error throws error', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
-        throw new Error('ORA-00942: table or view does not exist');
-      });
-
-      await assert.rejects(
-        () => OracleDreamingService.deleteDreamMemory('fail-id'),
-        (err: Error) => {
-          assert.ok(err.message.includes('ORA-00942'));
-          return true;
-        },
-      );
-
-      // Connection closed despite error
-      assert.strictEqual(mockConnection.close.mock.calls.length, 1);
+    test('propagates adapter errors', async () => {
+      mockDbAdapter.execute.mock.mockImplementation(async () => { throw new Error('database is locked'); });
+      await assert.rejects(() => DreamingService.deleteDreamMemory('fail-id'), /database is locked/);
     });
   });
 
   // ── initialize ─────────────────────────────────────────────────────
   describe('initialize()', () => {
-    test('creates table if not exists', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
-        return {};
-      });
-
-      await OracleDreamingService.initialize();
-
-      // Should have executed: table creation + 12 column checks + 12 alters + 2 cache checks + concepts + genome + mutations + relationships = 31
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 31);
-      const sql0 = mockConnection.execute.mock.calls[0].arguments[0] as string;
-      assert.ok(sql0.includes('CREATE TABLE ai_dreaming_memory'));
+    test('initializes SQLite schema and caches column availability', async () => {
+      await DreamingService.initialize();
+      assert.strictEqual(mockDbAdapter.connect.mock.calls.length, 1);
+      assert.strictEqual(mockDbAdapter.initializeSchema.mock.calls.length, 1);
+      assert.deepStrictEqual(mockDbAdapter.checkColumnExists.mock.calls.map(call => call.arguments), [
+        ['ai_dreaming_memory', 'content_hash'],
+        ['ai_dreaming_memory', 'status'],
+      ]);
+      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 1);
     });
 
-    test('handles table already existing (ORA-00955 swallowed)', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
-        return {};
-      });
-
-      await OracleDreamingService.initialize();
-
-      // 1 table + 12 column checks + 12 alters + 2 cache checks + concepts + genome + mutations + relationships = 31
-      assert.strictEqual(mockConnection.execute.mock.calls.length, 31);
-    });
-
-    test('throws on initPool failure', async () => {
-      // Override initPool to throw
-      const { initPool } = await import(
-        path.join(srcDir, 'database/connection.js')
-      );
-      initPool.mock.mockImplementation(() => Promise.reject(new Error('Connection refused')));
-
-      await assert.rejects(
-        () => OracleDreamingService.initialize(),
-        (err: Error) => {
-          assert.ok(err.message.includes('Connection refused'));
-          return true;
-        },
-      );
-    });
-
-    test('always closes connection in finally block', async () => {
-      mockConnection.execute.mock.mockImplementation(async () => {
-        return {};
-      });
-
-      await OracleDreamingService.initialize();
-
-      assert.strictEqual(mockConnection.close.mock.calls.length, 1);
+    test('disconnects when schema initialization fails', async () => {
+      mockDbAdapter.initializeSchema.mock.mockImplementation(async () => { throw new Error('schema failure'); });
+      await assert.rejects(() => DreamingService.initialize(), /schema failure/);
+      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 1);
     });
   });
 
   // ── SQLite / Postgres backend (CODEATLAS_DB_TYPE) ───────────────────
   // Guards the migration to SQLite-as-default: these paths must never touch
-  // the Oracle pool, otherwise the UI fails with
-  // "ORACLE_PASSWORD environment variable is required".
-  describe('non-Oracle backends via CODEATLAS_DB_TYPE', () => {
+  // the configured adapter, otherwise the UI fails with
+  // a database configuration error.
+  describe('adapter backends via CODEATLAS_DB_TYPE', () => {
     const origDbType = process.env.CODEATLAS_DB_TYPE;
 
     // Lowercase keys — what SQLite/Postgres drivers actually return
@@ -565,10 +418,6 @@ describe('OracleDreamingService', () => {
       },
     ];
 
-    async function initPoolMock() {
-      const { initPool } = await import(path.join(srcDir, 'database/connection.js'));
-      return initPool;
-    }
 
     afterEach(() => {
       if (origDbType === undefined) delete process.env.CODEATLAS_DB_TYPE;
@@ -589,29 +438,21 @@ describe('OracleDreamingService', () => {
       test(`queryDreamMemories (${dbType}) never calls initPool`, async () => {
         process.env.CODEATLAS_DB_TYPE = dbType;
         mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
-        mockConnection.execute.mock.mockImplementation(async () => {
-          throw new Error('Oracle pool must not be used when CODEATLAS_DB_TYPE=' + dbType);
-        });
 
-        const rows = await OracleDreamingService.queryDreamMemories('test-project', 'how does node work?', 10);
+        const rows = await DreamingService.queryDreamMemories('test-project', 'how does node work?', 10);
 
         assert.strictEqual(rows.length, 2);
-        const initPool = await initPoolMock();
-        assert.strictEqual(initPool.mock.calls.length, 0, 'initPool must not be called');
-        assert.strictEqual(mockPool.getConnection.mock.calls.length, 0);
-        assert.strictEqual(mockConnection.execute.mock.calls.length, 0);
-        assert.strictEqual(mockConnection.close.mock.calls.length, 0);
+        assert.strictEqual(mockDbAdapter.query.mock.calls.length, 1);
       });
 
       test(`deleteDreamMemory (${dbType}) never calls initPool`, async () => {
         process.env.CODEATLAS_DB_TYPE = dbType;
         mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 1 }));
 
-        const deleted = await OracleDreamingService.deleteDreamMemory('memory_1');
+        const deleted = await DreamingService.deleteDreamMemory('memory_1');
 
         assert.strictEqual(deleted, true);
-        const initPool = await initPoolMock();
-        assert.strictEqual(initPool.mock.calls.length, 0, 'initPool must not be called');
+
         assert.strictEqual(mockDbAdapter.execute.mock.calls.length, 1);
 
         const sql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
@@ -626,23 +467,23 @@ describe('OracleDreamingService', () => {
       process.env.CODEATLAS_DB_TYPE = 'sqlite';
       mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 0 }));
 
-      const deleted = await OracleDreamingService.deleteDreamMemory('missing-id');
+      const deleted = await DreamingService.deleteDreamMemory('missing-id');
       assert.strictEqual(deleted, false);
     });
 
-    test('non-vector query (sqlite) uses LIMIT/OFFSET, not Oracle FETCH NEXT', async () => {
+    test('non-vector query (sqlite) uses LIMIT/OFFSET, not FETCH NEXT', async () => {
       process.env.CODEATLAS_DB_TYPE = 'sqlite';
       mockGenerateEmbedding.mock.mockImplementation(() => Promise.resolve(null));
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
 
-      await OracleDreamingService.queryDreamMemories('test-project', 'anything', 7, 14);
+      await DreamingService.queryDreamMemories('test-project', 'anything', 7, 14);
 
       assert.strictEqual(mockDbAdapter.query.mock.calls.length, 1);
       const sql = mockDbAdapter.query.mock.calls[0].arguments[0] as string;
       const binds = mockDbAdapter.query.mock.calls[0].arguments[1] as Record<string, unknown>;
 
       assert.ok(sql.includes('LIMIT :limit OFFSET :offset'), 'must use SQLite pagination syntax');
-      assert.ok(!sql.includes('FETCH NEXT'), 'must not emit Oracle-only FETCH NEXT');
+      assert.ok(!sql.includes('FETCH NEXT'), 'must not emit FETCH NEXT');
       assert.ok(sql.includes('ORDER BY created_at DESC'));
       assert.strictEqual(binds.limit, 7);
       assert.strictEqual(binds.offset, 14);
@@ -654,7 +495,7 @@ describe('OracleDreamingService', () => {
       process.env.CODEATLAS_DB_TYPE = 'sqlite';
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
 
-      await OracleDreamingService.queryDreamMemories('test-project', 'event loop', 10);
+      await DreamingService.queryDreamMemories('test-project', 'event loop', 10);
 
       assert.strictEqual(mockDbAdapter.searchVector.mock.calls.length, 1);
       const sql = mockDbAdapter.query.mock.calls[0].arguments[0] as string;
@@ -673,18 +514,18 @@ describe('OracleDreamingService', () => {
       process.env.CODEATLAS_DB_TYPE = 'sqlite';
       mockDbAdapter.searchVector.mock.mockImplementationOnce(() => Promise.resolve([]));
 
-      const rows = await OracleDreamingService.queryDreamMemories('test-project', 'no match', 10);
+      const rows = await DreamingService.queryDreamMemories('test-project', 'no match', 10);
 
       assert.deepStrictEqual(rows, []);
       assert.strictEqual(mockDbAdapter.query.mock.calls.length, 0);
     });
 
-    test('filters (sqlite) bind scope, tags and memory_type the same as Oracle', async () => {
+    test('filters (sqlite) bind scope, tags and memory_type', async () => {
       process.env.CODEATLAS_DB_TYPE = 'sqlite';
       mockGenerateEmbedding.mock.mockImplementation(() => Promise.resolve(null));
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
 
-      await OracleDreamingService.queryDreamMemories(
+      await DreamingService.queryDreamMemories(
         'test-project', 'filtered', 10, 0,
         'SESSION_SUMMARY, KNOWLEDGE', 'claude', undefined, undefined, 'auth', ['jwt', 'login'],
       );
@@ -701,7 +542,7 @@ describe('OracleDreamingService', () => {
       assert.strictEqual(binds.provider, 'claude');
       assert.ok(sql.includes('memory_type IN (:type0, :type1)'));
       assert.ok(sql.includes("status IN ('active', 'superseded')"));
-      // No USER_TAB_COLUMNS probe — that is Oracle-only metadata
+      // No USER_TAB_COLUMNS probe — SQLite uses pragma table_info
       assert.ok(!sql.includes('USER_TAB_COLUMNS'));
     });
 
@@ -712,7 +553,7 @@ describe('OracleDreamingService', () => {
 
       const start = new Date('2026-01-01');
       const end = new Date('2026-12-31');
-      await OracleDreamingService.queryDreamMemories(
+      await DreamingService.queryDreamMemories(
         'test-project', 'ranged', 10, 0, undefined, undefined, start, end,
       );
 
@@ -733,7 +574,7 @@ describe('OracleDreamingService', () => {
       ]));
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
 
-      const rows = await OracleDreamingService.queryDreamMemories('test-project', 'ranked', 10) as Array<Record<string, unknown>>;
+      const rows = await DreamingService.queryDreamMemories('test-project', 'ranked', 10) as Array<Record<string, unknown>>;
 
       assert.strictEqual(rows.length, 2);
       assert.strictEqual(rows[0].id, 'memory_2', 'higher vector score must sort first');
@@ -751,7 +592,7 @@ describe('OracleDreamingService', () => {
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
 
       // memory_1 has scope 'auth/login'; querying scope 'auth' gives it a 0.15 prefix boost
-      const rows = await OracleDreamingService.queryDreamMemories(
+      const rows = await DreamingService.queryDreamMemories(
         'test-project', 'scoped', 10, 0, undefined, undefined, undefined, undefined, 'auth',
       ) as Array<Record<string, unknown>>;
 
@@ -766,7 +607,7 @@ describe('OracleDreamingService', () => {
       ]));
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
 
-      const rows = await OracleDreamingService.queryDreamMemories(
+      const rows = await DreamingService.queryDreamMemories(
         'test-project', 'paged', 1, 1,
       ) as Array<Record<string, unknown>>;
 
@@ -781,7 +622,7 @@ describe('OracleDreamingService', () => {
         throw new Error('database is locked');
       });
 
-      const rows = await OracleDreamingService.queryDreamMemories('test-project', 'bump fails', 10);
+      const rows = await DreamingService.queryDreamMemories('test-project', 'bump fails', 10);
 
       assert.strictEqual(rows.length, 2, 'results must still be returned');
       assert.ok(
@@ -795,7 +636,7 @@ describe('OracleDreamingService', () => {
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
       mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 1 }));
 
-      await OracleDreamingService.queryDreamMemories('test-project', 'bump ok', 10);
+      await DreamingService.queryDreamMemories('test-project', 'bump ok', 10);
 
       assert.strictEqual(mockDbAdapter.execute.mock.calls.length, 2);
       const sql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
@@ -803,35 +644,24 @@ describe('OracleDreamingService', () => {
       assert.ok(sql.includes('last_accessed_at = CURRENT_TIMESTAMP'));
     });
 
-    test('unset CODEATLAS_DB_TYPE still uses the Oracle pool (no silent regression)', async () => {
+    test('unset and unknown database types use the SQLite adapter', async () => {
       delete process.env.CODEATLAS_DB_TYPE;
-      mockConnection.execute.mock.mockImplementation(async () => ({ rows: [] }));
+      mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
+      await DreamingService.queryDreamMemories('test-project', 'default backend', 10);
+      assert.strictEqual(mockDbAdapter.query.mock.calls.length, 1);
 
-      await OracleDreamingService.queryDreamMemories('test-project', 'oracle default', 10);
-
-      const initPool = await initPoolMock();
-      assert.ok(initPool.mock.calls.length >= 1, 'Oracle remains the default backend');
-      assert.strictEqual(mockDbAdapter.query.mock.calls.length, 0);
-    });
-
-    test('unknown CODEATLAS_DB_TYPE falls back to the Oracle pool', async () => {
       process.env.CODEATLAS_DB_TYPE = 'mysql';
-      mockConnection.execute.mock.mockImplementation(async () => ({ rows: [] }));
-
-      await OracleDreamingService.queryDreamMemories('test-project', 'unknown backend', 10);
-
-      const initPool = await initPoolMock();
-      assert.ok(initPool.mock.calls.length >= 1);
+      mockDbAdapter.query.mock.resetCalls();
+      await DreamingService.queryDreamMemories('test-project', 'unknown backend', 10);
+      assert.strictEqual(mockDbAdapter.query.mock.calls.length, 1);
     });
 
     test('CODEATLAS_DB_TYPE is case-insensitive', async () => {
       process.env.CODEATLAS_DB_TYPE = 'SQLite';
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
 
-      await OracleDreamingService.queryDreamMemories('test-project', 'mixed case', 10);
+      await DreamingService.queryDreamMemories('test-project', 'mixed case', 10);
 
-      const initPool = await initPoolMock();
-      assert.strictEqual(initPool.mock.calls.length, 0);
       assert.strictEqual(mockDbAdapter.query.mock.calls.length, 1);
     });
 
@@ -878,7 +708,7 @@ describe('OracleDreamingService', () => {
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
       mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 1 }));
 
-      const rows = await OracleDreamingService.queryDreamMemories('p', 'some task', 10);
+      const rows = await DreamingService.queryDreamMemories('p', 'some task', 10);
 
       assert.equal(rows.length, 1);
       assert.equal(rows[0].id, '2');
@@ -897,7 +727,7 @@ describe('OracleDreamingService', () => {
       const origMinScore = process.env.CODEATLAS_DREAM_MIN_SCORE;
       process.env.CODEATLAS_DREAM_MIN_SCORE = '0.8';
       try {
-        const rows = await OracleDreamingService.queryDreamMemories('test-project', 'event loop', 10);
+        const rows = await DreamingService.queryDreamMemories('test-project', 'event loop', 10);
         assert.equal(rows.length, 1, 'only the high-score dream survives the relevance gate');
         assert.equal(rows[0].id, 'memory_1');
       } finally {
@@ -918,7 +748,7 @@ describe('OracleDreamingService', () => {
       const origMinScore = process.env.CODEATLAS_DREAM_MIN_SCORE;
       delete process.env.CODEATLAS_DREAM_MIN_SCORE;
       try {
-        const rows = await OracleDreamingService.queryDreamMemories('test-project', 'event loop', 10);
+        const rows = await DreamingService.queryDreamMemories('test-project', 'event loop', 10);
         assert.equal(rows.length, 2, 'no relevance floor means both dreams are returned');
       } finally {
         if (origMinScore === undefined) delete process.env.CODEATLAS_DREAM_MIN_SCORE;
@@ -930,22 +760,22 @@ describe('OracleDreamingService', () => {
 
 describe('noise blocklist save-gate', () => {
   test('blocks english word-choice content', () => {
-    const r = OracleDreamingService.checkNoise('KNOWLEDGE', 'Khi nào dùng raining and khi dùng rainy? Trong bài nói raining (adj)', 6);
+    const r = DreamingService.checkNoise('KNOWLEDGE', 'Khi nào dùng raining and khi dùng rainy? Trong bài nói raining (adj)', 6);
     assert.equal(r.isNoise, true);
   });
 
   test('blocks shopping list content with valid length/importance', () => {
-    const r = OracleDreamingService.checkNoise('KNOWLEDGE', 'write a shopping list before going to the store and buy low-fat milk and plain yogurt', 5);
+    const r = DreamingService.checkNoise('KNOWLEDGE', 'write a shopping list before going to the store and buy low-fat milk and plain yogurt', 5);
     assert.equal(r.isNoise, true);
   });
 
   test('blocks scheduler retry content', () => {
-    const r = OracleDreamingService.checkNoise('KNOWLEDGE', '`--retry-failed` for YouTube and clear the stuck `scheduling` records for IG/FB', 6);
+    const r = DreamingService.checkNoise('KNOWLEDGE', '`--retry-failed` for YouTube and clear the stuck `scheduling` records for IG/FB', 6);
     assert.equal(r.isNoise, true);
   });
 
   test('keeps genuine code knowledge', () => {
-    const r = OracleDreamingService.checkNoise('KNOWLEDGE', 'Using a connection pool with initPool() avoids ORA-00001 collisions when upserting dream memories in Oracle', 8);
+    const r = DreamingService.checkNoise('KNOWLEDGE', 'Using a connection pool with initPool() avoids unique-constraint collisions when upserting dream memories', 8);
     assert.equal(r.isNoise, false);
   });
 });

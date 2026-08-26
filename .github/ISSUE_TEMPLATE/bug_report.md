@@ -30,7 +30,7 @@ assignees: []
 - Node.js version: <!-- `node --version` -->
 - pnpm version: <!-- `pnpm --version` -->
 - Operating system: <!-- e.g., Ubuntu 22.04, macOS 14 -->
-- Oracle database version:
+- Database backend: <!-- sqlite (default) | postgres -->
 - Deployment mode: <!-- stdio | SSE | Docker | PM2 | systemd -->
 - Multi-tenant: <!-- true | false -->
 

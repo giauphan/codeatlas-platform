@@ -16,8 +16,6 @@ pnpm-debug.log*
 !.env.example
 serviceAccountKey.json
 atlas-intelligence-node-firebase-adminsdk-*.json
-wallet/
-instantclient/
 
 # AI tool configs (may contain local paths or tokens)
 .gemini/

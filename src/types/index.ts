@@ -85,7 +85,7 @@ export interface InitialLoadData {
   initialNodeLimit: number;
 }
 
-// --- Oracle Memory Service Types ---
+// --- Memory Service Types ---
 
 export interface GraphEntity {
   id: string;

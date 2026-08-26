@@ -90,7 +90,7 @@ describe('SQLiteAdapter', () => {
     await adapter.connect();
     await adapter.initializeSchema();
 
-    // Mirrors OracleDreamingService.saveDreamMemory's SQLite path: many named binds,
+    // Mirrors DreamingService.saveDreamMemory's SQLite path: many named binds,
     // some reused across the ON CONFLICT clause. Previously threw
     // "Too many parameter values were provided" when binds were spread positionally.
     const embedding = new Uint8Array(new Float32Array([0.1, 0.2, 0.3]).buffer);
@@ -182,7 +182,7 @@ describe('SQLiteAdapter', () => {
     assert.ok(Array.isArray(circular));
   });
 
-  // These exercise the exact SQL shapes OracleDreamingService emits on the
+  // These exercise the exact SQL shapes DreamingService emits on the
   // SQLite path, against a real in-memory DB — the migration to SQLite-default
   // must keep query/delete working end-to-end, not just in mocks.
   test('dream-memory query: named binds with LIMIT/OFFSET pagination', async () => {

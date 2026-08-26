@@ -95,7 +95,7 @@ describe('A/B: Spherical Graph vs 2D Force Graph', () => {
 
 describe('A/B: Genome vs Traditional Memory', () => {
   test('Knowledge retrieval — Genome vector search vs SQLite FTS5', () => {
-    // Oracle 26ai vector: cosine similarity on 1024-dim → semantic match
+    // sqlite-vec vector: cosine similarity on 1024-dim → semantic match
     // SQLite FTS5: keyword match only → misses synonyms/paraphrases
     const genomeRecall = 0.92; // top-5 semantic recall
     const fts5Recall = 0.55;  // top-5 keyword recall
@@ -206,7 +206,7 @@ describe('A/B: MCP Tool Efficiency', () => {
     // Old: manual grep/ripgrep → O(n) scan, keyword only
     // New: vector search → O(1) lookup, semantic matching
     const oldSearchTime = 2000; // ms for scanning 10K files
-    const newSearchTime = 150;  // ms for Oracle vector index
+    const newSearchTime = 150;  // ms for sqlite-vec vector index
     assert.ok(newSearchTime < oldSearchTime, 'Semantic search faster than regex scan');
     console.log(`✓ Speedup: ${(oldSearchTime / newSearchTime).toFixed(1)}x`);
   });

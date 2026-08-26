@@ -69,7 +69,7 @@ async function seed() {
         session_id: randomUUID(),
         project: projectId,
         memory_type: "SESSION_SUMMARY",
-        content: "Implemented database abstraction layer to support SQLite and Postgres alongside Oracle.",
+        content: "Implemented database abstraction layer with SQLite + sqlite-vec as the default backend and optional Postgres.",
         content_hash: "a1b2c3d4e5f6",
         importance: 0.9,
         confidence: 0.95,
@@ -122,9 +122,9 @@ async function seed() {
       {
         id: randomUUID(),
         name: "Database Abstraction Layer",
-        description: "Multi-DB adapter pattern to support Oracle, SQLite, and Postgres.",
-        problem: "Hard coupling to Oracle 26ai makes local development impossible.",
-        solution: "Implemented IDatabaseAdapter interface with OracleAdapter and SQLiteAdapter.",
+        description: "Multi-DB adapter pattern with SQLite + sqlite-vec as default and optional Postgres.",
+        problem: "Coupling to an external cloud database made local development hard.",
+        solution: "Implemented IDatabaseAdapter interface with SQLiteAdapter and PostgresAdapter.",
         architecture: "Adapter pattern with factory for runtime DB selection.",
         category: "refactor",
         project: projectId,
@@ -187,7 +187,7 @@ async function seed() {
         entity_type: "interface",
         entity_name: "IDatabaseAdapter",
         file_path: "src/database/adapters/interface.ts",
-        content: "Database adapter interface for multi-DB support (Oracle, SQLite, Postgres).",
+        content: "Database adapter interface for multi-DB support (SQLite default, Postgres optional).",
         tenant_id: tenantId
       }
     ];

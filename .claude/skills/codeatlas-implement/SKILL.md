@@ -10,7 +10,7 @@ description: Implement a CodeAtlas change from discovery through tests and verif
 3. Read related source, dependencies, and tests.
 4. Choose the smallest change that satisfies the request.
 5. Keep HTTP/MCP code in `src/presentation`, business logic in `src/services`, and persistence in `src/database` or repositories.
-6. Use SQLite + `sqlite-vec` as default behavior. Do not make Oracle or PostgreSQL required for local work.
+6. Use SQLite + `sqlite-vec` as default behavior. Do not make PostgreSQL required for local work.
 7. Add regression coverage for changed behavior.
 8. Run:
 
