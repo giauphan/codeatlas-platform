@@ -13,7 +13,7 @@
   "dependencies": {
     "3d-force-graph": "^1.80.0",
     "clsx": "^2.1.1",
-    "firebase": "^12.17.1",
+    "firebase": "^12.18.0",
     "force-graph": "^1.51.4",
     "framer-motion": "^13.1.0",
     "idb": "^8.0.3",
