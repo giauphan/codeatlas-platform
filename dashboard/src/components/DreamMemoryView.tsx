@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
-import { FOCUS_RING_CLASS, DREAM_CONFIG_LOADING_BUTTON_STYLE } from '../lib/constants';
+import {
+  DREAM_CONFIG_LOADING_BUTTON_STYLE,
+  DREAM_CONFIG_RUN_BUTTON_STYLE,
+  FOCUS_RING_CLASS,
+} from '../lib/constants';
 
 interface DreamConfig {
   dreams_schedule: string;
@@ -93,8 +97,10 @@ export function DreamMemoryView() {
       const result = await resp.json();
       setDreamConfig(result.settings);
       setDreamConfig(result.settings);
-    } catch (err: any) {
-      setConfigError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setConfigStatus(null);
+      setConfigError(message);
     } finally {
       setSavingConfig(false);
     }
@@ -112,10 +118,12 @@ export function DreamMemoryView() {
         body: JSON.stringify({ provider: tempProvider }),
       });
       if (!resp.ok) throw new Error(`Run failed (HTTP ${resp.status})`);
+      setConfigError(null);
       setConfigStatus('Daily dream generation triggered successfully.');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('Failed to run daily dreams:', err);
+      setConfigStatus(null);
       setConfigError(`Failed to run daily dreams: ${message}`);
     } finally {
       setRunningDailyDreams(false);
@@ -345,7 +353,7 @@ export function DreamMemoryView() {
           <button onClick={saveDreamConfig} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={DREAM_CONFIG_LOADING_BUTTON_STYLE}>
             {savingConfig ? (<><Loader2 className="animate-spin" size={14} /> Saving...</>) : 'Save Config'}
           </button>
-          <button onClick={runDailyDreamsNow} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={{ ...DREAM_CONFIG_LOADING_BUTTON_STYLE, background: 'var(--primary-neon)', color: '#000' }}>
+          <button onClick={runDailyDreamsNow} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={DREAM_CONFIG_RUN_BUTTON_STYLE}>
             {runningDailyDreams ? (<><Loader2 className="animate-spin" size={14} /> Running...</>) : 'Run Now'}
           </button>
         </div>
