@@ -774,7 +774,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
               searchDirs.push(path.join(userDir, p.name));
             }
           }
-        } catch { /* skip */ }
+        } catch { /* Skip non-accessible directories */ }
       }
     }
 
