@@ -760,7 +760,6 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
 export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: string; dir: string; analysisPath: string; modifiedAt: Date }[]> {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
   const searchDirs: string[] = [];
-  const followSymlinks = process.env.CODEATLAS_FOLLOW_SYMLINKS === "true";
 
   // Multi-Tenant Isolation
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
@@ -778,12 +777,12 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           // ⚡ Bolt: Using { withFileTypes: true } to get fs.Dirent objects directly from readdir,
           // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
           const userProjects = await fs.promises.readdir(userDir, { withFileTypes: true });
-          for (const p of userProjects) {
-            if (p.isDirectory() && (followSymlinks || !p.isSymbolicLink())) {
+          userProjects.forEach((p) => {
+            if (p.isDirectory()) {
               searchDirs.push(path.join(userDir, p.name));
             }
-          }
-        } catch { /* Skip non-accessible directories */ }
+          });
+        } catch { /* skip */ }
       }
     }
 
@@ -807,15 +806,15 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
             await Promise.all(chunk.map(async (t) => {
               if (t.name === tenantId) return;
               const tDir = path.join(tenantRoot, t.name);
-              if (t.isDirectory() && (followSymlinks || !t.isSymbolicLink())) {
+              if (t.isDirectory()) {
                 try {
-                  const teamProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
-                  for (const p of teamProjects) {
-                    if (p.isDirectory() && (followSymlinks || !p.isSymbolicLink())) {
+                  const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
+                  tProjects.forEach((p) => {
+                    if (p.isDirectory()) {
                       searchDirs.push(path.join(tDir, p.name));
                     }
-                  }
-                } catch { /* Skip non-accessible directories */ }
+                  });
+                } catch { /* skip */ }
               }
             }));
           }
@@ -843,13 +842,13 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     const projectsDir = path.join(process.cwd(), "projects");
     if (await fileExists(projectsDir)) {
       try {
-        const subDirectories = await fs.promises.readdir(projectsDir, { withFileTypes: true });
-        for (const p of subDirectories) {
-          if (p.isDirectory() && (followSymlinks || !p.isSymbolicLink())) {
+        const subDirs = await fs.promises.readdir(projectsDir, { withFileTypes: true });
+        subDirs.forEach((p) => {
+          if (p.isDirectory()) {
             searchDirs.push(path.join(projectsDir, p.name));
           }
-        }
-      } catch { /* Skip non-accessible directories */ }
+        });
+      } catch { /* skip */ }
     }
 
     // Load globally registered projects
