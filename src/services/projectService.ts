@@ -553,9 +553,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
               searchDirs.push(path.join(userDir, p.name));
             }
           }
-        } catch (err: unknown) {
-          logger.warn(`[Project-Discovery] Skipped non-accessible directory ${userDir}: ${extractErrorMessage(err)}`);
-        }
+        } catch { /* Skip non-accessible directories */ }
       }
     }
 
@@ -583,9 +581,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
                     searchDirs.push(path.join(tDir, p.name));
                   }
                 }
-              } catch (err: unknown) {
-                logger.warn(`[Project-Discovery] Skipped non-accessible directory ${tDir}: ${extractErrorMessage(err)}`);
-              }
+              } catch { /* Skip non-accessible directories */ }
             }
           }
         } catch { /* skip */ }
@@ -618,9 +614,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
             searchDirs.push(path.join(projectsDir, p.name));
           }
         }
-      } catch (err: unknown) {
-        logger.warn(`[Project-Discovery] Skipped non-accessible directory ${projectsDir}: ${extractErrorMessage(err)}`);
-      }
+      } catch { /* Skip non-accessible directories */ }
     }
 
     // Load globally registered projects
