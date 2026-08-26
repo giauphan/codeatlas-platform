@@ -347,4 +347,128 @@ describe('DreamMemoryView', () => {
       expect(screen.getByText('Importance: 3/10')).toBeTruthy();
     });
   });
+
+  function openConfigPanel() {
+    const configBtns = screen.getAllByRole('button').filter(b => b.textContent?.includes('Config'));
+    fireEvent.click(configBtns[0]);
+  }
+
+  it('shows Running... and disables both config buttons while daily dreams run', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    let resolveRun: ((value: { ok: boolean; json: () => Promise<Record<string, never>> }) => void) | undefined;
+    const runPromise = new Promise<{ ok: boolean; json: () => Promise<Record<string, never>> }>((resolve) => {
+      resolveRun = resolve;
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/settings/cron')) {
+        return { ok: true, json: () => Promise.resolve(DREAM_CONFIG) };
+      }
+      if (typeof url === 'string' && url.includes('/api/dreams/generate-daily-dreams')) {
+        return runPromise;
+      }
+      return { ok: true, json: () => Promise.resolve(MOCK_DREAMS) };
+    });
+
+    render(<DreamMemoryView />);
+    await waitFor(() => {
+      expect(screen.getByText('The fix is to use strict equality operator instead of loose comparison')).toBeTruthy();
+    });
+
+    openConfigPanel();
+    const runNow = await screen.findByRole('button', { name: 'Run Now' });
+    const saveConfig = screen.getByRole('button', { name: 'Save Config' });
+    fireEvent.click(runNow);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Running/ })).toBeDisabled();
+      expect(saveConfig).toBeDisabled();
+    });
+
+    resolveRun?.({ ok: true, json: () => Promise.resolve({}) });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Run Now' })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Save Config' })).not.toBeDisabled();
+      expect(screen.getByText('Daily dream generation triggered successfully.')).toBeTruthy();
+    });
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('saves config successfully and clears loading state', async () => {
+    mockFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/api/settings/cron')) {
+        if (options?.method === 'PUT') {
+          return { ok: true, json: () => Promise.resolve({ settings: DREAM_CONFIG }) };
+        }
+        return { ok: true, json: () => Promise.resolve(DREAM_CONFIG) };
+      }
+      return { ok: true, json: () => Promise.resolve(MOCK_DREAMS) };
+    });
+
+    render(<DreamMemoryView />);
+    await waitFor(() => {
+      expect(screen.getByText('The fix is to use strict equality operator instead of loose comparison')).toBeTruthy();
+    });
+
+    openConfigPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'Save Config' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save Config' })).not.toBeDisabled();
+    });
+  });
+
+  it('surfaces Save Config failures in the config panel', async () => {
+    mockFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/api/settings/cron')) {
+        if (options?.method === 'PUT') {
+          return { ok: false, status: 500, json: () => Promise.resolve({ error: 'settings unavailable' }) };
+        }
+        return { ok: true, json: () => Promise.resolve(DREAM_CONFIG) };
+      }
+      return { ok: true, json: () => Promise.resolve(MOCK_DREAMS) };
+    });
+
+    render(<DreamMemoryView />);
+    await waitFor(() => {
+      expect(screen.getByText('The fix is to use strict equality operator instead of loose comparison')).toBeTruthy();
+    });
+
+    openConfigPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'Save Config' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('settings unavailable');
+    expect(screen.getByRole('button', { name: 'Save Config' })).not.toBeDisabled();
+  });
+
+  it('surfaces Run Now failures in the config panel instead of alert', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/settings/cron')) {
+        return { ok: true, json: () => Promise.resolve(DREAM_CONFIG) };
+      }
+      if (typeof url === 'string' && url.includes('/api/dreams/generate-daily-dreams')) {
+        throw new Error('upstream unavailable');
+      }
+      return { ok: true, json: () => Promise.resolve(MOCK_DREAMS) };
+    });
+
+    render(<DreamMemoryView />);
+    await waitFor(() => {
+      expect(screen.getByText('The fix is to use strict equality operator instead of loose comparison')).toBeTruthy();
+    });
+
+    openConfigPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'Run Now' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to run daily dreams: upstream unavailable');
+    expect(consoleError).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Running/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Run Now' })).not.toBeDisabled();
+
+    consoleError.mockRestore();
+  });
 });
