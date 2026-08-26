@@ -81,6 +81,7 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     process.env.CODEATLAS_DB_TYPE = 'sqlite';
     mockDbAdapter.query.mock.resetCalls();
     mockDbAdapter.execute.mock.resetCalls();
+    mockDbAdapter.executeMany.mock.resetCalls();
   });
 
   afterEach(() => {
@@ -98,8 +99,8 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
 
     await (consolidationEngine as any).scoreConcepts('test-proj');
 
-    assert.ok(mockDbAdapter.execute.mock.calls.length > 0);
-    const sql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
+    assert.ok(mockDbAdapter.executeMany.mock.calls.length > 0);
+    const sql = mockDbAdapter.executeMany.mock.calls[0].arguments[0] as string;
     assert.ok(sql.includes("datetime('now')"), 'SQL should use datetime("now") for SQLite');
   });
 

@@ -389,7 +389,7 @@ export class ConsolidationEngine {
 
       const rows = await db.query<any[]>(sql, binds);
 
-      let updated = 0;
+      const bindsBatch: Record<string, unknown>[] = [];
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
@@ -399,14 +399,23 @@ export class ConsolidationEngine {
         const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
 
         if (Math.abs(newConf - currentConf) > 0.01) {
-          const updateSql = `
-            UPDATE codeatlas_concepts
-            SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
-            WHERE id = :id AND tenant_id = :tenantId
-          `;
-          await db.execute(updateSql, { conf: newConf, id, tenantId });
-          updated++;
+          bindsBatch.push({ conf: newConf, id, tenantId });
         }
+      }
+
+      let updated = 0;
+      if (bindsBatch.length > 0) {
+        // ⚡ Bolt: Batch database operations using executeMany to avoid N+1 query problem
+        const updateSql = `
+          UPDATE codeatlas_concepts
+          SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
+          WHERE id = :id AND tenant_id = :tenantId
+        `;
+        await db.executeMany(updateSql, bindsBatch);
+
+        // Note: we're ignoring batchErrors since the adapter's executeMany behavior
+        // doesn't inherently return batchErrors outside of oracle, but this protects the batch.
+        updated = bindsBatch.length;
       }
 
       logger.info(`[Consolidation] Scored ${rows.length} concepts, updated ${updated}`);
