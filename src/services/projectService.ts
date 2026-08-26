@@ -553,7 +553,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
               searchDirs.push(path.join(userDir, p.name));
             }
           }
-        } catch { /* skip */ }
+        } catch { /* Skip non-accessible directories */ }
       }
     }
 
@@ -800,13 +800,13 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
               const tDir = path.join(tenantRoot, t.name);
               if (t.isDirectory()) {
                 try {
-                  const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
-                  for (const p of tProjects) {
+                  const teamProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
+                  for (const p of teamProjects) {
                     if (p.isDirectory()) {
                       searchDirs.push(path.join(tDir, p.name));
                     }
                   }
-                } catch { /* skip */ }
+                } catch { /* Skip non-accessible directories */ }
               }
             }));
           }
@@ -840,7 +840,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
             searchDirs.push(path.join(projectsDir, p.name));
           }
         }
-      } catch { /* skip */ }
+      } catch { /* Skip non-accessible directories */ }
     }
 
     // Load globally registered projects
