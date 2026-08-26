@@ -531,6 +531,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
 export function discoverProjects(tenantId?: string): { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
   const searchDirs: string[] = [];
+  const followSymlinks = process.env.CODEATLAS_FOLLOW_SYMLINKS === "true";
 
   // Multi-Tenant Isolation
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
@@ -549,7 +550,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
           // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
           const userProjects = fs.readdirSync(userDir, { withFileTypes: true });
           for (const p of userProjects) {
-            if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
+            if (p.isDirectory() && (followSymlinks || !p.isSymbolicLink())) {
               searchDirs.push(path.join(userDir, p.name));
             }
           }
@@ -575,11 +576,11 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
           for (const t of tenants) {
             if (t.name === tenantId) continue;
             const tDir = path.join(tenantRoot, t.name);
-            if (t.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !t.isSymbolicLink())) {
+            if (t.isDirectory() && (followSymlinks || !t.isSymbolicLink())) {
               try {
                 const tProjects = fs.readdirSync(tDir, { withFileTypes: true });
                 for (const p of tProjects) {
-                  if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
+                  if (p.isDirectory() && (followSymlinks || !p.isSymbolicLink())) {
                     searchDirs.push(path.join(tDir, p.name));
                   }
                 }
@@ -614,7 +615,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       try {
         const subDirs = fs.readdirSync(projectsDir, { withFileTypes: true });
         for (const p of subDirs) {
-          if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
+          if (p.isDirectory() && (followSymlinks || !p.isSymbolicLink())) {
             searchDirs.push(path.join(projectsDir, p.name));
           }
         }
@@ -760,6 +761,7 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
 export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: string; dir: string; analysisPath: string; modifiedAt: Date }[]> {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
   const searchDirs: string[] = [];
+  const followSymlinks = process.env.CODEATLAS_FOLLOW_SYMLINKS === "true";
 
   // Multi-Tenant Isolation
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
@@ -778,7 +780,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
           const userProjects = await fs.promises.readdir(userDir, { withFileTypes: true });
           for (const p of userProjects) {
-            if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
+            if (p.isDirectory() && (followSymlinks || !p.isSymbolicLink())) {
               searchDirs.push(path.join(userDir, p.name));
             }
           }
@@ -808,11 +810,11 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
             await Promise.all(chunk.map(async (t) => {
               if (t.name === tenantId) return;
               const tDir = path.join(tenantRoot, t.name);
-              if (t.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !t.isSymbolicLink())) {
+              if (t.isDirectory() && (followSymlinks || !t.isSymbolicLink())) {
                 try {
                   const teamProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
                   for (const p of teamProjects) {
-                    if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
+                    if (p.isDirectory() && (followSymlinks || !p.isSymbolicLink())) {
                       searchDirs.push(path.join(tDir, p.name));
                     }
                   }
@@ -848,7 +850,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       try {
         const subDirectories = await fs.promises.readdir(projectsDir, { withFileTypes: true });
         for (const p of subDirectories) {
-          if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
+          if (p.isDirectory() && (followSymlinks || !p.isSymbolicLink())) {
             searchDirs.push(path.join(projectsDir, p.name));
           }
         }
