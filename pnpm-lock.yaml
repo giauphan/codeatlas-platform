@@ -95,8 +95,8 @@ importers:
         specifier: ^8.13.0
         version: 8.23.0
       pgvector:
-        specifier: ^0.1.8
-        version: 0.1.8
+        specifier: ^0.3.0
+        version: 0.3.0
       playwright:
         specifier: ^1.61.1
         version: 1.62.1
@@ -2463,9 +2463,9 @@ packages:
   pgpass@1.0.5:
     resolution: {integrity: sha512-FdW9r/jQZhSeohs1Z3sI1yxFQNFvMcnmfuj4WBMUTxOrAyLMaTcE1aAMBiTlbMNaXvBCQuVi0R7hd8udDSP7ug==}
 
-  pgvector@0.1.8:
-    resolution: {integrity: sha512-mD6aw+XYJrsuLl3Y8s8gHDDfOZQ9ERtfQPdhvjOrC7eOTM7b6sNkxeZxBhHwUdXMfHmyGWIbwU0QbmSnn7pPmg==}
-    engines: {node: '>= 12'}
+  pgvector@0.3.0:
+    resolution: {integrity: sha512-+t7qcQD2us8fO8YIq/3lA0gUrD+bVO70MG1MhcDcxJz/OlRGGIIHzFq/4x57Vn/LpzX5wFdfOTLQp9QMPd4ljQ==}
+    engines: {node: '>=22'}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -5497,7 +5497,7 @@ snapshots:
     dependencies:
       split2: 4.2.0
 
-  pgvector@0.1.8: {}
+  pgvector@0.3.0: {}
 
   picocolors@1.1.1: {}
 
