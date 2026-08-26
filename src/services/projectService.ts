@@ -769,11 +769,11 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           // ⚡ Bolt: Using { withFileTypes: true } to get fs.Dirent objects directly from readdir,
           // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
           const userProjects = await fs.promises.readdir(userDir, { withFileTypes: true });
-          userProjects.forEach((p) => {
+          for (const p of userProjects) {
             if (p.isDirectory()) {
               searchDirs.push(path.join(userDir, p.name));
             }
-          });
+          }
         } catch { /* skip */ }
       }
     }
@@ -801,11 +801,11 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
               if (t.isDirectory()) {
                 try {
                   const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
-                  tProjects.forEach((p) => {
+                  for (const p of tProjects) {
                     if (p.isDirectory()) {
                       searchDirs.push(path.join(tDir, p.name));
                     }
-                  });
+                  }
                 } catch { /* skip */ }
               }
             }));
@@ -835,11 +835,11 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
     if (await fileExists(projectsDir)) {
       try {
         const subDirs = await fs.promises.readdir(projectsDir, { withFileTypes: true });
-        subDirs.forEach((p) => {
+        for (const p of subDirs) {
           if (p.isDirectory()) {
             searchDirs.push(path.join(projectsDir, p.name));
           }
-        });
+        }
       } catch { /* skip */ }
     }
 
