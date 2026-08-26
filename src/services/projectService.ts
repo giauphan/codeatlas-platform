@@ -15,6 +15,18 @@ export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
 }
 
+
+/** Helper to retrieve boolean environment variables */
+function getEnvVar(key: string): boolean {
+  return process.env[key]?.toLowerCase() === "true";
+}
+
+/** Check if a directory entry is valid, conditionally following symlinks */
+function isValidDirectory(entry: fs.Dirent): boolean {
+  const followSymlinks = getEnvVar("CODEATLAS_FOLLOW_SYMLINKS");
+  return entry.isDirectory() && (followSymlinks || !entry.isSymbolicLink());
+}
+
 /** Helper to format error messages robustly */
 function extractErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -531,10 +543,6 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
 export function discoverProjects(tenantId?: string): { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
   const searchDirs: string[] = [];
-  const followSymlinks = process.env.CODEATLAS_FOLLOW_SYMLINKS?.toLowerCase() === "true";
-
-  const isValidDirectory = (entry: fs.Dirent) => entry.isDirectory() && (followSymlinks || !entry.isSymbolicLink());
-
   // Multi-Tenant Isolation
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
     const auth = authStorage.getStore();
@@ -757,8 +765,6 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
 export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: string; dir: string; analysisPath: string; modifiedAt: Date }[]> {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
   const searchDirs: string[] = [];
-  const followSymlinks = process.env.CODEATLAS_FOLLOW_SYMLINKS?.toLowerCase() === "true";
-
   // Multi-Tenant Isolation
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
     const auth = authStorage.getStore();
