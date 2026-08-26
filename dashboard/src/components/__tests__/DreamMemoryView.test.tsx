@@ -396,6 +396,53 @@ describe('DreamMemoryView', () => {
     alertSpy.mockRestore();
   });
 
+  it('saves config successfully and clears loading state', async () => {
+    mockFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/api/settings/cron')) {
+        if (options?.method === 'PUT') {
+          return { ok: true, json: () => Promise.resolve({ settings: DREAM_CONFIG }) };
+        }
+        return { ok: true, json: () => Promise.resolve(DREAM_CONFIG) };
+      }
+      return { ok: true, json: () => Promise.resolve(MOCK_DREAMS) };
+    });
+
+    render(<DreamMemoryView />);
+    await waitFor(() => {
+      expect(screen.getByText('The fix is to use strict equality operator instead of loose comparison')).toBeTruthy();
+    });
+
+    openConfigPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'Save Config' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save Config' })).not.toBeDisabled();
+    });
+  });
+
+  it('surfaces Save Config failures in the config panel', async () => {
+    mockFetch.mockImplementation(async (url: string, options?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/api/settings/cron')) {
+        if (options?.method === 'PUT') {
+          return { ok: false, status: 500, json: () => Promise.resolve({ error: 'settings unavailable' }) };
+        }
+        return { ok: true, json: () => Promise.resolve(DREAM_CONFIG) };
+      }
+      return { ok: true, json: () => Promise.resolve(MOCK_DREAMS) };
+    });
+
+    render(<DreamMemoryView />);
+    await waitFor(() => {
+      expect(screen.getByText('The fix is to use strict equality operator instead of loose comparison')).toBeTruthy();
+    });
+
+    openConfigPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'Save Config' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('settings unavailable');
+    expect(screen.getByRole('button', { name: 'Save Config' })).not.toBeDisabled();
+  });
+
   it('surfaces Run Now failures in the config panel instead of alert', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 

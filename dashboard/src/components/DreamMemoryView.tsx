@@ -99,7 +99,6 @@ export function DreamMemoryView() {
       setDreamConfig(result.settings);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      setConfigStatus(null);
       setConfigError(message);
     } finally {
       setSavingConfig(false);
@@ -118,12 +117,10 @@ export function DreamMemoryView() {
         body: JSON.stringify({ provider: tempProvider }),
       });
       if (!resp.ok) throw new Error(`Run failed (HTTP ${resp.status})`);
-      setConfigError(null);
       setConfigStatus('Daily dream generation triggered successfully.');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('Failed to run daily dreams:', err);
-      setConfigStatus(null);
       setConfigError(`Failed to run daily dreams: ${message}`);
     } finally {
       setRunningDailyDreams(false);
