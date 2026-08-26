@@ -43,7 +43,7 @@ jobs:
         run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: pnpm-cache
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -105,7 +105,7 @@ jobs:
         run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: pnpm-cache
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -156,7 +156,7 @@ jobs:
         run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: pnpm-cache
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -201,7 +201,7 @@ jobs:
         run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: pnpm-cache
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
