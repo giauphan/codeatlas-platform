@@ -549,11 +549,13 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
           // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
           const userProjects = fs.readdirSync(userDir, { withFileTypes: true });
           for (const p of userProjects) {
-            if (p.isDirectory() && !p.isSymbolicLink()) {
+            if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
               searchDirs.push(path.join(userDir, p.name));
             }
           }
-        } catch { /* Skip non-accessible directories */ }
+        } catch (err: unknown) {
+          logger.debug(`[Project-Discovery] Skipped non-accessible directory ${userDir}: ${extractErrorMessage(err)}`);
+        }
       }
     }
 
@@ -573,12 +575,16 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
           for (const t of tenants) {
             if (t.name === tenantId) continue;
             const tDir = path.join(tenantRoot, t.name);
-            if (t.isDirectory() && !t.isSymbolicLink()) {
-              const tProjects = fs.readdirSync(tDir, { withFileTypes: true });
-              for (const p of tProjects) {
-                if (p.isDirectory() && !p.isSymbolicLink()) {
-                  searchDirs.push(path.join(tDir, p.name));
+            if (t.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !t.isSymbolicLink())) {
+              try {
+                const tProjects = fs.readdirSync(tDir, { withFileTypes: true });
+                for (const p of tProjects) {
+                  if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
+                    searchDirs.push(path.join(tDir, p.name));
+                  }
                 }
+              } catch (err: unknown) {
+                logger.debug(`[Project-Discovery] Skipped non-accessible directory ${tDir}: ${extractErrorMessage(err)}`);
               }
             }
           }
@@ -608,11 +614,13 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       try {
         const subDirs = fs.readdirSync(projectsDir, { withFileTypes: true });
         for (const p of subDirs) {
-          if (p.isDirectory() && !p.isSymbolicLink()) {
+          if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
             searchDirs.push(path.join(projectsDir, p.name));
           }
         }
-      } catch { /* Skip non-accessible directories */ }
+      } catch (err: unknown) {
+        logger.debug(`[Project-Discovery] Skipped non-accessible directory ${projectsDir}: ${extractErrorMessage(err)}`);
+      }
     }
 
     // Load globally registered projects
@@ -770,11 +778,13 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
           // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
           const userProjects = await fs.promises.readdir(userDir, { withFileTypes: true });
           for (const p of userProjects) {
-            if (p.isDirectory() && !p.isSymbolicLink()) {
+            if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
               searchDirs.push(path.join(userDir, p.name));
             }
           }
-        } catch { /* Skip non-accessible directories */ }
+        } catch (err: unknown) {
+          logger.debug(`[Project-Discovery] Skipped non-accessible directory ${userDir}: ${extractErrorMessage(err)}`);
+        }
       }
     }
 
@@ -798,15 +808,17 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
             await Promise.all(chunk.map(async (t) => {
               if (t.name === tenantId) return;
               const tDir = path.join(tenantRoot, t.name);
-              if (t.isDirectory() && !t.isSymbolicLink()) {
+              if (t.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !t.isSymbolicLink())) {
                 try {
                   const teamProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
                   for (const p of teamProjects) {
-                    if (p.isDirectory() && !p.isSymbolicLink()) {
+                    if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
                       searchDirs.push(path.join(tDir, p.name));
                     }
                   }
-                } catch { /* Skip non-accessible directories */ }
+                } catch (err: unknown) {
+                  logger.debug(`[Project-Discovery] Skipped non-accessible directory ${tDir}: ${extractErrorMessage(err)}`);
+                }
               }
             }));
           }
@@ -836,11 +848,13 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
       try {
         const subDirectories = await fs.promises.readdir(projectsDir, { withFileTypes: true });
         for (const p of subDirectories) {
-          if (p.isDirectory() && !p.isSymbolicLink()) {
+          if (p.isDirectory() && (process.env.CODEATLAS_FOLLOW_SYMLINKS === "true" || !p.isSymbolicLink())) {
             searchDirs.push(path.join(projectsDir, p.name));
           }
         }
-      } catch { /* Skip non-accessible directories */ }
+      } catch (err: unknown) {
+        logger.debug(`[Project-Discovery] Skipped non-accessible directory ${projectsDir}: ${extractErrorMessage(err)}`);
+      }
     }
 
     // Load globally registered projects
