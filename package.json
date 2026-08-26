@@ -57,7 +57,7 @@
     "@types/pg": "^8.11.10",
     "better-sqlite3": "^11.3.0",
     "pg": "^8.13.0",
-    "pgvector": "^0.1.8",
+    "pgvector": "^0.3.0",
     "playwright": "^1.61.1",
     "sqlite-vec": "0.1.9",
     "tsx": "^4.22.1",
