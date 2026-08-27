@@ -124,6 +124,48 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     assert.ok(decaySql.includes("julianday('now')"), 'Decay SQL should use julianday for SQLite');
   });
 
+  test('computeConfidence applies bayesian bounds correctly', () => {
+    const computeConfidence = (consolidationEngine as any).computeConfidence.bind(consolidationEngine);
+
+    // Initial confidence with 0 evidence
+    assert.equal(computeConfidence(0.5, 0), 0.5);
+
+    // Confidence increases with positive evidence
+    assert.ok(computeConfidence(0.5, 5) > 0.5);
+
+    // Confidence is hard-capped at 0.99
+    assert.equal(computeConfidence(0.99, 100), 0.99);
+    assert.ok(computeConfidence(0.98, 100) <= 0.99);
+  });
+
+  test('getBatchChunkSize applies valid sizes and fallbacks correctly', () => {
+    const getBatchChunkSize = (consolidationEngine as any).getBatchChunkSize.bind(consolidationEngine);
+
+    // Default configuration fallback
+    delete process.env.CODEATLAS_DB_BATCH_SIZE;
+    assert.equal(getBatchChunkSize(500, 2000), 500);
+
+    // Valid configuration
+    process.env.CODEATLAS_DB_BATCH_SIZE = '1000';
+    assert.equal(getBatchChunkSize(500, 2000), 1000);
+
+    // Valid configuration with whitespace
+    process.env.CODEATLAS_DB_BATCH_SIZE = '  1500  ';
+    assert.equal(getBatchChunkSize(500, 2000), 1500);
+
+    // Enforced maximum limit
+    process.env.CODEATLAS_DB_BATCH_SIZE = '5000';
+    assert.equal(getBatchChunkSize(500, 2000), 2000);
+
+    // Fallback on invalid types
+    process.env.CODEATLAS_DB_BATCH_SIZE = 'invalid_string';
+    assert.equal(getBatchChunkSize(500, 2000), 500);
+
+    // Fallback on zero/negative limits
+    process.env.CODEATLAS_DB_BATCH_SIZE = '-100';
+    assert.equal(getBatchChunkSize(500, 2000), 500);
+  });
+
   test('getNormalizedVector correctly normalizes and handles zero-norm vectors', () => {
     // Access private method for testing
     const normalize = (consolidationEngine as any).getNormalizedVector.bind(consolidationEngine);
