@@ -143,7 +143,7 @@ export class ConsolidationEngine {
   private getBatchChunkSize(defaultSize = 500, maxLimit = 2000): number {
     let chunkSize = defaultSize;
     if (process.env.CODEATLAS_DB_BATCH_SIZE) {
-      const parsed = Number.parseInt(process.env.CODEATLAS_DB_BATCH_SIZE, 10);
+      const parsed = Number.parseInt(process.env.CODEATLAS_DB_BATCH_SIZE.trim(), 10);
       // Enforce hard upper limit to prevent misconfiguration from degrading DB performance
       if (!Number.isNaN(parsed) && parsed > 0) {
         chunkSize = Math.min(parsed, maxLimit);
@@ -151,6 +151,7 @@ export class ConsolidationEngine {
         logger.warn(`[Consolidation] Invalid CODEATLAS_DB_BATCH_SIZE: ${process.env.CODEATLAS_DB_BATCH_SIZE}. Must be a positive integer <= ${maxLimit}. Falling back to default chunk size ${chunkSize}.`);
       }
     }
+    logger.info(`[Consolidation] Using batch chunk size of ${chunkSize}`);
     return chunkSize;
   }
 
@@ -431,8 +432,7 @@ export class ConsolidationEngine {
 
       const rows = await db.query<any[]>(sql, binds);
 
-      const bindsBatch: ConceptConfidenceUpdate[] = [];
-      for (const row of rows) {
+      const bindsBatch: ConceptConfidenceUpdate[] = rows.reduce((acc: ConceptConfidenceUpdate[], row) => {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
         const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
@@ -441,9 +441,10 @@ export class ConsolidationEngine {
         const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
 
         if (Math.abs(newConf - currentConf) > 0.01) {
-          bindsBatch.push({ conf: newConf, id, tenantId });
+          acc.push({ conf: newConf, id, tenantId });
         }
-      }
+        return acc;
+      }, []);
 
       let updated = 0;
       if (bindsBatch.length > 0) {
