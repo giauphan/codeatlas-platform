@@ -6,6 +6,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import ForceGraph2D from 'force-graph';
+import { FOCUS_RING_CLASS } from '../lib/constants';
 
 // ─── Types ──────────────────────────────────────────────────
 interface GraphNode {
@@ -107,6 +108,7 @@ export function SphericalKnowledgeGraph({
           zIndex: 10,
         }}>
           <button
+            className={FOCUS_RING_CLASS}
             onClick={() => setShowAll(true)}
             style={{
               padding: '0.6rem 1.5rem', borderRadius: '20px', border: 'none',
