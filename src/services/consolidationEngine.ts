@@ -119,6 +119,21 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
+  private async attemptBatchUpdate(db: any, updateSql: string, chunk: any[], maxRetries = 3): Promise<boolean> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await db.executeMany(updateSql, chunk);
+        return true;
+      } catch (err: any) {
+        logger.warn(`[Consolidation] Attempt ${attempt} failed batch update for chunk: ${err.message || err}`);
+        if (attempt === maxRetries) {
+          logger.error(`[Consolidation] All ${maxRetries} attempts failed batch update for chunk. Sample failed ID: ${chunk[0]?.id}`);
+        }
+      }
+    }
+    return false;
+  }
+
   private getNormalizedVector(embedding: Float32Array, id: string): Float32Array {
     const vec = embedding.slice();
     let norm = 0;
@@ -413,9 +428,11 @@ export class ConsolidationEngine {
       let updated = 0;
       if (bindsBatch.length > 0) {
         // ⚡ Bolt: Batch database operations using executeMany to avoid N+1 query problem
+        // Generate a single timestamp for all retries in this batch to maintain consistent metadata
+        const timestampVal = dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')";
         const updateSql = `
           UPDATE codeatlas_concepts
-          SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
+          SET confidence = :conf, updated_at = ${timestampVal}
           WHERE id = :id AND tenant_id = :tenantId
         `;
 
@@ -426,6 +443,8 @@ export class ConsolidationEngine {
           // Enforce hard upper limit of 2000 to prevent misconfiguration from degrading DB performance
           if (!Number.isNaN(parsed) && parsed > 0) {
             chunkSize = Math.min(parsed, 2000);
+          } else {
+            logger.warn(`[Consolidation] Invalid CODEATLAS_DB_BATCH_SIZE: ${process.env.CODEATLAS_DB_BATCH_SIZE}. Falling back to default chunk size ${chunkSize}.`);
           }
         }
 
@@ -433,23 +452,13 @@ export class ConsolidationEngine {
 
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
           const chunk = bindsBatch.slice(i, i + chunkSize);
-          logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
-          let success = false;
-          // Implement simple retry mechanism (up to 3 attempts)
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              await db.executeMany(updateSql, chunk);
-              updated += chunk.length;
-              success = true;
-              break;
-            } catch (err: any) {
-              logger.warn(`[Consolidation] Attempt ${attempt} failed batch update for chunk: ${err.message || err}`);
-              if (attempt === 3) {
-                logger.error(`[Consolidation] All 3 attempts failed batch update for chunk: ${err.message || err}`);
-              }
-            }
+          if (process.env.DEBUG || process.env.VERBOSE) {
+            logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
           }
-          if (!success) {
+          const success = await this.attemptBatchUpdate(db, updateSql, chunk);
+          if (success) {
+             updated += chunk.length;
+          } else {
             failedChunks.push(chunk);
           }
         }
