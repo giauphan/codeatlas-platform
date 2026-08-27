@@ -334,6 +334,10 @@ export class ConsolidationEngine {
         logger.warn(`[Consolidation] Invalid decay value passed (${customDecay}). Ignoring custom override.`);
         customDecay = undefined;
     }
+    if (customDecay !== undefined && (Number.isNaN(customDecay) || typeof customDecay !== 'number')) {
+        logger.warn(`[Consolidation] Invalid decay value passed (${customDecay}). Ignoring custom override.`);
+        customDecay = undefined;
+    }
     let decayConstant = customDecay !== undefined ? customDecay : this.initConfig().decayConstant;
 
     if (currentConf < 0 || evidenceCount < 0 || decayConstant < 0) {
