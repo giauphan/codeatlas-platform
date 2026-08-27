@@ -280,8 +280,8 @@ export class ConsolidationEngine {
     return chunkSize;
   }
 
-  private computeConfidence(currentConf: number, evidenceCount: number): number {
-    const decayConstant = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', DEFAULTS.DECAY_CONSTANT, EnvVarType.FLOAT, DEFAULTS.MAX_DECAY);
+  private computeConfidence(currentConf: number, evidenceCount: number, customDecay?: number): number {
+    const decayConstant = customDecay !== undefined ? customDecay : this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', DEFAULTS.DECAY_CONSTANT, EnvVarType.FLOAT, DEFAULTS.MAX_DECAY);
     const ceiling = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_CEILING', DEFAULTS.CONFIDENCE_CEILING, EnvVarType.FLOAT, 1.0);
     return Math.min(ceiling, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
   }
@@ -331,8 +331,16 @@ export class ConsolidationEngine {
       }
 
       const id = this.sanitizeIdForUpdate(idStr);
-      const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') ?? 1);
+      const evidenceCountRaw = this.getVal(row, 5, 'EVIDENCE_COUNT');
+
+      // Enforce robust type conversions to prevent NaN propagation
+      const evidenceCount = evidenceCountRaw !== undefined && evidenceCountRaw !== null ? Number(evidenceCountRaw) : 1;
       const currentConf = Number(confStr);
+
+      if (Number.isNaN(evidenceCount) || Number.isNaN(currentConf)) {
+         logger.warn(`[Consolidation] Row (${id}) skipped due to NaN properties.`);
+         continue;
+      }
 
       // Bayesian confidence update: each piece of evidence increases confidence
       const newConf = this.computeConfidence(currentConf, evidenceCount);
@@ -674,6 +682,7 @@ export class ConsolidationEngine {
                    });
                    success = true;
                } else {
+                   this.logBatchDetails('debug', 'Transaction', `Adapter does not support native db.transaction(); falling back to explicit BEGIN/COMMIT statements`, { txId: batchId });
                    await db.execute('BEGIN TRANSACTION', {});
                    success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId, fallbackState);
                    if (success) {
