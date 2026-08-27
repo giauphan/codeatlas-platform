@@ -178,8 +178,13 @@ describe('DreamMemoryView', () => {
 
     // Click "KNOWLEDGE" chip to toggle it OFF (will re-fetch)
     // Default: all 4 types selected. Toggling KNOWLEDGE off means query with 3 types
-    const knowledgeChip = screen.getByText('KNOWLEDGE');
-    fireEvent.click(knowledgeChip);
+    const knowledgeChips = screen.getAllByText('KNOWLEDGE');
+    // The clickable chip is a <button>, while spans might be used for badges on dreams
+    const knowledgeChipBtn = knowledgeChips.find(el => el.tagName.toLowerCase() === 'button');
+    if (!knowledgeChipBtn) {
+       throw new Error('Could not find KNOWLEDGE button chip');
+    }
+    fireEvent.click(knowledgeChipBtn);
 
     // Should re-fetch with memory_type filter
     await waitFor(() => {
