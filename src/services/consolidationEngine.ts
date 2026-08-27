@@ -120,14 +120,14 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = Number.parseInt(process.env.CODEATLAS_BATCH_UPDATE_RETRIES || '3', 10)): Promise<boolean> {
-    const backoffBaseMs = Number.parseInt(process.env.CODEATLAS_BATCH_UPDATE_BACKOFF_MS || '500', 10);
+  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = Number.parseInt(process.env.CODEATLAS_BATCH_UPDATE_RETRIES?.trim() || '3', 10)): Promise<boolean> {
+    const backoffBaseMs = Number.parseInt(process.env.CODEATLAS_BATCH_UPDATE_BACKOFF_MS?.trim() || '500', 10);
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await db.executeMany(updateSql, chunk);
         return true;
       } catch (err: any) {
-        logger.warn(`[Consolidation] Attempt ${attempt} failed batch update for chunk: ${err.message || err}`);
+        logger.warn(`[Consolidation] Retrying batch update #${attempt} of ${maxRetries} for failed chunk... (${err.message || err})`);
         if (attempt === maxRetries) {
           const sampleIds = chunk.slice(0, 3).map(c => c.id).join(', ');
           logger.error(`[Consolidation] All ${maxRetries} attempts failed batch update for chunk. Sample failed IDs: ${sampleIds}`);
@@ -465,10 +465,11 @@ export class ConsolidationEngine {
         const failedChunks: ConceptConfidenceUpdate[][] = [];
         let totalConsecutiveFailures = 0;
         const ABORT_THRESHOLD = 5;
+        const totalRunCount = Math.ceil(bindsBatch.length / chunkSize);
 
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
-          if (totalConsecutiveFailures >= ABORT_THRESHOLD) {
-            logger.error(`[Consolidation] Aborting concept scoring batch update due to ${ABORT_THRESHOLD} consecutive chunk failures.`);
+          if (totalConsecutiveFailures >= ABORT_THRESHOLD || (failedChunks.length / totalRunCount) > 0.5) {
+            logger.error(`[Consolidation] Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
             break;
           }
 
