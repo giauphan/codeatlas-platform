@@ -147,7 +147,7 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
 
     // Test that it fails after all retries
     const start = Date.now();
-    const result = await attemptBatchUpdate(mockDb, 'SQL', [{ id: '1' }], 'test-batch', { logCount: 0 }, 2); // 2 retries
+    const result = await attemptBatchUpdate({ db: mockDb, updateSql: 'SQL', chunk: [{ id: '550e8400-e29b-41d4-a716-446655440000' }], batchId: 'test-batch', fallbackState: { logCount: 0 }, maxRetries: 2 }); // 2 retries
     const duration = Date.now() - start;
 
     assert.equal(result, false);

@@ -251,7 +251,11 @@ export class ConsolidationEngine {
   /**
    * Execute row-by-row fallback logic, isolated for testability and clarity.
    */
-  private async executeRowFallback(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, fallbackState: { logCount: number }): Promise<boolean> {
+  private async executeRowFallback(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[] | Record<string, unknown>[], batchId: string, fallbackState: { logCount: number }): Promise<boolean> {
+    if (!Array.isArray(chunk)) {
+      this.logBatchDetails('error', 'Fallback', `Chunk is not an array, cannot execute row fallback.`, { txId: batchId });
+      return false;
+    }
     this.logBatchDetails('warn', 'Fallback', `Chunk failed all retries. Falling back to row-by-row execution to salvage valid rows.`, { txId: batchId });
     let successCount = 0;
 
@@ -279,7 +283,7 @@ export class ConsolidationEngine {
     if (fallbackState.logCount > 0) {
        this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution encountered ${fallbackState.logCount} total row-level errors.`, { txId: batchId });
     }
-    const sampleIds = chunk.slice(0, 3).map((c: ConceptConfidenceUpdate) => c.id).join(', ');
+    const sampleIds = chunk.slice(0, 3).map((c: any) => c.id).join(', ');
     this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk resulting in complete serialization failure. Sample failed IDs: ${sampleIds}`, { txId: batchId });
     return false;
   }
@@ -288,7 +292,11 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, fallbackState: { logCount: number } = { logCount: 0 }, maxRetries = this.initConfig().maxRetries): Promise<boolean> {
+  private async attemptBatchUpdate({ db, updateSql, chunk, batchId, fallbackState = { logCount: 0 }, maxRetries = this.initConfig().maxRetries }: { db: IDatabaseAdapter; updateSql: string; chunk: ConceptConfidenceUpdate[] | Record<string, unknown>[]; batchId: string; fallbackState?: { logCount: number }; maxRetries?: number }): Promise<boolean> {
+    if (!Array.isArray(chunk)) {
+      this.logBatchDetails('error', 'Attempt', `Chunk is not an array, cannot attempt batch update.`, { txId: batchId });
+      return false;
+    }
     const backoffBaseMs = this.initConfig().backoffMs;
     const MAX_CUMULATIVE_RETRY_MS = this.getEnvVarNumber('CODEATLAS_MAX_CUMULATIVE_RETRY_MS', 600000, EnvVarType.INT, 1800000); // Default 10 mins, Max 30 mins
     let cumulativeRetryTime = 0;
@@ -319,8 +327,9 @@ export class ConsolidationEngine {
 
   private getBatchChunkSize(): number {
     const chunkSize = this.initConfig().batchSize;
-    if (process.env.CODEATLAS_BATCH_VERBOSE_LOGGING === 'true') {
+    if (this._configCache.get('_chunkSizeLogged') !== 1 && this.getEnvVarNumber('CODEATLAS_BATCH_VERBOSE_LOGGING', 0, EnvVarType.INT, 1) === 1) {
       logger.info(`[Consolidation] Using batch chunk size of ${chunkSize}`);
+      this._configCache.set('_chunkSizeLogged', 1);
     }
     return chunkSize;
   }
@@ -762,14 +771,14 @@ export class ConsolidationEngine {
                if (typeof (db as any).transaction === 'function') {
                    // Prefer native transaction wrappers if the adapter implements them
                    await (db as any).transaction(async (txAdapter: IDatabaseAdapter) => {
-                       success = await this.attemptBatchUpdate(txAdapter, updateSql, chunk, batchId, fallbackState);
+                       success = await this.attemptBatchUpdate({ db: txAdapter, updateSql, chunk, batchId, fallbackState });
                        if (!success) throw new Error('Batch update chunk failed');
                    });
                    success = true;
                } else {
                    this.logBatchDetails('debug', 'Transaction', `Adapter does not support native db.transaction(); falling back to explicit BEGIN/COMMIT statements`, { txId: batchId });
                    await db.execute('BEGIN TRANSACTION', {});
-                   success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId, fallbackState);
+                   success = await this.attemptBatchUpdate({ db, updateSql, chunk, batchId, fallbackState });
                    if (success) {
                       await db.execute('COMMIT', {});
                    } else {
@@ -778,7 +787,7 @@ export class ConsolidationEngine {
                }
             } catch (txErr) {
                // If transaction commands fail (e.g., unsupported by adapter), just run directly
-               success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId, fallbackState);
+               success = await this.attemptBatchUpdate({ db, updateSql, chunk, batchId, fallbackState });
             }
             const duration = Date.now() - tStart;
             this.logBatchDetails('debug', 'Performance', `Batch executed in ${duration}ms`, { txId: batchId, durationMs: duration, rows: chunk.length });
