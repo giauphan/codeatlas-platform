@@ -127,7 +127,7 @@ export class ConsolidationEngine {
         await db.executeMany(updateSql, chunk);
         return true;
       } catch (err: any) {
-        logger.warn(`[Consolidation] Retrying batch update #${attempt} of ${maxRetries} for failed chunk... (${err.message || err})`);
+        logger.warn(`[Consolidation] Retrying batch update #${attempt} of ${maxRetries} for failed chunk... (${err.message || err})`, { error: err });
         if (attempt === maxRetries) {
           const sampleIds = chunk.slice(0, 3).map(c => c.id).join(', ');
           logger.error(`[Consolidation] All ${maxRetries} attempts failed batch update for chunk. Sample failed IDs: ${sampleIds}`);
