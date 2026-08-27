@@ -411,10 +411,14 @@ export class ConsolidationEngine {
           SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
           WHERE id = :id AND tenant_id = :tenantId
         `;
-        await db.executeMany(updateSql, updates as any);
+        const chunkSize = 500;
+        for (let i = 0; i < updates.length; i += chunkSize) {
+          const chunk = updates.slice(i, i + chunkSize);
+          await db.executeMany(updateSql, chunk as any);
+        }
       }
 
-      logger.info(`[Consolidation] Scored ${rows.length} concepts, updated ${updated}`);
+      logger.info(`[Consolidation] Scored ${rows.length} concepts, prepared ${updates.length} updates, applied ${updated}`);
   }
 
   /**
