@@ -473,7 +473,7 @@ export class ConsolidationEngine {
         const totalRunCount = Math.ceil(bindsBatch.length / chunkSize);
 
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
-          if (totalConsecutiveFailures >= ABORT_THRESHOLD || (failedChunks.length / totalRunCount) > 0.5) {
+          if (totalConsecutiveFailures >= ABORT_THRESHOLD || (totalRunCount >= 10 && failedChunks.length / totalRunCount > 0.5)) {
             logger.error(`[Consolidation] Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
             break;
           }
