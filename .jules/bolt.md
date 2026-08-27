@@ -37,3 +37,7 @@
 ## 2026-08-24 - O(1) Validation Heuristics inside O(N^2) Math Loops
 **Learning:** Validating vector normalization in development inside an $O(N^2)$ inner loop using full calculations (e.g. `sum(vec^2) ≈ 1`) introduces unacceptable $O(N)$ math overhead per comparison, destroying the original optimization's intent even in dev/test environments.
 **Action:** Use an $O(1)$ constant-time heuristic check (e.g. `vec[0]^2 + vec[len-1]^2 > 1.01`) to assert bounds without iterating the entire array. Because a truly normalized vector's sum-of-squares is $1$, any partial sum of its squared elements must logically be $\le 1$. If a partial sum exceeds $1$, the vector is guaranteed to be unnormalized, providing a cheap, zero-false-positive safety net against regressions.
+
+## 2026-08-25 - Avoid chained .filter().length
+**Learning:** To optimize performance during AST traversal or file indexing, chaining `.filter().length` creates intermediate array allocations that must then be scanned and garbage collected. This hurts performance significantly in hot paths like text classification checks.
+**Action:** Replace `.filter(condition).length` with a direct `for` loop that iterates over the original array and counts the occurrences that match the condition. This avoids allocating a new array and reduces garbage collection pressure.

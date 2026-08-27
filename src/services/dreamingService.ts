@@ -6,6 +6,7 @@ import { initPool, setSessionContext } from "../database/connection.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { createDatabaseAdapter } from "../database/factory.js";
 import { checkNoiseBlocklist } from "./noiseBlocklist.js";
+import { countMatching } from "../utils/array.js";
 
 /**
  * Stop words for noise gate — English + Vietnamese.
@@ -410,8 +411,12 @@ export class OracleDreamingService {
     // Content quality: check information density via stop-word ratio
     // Use Unicode-aware regex to preserve Vietnamese letters (e.g., 'của', 'là')
     const words = trimmed.split(/\s+/).map(w => w.replace(/[^\p{L}\p{N}]/gu, ''));
-    const stopWordCount = words.filter(w => STOP_WORDS.has(w.toLowerCase())).length;
-    const stopRatio = words.length > 0 ? stopWordCount / words.length : 1;
+
+    // ⚡ Bolt: Replaced chained .filter().length with a direct for loop to
+    // prevent unnecessary intermediate array allocation and reduce V8 GC pressure.
+    const wordsLen = words.length;
+    const stopWordCount = countMatching(words, w => STOP_WORDS.has(w.toLowerCase()));
+    const stopRatio = wordsLen > 0 ? stopWordCount / wordsLen : 1;
 
     // If >80% stop words, it's noise (e.g., "Sẵn sàng. Cần tôi làm gì?")
     if (stopRatio > 0.80 && words.length > 0) {
