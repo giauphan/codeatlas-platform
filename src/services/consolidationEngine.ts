@@ -211,6 +211,18 @@ export class ConsolidationEngine {
     return Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
   }
 
+  private isValidConfidenceUpdate(idStr: any, confStr: any): boolean {
+    if (idStr === undefined || confStr === undefined) {
+      logger.error("[Consolidation] Missing required fields in database row. Skipping.");
+      return false;
+    }
+    return true;
+  }
+
+  private sanitizeIdForUpdate(idStr: any): string {
+    return String(idStr).trim();
+  }
+
   private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
     const results: ConceptConfidenceUpdate[] = [];
     const maxLimit = this.getEnvVarNumber('CODEATLAS_MAX_UPDATE_RECORDS', 10000, EnvVarType.INT, 50000);
@@ -224,13 +236,11 @@ export class ConsolidationEngine {
       const idStr = this.getVal(row, R_IDX.ID, 'ID');
       const confStr = this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE');
 
-      if (idStr === undefined || confStr === undefined) {
-        logger.error("[Consolidation] Missing required fields in database row. Skipping.");
+      if (!this.isValidConfidenceUpdate(idStr, confStr)) {
         continue;
       }
 
-      // Sanitize ID upstream
-      const id = String(idStr).trim();
+      const id = this.sanitizeIdForUpdate(idStr);
       const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
       const currentConf = Number(confStr);
 
@@ -554,7 +564,23 @@ export class ConsolidationEngine {
           const chunk = updateRecords.slice(i, i + chunkSize);
           this.logBatchDetails('debug', 'Execution', `Executing batch update for ${chunk.length} rows.`);
           try {
-            const success = await this.attemptBatchUpdate(db, updateSql, chunk);
+            let success = false;
+
+            // Wrap the batch chunk attempt in a transaction to prevent partial execution inconsistencies.
+            // Some database adapters (like SQLite) may not support manual .transaction methods in this interface,
+            // so we fall back to raw query execution for BEGIN/COMMIT if necessary, or just run it.
+            try {
+               await db.execute('BEGIN TRANSACTION', {});
+               success = await this.attemptBatchUpdate(db, updateSql, chunk);
+               if (success) {
+                  await db.execute('COMMIT', {});
+               } else {
+                  await db.execute('ROLLBACK', {});
+               }
+            } catch (txErr) {
+               // If transaction commands fail (e.g., unsupported by adapter), just run directly
+               success = await this.attemptBatchUpdate(db, updateSql, chunk);
+            }
 
             if (success) {
                updated += chunk.length;
