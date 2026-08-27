@@ -128,7 +128,11 @@ export class ConsolidationEngine {
       } catch (err: any) {
         logger.warn(`[Consolidation] Attempt ${attempt} failed batch update for chunk: ${err.message || err}`);
         if (attempt === maxRetries) {
-          logger.error(`[Consolidation] All ${maxRetries} attempts failed batch update for chunk. Sample failed ID: ${chunk[0]?.id}`);
+          const sampleIds = chunk.slice(0, 3).map(c => c.id).join(', ');
+          logger.error(`[Consolidation] All ${maxRetries} attempts failed batch update for chunk. Sample failed IDs: ${sampleIds}`);
+        } else {
+          // Exponential backoff: 500ms, 1000ms, etc.
+          await new Promise(res => setTimeout(res, attempt * 500));
         }
       }
     }
