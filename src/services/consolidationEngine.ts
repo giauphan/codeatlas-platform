@@ -150,15 +150,12 @@ export class ConsolidationEngine {
 
     const parsed = type === EnvVarType.FLOAT ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
 
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      if (parsed === 0 && name === 'CODEATLAS_CONFIDENCE_DECAY_CONSTANT') {
-          // Special exception: A decay constant of 0 means NO decay (score does not drop), which is a valid math state
-          // but we still want to warn
-          logger.warn(`[Consolidation] Configured ${name} as 0. This disables decay completely.`);
-      } else {
-          logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a strictly positive finite number greater than zero. Falling back to default ${defaultVal}.`);
-          return defaultVal;
-      }
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a finite non-negative number. Falling back to default ${defaultVal}.`);
+      return defaultVal;
+    }
+    if (parsed === 0 && name === 'CODEATLAS_CONFIDENCE_DECAY_CONSTANT') {
+        logger.warn(`[Consolidation] Configured ${name} as 0. This disables decay completely.`);
     }
 
     if (maxLimit !== undefined && parsed > maxLimit) {
@@ -278,7 +275,7 @@ export class ConsolidationEngine {
        this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution encountered ${fallbackState.logCount} total row-level errors.`, { txId: batchId });
     }
     const sampleIds = chunk.slice(0, 3).map((c: ConceptConfidenceUpdate) => c.id).join(', ');
-    this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk. Sample failed IDs: ${sampleIds}`, { txId: batchId });
+    this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk resulting in complete serialization failure. Sample failed IDs: ${sampleIds}`, { txId: batchId });
     return false;
   }
 
@@ -762,7 +759,7 @@ export class ConsolidationEngine {
                    if (success) {
                       await db.execute('COMMIT', {});
                    } else {
-                      await db.execute('ROLLBACK', {});
+                      try { await db.execute('ROLLBACK', {}); } catch (e) { this.logBatchDetails('error', 'Transaction', 'ROLLBACK failed', { txId: batchId, error: e }); }
                    }
                }
             } catch (txErr) {
