@@ -46,6 +46,7 @@ export interface ConsolidationReport {
   dreamsSuperseded: number;
   invalidEmbeddingsSkipped: number;
   errors: string[];
+  failedScoringChunks?: any[][];
 }
 
 export class ConsolidationEngine {
@@ -449,6 +450,9 @@ export class ConsolidationEngine {
 
         if (failedChunks.length > 0) {
           logger.error(`[Consolidation] ${failedChunks.length} chunks failed during concept scoring. Total rows failed: ${failedChunks.reduce((acc, c) => acc + c.length, 0)}`);
+          if (report) {
+            report.failedScoringChunks = failedChunks;
+          }
         }
       }
 
