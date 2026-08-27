@@ -109,6 +109,8 @@ export function SphericalKnowledgeGraph({
         }}>
           <button
             className={FOCUS_RING_CLASS}
+            aria-label="Load all nodes and links into the knowledge graph"
+            title="Load all nodes and links"
             onClick={() => setShowAll(true)}
             style={{
               padding: '0.6rem 1.5rem', borderRadius: '20px', border: 'none',
