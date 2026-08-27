@@ -336,10 +336,11 @@ export class ConsolidationEngine {
     }
     let decayConstant = customDecay !== undefined ? customDecay : this.initConfig().decayConstant;
 
-    // Safety guard against invalid negative decay constants
-    if (decayConstant < 0) {
-       logger.warn(`[Consolidation] Negative decay constant provided (${decayConstant}). Clamping to 0 to prevent algorithm corruption.`);
-       decayConstant = 0;
+    if (currentConf < 0 || evidenceCount < 0 || decayConstant < 0) {
+       logger.warn(`[Consolidation] Invalid negative values in confidence computation. (conf: ${currentConf}, evidence: ${evidenceCount}, decay: ${decayConstant}). Clamping values.`);
+       currentConf = Math.max(0, currentConf);
+       evidenceCount = Math.max(0, evidenceCount);
+       decayConstant = Math.max(0, decayConstant);
     }
 
     const ceiling = this.initConfig().confidenceCeiling;
