@@ -53,6 +53,7 @@ const DEFAULTS = {
   BACKOFF_MS: 500,
   DECAY_CONSTANT: 0.2,
   MAX_DECAY: 1.0,
+  CONFIDENCE_CEILING: 0.99,
   ABORT_THRESHOLD: 5,
   MAX_ABORT_THRESHOLD: 50,
   ABORT_FRACTION: 0.5,
@@ -199,9 +200,13 @@ export class ConsolidationEngine {
   /**
    * Execute row-by-row fallback logic, isolated for testability and clarity.
    */
-  private async executeRowFallback(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string): Promise<boolean> {
+  private async executeRowFallback(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, fallbackState: { logCount: number }): Promise<boolean> {
     this.logBatchDetails('warn', 'Fallback', `Chunk failed all retries. Falling back to row-by-row execution to salvage valid rows.`, { txId: batchId });
     let successCount = 0;
+
+    // Configurable log suppression limit
+    const suppressLimit = this.getEnvVarNumber('CODEATLAS_FALLBACK_LOG_LIMIT', 50, EnvVarType.INT, 1000);
+
     for (const row of chunk) {
       try {
         await db.execute(updateSql, row);
@@ -209,13 +214,13 @@ export class ConsolidationEngine {
       } catch (rowErr) {
         const rowMsg = rowErr instanceof Error ? rowErr.message : String(rowErr);
 
-        // Suppress repetitive row-level fallback logs if we've seen too many
-        if (this._fallbackLogCount < 50) {
+        // Suppress repetitive row-level fallback logs if we've seen too many across the entire batch run
+        if (fallbackState.logCount < suppressLimit) {
            this.logBatchDetails('error', 'FallbackRow', `Invalid row during fallback execution (id: ${row.id}): ${rowMsg}`, { txId: batchId, rowId: row.id, error: rowErr });
-        } else if (this._fallbackLogCount === 50) {
-           this.logBatchDetails('error', 'FallbackRow', `Too many row fallback failures. Suppressing further row-level fallback logs for this run.`, { txId: batchId });
+        } else if (fallbackState.logCount === suppressLimit) {
+           this.logBatchDetails('error', 'FallbackRow', `Too many row fallback failures (${suppressLimit}). Suppressing further row-level fallback logs for this run.`, { txId: batchId });
         }
-        this._fallbackLogCount++;
+        fallbackState.logCount++;
       }
     }
     if (successCount > 0) {
@@ -231,7 +236,7 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', DEFAULTS.BATCH_UPDATE_RETRIES, EnvVarType.INT, DEFAULTS.MAX_RETRIES)): Promise<boolean> {
+  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, fallbackState: { logCount: number } = { logCount: 0 }, maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', DEFAULTS.BATCH_UPDATE_RETRIES, EnvVarType.INT, DEFAULTS.MAX_RETRIES)): Promise<boolean> {
     const backoffBaseMs = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', DEFAULTS.BACKOFF_MS);
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -241,7 +246,7 @@ export class ConsolidationEngine {
         const errorMessage = err instanceof Error ? err.message : String(err);
         this.logBatchDetails('warn', 'Attempt', `Retrying update #${attempt} of ${maxRetries} for failed chunk... (${errorMessage})`, { error: err, txId: batchId });
         if (attempt === maxRetries) {
-          return await this.executeRowFallback(db, updateSql, chunk, batchId);
+          return await this.executeRowFallback(db, updateSql, chunk, batchId, fallbackState);
         } else {
           // Exponential backoff with jitter
           const jitter = Math.random() * 100;
@@ -262,7 +267,8 @@ export class ConsolidationEngine {
 
   private computeConfidence(currentConf: number, evidenceCount: number): number {
     const decayConstant = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', DEFAULTS.DECAY_CONSTANT, EnvVarType.FLOAT, DEFAULTS.MAX_DECAY);
-    return Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
+    const ceiling = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_CEILING', DEFAULTS.CONFIDENCE_CEILING, EnvVarType.FLOAT, 1.0);
+    return Math.min(ceiling, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
   }
 
   private isValidConfidenceUpdate(idStr: unknown, confStr: unknown): boolean {
@@ -625,6 +631,7 @@ export class ConsolidationEngine {
         const totalRunCount = Math.ceil(updateRecords.length / chunkSize);
 
         const MAX_HARD_ABORT = 100;
+        const fallbackState = { logCount: 0 };
         for (let i = 0; i < updateRecords.length; i += chunkSize) {
           if (this.shouldAbortBatchProcessing(totalConsecutiveFailures, abortThreshold, failedChunks.length, totalRunCount, abortFraction) || failedChunks.length >= MAX_HARD_ABORT) {
             this.logBatchDetails('error', 'Execution', `Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
@@ -644,7 +651,7 @@ export class ConsolidationEngine {
             // so we fall back to raw query execution for BEGIN/COMMIT if necessary, or just run it.
             try {
                await db.execute('BEGIN TRANSACTION', {});
-               success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId);
+               success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId, fallbackState);
                if (success) {
                   await db.execute('COMMIT', {});
                } else {
@@ -652,7 +659,7 @@ export class ConsolidationEngine {
                }
             } catch (txErr) {
                // If transaction commands fail (e.g., unsupported by adapter), just run directly
-               success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId);
+               success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId, fallbackState);
             }
             const duration = Date.now() - tStart;
             this.logBatchDetails('debug', 'Performance', `Batch executed in ${duration}ms`, { txId: batchId, durationMs: duration, rows: chunk.length });
