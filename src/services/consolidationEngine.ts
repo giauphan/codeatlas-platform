@@ -390,7 +390,7 @@ export class ConsolidationEngine {
       const rows = await db.query<any[]>(sql, binds);
 
       let updated = 0;
-      const updates: Array<{ conf: number, id: string, tenantId: string }> = [];
+      const updateBindings: Array<{ conf: number, id: string, tenantId: string }> = [];
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
@@ -400,25 +400,30 @@ export class ConsolidationEngine {
         const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
 
         if (Math.abs(newConf - currentConf) > 0.01) {
-          updates.push({ conf: newConf, id, tenantId });
+          updateBindings.push({ conf: newConf, id, tenantId });
           updated++;
         }
       }
 
-      if (updates.length > 0) {
+      if (updateBindings.length > 0) {
         const updateSql = `
           UPDATE codeatlas_concepts
           SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
           WHERE id = :id AND tenant_id = :tenantId
         `;
-        const chunkSize = 500;
-        for (let i = 0; i < updates.length; i += chunkSize) {
-          const chunk = updates.slice(i, i + chunkSize);
-          await db.executeMany(updateSql, chunk as any);
+        const chunkSize = process.env.DB_BATCH_CHUNK_SIZE ? parseInt(process.env.DB_BATCH_CHUNK_SIZE, 10) : 500;
+        for (let i = 0; i < updateBindings.length; i += chunkSize) {
+          const chunk = updateBindings.slice(i, i + chunkSize);
+          try {
+            await db.executeMany(updateSql, chunk as any);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.error(`[Consolidation] Batch update failed for chunk starting at index ${i}, error: ${msg}`);
+          }
         }
       }
 
-      logger.info(`[Consolidation] Scored ${rows.length} concepts, prepared ${updates.length} updates, applied ${updated}`);
+      logger.info(`[Consolidation] Processed ${rows.length} concepts, prepared ${updateBindings.length} updates, successfully applied ${updated}`);
   }
 
   /**
