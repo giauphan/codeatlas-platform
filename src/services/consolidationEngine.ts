@@ -155,6 +155,10 @@ export class ConsolidationEngine {
     return chunkSize;
   }
 
+  private computeConfidence(currentConf: number, evidenceCount: number): number {
+    return Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
+  }
+
   private getNormalizedVector(embedding: Float32Array, id: string): Float32Array {
     const vec = embedding.slice();
     let norm = 0;
@@ -438,7 +442,7 @@ export class ConsolidationEngine {
         const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
 
         // Bayesian confidence update: each piece of evidence increases confidence
-        const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
+        const newConf = this.computeConfidence(currentConf, evidenceCount);
 
         if (Math.abs(newConf - currentConf) > 0.01) {
           acc.push({ conf: newConf, id, tenantId });
@@ -475,12 +479,18 @@ export class ConsolidationEngine {
 
           const chunk = bindsBatch.slice(i, i + chunkSize);
           logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
-          const success = await this.attemptBatchUpdate(db, updateSql, chunk);
+          try {
+            const success = await this.attemptBatchUpdate(db, updateSql, chunk);
 
-          if (success) {
-             updated += chunk.length;
-             totalConsecutiveFailures = 0;
-          } else {
+            if (success) {
+               updated += chunk.length;
+               totalConsecutiveFailures = 0;
+            } else {
+              failedChunks.push(chunk);
+              totalConsecutiveFailures++;
+            }
+          } catch (err: any) {
+            logger.error(`[Consolidation] Unhandled error during batch processing: ${err.message || err}`);
             failedChunks.push(chunk);
             totalConsecutiveFailures++;
           }
