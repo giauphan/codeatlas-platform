@@ -81,7 +81,6 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     process.env.CODEATLAS_DB_TYPE = 'sqlite';
     mockDbAdapter.query.mock.resetCalls();
     mockDbAdapter.execute.mock.resetCalls();
-    mockDbAdapter.executeMany.mock.resetCalls();
   });
 
   afterEach(() => {
@@ -99,8 +98,8 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
 
     await (consolidationEngine as any).scoreConcepts('test-proj');
 
-    assert.ok(mockDbAdapter.executeMany.mock.calls.length > 0);
-    const sql = mockDbAdapter.executeMany.mock.calls[0].arguments[0] as string;
+    assert.ok(mockDbAdapter.execute.mock.calls.length > 0);
+    const sql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
     assert.ok(sql.includes("datetime('now')"), 'SQL should use datetime("now") for SQLite');
   });
 
@@ -122,72 +121,6 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     assert.ok(mockDbAdapter.execute.mock.calls.length > 0);
     const decaySql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
     assert.ok(decaySql.includes("julianday('now')"), 'Decay SQL should use julianday for SQLite');
-  });
-
-  test('computeConfidence applies bayesian bounds correctly', () => {
-    const computeConfidence = (consolidationEngine as any).computeConfidence.bind(consolidationEngine);
-
-    // Initial confidence with 0 evidence
-    assert.equal(computeConfidence(0.5, 0), 0.5);
-
-    // Confidence increases with positive evidence
-    assert.ok(computeConfidence(0.5, 5) > 0.5);
-
-    // Confidence is hard-capped at 0.99
-    assert.equal(computeConfidence(0.99, 100), 0.99);
-    assert.ok(computeConfidence(0.98, 100) <= 0.99);
-  });
-
-  test('attemptBatchUpdate performs retries and handles errors correctly', async () => {
-    const attemptBatchUpdate = (consolidationEngine as any).attemptBatchUpdate.bind(consolidationEngine);
-    const mockDb = {
-      executeMany: mock.fn(async () => { throw new Error('DB Error'); }),
-      execute: mock.fn(async () => { throw new Error('DB Error'); })
-    };
-
-    // Test that it fails after all retries
-    const start = Date.now();
-    const result = await attemptBatchUpdate(mockDb, 'SQL', [{ id: '1' }], 'test-batch', { logCount: 0 }, 2); // 2 retries
-    const duration = Date.now() - start;
-
-    assert.equal(result, false);
-    assert.equal(mockDb.executeMany.mock.calls.length, 2);
-    // Backoff is 500ms by default, so 2 attempts with a 500ms delay between them means at least 500ms duration
-    assert.ok(duration >= 500);
-  });
-
-  test('getEnvVarNumber applies valid sizes and fallbacks correctly', () => {
-    (consolidationEngine as any)._configCache.clear();
-    (consolidationEngine as any)._engineConfig = null;
-    const getEnvVarNumber = (consolidationEngine as any).getEnvVarNumber.bind(consolidationEngine);
-
-    // Default configuration fallback
-    delete process.env.CODEATLAS_TEST_VAR_1;
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR_1', 500, 'int', 2000), 500);
-
-    // Valid configuration
-    process.env.CODEATLAS_TEST_VAR_2 = '1000';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR_2', 500, 'int', 2000), 1000);
-
-    // Valid configuration with whitespace
-    process.env.CODEATLAS_TEST_VAR_3 = '  1500  ';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR_3', 500, 'int', 2000), 1500);
-
-    // Enforced maximum limit
-    process.env.CODEATLAS_TEST_VAR_4 = '5000';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR_4', 500, 'int', 2000), 2000);
-
-    // Float parsing
-    process.env.CODEATLAS_TEST_FLOAT = '0.75';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_FLOAT', 0.5, 'float', 1.0), 0.75);
-
-    // Invalid string fallback
-    process.env.CODEATLAS_TEST_INVALID = 'abc';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_INVALID', 300), 300);
-
-    // Negative number fallback
-    process.env.CODEATLAS_TEST_NEGATIVE = '-50';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_NEGATIVE', 300), 300);
   });
 
   test('getNormalizedVector correctly normalizes and handles zero-norm vectors', () => {

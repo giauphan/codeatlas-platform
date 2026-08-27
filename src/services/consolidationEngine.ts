@@ -10,7 +10,6 @@
 
 import { randomUUID } from "node:crypto";
 import { createDatabaseAdapter } from "../database/factory.js";
-import { IDatabaseAdapter } from "../database/adapters/interface.js";
 import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
@@ -37,40 +36,6 @@ export interface ConsolidationJob {
   operations: ("dedup" | "extract_concepts" | "score" | "score_dreams")[];
 }
 
-export interface ConceptConfidenceUpdate extends Record<string, unknown> {
-  conf: number;
-  id: string;
-  tenantId: string;
-}
-
-const DEFAULTS = {
-  BATCH_SIZE: 500,
-  MAX_CHUNK_SIZE: 2000,
-  MAX_UPDATE_RECORDS: 10000,
-  MAX_UPDATE_LIMIT: 50000,
-  BATCH_UPDATE_RETRIES: 3,
-  MAX_RETRIES: 10,
-  BACKOFF_MS: 500,
-  DECAY_CONSTANT: 0.2,
-  MAX_DECAY: 1.0,
-  CONFIDENCE_CEILING: 0.99,
-  ABORT_THRESHOLD: 5,
-  MAX_ABORT_THRESHOLD: 50,
-  ABORT_FRACTION: 0.5,
-  MAX_ABORT_FRACTION: 1.0
-};
-
-interface EngineConfig {
-   batchSize: number;
-   maxUpdateRecords: number;
-   abortThreshold: number;
-   abortFraction: number;
-   decayConstant: number;
-   confidenceCeiling: number;
-   maxRetries: number;
-   backoffMs: number;
-}
-
 export interface ConsolidationReport {
   id: string;
   jobType: string;
@@ -81,22 +46,8 @@ export interface ConsolidationReport {
   dreamsSuperseded: number;
   invalidEmbeddingsSkipped: number;
   errors: string[];
-  failedScoringChunks?: ConceptConfidenceUpdate[][];
 }
 
-export enum EnvVarType {
-  INT = 'int',
-  FLOAT = 'float',
-}
-
-/**
- * Core processor for AI memory consolidation.
- * Handles deduplication, concept extraction, and confidence scoring.
- *
- * Includes robust retry limits, exponential backoff, and
- * configurable chunking mechanisms to safely execute mass operations
- * without blocking database connections or encountering latency spikes.
- */
 export class ConsolidationEngine {
 
   private getVal(row: any, index: number, keyStr: string): any {
@@ -106,67 +57,6 @@ export class ConsolidationEngine {
     const lowerKey = keyStr.toLowerCase();
     if (row[lowerKey] !== undefined) return row[lowerKey];
     return undefined;
-  }
-
-  /**
-   * Helper to parse and validate environment variables with fallbacks
-   */
-  private _configCache = new Map<string, number>();
-  private _engineConfig: EngineConfig | null = null;
-
-  /**
-   * Caches configuration globally to avoid redundant Env var checks per method
-   */
-  private initConfig(): EngineConfig {
-    if (this._engineConfig) return this._engineConfig;
-
-    this._engineConfig = {
-       batchSize: this.getEnvVarNumber('CODEATLAS_DB_BATCH_SIZE', DEFAULTS.BATCH_SIZE, EnvVarType.INT, DEFAULTS.MAX_CHUNK_SIZE),
-       maxUpdateRecords: this.getEnvVarNumber('CODEATLAS_MAX_UPDATE_RECORDS', DEFAULTS.MAX_UPDATE_RECORDS, EnvVarType.INT, DEFAULTS.MAX_UPDATE_LIMIT),
-       abortThreshold: this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_THRESHOLD', DEFAULTS.ABORT_THRESHOLD, EnvVarType.INT, DEFAULTS.MAX_ABORT_THRESHOLD),
-       abortFraction: this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', DEFAULTS.ABORT_FRACTION, EnvVarType.FLOAT, DEFAULTS.MAX_ABORT_FRACTION),
-       decayConstant: this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', DEFAULTS.DECAY_CONSTANT, EnvVarType.FLOAT, DEFAULTS.MAX_DECAY),
-       confidenceCeiling: this.getEnvVarNumber('CODEATLAS_CONFIDENCE_CEILING', DEFAULTS.CONFIDENCE_CEILING, EnvVarType.FLOAT, 1.0),
-       maxRetries: this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', DEFAULTS.BATCH_UPDATE_RETRIES, EnvVarType.INT, DEFAULTS.MAX_RETRIES),
-       backoffMs: this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', DEFAULTS.BACKOFF_MS)
-    };
-    return this._engineConfig;
-  }
-
-  private getEnvVarNumber(name: string, defaultVal: number, type: EnvVarType = EnvVarType.INT, maxLimit?: number): number {
-    if (this._configCache.has(name)) {
-       return this._configCache.get(name)!;
-    }
-    let result = defaultVal;
-    if (defaultVal === undefined || defaultVal === null) {
-      throw new Error(`[Consolidation] Developer Error: defaultVal must be provided for getEnvVarNumber('${name}')`);
-    }
-
-    const rawValue = process.env[name];
-    if (!rawValue) return defaultVal;
-
-    const parsed = type === EnvVarType.FLOAT ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
-
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      if (parsed === 0 && name === 'CODEATLAS_CONFIDENCE_DECAY_CONSTANT') {
-          // Special exception: A decay constant of 0 means NO decay (score does not drop), which is a valid math state
-          // but we still want to warn
-          logger.warn(`[Consolidation] Configured ${name} as 0. This disables decay completely.`);
-      } else {
-          logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a strictly positive finite number greater than zero. Falling back to default ${defaultVal}.`);
-          return defaultVal;
-      }
-    }
-
-    if (maxLimit !== undefined && parsed > maxLimit) {
-      logger.error(`[Consolidation] Configuration for ${name} exceeds maximum limit of ${maxLimit}. Clamping value to ${maxLimit}.`);
-      result = maxLimit;
-    } else {
-      result = parsed;
-    }
-
-    this._configCache.set(name, result);
-    return result;
   }
 
   /**
@@ -219,207 +109,9 @@ export class ConsolidationEngine {
   }
 
   /**
-   * Helper to encapsulate batch logging and reduce redundancy.
-   */
-  private logBatchDetails(level: 'debug' | 'info' | 'warn' | 'error', action: string, message: string, meta?: any): void {
-    const txId = meta?.txId || 'no-tx';
-    const msg = `[Consolidation] [Batch:${action}] [TxID:${txId}] ${message}`;
-
-    // Toggle verbose debug logs based on configuration to avoid I/O overhead.
-    const isVerbose = process.env.CODEATLAS_BATCH_VERBOSE_LOGGING === 'true';
-    if (level === 'debug' && !isVerbose) return;
-
-    if (meta) {
-      // clone meta to prevent mutation, but omit noisy fields
-      const logMeta = { ...meta };
-      delete logMeta.txId;
-      if (Object.keys(logMeta).length > 0) {
-          logger[level](msg, logMeta);
-      } else {
-          logger[level](msg);
-      }
-    } else {
-      logger[level](msg);
-    }
-  }
-
-  /**
-   * Execute row-by-row fallback logic, isolated for testability and clarity.
-   */
-  private async executeRowFallback(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, fallbackState: { logCount: number }): Promise<boolean> {
-    this.logBatchDetails('warn', 'Fallback', `Chunk failed all retries. Falling back to row-by-row execution to salvage valid rows.`, { txId: batchId });
-    let successCount = 0;
-
-    // Configurable log suppression limit
-    const suppressLimit = this.getEnvVarNumber('CODEATLAS_FALLBACK_LOG_LIMIT', 50, EnvVarType.INT, 1000);
-
-    for (const row of chunk) {
-      try {
-        await db.execute(updateSql, row);
-        successCount++;
-      } catch (rowErr) {
-        const rowMsg = rowErr instanceof Error ? rowErr.message : String(rowErr);
-
-        // We aggregate errors to avoid excessive I/O overhead on high-failure jobs
-        fallbackState.logCount++;
-      }
-    }
-    if (successCount > 0) {
-      if (fallbackState.logCount > 0) {
-         this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution encountered ${fallbackState.logCount} total row-level errors.`, { txId: batchId });
-      }
-      this.logBatchDetails('info', 'FallbackResult', `Row-by-row fallback succeeded for ${successCount}/${chunk.length} rows.`, { txId: batchId });
-      return successCount === chunk.length;
-    }
-    if (fallbackState.logCount > 0) {
-       this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution encountered ${fallbackState.logCount} total row-level errors.`, { txId: batchId });
-    }
-    const sampleIds = chunk.slice(0, 3).map((c: ConceptConfidenceUpdate) => c.id).join(', ');
-    this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk. Sample failed IDs: ${sampleIds}`, { txId: batchId });
-    return false;
-  }
-
-  /**
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, fallbackState: { logCount: number } = { logCount: 0 }, maxRetries = this.initConfig().maxRetries): Promise<boolean> {
-    const backoffBaseMs = this.initConfig().backoffMs;
-    const MAX_CUMULATIVE_RETRY_MS = this.getEnvVarNumber('CODEATLAS_MAX_CUMULATIVE_RETRY_MS', 600000, EnvVarType.INT, 1800000); // Default 10 mins, Max 30 mins
-    let cumulativeRetryTime = 0;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await db.executeMany(updateSql, chunk);
-        return true;
-      } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        this.logBatchDetails('warn', 'Attempt', `Retrying update #${attempt} of ${maxRetries} for failed chunk... (${errorMessage})`, { error: err, txId: batchId });
-        if (attempt === maxRetries) {
-          return await this.executeRowFallback(db, updateSql, chunk, batchId, fallbackState);
-        } else {
-          // Check global time cap before applying next retry backoff
-          if (cumulativeRetryTime >= MAX_CUMULATIVE_RETRY_MS) {
-            this.logBatchDetails('error', 'Timeout', `Cumulative retry time (${cumulativeRetryTime}ms) exceeded maximum allowed limit (${MAX_CUMULATIVE_RETRY_MS}ms). Aborting retries and falling back.`, { txId: batchId });
-            return await this.executeRowFallback(db, updateSql, chunk, batchId, fallbackState);
-          }
-
-          // Exponential backoff with jitter
-          cumulativeRetryTime += await this.applyExponentialBackoff(attempt, backoffBaseMs);
-        }
-      }
-    }
-    return false;
-  }
-
-  private getBatchChunkSize(): number {
-    const chunkSize = this.initConfig().batchSize;
-    if (process.env.CODEATLAS_BATCH_VERBOSE_LOGGING === 'true') {
-      logger.info(`[Consolidation] Using batch chunk size of ${chunkSize}`);
-    }
-    return chunkSize;
-  }
-
-  private computeConfidence(currentConf: number, evidenceCount: number, customDecay?: number): number {
-    if (evidenceCount === 0) {
-      return currentConf; // No change in confidence for 0 evidence
-    }
-
-    let decayConstant = customDecay !== undefined ? customDecay : this.initConfig().decayConstant;
-
-    // Safety guard against invalid negative decay constants
-    if (decayConstant < 0) {
-       logger.warn(`[Consolidation] Negative decay constant provided (${decayConstant}). Clamping to 0 to prevent algorithm corruption.`);
-       decayConstant = 0;
-    }
-
-    const ceiling = this.initConfig().confidenceCeiling;
-    return Math.min(ceiling, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
-  }
-
-  private isValidConfidenceUpdate(idStr: unknown, confStr: unknown): boolean {
-    if (idStr === undefined || confStr === undefined) {
-      logger.error("[Consolidation] Missing required fields in database row. Skipping.");
-      return false;
-    }
-    return true;
-  }
-
-  private sanitizeIdForUpdate(idStr: unknown): string {
-    const id = String(idStr).trim();
-    const idRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-
-    if (idRegex.test(id)) {
-        return id;
-    }
-
-    // Non-UUID IDs are sometimes valid in CodeAtlas depending on the provider,
-    // but for strict ID sanitation we will ensure no SQL injection characters
-    const sanitized = id.replace(/[^a-zA-Z0-9\-_]/g, '');
-
-    if (sanitized.length === 0) {
-        throw new Error(`[Consolidation] Invalid sanitized ID: "${id}". Possible injection attempt or malformed input.`);
-    }
-
-    if (id !== sanitized) {
-       logger.debug(`[Consolidation] Sanitized non-UUID ID from "${id}" to "${sanitized}"`);
-    }
-    return sanitized;
-  }
-
-  private async applyExponentialBackoff(attempt: number, baseMs: number): Promise<number> {
-    const MAX_BACKOFF_CAP_MS = 10000; // 10 seconds max wait
-    const maxJitter = Math.min(100, baseMs);
-    const jitter = Math.random() * maxJitter;
-    // Cap exponential growth to prevent uncontrolled stalling
-    const waitTime = Math.min((2 ** attempt) * baseMs + jitter, MAX_BACKOFF_CAP_MS);
-    await new Promise(res => setTimeout(res, waitTime));
-    return waitTime;
-  }
-
-  private shouldAbortBatchProcessing(consecutiveFailures: number, abortThreshold: number, totalFailed: number, totalChunks: number, abortFraction: number): boolean {
-    return consecutiveFailures >= abortThreshold || (totalChunks >= 10 && totalFailed / totalChunks > abortFraction);
-  }
-
-  private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
-    const results: ConceptConfidenceUpdate[] = [];
-    const maxLimit = this.initConfig().maxUpdateRecords;
-
-    for (const row of rows) {
-      if (results.length >= maxLimit) {
-        logger.warn(`[Consolidation] Reached max update records limit (${maxLimit}). Terminating prepareConfidenceUpdates early.`);
-        break;
-      }
-
-      const idStr = this.getVal(row, R_IDX.ID, 'ID');
-      const confStr = this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE');
-
-      if (!this.isValidConfidenceUpdate(idStr, confStr)) {
-        continue;
-      }
-
-      const id = this.sanitizeIdForUpdate(idStr);
-      const evidenceCountRaw = this.getVal(row, 5, 'EVIDENCE_COUNT');
-
-      // Enforce robust type conversions to prevent NaN propagation
-      const evidenceCount = evidenceCountRaw !== undefined && evidenceCountRaw !== null ? Number(evidenceCountRaw) : 1;
-      const currentConf = Number(confStr);
-
-      if (Number.isNaN(evidenceCount) || Number.isNaN(currentConf)) {
-         logger.warn(`[Consolidation] Row (${id}) skipped due to NaN properties.`);
-         continue;
-      }
-
-      // Bayesian confidence update: each piece of evidence increases confidence
-      const newConf = this.computeConfidence(currentConf, evidenceCount);
-
-      if (Math.abs(newConf - currentConf) > 0.01) {
-        results.push({ conf: newConf, id, tenantId });
-      }
-    }
-    return results;
-  }
-
   private getNormalizedVector(embedding: Float32Array, id: string): Float32Array {
     const vec = embedding.slice();
     let norm = 0;
@@ -697,96 +389,23 @@ export class ConsolidationEngine {
 
       const rows = await db.query<any[]>(sql, binds);
 
-      const updateRecords: ConceptConfidenceUpdate[] = this.prepareConfidenceUpdates(rows, tenantId);
-
       let updated = 0;
-      if (updateRecords.length > 0) {
-        // ⚡ Bolt: Batch database operations using executeMany to avoid N+1 query problem
-        // Generate a single timestamp for all retries in this batch to maintain consistent metadata
-        const timestampVal = dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')";
-        const updateSql = `
-          UPDATE codeatlas_concepts
-          SET confidence = :conf, updated_at = ${timestampVal}
-          WHERE id = :id AND tenant_id = :tenantId
-        `;
+      for (const row of rows) {
+        const id = String(this.getVal(row, R_IDX.ID, 'ID'));
+        const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
+        const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
 
-        // Chunk batches to prevent very large batches from hitting database size limits or latency spikes.
-        const DEFAULT_CHUNK_SIZE = 500;
-        const MAX_CHUNK_LIMIT = 2000;
-        const chunkSize = this.getBatchChunkSize();
+        // Bayesian confidence update: each piece of evidence increases confidence
+        const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
 
-        const failedChunks: ConceptConfidenceUpdate[][] = [];
-        let totalConsecutiveFailures = 0;
-        const abortThreshold = this.initConfig().abortThreshold;
-        const abortFraction = this.initConfig().abortFraction;
-        const totalRunCount = Math.ceil(updateRecords.length / chunkSize);
-
-        const MAX_HARD_ABORT = 100;
-        const fallbackState = { logCount: 0 };
-        for (let i = 0; i < updateRecords.length; i += chunkSize) {
-          if (this.shouldAbortBatchProcessing(totalConsecutiveFailures, abortThreshold, failedChunks.length, totalRunCount, abortFraction) || failedChunks.length >= MAX_HARD_ABORT) {
-            this.logBatchDetails('error', 'Execution', `Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
-            break;
-          }
-
-          const chunk = updateRecords.slice(i, i + chunkSize);
-          const batchId = randomUUID();
-
-          const tStart = Date.now();
-          this.logBatchDetails('debug', 'Execution', `Executing batch update for ${chunk.length} rows.`, { txId: batchId });
-          try {
-            let success = false;
-
-            // Wrap the batch chunk attempt in a transaction to prevent partial execution inconsistencies.
-            // Some database adapters (like SQLite) may not support manual .transaction methods in this interface,
-            // so we fall back to raw query execution for BEGIN/COMMIT if necessary, or just run it.
-            try {
-               // SQLite specifically supports db.execute('BEGIN') but many native Postgres/Oracle adapters require explicit tx APIs
-               if (typeof (db as any).transaction === 'function') {
-                   // Prefer native transaction wrappers if the adapter implements them
-                   await (db as any).transaction(async (txAdapter: IDatabaseAdapter) => {
-                       success = await this.attemptBatchUpdate(txAdapter, updateSql, chunk, batchId, fallbackState);
-                       if (!success) throw new Error('Batch update chunk failed');
-                   });
-                   success = true;
-               } else {
-                   this.logBatchDetails('debug', 'Transaction', `Adapter does not support native db.transaction(); falling back to explicit BEGIN/COMMIT statements`, { txId: batchId });
-                   await db.execute('BEGIN TRANSACTION', {});
-                   success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId, fallbackState);
-                   if (success) {
-                      await db.execute('COMMIT', {});
-                   } else {
-                      await db.execute('ROLLBACK', {});
-                   }
-               }
-            } catch (txErr) {
-               // If transaction commands fail (e.g., unsupported by adapter), just run directly
-               success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId, fallbackState);
-            }
-            const duration = Date.now() - tStart;
-            this.logBatchDetails('debug', 'Performance', `Batch executed in ${duration}ms`, { txId: batchId, durationMs: duration, rows: chunk.length });
-
-            if (success) {
-               updated += chunk.length;
-               totalConsecutiveFailures = 0;
-            } else {
-              failedChunks.push(chunk);
-              totalConsecutiveFailures++;
-            }
-          } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            this.logBatchDetails('error', 'Execution', `Unhandled error during batch processing: ${errorMessage}`);
-            failedChunks.push(chunk);
-            totalConsecutiveFailures++;
-          }
-        }
-
-        if (failedChunks.length > 0) {
-          const totalFailedRows = failedChunks.reduce((acc, c) => acc + c.length, 0);
-          this.logBatchDetails('error', 'Summary', `${failedChunks.length} chunks failed during concept scoring. Total rows failed: ${totalFailedRows}`);
-          if (report) {
-            report.failedScoringChunks = failedChunks;
-          }
+        if (Math.abs(newConf - currentConf) > 0.01) {
+          const updateSql = `
+            UPDATE codeatlas_concepts
+            SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
+            WHERE id = :id AND tenant_id = :tenantId
+          `;
+          await db.execute(updateSql, { conf: newConf, id, tenantId });
+          updated++;
         }
       }
 
