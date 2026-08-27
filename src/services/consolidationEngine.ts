@@ -120,7 +120,7 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = 3): Promise<boolean> {
+  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = Number.parseInt(process.env.CODEATLAS_BATCH_UPDATE_RETRIES || '3', 10)): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await db.executeMany(updateSql, chunk);
