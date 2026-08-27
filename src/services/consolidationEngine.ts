@@ -54,6 +54,7 @@ const DEFAULTS = {
   DECAY_CONSTANT: 0.2,
   MAX_DECAY: 1.0,
   CONFIDENCE_CEILING: 0.99,
+  CONFIDENCE_UPDATE_THRESHOLD: 0.01,
   ABORT_THRESHOLD: 5,
   MAX_ABORT_THRESHOLD: 50,
   ABORT_FRACTION: 0.5,
@@ -67,6 +68,7 @@ interface EngineConfig {
    abortFraction: number;
    decayConstant: number;
    confidenceCeiling: number;
+   confidenceUpdateThreshold: number;
    maxRetries: number;
    backoffMs: number;
 }
@@ -130,6 +132,7 @@ export class ConsolidationEngine {
        abortFraction: this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', DEFAULTS.ABORT_FRACTION, EnvVarType.FLOAT, DEFAULTS.MAX_ABORT_FRACTION),
        decayConstant: this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', DEFAULTS.DECAY_CONSTANT, EnvVarType.FLOAT, DEFAULTS.MAX_DECAY),
        confidenceCeiling: this.getEnvVarNumber('CODEATLAS_CONFIDENCE_CEILING', DEFAULTS.CONFIDENCE_CEILING, EnvVarType.FLOAT, 1.0),
+   confidenceUpdateThreshold: this.getEnvVarNumber('CODEATLAS_CONFIDENCE_UPDATE_THRESHOLD', DEFAULTS.CONFIDENCE_UPDATE_THRESHOLD, EnvVarType.FLOAT, 1.0),
        maxRetries: this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', DEFAULTS.BATCH_UPDATE_RETRIES, EnvVarType.INT, DEFAULTS.MAX_RETRIES),
        backoffMs: this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', DEFAULTS.BACKOFF_MS)
     };
@@ -451,7 +454,7 @@ export class ConsolidationEngine {
       // Bayesian confidence update: each piece of evidence increases confidence
       const newConf = this.computeConfidence(currentConf, evidenceCount);
 
-      if (Math.abs(newConf - currentConf) > 0.01) {
+      if (Math.abs(newConf - currentConf) > this.initConfig().confidenceUpdateThreshold) {
         results.push({ conf: newConf, id, tenantId });
       }
     }
