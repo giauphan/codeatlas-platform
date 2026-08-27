@@ -11,6 +11,7 @@ import express from "express";
 import { a2aRegistry } from "../../services/a2aRegistry.js";
 import { logger } from "../../utils/logger.js";
 import { authMiddleware } from "../../middleware/auth.js";
+import { countMatching } from "../../utils/array.js";
 import { a2aRateLimiter } from "./a2aRoutes.js";
 
 export function mountHeartbeatRoutes(app: express.Express): void {
@@ -65,7 +66,7 @@ export function mountHeartbeatRoutes(app: express.Express): void {
 
       res.json({
         agentCount: agents.length,
-        onlineCount: agents.filter(a => a.status === "online").length,
+        onlineCount: countMatching(agents, a => a.status === "online"),
         agents: agents.sort((a, b) => a.status === "online" ? -1 : 1),
       });
     } catch (err) {
