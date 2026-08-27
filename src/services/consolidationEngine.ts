@@ -182,6 +182,22 @@ export class ConsolidationEngine {
     return Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
   }
 
+  private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
+    return rows.reduce((acc: ConceptConfidenceUpdate[], row) => {
+      const id = String(this.getVal(row, R_IDX.ID, 'ID'));
+      const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
+      const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
+
+      // Bayesian confidence update: each piece of evidence increases confidence
+      const newConf = this.computeConfidence(currentConf, evidenceCount);
+
+      if (Math.abs(newConf - currentConf) > 0.01) {
+        acc.push({ conf: newConf, id, tenantId });
+      }
+      return acc;
+    }, []);
+  }
+
   private getNormalizedVector(embedding: Float32Array, id: string): Float32Array {
     const vec = embedding.slice();
     let norm = 0;
@@ -459,22 +475,10 @@ export class ConsolidationEngine {
 
       const rows = await db.query<any[]>(sql, binds);
 
-      const bindsBatch: ConceptConfidenceUpdate[] = rows.reduce((acc: ConceptConfidenceUpdate[], row) => {
-        const id = String(this.getVal(row, R_IDX.ID, 'ID'));
-        const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
-        const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
-
-        // Bayesian confidence update: each piece of evidence increases confidence
-        const newConf = this.computeConfidence(currentConf, evidenceCount);
-
-        if (Math.abs(newConf - currentConf) > 0.01) {
-          acc.push({ conf: newConf, id, tenantId });
-        }
-        return acc;
-      }, []);
+      const updateRecords: ConceptConfidenceUpdate[] = this.prepareConfidenceUpdates(rows, tenantId);
 
       let updated = 0;
-      if (bindsBatch.length > 0) {
+      if (updateRecords.length > 0) {
         // ⚡ Bolt: Batch database operations using executeMany to avoid N+1 query problem
         // Generate a single timestamp for all retries in this batch to maintain consistent metadata
         const timestampVal = dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')";
@@ -493,15 +497,15 @@ export class ConsolidationEngine {
         let totalConsecutiveFailures = 0;
         const abortThreshold = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_THRESHOLD', 5, 'int', 50);
         const abortFraction = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', 0.5, 'float', 1.0);
-        const totalRunCount = Math.ceil(bindsBatch.length / chunkSize);
+        const totalRunCount = Math.ceil(updateRecords.length / chunkSize);
 
-        for (let i = 0; i < bindsBatch.length; i += chunkSize) {
+        for (let i = 0; i < updateRecords.length; i += chunkSize) {
           if (totalConsecutiveFailures >= abortThreshold || (totalRunCount >= 10 && failedChunks.length / totalRunCount > abortFraction)) {
             logger.error(`[Consolidation] Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
             break;
           }
 
-          const chunk = bindsBatch.slice(i, i + chunkSize);
+          const chunk = updateRecords.slice(i, i + chunkSize);
           logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
           try {
             const success = await this.attemptBatchUpdate(db, updateSql, chunk);
