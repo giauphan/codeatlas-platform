@@ -390,6 +390,7 @@ export class ConsolidationEngine {
       const rows = await db.query<any[]>(sql, binds);
 
       let updated = 0;
+      const updates: Array<{ conf: number, id: string, tenantId: string }> = [];
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
@@ -399,14 +400,18 @@ export class ConsolidationEngine {
         const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
 
         if (Math.abs(newConf - currentConf) > 0.01) {
-          const updateSql = `
-            UPDATE codeatlas_concepts
-            SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
-            WHERE id = :id AND tenant_id = :tenantId
-          `;
-          await db.execute(updateSql, { conf: newConf, id, tenantId });
+          updates.push({ conf: newConf, id, tenantId });
           updated++;
         }
+      }
+
+      if (updates.length > 0) {
+        const updateSql = `
+          UPDATE codeatlas_concepts
+          SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
+          WHERE id = :id AND tenant_id = :tenantId
+        `;
+        await db.executeMany(updateSql, updates as any);
       }
 
       logger.info(`[Consolidation] Scored ${rows.length} concepts, updated ${updated}`);

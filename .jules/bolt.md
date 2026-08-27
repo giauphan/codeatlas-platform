@@ -45,3 +45,6 @@
 ## 2026-08-25 - Avoid chained .filter().length
 **Learning:** To optimize performance during AST traversal or file indexing, chaining `.filter().length` creates intermediate array allocations that must then be scanned and garbage collected. This hurts performance significantly in hot paths like text classification checks.
 **Action:** Replace `.filter(condition).length` with a direct `for` loop that iterates over the original array and counts the occurrences that match the condition. This avoids allocating a new array and reduces garbage collection pressure.
+## 2026-08-27 - N+1 Query in database updates
+**Learning:** Performing single `db.execute` updates inside a loop over a large dataset creates massive database round-trip overhead and bottlenecks backend performance.
+**Action:** Always collect query bindings in an array during the loop and execute them in a single batched `db.executeMany` call to minimize database round-trips.
