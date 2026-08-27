@@ -43,6 +43,22 @@ export interface ConceptConfidenceUpdate extends Record<string, unknown> {
   tenantId: string;
 }
 
+const DEFAULTS = {
+  BATCH_SIZE: 500,
+  MAX_CHUNK_SIZE: 2000,
+  MAX_UPDATE_RECORDS: 10000,
+  MAX_UPDATE_LIMIT: 50000,
+  BATCH_UPDATE_RETRIES: 3,
+  MAX_RETRIES: 10,
+  BACKOFF_MS: 500,
+  DECAY_CONSTANT: 0.2,
+  MAX_DECAY: 1.0,
+  ABORT_THRESHOLD: 5,
+  MAX_ABORT_THRESHOLD: 50,
+  ABORT_FRACTION: 0.5,
+  MAX_ABORT_FRACTION: 1.0
+};
+
 export interface ConsolidationReport {
   id: string;
   jobType: string;
@@ -71,7 +87,7 @@ export enum EnvVarType {
  */
 export class ConsolidationEngine {
 
-  private getVal(row: any, index: number, keyStr: string): any {
+  private getVal(row: Record<string, any>, index: number, keyStr: string): any {
     if (!row) return undefined;
     if (row[index] !== undefined) return row[index];
     if (row[keyStr] !== undefined) return row[keyStr];
@@ -159,7 +175,8 @@ export class ConsolidationEngine {
     const msg = `[Consolidation] [Batch:${action}] [TxID:${txId}] ${message}`;
 
     // Toggle verbose debug logs based on configuration to avoid I/O overhead.
-    if (level === 'debug' && process.env.CODEATLAS_BATCH_VERBOSE_LOGGING !== 'true') return;
+    const isVerbose = process.env.CODEATLAS_BATCH_VERBOSE_LOGGING === 'true';
+    if (level === 'debug' && !isVerbose) return;
 
     if (meta) {
       // clone meta to prevent mutation, but omit noisy fields
@@ -203,8 +220,8 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', 3, EnvVarType.INT, 10)): Promise<boolean> {
-    const backoffBaseMs = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', 500);
+  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', DEFAULTS.BATCH_UPDATE_RETRIES, EnvVarType.INT, DEFAULTS.MAX_RETRIES)): Promise<boolean> {
+    const backoffBaseMs = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', DEFAULTS.BACKOFF_MS);
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await db.executeMany(updateSql, chunk);
@@ -215,15 +232,16 @@ export class ConsolidationEngine {
         if (attempt === maxRetries) {
           return await this.executeRowFallback(db, updateSql, chunk, batchId);
         } else {
-          // Exponential backoff
-          await new Promise(res => setTimeout(res, attempt * backoffBaseMs));
+          // Exponential backoff with jitter
+          const jitter = Math.random() * 100;
+          await new Promise(res => setTimeout(res, (attempt * backoffBaseMs) + jitter));
         }
       }
     }
     return false;
   }
 
-  private getBatchChunkSize(defaultSize = 500, maxLimit = 2000): number {
+  private getBatchChunkSize(defaultSize = DEFAULTS.BATCH_SIZE, maxLimit = DEFAULTS.MAX_CHUNK_SIZE): number {
     const chunkSize = this.getEnvVarNumber('CODEATLAS_DB_BATCH_SIZE', defaultSize, EnvVarType.INT, maxLimit);
     if (process.env.CODEATLAS_BATCH_VERBOSE_LOGGING === 'true') {
       logger.info(`[Consolidation] Using batch chunk size of ${chunkSize}`);
@@ -232,11 +250,11 @@ export class ConsolidationEngine {
   }
 
   private computeConfidence(currentConf: number, evidenceCount: number): number {
-    const decayConstant = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', 0.2, EnvVarType.FLOAT, 1.0);
+    const decayConstant = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', DEFAULTS.DECAY_CONSTANT, EnvVarType.FLOAT, DEFAULTS.MAX_DECAY);
     return Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
   }
 
-  private isValidConfidenceUpdate(idStr: any, confStr: any): boolean {
+  private isValidConfidenceUpdate(idStr: unknown, confStr: unknown): boolean {
     if (idStr === undefined || confStr === undefined) {
       logger.error("[Consolidation] Missing required fields in database row. Skipping.");
       return false;
@@ -244,21 +262,24 @@ export class ConsolidationEngine {
     return true;
   }
 
-  private sanitizeIdForUpdate(idStr: any): string {
+  private sanitizeIdForUpdate(idStr: unknown): string {
     const id = String(idStr).trim();
-    // Strict check for valid UUID format if it's expected, else prevent SQL injection tokens
-    // although bind params mitigate direct SQLi, strict ID typing helps avoid errors.
-    const safeId = id.replace(/[^a-zA-Z0-9\-_]/g, '');
-    return safeId;
+    const idRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (!idRegex.test(id)) {
+      // Non-UUID IDs are sometimes valid in CodeAtlas depending on the provider,
+      // but for strict ID sanitation we will ensure no SQL injection characters
+      return id.replace(/[^a-zA-Z0-9\-_]/g, '');
+    }
+    return id;
   }
 
   private shouldAbortBatchProcessing(consecutiveFailures: number, abortThreshold: number, totalFailed: number, totalChunks: number, abortFraction: number): boolean {
     return consecutiveFailures >= abortThreshold || (totalChunks >= 10 && totalFailed / totalChunks > abortFraction);
   }
 
-  private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
+  private prepareConfidenceUpdates(rows: Record<string, any>[], tenantId: string): ConceptConfidenceUpdate[] {
     const results: ConceptConfidenceUpdate[] = [];
-    const maxLimit = this.getEnvVarNumber('CODEATLAS_MAX_UPDATE_RECORDS', 10000, EnvVarType.INT, 50000);
+    const maxLimit = this.getEnvVarNumber('CODEATLAS_MAX_UPDATE_RECORDS', DEFAULTS.MAX_UPDATE_RECORDS, EnvVarType.INT, DEFAULTS.MAX_UPDATE_LIMIT);
 
     for (const row of rows) {
       if (results.length >= maxLimit) {
@@ -584,8 +605,8 @@ export class ConsolidationEngine {
 
         const failedChunks: ConceptConfidenceUpdate[][] = [];
         let totalConsecutiveFailures = 0;
-        const abortThreshold = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_THRESHOLD', 5, EnvVarType.INT, 50);
-        const abortFraction = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', 0.5, EnvVarType.FLOAT, 1.0);
+        const abortThreshold = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_THRESHOLD', DEFAULTS.ABORT_THRESHOLD, EnvVarType.INT, DEFAULTS.MAX_ABORT_THRESHOLD);
+        const abortFraction = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', DEFAULTS.ABORT_FRACTION, EnvVarType.FLOAT, DEFAULTS.MAX_ABORT_FRACTION);
         const totalRunCount = Math.ceil(updateRecords.length / chunkSize);
 
         for (let i = 0; i < updateRecords.length; i += chunkSize) {
