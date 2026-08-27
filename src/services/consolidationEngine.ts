@@ -358,7 +358,8 @@ export class ConsolidationEngine {
             throw new Error(`[Consolidation] customDecay cannot be 0. Decay is required for consistent scoring.`);
         }
     }
-    let decayConstant = customDecay !== undefined ? customDecay : this.initConfig().decayConstant;
+    const config = this.initConfig();
+    let decayConstant = customDecay !== undefined ? customDecay : config.decayConstant;
 
     if (currentConf < 0 || evidenceCount < 0 || decayConstant < 0) {
        logger.warn(`[Consolidation] Invalid negative values in confidence computation. (conf: ${currentConf}, evidence: ${evidenceCount}, decay: ${decayConstant}). Clamping values.`);
