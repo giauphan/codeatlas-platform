@@ -76,6 +76,28 @@ export class ConsolidationEngine {
   }
 
   /**
+   * Helper to parse and validate environment variables with fallbacks
+   */
+  private getEnvVarNumber(name: string, defaultVal: number, type: 'int' | 'float' = 'int', maxLimit?: number): number {
+    const rawValue = process.env[name];
+    if (!rawValue) return defaultVal;
+
+    const parsed = type === 'float' ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
+
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      logger.warn(`[Consolidation] Invalid ${name}: ${rawValue}. Must be a positive number. Falling back to default ${defaultVal}.`);
+      return defaultVal;
+    }
+
+    if (maxLimit !== undefined && parsed > maxLimit) {
+      logger.warn(`[Consolidation] ${name} exceeds maximum limit of ${maxLimit}. Clamping value to ${maxLimit}.`);
+      return maxLimit;
+    }
+
+    return parsed;
+  }
+
+  /**
    * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
    */
   private parseEmbedding(rawEmb: any): Float32Array | null {
@@ -128,8 +150,8 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = Number.parseInt(process.env.CODEATLAS_BATCH_UPDATE_RETRIES?.trim() || '3', 10)): Promise<boolean> {
-    const backoffBaseMs = Number.parseInt(process.env.CODEATLAS_BATCH_UPDATE_BACKOFF_MS?.trim() || '500', 10);
+  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', 3, 'int', 10)): Promise<boolean> {
+    const backoffBaseMs = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', 500);
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await db.executeMany(updateSql, chunk);
@@ -149,22 +171,13 @@ export class ConsolidationEngine {
   }
 
   private getBatchChunkSize(defaultSize = 500, maxLimit = 2000): number {
-    let chunkSize = defaultSize;
-    if (process.env.CODEATLAS_DB_BATCH_SIZE) {
-      const parsed = Number.parseInt(process.env.CODEATLAS_DB_BATCH_SIZE.trim(), 10);
-      // Enforce hard upper limit to prevent misconfiguration from degrading DB performance
-      if (!Number.isNaN(parsed) && parsed > 0) {
-        chunkSize = Math.min(parsed, maxLimit);
-      } else {
-        logger.warn(`[Consolidation] Invalid CODEATLAS_DB_BATCH_SIZE: ${process.env.CODEATLAS_DB_BATCH_SIZE}. Must be a positive integer <= ${maxLimit}. Falling back to default chunk size ${chunkSize}.`);
-      }
-    }
+    const chunkSize = this.getEnvVarNumber('CODEATLAS_DB_BATCH_SIZE', defaultSize, 'int', maxLimit);
     logger.info(`[Consolidation] Using batch chunk size of ${chunkSize}`);
     return chunkSize;
   }
 
   private computeConfidence(currentConf: number, evidenceCount: number): number {
-    const decayConstant = Number.parseFloat(process.env.CODEATLAS_CONFIDENCE_DECAY_CONSTANT || '0.2');
+    const decayConstant = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', 0.2, 'float', 1.0);
     return Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
   }
 
@@ -477,8 +490,8 @@ export class ConsolidationEngine {
 
         const failedChunks: ConceptConfidenceUpdate[][] = [];
         let totalConsecutiveFailures = 0;
-        const abortThreshold = Number.parseInt(process.env.CODEATLAS_BATCH_ABORT_THRESHOLD?.trim() || '5', 10);
-        const abortFraction = Number.parseFloat(process.env.CODEATLAS_BATCH_ABORT_FRACTION?.trim() || '0.5');
+        const abortThreshold = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_THRESHOLD', 5, 'int', 50);
+        const abortFraction = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', 0.5, 'float', 1.0);
         const totalRunCount = Math.ceil(bindsBatch.length / chunkSize);
 
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
