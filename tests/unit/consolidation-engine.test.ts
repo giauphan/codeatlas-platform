@@ -155,32 +155,36 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     assert.ok(duration >= 500);
   });
 
-  test('getBatchChunkSize applies valid sizes and fallbacks correctly', () => {
-    const getBatchChunkSize = (consolidationEngine as any).getBatchChunkSize.bind(consolidationEngine);
+  test('getEnvVarNumber applies valid sizes and fallbacks correctly', () => {
+    const getEnvVarNumber = (consolidationEngine as any).getEnvVarNumber.bind(consolidationEngine);
 
     // Default configuration fallback
-    delete process.env.CODEATLAS_DB_BATCH_SIZE;
-    assert.equal(getBatchChunkSize(500, 2000), 500);
+    delete process.env.CODEATLAS_TEST_VAR;
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 500);
 
     // Valid configuration
-    process.env.CODEATLAS_DB_BATCH_SIZE = '1000';
-    assert.equal(getBatchChunkSize(500, 2000), 1000);
+    process.env.CODEATLAS_TEST_VAR = '1000';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 1000);
 
     // Valid configuration with whitespace
-    process.env.CODEATLAS_DB_BATCH_SIZE = '  1500  ';
-    assert.equal(getBatchChunkSize(500, 2000), 1500);
+    process.env.CODEATLAS_TEST_VAR = '  1500  ';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 1500);
 
     // Enforced maximum limit
-    process.env.CODEATLAS_DB_BATCH_SIZE = '5000';
-    assert.equal(getBatchChunkSize(500, 2000), 2000);
+    process.env.CODEATLAS_TEST_VAR = '5000';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 2000);
 
     // Fallback on invalid types
-    process.env.CODEATLAS_DB_BATCH_SIZE = 'invalid_string';
-    assert.equal(getBatchChunkSize(500, 2000), 500);
+    process.env.CODEATLAS_TEST_VAR = 'invalid_string';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 500);
 
     // Fallback on zero/negative limits
-    process.env.CODEATLAS_DB_BATCH_SIZE = '-100';
-    assert.equal(getBatchChunkSize(500, 2000), 500);
+    process.env.CODEATLAS_TEST_VAR = '-100';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 500);
+
+    // Float parsing
+    process.env.CODEATLAS_TEST_VAR = '0.5';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 0.2, 'float', 1.0), 0.5);
   });
 
   test('getNormalizedVector correctly normalizes and handles zero-norm vectors', () => {
