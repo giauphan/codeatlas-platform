@@ -132,11 +132,16 @@ export function SecondBrainView() {
             placeholder="Search concepts…"
             aria-label="Search concepts"
             style={{
-              width: '100%', padding: '0.7rem 1rem 0.7rem 2.5rem', borderRadius: '10px',
+              width: '100%', padding: '0.7rem 4rem 0.7rem 2.5rem', borderRadius: '10px',
               border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)',
               color: '#fff', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box'
             }}
           />
+          <div style={{ position: 'absolute', right: '0.75rem', top: '0.65rem', pointerEvents: 'none' }}>
+            <kbd style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem', background: 'rgba(255,255,255,0.1)', borderRadius: '6px', color: 'var(--text-muted)', fontFamily: 'monospace', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+              <span style={{ fontSize: '0.8rem', lineHeight: 1 }}>↵</span> Enter
+            </kbd>
+          </div>
         </div>
         <div role="group" aria-label="Filter concepts by category" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {categories.map(cat => (

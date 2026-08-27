@@ -242,9 +242,14 @@ export function DreamMemoryView() {
           <input
             type="text" className="glass-input" placeholder="Search memories semantically..."
             aria-label="Search memories semantically"
-            style={{ paddingLeft: '3.25rem', paddingRight: searchQuery ? '2.5rem' : '1rem', width: '100%' }}
+            style={{ paddingLeft: '3.25rem', paddingRight: searchQuery ? '4.5rem' : '3.5rem', width: '100%' }}
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           />
+          <div style={{ position: 'absolute', right: searchQuery ? '2.5rem' : '1rem', top: '1rem', pointerEvents: 'none', transition: 'right 0.2s ease' }}>
+            <kbd style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem', background: 'rgba(255,255,255,0.1)', borderRadius: '6px', color: 'var(--text-muted)', fontFamily: 'monospace', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+              <span style={{ fontSize: '0.8rem', lineHeight: 1 }}>↵</span> Enter
+            </kbd>
+          </div>
           {searchQuery && (
             <button
               type="button"
