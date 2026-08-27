@@ -10,6 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import { createDatabaseAdapter } from "../database/factory.js";
+import { IDatabaseAdapter } from "../database/adapters/interface.js";
 import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
@@ -119,7 +120,7 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: any, updateSql: string, chunk: any[], maxRetries = 3): Promise<boolean> {
+  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = 3): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await db.executeMany(updateSql, chunk);
