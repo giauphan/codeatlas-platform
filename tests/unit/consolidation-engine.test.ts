@@ -138,6 +138,23 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     assert.ok(computeConfidence(0.98, 100) <= 0.99);
   });
 
+  test('attemptBatchUpdate performs retries and handles errors correctly', async () => {
+    const attemptBatchUpdate = (consolidationEngine as any).attemptBatchUpdate.bind(consolidationEngine);
+    const mockDb = {
+      executeMany: mock.fn(async () => { throw new Error('DB Error'); })
+    };
+
+    // Test that it fails after all retries
+    const start = Date.now();
+    const result = await attemptBatchUpdate(mockDb, 'SQL', [{ id: '1' }], 2); // 2 retries
+    const duration = Date.now() - start;
+
+    assert.equal(result, false);
+    assert.equal(mockDb.executeMany.mock.calls.length, 2);
+    // Backoff is 500ms by default, so 2 attempts with a 500ms delay between them means at least 500ms duration
+    assert.ok(duration >= 500);
+  });
+
   test('getBatchChunkSize applies valid sizes and fallbacks correctly', () => {
     const getBatchChunkSize = (consolidationEngine as any).getBatchChunkSize.bind(consolidationEngine);
 
