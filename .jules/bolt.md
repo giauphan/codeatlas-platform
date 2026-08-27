@@ -41,3 +41,9 @@
 ## 2026-08-25 - Iteration over Directory Entries
 **Learning:** Using `Array.prototype.forEach` to iterate over arrays returned by `fs.promises.readdir` prevents early returns and adds slight overhead compared to standard `for...of` loops. This can accumulate overhead during large directory scans.
 **Action:** Replace `forEach` with `for...of` when iterating over `fs.Dirent` arrays in project discovery to ensure optimal iteration performance and modern async control flow compatibility.
+## 2024-05-13 - [N+1 query problem in Consolidation Engine]
+**Learning:** Found N+1 query pattern in `scoreConcepts` of `consolidationEngine.ts`, doing `await db.execute` inside a loop instead of batched `db.executeMany`.
+**Action:** When updating database in loops, use `db.executeMany` or batched operations to prevent database bottleneck and N+1 performance issues.
+## 2024-05-13 - [Batch Limits on N+1 Mitigations]
+**Learning:** While batching `db.executeMany` fixes N+1 queries, passing an unbounded array can risk hitting database constraints or causing latency spikes.
+**Action:** Always chunk parameters when using batched database updates (e.g. chunk size 500) to ensure predictable size payloads, even when the overall N+1 pattern is mitigated.
