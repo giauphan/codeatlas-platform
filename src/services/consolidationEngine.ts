@@ -90,12 +90,12 @@ export class ConsolidationEngine {
     const parsed = type === EnvVarType.FLOAT ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
 
     if (Number.isNaN(parsed) || parsed <= 0) {
-      logger.warn(`[Consolidation] Invalid ${name}: ${rawValue}. Must be a positive number. Falling back to default ${defaultVal}.`);
+      logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a positive number. Falling back to default ${defaultVal}.`);
       return defaultVal;
     }
 
     if (maxLimit !== undefined && parsed > maxLimit) {
-      logger.warn(`[Consolidation] ${name} exceeds maximum limit of ${maxLimit}. Clamping value to ${maxLimit}.`);
+      logger.error(`[Consolidation] Configuration for ${name} exceeds maximum limit of ${maxLimit}. Clamping value to ${maxLimit}.`);
       return maxLimit;
     }
 
@@ -157,8 +157,46 @@ export class ConsolidationEngine {
   private logBatchDetails(level: 'debug' | 'info' | 'warn' | 'error', action: string, message: string, meta?: any): void {
     const txId = meta?.txId || 'no-tx';
     const msg = `[Consolidation] [Batch:${action}] [TxID:${txId}] ${message}`;
-    if (meta) logger[level](msg, meta);
-    else logger[level](msg);
+
+    // Toggle verbose debug logs based on configuration to avoid I/O overhead.
+    if (level === 'debug' && process.env.CODEATLAS_BATCH_VERBOSE_LOGGING !== 'true') return;
+
+    if (meta) {
+      // clone meta to prevent mutation, but omit noisy fields
+      const logMeta = { ...meta };
+      delete logMeta.txId;
+      if (Object.keys(logMeta).length > 0) {
+          logger[level](msg, logMeta);
+      } else {
+          logger[level](msg);
+      }
+    } else {
+      logger[level](msg);
+    }
+  }
+
+  /**
+   * Execute row-by-row fallback logic, isolated for testability and clarity.
+   */
+  private async executeRowFallback(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string): Promise<boolean> {
+    this.logBatchDetails('warn', 'Fallback', `Chunk failed all retries. Falling back to row-by-row execution to salvage valid rows.`, { txId: batchId });
+    let successCount = 0;
+    for (const row of chunk) {
+      try {
+        await db.execute(updateSql, row);
+        successCount++;
+      } catch (rowErr) {
+        const rowMsg = rowErr instanceof Error ? rowErr.message : String(rowErr);
+        this.logBatchDetails('error', 'FallbackRow', `Invalid row during fallback execution (id: ${row.id}): ${rowMsg}`, { txId: batchId, rowId: row.id, error: rowErr });
+      }
+    }
+    if (successCount > 0) {
+      this.logBatchDetails('info', 'FallbackResult', `Row-by-row fallback succeeded for ${successCount}/${chunk.length} rows.`, { txId: batchId });
+      return successCount === chunk.length;
+    }
+    const sampleIds = chunk.slice(0, 3).map((c: any) => c.id).join(', ');
+    this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk. Sample failed IDs: ${sampleIds}`, { txId: batchId });
+    return false;
   }
 
   /**
@@ -175,23 +213,7 @@ export class ConsolidationEngine {
         const errorMessage = err instanceof Error ? err.message : String(err);
         this.logBatchDetails('warn', 'Attempt', `Retrying update #${attempt} of ${maxRetries} for failed chunk... (${errorMessage})`, { error: err, txId: batchId });
         if (attempt === maxRetries) {
-          this.logBatchDetails('warn', 'Fallback', `Chunk failed all retries. Falling back to row-by-row execution to salvage valid rows.`, { txId: batchId });
-          let successCount = 0;
-          for (const row of chunk) {
-            try {
-              await db.execute(updateSql, row);
-              successCount++;
-            } catch (rowErr) {
-              const rowMsg = rowErr instanceof Error ? rowErr.message : String(rowErr);
-              this.logBatchDetails('error', 'FallbackRow', `Invalid row during fallback execution (id: ${row.id}): ${rowMsg}`, { txId: batchId, rowId: row.id, error: rowErr });
-            }
-          }
-          if (successCount > 0) {
-            this.logBatchDetails('info', 'FallbackResult', `Row-by-row fallback succeeded for ${successCount}/${chunk.length} rows.`, { txId: batchId });
-            return successCount === chunk.length;
-          }
-          const sampleIds = chunk.slice(0, 3).map((c: any) => c.id).join(', ');
-          this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk. Sample failed IDs: ${sampleIds}`, { txId: batchId });
+          return await this.executeRowFallback(db, updateSql, chunk, batchId);
         } else {
           // Exponential backoff
           await new Promise(res => setTimeout(res, attempt * backoffBaseMs));
@@ -203,7 +225,9 @@ export class ConsolidationEngine {
 
   private getBatchChunkSize(defaultSize = 500, maxLimit = 2000): number {
     const chunkSize = this.getEnvVarNumber('CODEATLAS_DB_BATCH_SIZE', defaultSize, EnvVarType.INT, maxLimit);
-    logger.info(`[Consolidation] Using batch chunk size of ${chunkSize}`);
+    if (process.env.CODEATLAS_BATCH_VERBOSE_LOGGING === 'true') {
+      logger.info(`[Consolidation] Using batch chunk size of ${chunkSize}`);
+    }
     return chunkSize;
   }
 
@@ -221,7 +245,11 @@ export class ConsolidationEngine {
   }
 
   private sanitizeIdForUpdate(idStr: any): string {
-    return String(idStr).trim();
+    const id = String(idStr).trim();
+    // Strict check for valid UUID format if it's expected, else prevent SQL injection tokens
+    // although bind params mitigate direct SQLi, strict ID typing helps avoid errors.
+    const safeId = id.replace(/[^a-zA-Z0-9\-_]/g, '');
+    return safeId;
   }
 
   private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
