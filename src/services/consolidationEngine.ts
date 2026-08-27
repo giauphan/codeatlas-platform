@@ -456,18 +456,30 @@ export class ConsolidationEngine {
         `;
 
         // Chunk batches to prevent very large batches from hitting database size limits or latency spikes.
-        const chunkSize = this.getBatchChunkSize(500, 2000);
+        const DEFAULT_CHUNK_SIZE = 500;
+        const MAX_CHUNK_LIMIT = 2000;
+        const chunkSize = this.getBatchChunkSize(DEFAULT_CHUNK_SIZE, MAX_CHUNK_LIMIT);
 
         const failedChunks: ConceptConfidenceUpdate[][] = [];
+        let totalConsecutiveFailures = 0;
+        const ABORT_THRESHOLD = 5;
 
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
+          if (totalConsecutiveFailures >= ABORT_THRESHOLD) {
+            logger.error(`[Consolidation] Aborting concept scoring batch update due to ${ABORT_THRESHOLD} consecutive chunk failures.`);
+            break;
+          }
+
           const chunk = bindsBatch.slice(i, i + chunkSize);
           logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
           const success = await this.attemptBatchUpdate(db, updateSql, chunk);
+
           if (success) {
              updated += chunk.length;
+             totalConsecutiveFailures = 0;
           } else {
             failedChunks.push(chunk);
+            totalConsecutiveFailures++;
           }
         }
 
