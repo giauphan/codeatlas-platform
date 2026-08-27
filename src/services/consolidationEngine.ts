@@ -99,9 +99,12 @@ export enum EnvVarType {
  */
 export class ConsolidationEngine {
 
-  private getVal(row: any, index: number, keyStr: string): any {
+  private getVal(row: Record<string, unknown> | unknown[], index: number, keyStr: string): unknown {
     if (!row) return undefined;
-    if (row[index] !== undefined) return row[index];
+    if (Array.isArray(row)) {
+        if (row[index] !== undefined) return row[index];
+        return undefined;
+    }
     if (row[keyStr] !== undefined) return row[keyStr];
     const lowerKey = keyStr.toLowerCase();
     if (row[lowerKey] !== undefined) return row[lowerKey];
@@ -172,7 +175,7 @@ export class ConsolidationEngine {
   /**
    * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
    */
-  private parseEmbedding(rawEmb: any): Float32Array | null {
+  private parseEmbedding(rawEmb: unknown): Float32Array | null {
     if (!rawEmb) return null;
 
     if (rawEmb instanceof Float32Array) {
@@ -207,7 +210,7 @@ export class ConsolidationEngine {
   /**
    * Validates embedding on a row before mathematical processing.
    */
-  private validateRowEmbedding(row: any, embeddingIdx: number, idIdx: number, stepName: string): boolean {
+  private validateRowEmbedding(row: Record<string, unknown> | unknown[], embeddingIdx: number, idIdx: number, stepName: string): boolean {
     const rawEmb = this.getVal(row, embeddingIdx, 'EMBEDDING');
     const parsed = this.parseEmbedding(rawEmb);
     if (!parsed || parsed.length === 0) {
@@ -221,12 +224,12 @@ export class ConsolidationEngine {
   /**
    * Helper to encapsulate batch logging and reduce redundancy.
    */
-  private logBatchDetails(level: 'debug' | 'info' | 'warn' | 'error', action: string, message: string, meta?: any): void {
+  private logBatchDetails(level: 'debug' | 'info' | 'warn' | 'error', action: string, message: string, meta?: Record<string, unknown>): void {
     const txId = meta?.txId || 'no-tx';
     const msg = `[Consolidation] [Batch:${action}] [TxID:${txId}] ${message}`;
 
     // Toggle verbose debug logs based on configuration to avoid I/O overhead.
-    const isVerbose = process.env.CODEATLAS_BATCH_VERBOSE_LOGGING === 'true';
+    const isVerbose = this.getEnvVarNumber('CODEATLAS_BATCH_VERBOSE_LOGGING', 0, EnvVarType.INT, 1) === 1;
     if (level === 'debug' && !isVerbose) return;
 
     if (meta) {
@@ -348,6 +351,9 @@ export class ConsolidationEngine {
   private sanitizeIdForUpdate(idStr: unknown): string {
     const id = String(idStr).trim();
     const idRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (!idRegex.test(id)) {
+      throw new Error(`Invalid UUID format detected: ${id}`);
+    }
 
     if (idRegex.test(id)) {
         return id;
@@ -381,7 +387,7 @@ export class ConsolidationEngine {
     return consecutiveFailures >= abortThreshold || (totalChunks >= 10 && totalFailed / totalChunks > abortFraction);
   }
 
-  private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
+  private prepareConfidenceUpdates(rows: Record<string, unknown>[], tenantId: string): ConceptConfidenceUpdate[] {
     const results: ConceptConfidenceUpdate[] = [];
     const maxLimit = this.initConfig().maxUpdateRecords;
 
@@ -508,7 +514,7 @@ export class ConsolidationEngine {
         WHERE ${conditions.join(' AND ')}
       `;
 
-      const rows = await db.query<any[]>(sql, binds);
+      const rows = await db.query<Record<string, unknown>>(sql, binds);
       report!.dreamsProcessed += rows.length;
 
       if (rows.length < 2) {
@@ -574,7 +580,7 @@ export class ConsolidationEngine {
             const binds = Array.from(toRemove).map((id) => ({ id }));
             await db.executeMany(
               `DELETE FROM ai_dreaming_memory WHERE id = :id`,
-              binds as any
+              binds as unknown as Record<string, unknown>[]
             );
             merged += toRemove.size;
           } catch {
@@ -606,7 +612,7 @@ export class ConsolidationEngine {
         WHERE ${conditions.join(' AND ')}
       `;
 
-      const rows = await db.query<any[]>(sql, binds);
+      const rows = await db.query<Record<string, unknown>>(sql, binds);
 
       if (rows.length < 3) {
         logger.info(`[Consolidation] Extract Concepts: ${rows.length} dreams found (min 3 required), skipping`);
@@ -614,7 +620,7 @@ export class ConsolidationEngine {
       }
 
       // Group dreams by project & type
-      const clusters = new Map<string, any[]>();
+      const clusters = new Map<string, Record<string, unknown>[]>();
       for (const row of rows) {
         const proj = String(this.getVal(row, R_IDX.PROJECT, 'PROJECT') || "default");
         const mtype = String(this.getVal(row, R_IDX.MEMORY_TYPE, 'MEMORY_TYPE') || "GENERAL");
@@ -626,7 +632,7 @@ export class ConsolidationEngine {
 
         const key = `${proj}:${mtype}`;
         if (!clusters.has(key)) clusters.set(key, []);
-        clusters.get(key)!.push(row);
+        clusters.get(key)!.push(row as unknown as Record<string, unknown>);
       }
 
       let created = 0;
@@ -695,9 +701,9 @@ export class ConsolidationEngine {
         WHERE ${conditions.join(' AND ')}
       `;
 
-      const rows = await db.query<any[]>(sql, binds);
+      const rows = await db.query<Record<string, unknown>>(sql, binds);
 
-      const updateRecords: ConceptConfidenceUpdate[] = this.prepareConfidenceUpdates(rows, tenantId);
+      const updateRecords = this.prepareConfidenceUpdates(rows, tenantId);
 
       let updated = 0;
       if (updateRecords.length > 0) {
@@ -729,7 +735,7 @@ export class ConsolidationEngine {
             break;
           }
 
-          const chunk = updateRecords.slice(i, i + chunkSize);
+          const chunk = updateRecords.slice(i, i + chunkSize) as ConceptConfidenceUpdate[];
           const batchId = randomUUID();
 
           const tStart = Date.now();
@@ -875,7 +881,7 @@ export class ConsolidationEngine {
       ORDER BY project, memory_type, created_at ASC
     `;
 
-    const rows = await db.query<any[]>(fetchSql, binds);
+    const rows = await db.query<Record<string, unknown>>(fetchSql, binds);
     let supersededCount = 0;
 
     if (rows.length > 1) {
@@ -930,7 +936,7 @@ export class ConsolidationEngine {
         const batch = Array.from(toSupersede).map((id: string) => ({ sid: id, tid: authStorage.getStore()!.uid }));
         await db.executeMany(
           `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id = :sid AND tenant_id = :tid`,
-          batch as any
+          batch as unknown as Record<string, unknown>[]
         );
         supersededCount = toSupersede.size;
       }

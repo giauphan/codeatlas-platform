@@ -94,7 +94,7 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
 
   test('scoreConcepts uses datetime("now") for updated_at in SQLite mode', async () => {
     mockDbAdapter.query.mock.mockImplementation(async () => [
-      { id: 'concept-1', confidence: 0.5, evidence_count: 5, status: 'active' }
+      { id: '550e8400-e29b-41d4-a716-446655440000', confidence: 0.5, evidence_count: 5, status: 'active' }
     ]);
 
     await (consolidationEngine as any).scoreConcepts('test-proj');
