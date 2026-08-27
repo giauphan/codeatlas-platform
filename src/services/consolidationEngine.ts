@@ -160,7 +160,7 @@ export class ConsolidationEngine {
       return defaultVal;
     }
     if (parsed === 0 && name === 'CODEATLAS_CONFIDENCE_DECAY_CONSTANT') {
-        logger.warn(`[Consolidation] Configured ${name} as 0. This disables decay completely.`);
+        throw new Error(`[Consolidation] Environment variable ${name} cannot be 0. Decay is required for consistent scoring.`);
     }
 
     if (maxLimit !== undefined && parsed > maxLimit) {
