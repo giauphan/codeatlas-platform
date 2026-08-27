@@ -156,8 +156,9 @@ export class ConsolidationEngine {
       try {
         await db.executeMany(updateSql, chunk);
         return true;
-      } catch (err: any) {
-        logger.warn(`[Consolidation] Retrying batch update #${attempt} of ${maxRetries} for failed chunk... (${err.message || err})`, { error: err });
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        logger.warn(`[Consolidation] Retrying batch update #${attempt} of ${maxRetries} for failed chunk... (${errorMessage})`, { error: err });
         if (attempt === maxRetries) {
           const sampleIds = chunk.slice(0, 3).map(c => c.id).join(', ');
           logger.error(`[Consolidation] All ${maxRetries} attempts failed batch update for chunk. Sample failed IDs: ${sampleIds}`);
@@ -512,8 +513,9 @@ export class ConsolidationEngine {
               failedChunks.push(chunk);
               totalConsecutiveFailures++;
             }
-          } catch (err: any) {
-            logger.error(`[Consolidation] Unhandled error during batch processing: ${err.message || err}`);
+          } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            logger.error(`[Consolidation] Unhandled error during batch processing: ${errorMessage}`);
             failedChunks.push(chunk);
             totalConsecutiveFailures++;
           }
