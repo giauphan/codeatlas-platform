@@ -147,13 +147,13 @@ export class ConsolidationEngine {
 
     const parsed = type === EnvVarType.FLOAT ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
 
-    if (Number.isNaN(parsed) || parsed <= 0) {
+    if (!Number.isFinite(parsed) || parsed <= 0) {
       if (parsed === 0 && name === 'CODEATLAS_CONFIDENCE_DECAY_CONSTANT') {
           // Special exception: A decay constant of 0 means NO decay (score does not drop), which is a valid math state
           // but we still want to warn
           logger.warn(`[Consolidation] Configured ${name} as 0. This disables decay completely.`);
       } else {
-          logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a strictly positive number greater than zero. Falling back to default ${defaultVal}.`);
+          logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a strictly positive finite number greater than zero. Falling back to default ${defaultVal}.`);
           return defaultVal;
       }
     }
@@ -260,24 +260,19 @@ export class ConsolidationEngine {
       } catch (rowErr) {
         const rowMsg = rowErr instanceof Error ? rowErr.message : String(rowErr);
 
-        // Suppress repetitive row-level fallback logs if we've seen too many across the entire batch run
-        if (fallbackState.logCount < suppressLimit) {
-           this.logBatchDetails('error', 'FallbackRow', `Invalid row during fallback execution (id: ${row.id}): ${rowMsg}`, { txId: batchId, rowId: row.id, error: rowErr });
-        } else if (fallbackState.logCount === suppressLimit) {
-           this.logBatchDetails('error', 'FallbackRow', `Too many row fallback failures (${suppressLimit}). Suppressing further row-level fallback logs for this run.`, { txId: batchId });
-        }
+        // We aggregate errors to avoid excessive I/O overhead on high-failure jobs
         fallbackState.logCount++;
       }
     }
     if (successCount > 0) {
       if (fallbackState.logCount > 0) {
-         this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution suppressed ${fallbackState.logCount} individual row error logs to prevent console flood.`, { txId: batchId });
+         this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution encountered ${fallbackState.logCount} total row-level errors.`, { txId: batchId });
       }
       this.logBatchDetails('info', 'FallbackResult', `Row-by-row fallback succeeded for ${successCount}/${chunk.length} rows.`, { txId: batchId });
       return successCount === chunk.length;
     }
     if (fallbackState.logCount > 0) {
-       this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution suppressed ${fallbackState.logCount} individual row error logs to prevent console flood.`, { txId: batchId });
+       this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution encountered ${fallbackState.logCount} total row-level errors.`, { txId: batchId });
     }
     const sampleIds = chunk.slice(0, 3).map((c: ConceptConfidenceUpdate) => c.id).join(', ');
     this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk. Sample failed IDs: ${sampleIds}`, { txId: batchId });
@@ -373,8 +368,11 @@ export class ConsolidationEngine {
   }
 
   private async applyExponentialBackoff(attempt: number, baseMs: number): Promise<number> {
-    const jitter = Math.random() * 100;
-    const waitTime = (attempt * baseMs) + jitter;
+    const MAX_BACKOFF_CAP_MS = 10000; // 10 seconds max wait
+    const maxJitter = Math.min(100, baseMs);
+    const jitter = Math.random() * maxJitter;
+    // Cap exponential growth to prevent uncontrolled stalling
+    const waitTime = Math.min((2 ** attempt) * baseMs + jitter, MAX_BACKOFF_CAP_MS);
     await new Promise(res => setTimeout(res, waitTime));
     return waitTime;
   }
