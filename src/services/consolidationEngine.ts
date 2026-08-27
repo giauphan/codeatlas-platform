@@ -146,9 +146,14 @@ export class ConsolidationEngine {
     }
 
     const rawValue = process.env[name];
-    if (!rawValue) return defaultVal;
+    if (rawValue === undefined || rawValue === '') return defaultVal;
 
-    const parsed = type === EnvVarType.FLOAT ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
+    let parsed = type === EnvVarType.FLOAT ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
+
+    if (Number.isNaN(parsed)) {
+      logger.warn(`[Consolidation] Environment variable ${name} is set to non-numeric value '${rawValue}'. Ignoring and using default ${defaultVal}.`);
+      return defaultVal;
+    }
 
     if (!Number.isFinite(parsed) || parsed < 0) {
       logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a finite non-negative number. Falling back to default ${defaultVal}.`);
@@ -325,6 +330,10 @@ export class ConsolidationEngine {
       return currentConf; // No change in confidence for 0 evidence
     }
 
+    if (customDecay !== undefined && (Number.isNaN(customDecay) || typeof customDecay !== 'number')) {
+        logger.warn(`[Consolidation] Invalid decay value passed (${customDecay}). Ignoring custom override.`);
+        customDecay = undefined;
+    }
     let decayConstant = customDecay !== undefined ? customDecay : this.initConfig().decayConstant;
 
     // Safety guard against invalid negative decay constants
