@@ -56,6 +56,11 @@ export interface ConsolidationReport {
   failedScoringChunks?: ConceptConfidenceUpdate[][];
 }
 
+export enum EnvVarType {
+  INT = 'int',
+  FLOAT = 'float',
+}
+
 /**
  * Core processor for AI memory consolidation.
  * Handles deduplication, concept extraction, and confidence scoring.
@@ -78,11 +83,11 @@ export class ConsolidationEngine {
   /**
    * Helper to parse and validate environment variables with fallbacks
    */
-  private getEnvVarNumber(name: string, defaultVal: number, type: 'int' | 'float' = 'int', maxLimit?: number): number {
+  private getEnvVarNumber(name: string, defaultVal: number, type: EnvVarType = EnvVarType.INT, maxLimit?: number): number {
     const rawValue = process.env[name];
     if (!rawValue) return defaultVal;
 
-    const parsed = type === 'float' ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
+    const parsed = type === EnvVarType.FLOAT ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
 
     if (Number.isNaN(parsed) || parsed <= 0) {
       logger.warn(`[Consolidation] Invalid ${name}: ${rawValue}. Must be a positive number. Falling back to default ${defaultVal}.`);
@@ -147,10 +152,19 @@ export class ConsolidationEngine {
   }
 
   /**
+   * Helper to encapsulate batch logging and reduce redundancy.
+   */
+  private logBatchDetails(level: 'debug' | 'info' | 'warn' | 'error', action: string, message: string, meta?: any): void {
+    const msg = `[Consolidation] [Batch:${action}] ${message}`;
+    if (meta) logger[level](msg, meta);
+    else logger[level](msg);
+  }
+
+  /**
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', 3, 'int', 10)): Promise<boolean> {
+  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', 3, EnvVarType.INT, 10)): Promise<boolean> {
     const backoffBaseMs = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', 500);
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -158,10 +172,25 @@ export class ConsolidationEngine {
         return true;
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        logger.warn(`[Consolidation] Retrying batch update #${attempt} of ${maxRetries} for failed chunk... (${errorMessage})`, { error: err });
+        this.logBatchDetails('warn', 'Attempt', `Retrying update #${attempt} of ${maxRetries} for failed chunk... (${errorMessage})`, { error: err });
         if (attempt === maxRetries) {
-          const sampleIds = chunk.slice(0, 3).map(c => c.id).join(', ');
-          logger.error(`[Consolidation] All ${maxRetries} attempts failed batch update for chunk. Sample failed IDs: ${sampleIds}`);
+          this.logBatchDetails('warn', 'Fallback', `Chunk failed all retries. Falling back to row-by-row execution to salvage valid rows.`);
+          let successCount = 0;
+          for (const row of chunk) {
+            try {
+              await db.execute(updateSql, row);
+              successCount++;
+            } catch (rowErr) {
+              const rowMsg = rowErr instanceof Error ? rowErr.message : String(rowErr);
+              this.logBatchDetails('error', 'FallbackRow', `Invalid row during fallback execution (id: ${row.id}): ${rowMsg}`);
+            }
+          }
+          if (successCount > 0) {
+            this.logBatchDetails('info', 'FallbackResult', `Row-by-row fallback succeeded for ${successCount}/${chunk.length} rows.`);
+            return successCount === chunk.length;
+          }
+          const sampleIds = chunk.slice(0, 3).map((c: any) => c.id).join(', ');
+          this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk. Sample failed IDs: ${sampleIds}`);
         } else {
           // Exponential backoff
           await new Promise(res => setTimeout(res, attempt * backoffBaseMs));
@@ -172,27 +201,36 @@ export class ConsolidationEngine {
   }
 
   private getBatchChunkSize(defaultSize = 500, maxLimit = 2000): number {
-    const chunkSize = this.getEnvVarNumber('CODEATLAS_DB_BATCH_SIZE', defaultSize, 'int', maxLimit);
+    const chunkSize = this.getEnvVarNumber('CODEATLAS_DB_BATCH_SIZE', defaultSize, EnvVarType.INT, maxLimit);
     logger.info(`[Consolidation] Using batch chunk size of ${chunkSize}`);
     return chunkSize;
   }
 
   private computeConfidence(currentConf: number, evidenceCount: number): number {
-    const decayConstant = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', 0.2, 'float', 1.0);
+    const decayConstant = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', 0.2, EnvVarType.FLOAT, 1.0);
     return Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
   }
 
   private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
-    return rows.reduce((acc: ConceptConfidenceUpdate[], row) => {
+    const results: ConceptConfidenceUpdate[] = [];
+    const maxLimit = this.getEnvVarNumber('CODEATLAS_MAX_UPDATE_RECORDS', 10000, EnvVarType.INT, 50000);
+
+    for (const row of rows) {
+      if (results.length >= maxLimit) {
+        logger.warn(`[Consolidation] Reached max update records limit (${maxLimit}). Terminating prepareConfidenceUpdates early.`);
+        break;
+      }
+
       const idStr = this.getVal(row, R_IDX.ID, 'ID');
       const confStr = this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE');
 
       if (idStr === undefined || confStr === undefined) {
         logger.error("[Consolidation] Missing required fields in database row. Skipping.");
-        return acc;
+        continue;
       }
 
-      const id = String(idStr);
+      // Sanitize ID upstream
+      const id = String(idStr).trim();
       const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
       const currentConf = Number(confStr);
 
@@ -200,10 +238,10 @@ export class ConsolidationEngine {
       const newConf = this.computeConfidence(currentConf, evidenceCount);
 
       if (Math.abs(newConf - currentConf) > 0.01) {
-        acc.push({ conf: newConf, id, tenantId });
+        results.push({ conf: newConf, id, tenantId });
       }
-      return acc;
-    }, []);
+    }
+    return results;
   }
 
   private getNormalizedVector(embedding: Float32Array, id: string): Float32Array {
@@ -503,18 +541,18 @@ export class ConsolidationEngine {
 
         const failedChunks: ConceptConfidenceUpdate[][] = [];
         let totalConsecutiveFailures = 0;
-        const abortThreshold = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_THRESHOLD', 5, 'int', 50);
-        const abortFraction = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', 0.5, 'float', 1.0);
+        const abortThreshold = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_THRESHOLD', 5, EnvVarType.INT, 50);
+        const abortFraction = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', 0.5, EnvVarType.FLOAT, 1.0);
         const totalRunCount = Math.ceil(updateRecords.length / chunkSize);
 
         for (let i = 0; i < updateRecords.length; i += chunkSize) {
           if (totalConsecutiveFailures >= abortThreshold || (totalRunCount >= 10 && failedChunks.length / totalRunCount > abortFraction)) {
-            logger.error(`[Consolidation] Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
+            this.logBatchDetails('error', 'Execution', `Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
             break;
           }
 
           const chunk = updateRecords.slice(i, i + chunkSize);
-          logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
+          this.logBatchDetails('debug', 'Execution', `Executing batch update for ${chunk.length} rows.`);
           try {
             const success = await this.attemptBatchUpdate(db, updateSql, chunk);
 
@@ -527,7 +565,7 @@ export class ConsolidationEngine {
             }
           } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : String(err);
-            logger.error(`[Consolidation] Unhandled error during batch processing: ${errorMessage}`);
+            this.logBatchDetails('error', 'Execution', `Unhandled error during batch processing: ${errorMessage}`);
             failedChunks.push(chunk);
             totalConsecutiveFailures++;
           }
@@ -535,7 +573,7 @@ export class ConsolidationEngine {
 
         if (failedChunks.length > 0) {
           const totalFailedRows = failedChunks.reduce((acc, c) => acc + c.length, 0);
-          logger.error(`[Consolidation] ${failedChunks.length} chunks failed during concept scoring. Total rows failed: ${totalFailedRows}`);
+          this.logBatchDetails('error', 'Summary', `${failedChunks.length} chunks failed during concept scoring. Total rows failed: ${totalFailedRows}`);
           if (report) {
             report.failedScoringChunks = failedChunks;
           }
