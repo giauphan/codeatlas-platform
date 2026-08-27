@@ -272,6 +272,11 @@ export class ConsolidationEngine {
         // We aggregate errors to avoid excessive I/O overhead on high-failure jobs
         fallbackState.logCount++;
 
+        // Sample errors to prevent log spam
+        if (fallbackState.logCount % Math.max(1, Math.floor(suppressLimit / 10)) === 0) {
+             this.logBatchDetails('warn', 'FallbackError', `Sampled fallback error (${fallbackState.logCount} failures so far): ${rowMsg}`, { txId: batchId });
+        }
+
         // Safety abort for runaway errors in large batches
         if (fallbackState.logCount > suppressLimit * 2) {
             this.logBatchDetails('error', 'FallbackAbort', `Row fallback error count (${fallbackState.logCount}) exceeded maximum allowed threshold. Aborting remaining row execution for chunk to preserve system stability.`, { txId: batchId });
@@ -345,9 +350,13 @@ export class ConsolidationEngine {
       return currentConf; // No change in confidence for 0 evidence
     }
 
-    if (customDecay !== undefined && (Number.isNaN(customDecay) || typeof customDecay !== 'number')) {
-        logger.warn(`[Consolidation] Invalid decay value passed (${customDecay}). Ignoring custom override.`);
-        customDecay = undefined;
+    if (customDecay !== undefined) {
+        if (Number.isNaN(customDecay) || typeof customDecay !== 'number') {
+            logger.warn(`[Consolidation] Invalid decay value passed (${customDecay}). Ignoring custom override.`);
+            customDecay = undefined;
+        } else if (customDecay === 0) {
+            throw new Error(`[Consolidation] customDecay cannot be 0. Decay is required for consistent scoring.`);
+        }
     }
     let decayConstant = customDecay !== undefined ? customDecay : this.initConfig().decayConstant;
 
