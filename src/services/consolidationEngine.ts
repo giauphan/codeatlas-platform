@@ -88,7 +88,7 @@ export enum EnvVarType {
  */
 export class ConsolidationEngine {
 
-  private getVal(row: Record<string, any>, index: number, keyStr: string): any {
+  private getVal(row: any, index: number, keyStr: string): any {
     if (!row) return undefined;
     if (row[index] !== undefined) return row[index];
     if (row[keyStr] !== undefined) return row[keyStr];
@@ -100,7 +100,13 @@ export class ConsolidationEngine {
   /**
    * Helper to parse and validate environment variables with fallbacks
    */
+  private _configCache = new Map<string, number>();
+
   private getEnvVarNumber(name: string, defaultVal: number, type: EnvVarType = EnvVarType.INT, maxLimit?: number): number {
+    if (this._configCache.has(name)) {
+       return this._configCache.get(name)!;
+    }
+    let result = defaultVal;
     if (defaultVal === undefined || defaultVal === null) {
       throw new Error(`[Consolidation] Developer Error: defaultVal must be provided for getEnvVarNumber('${name}')`);
     }
@@ -117,10 +123,13 @@ export class ConsolidationEngine {
 
     if (maxLimit !== undefined && parsed > maxLimit) {
       logger.error(`[Consolidation] Configuration for ${name} exceeds maximum limit of ${maxLimit}. Clamping value to ${maxLimit}.`);
-      return maxLimit;
+      result = maxLimit;
+    } else {
+      result = parsed;
     }
 
-    return parsed;
+    this._configCache.set(name, result);
+    return result;
   }
 
   /**
@@ -224,10 +233,16 @@ export class ConsolidationEngine {
       }
     }
     if (successCount > 0) {
+      if (fallbackState.logCount > 0) {
+         this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution suppressed ${fallbackState.logCount} individual row error logs to prevent console flood.`, { txId: batchId });
+      }
       this.logBatchDetails('info', 'FallbackResult', `Row-by-row fallback succeeded for ${successCount}/${chunk.length} rows.`, { txId: batchId });
       return successCount === chunk.length;
     }
-    const sampleIds = chunk.slice(0, 3).map((c: any) => c.id).join(', ');
+    if (fallbackState.logCount > 0) {
+       this.logBatchDetails('warn', 'FallbackSummary', `Fallback execution suppressed ${fallbackState.logCount} individual row error logs to prevent console flood.`, { txId: batchId });
+    }
+    const sampleIds = chunk.slice(0, 3).map((c: ConceptConfidenceUpdate) => c.id).join(', ');
     this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk. Sample failed IDs: ${sampleIds}`, { txId: batchId });
     return false;
   }
@@ -298,7 +313,7 @@ export class ConsolidationEngine {
     return consecutiveFailures >= abortThreshold || (totalChunks >= 10 && totalFailed / totalChunks > abortFraction);
   }
 
-  private prepareConfidenceUpdates(rows: Record<string, any>[], tenantId: string): ConceptConfidenceUpdate[] {
+  private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
     const results: ConceptConfidenceUpdate[] = [];
     const maxLimit = this.getEnvVarNumber('CODEATLAS_MAX_UPDATE_RECORDS', DEFAULTS.MAX_UPDATE_RECORDS, EnvVarType.INT, DEFAULTS.MAX_UPDATE_LIMIT);
 
@@ -316,7 +331,7 @@ export class ConsolidationEngine {
       }
 
       const id = this.sanitizeIdForUpdate(idStr);
-      const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
+      const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') ?? 1);
       const currentConf = Number(confStr);
 
       // Bayesian confidence update: each piece of evidence increases confidence
@@ -650,12 +665,22 @@ export class ConsolidationEngine {
             // Some database adapters (like SQLite) may not support manual .transaction methods in this interface,
             // so we fall back to raw query execution for BEGIN/COMMIT if necessary, or just run it.
             try {
-               await db.execute('BEGIN TRANSACTION', {});
-               success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId, fallbackState);
-               if (success) {
-                  await db.execute('COMMIT', {});
+               // SQLite specifically supports db.execute('BEGIN') but many native Postgres/Oracle adapters require explicit tx APIs
+               if (typeof (db as any).transaction === 'function') {
+                   // Prefer native transaction wrappers if the adapter implements them
+                   await (db as any).transaction(async (txAdapter: IDatabaseAdapter) => {
+                       success = await this.attemptBatchUpdate(txAdapter, updateSql, chunk, batchId, fallbackState);
+                       if (!success) throw new Error('Batch update chunk failed');
+                   });
+                   success = true;
                } else {
-                  await db.execute('ROLLBACK', {});
+                   await db.execute('BEGIN TRANSACTION', {});
+                   success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId, fallbackState);
+                   if (success) {
+                      await db.execute('COMMIT', {});
+                   } else {
+                      await db.execute('ROLLBACK', {});
+                   }
                }
             } catch (txErr) {
                // If transaction commands fail (e.g., unsupported by adapter), just run directly

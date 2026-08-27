@@ -157,35 +157,36 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
   });
 
   test('getEnvVarNumber applies valid sizes and fallbacks correctly', () => {
+    (consolidationEngine as any)._configCache.clear();
     const getEnvVarNumber = (consolidationEngine as any).getEnvVarNumber.bind(consolidationEngine);
 
     // Default configuration fallback
-    delete process.env.CODEATLAS_TEST_VAR;
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 500);
+    delete process.env.CODEATLAS_TEST_VAR_1;
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR_1', 500, 'int', 2000), 500);
 
     // Valid configuration
-    process.env.CODEATLAS_TEST_VAR = '1000';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 1000);
+    process.env.CODEATLAS_TEST_VAR_2 = '1000';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR_2', 500, 'int', 2000), 1000);
 
     // Valid configuration with whitespace
-    process.env.CODEATLAS_TEST_VAR = '  1500  ';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 1500);
+    process.env.CODEATLAS_TEST_VAR_3 = '  1500  ';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR_3', 500, 'int', 2000), 1500);
 
     // Enforced maximum limit
-    process.env.CODEATLAS_TEST_VAR = '5000';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 2000);
-
-    // Fallback on invalid types
-    process.env.CODEATLAS_TEST_VAR = 'invalid_string';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 500);
-
-    // Fallback on zero/negative limits
-    process.env.CODEATLAS_TEST_VAR = '-100';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 500, 'int', 2000), 500);
+    process.env.CODEATLAS_TEST_VAR_4 = '5000';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR_4', 500, 'int', 2000), 2000);
 
     // Float parsing
-    process.env.CODEATLAS_TEST_VAR = '0.5';
-    assert.equal(getEnvVarNumber('CODEATLAS_TEST_VAR', 0.2, 'float', 1.0), 0.5);
+    process.env.CODEATLAS_TEST_FLOAT = '0.75';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_FLOAT', 0.5, 'float', 1.0), 0.75);
+
+    // Invalid string fallback
+    process.env.CODEATLAS_TEST_INVALID = 'abc';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_INVALID', 300), 300);
+
+    // Negative number fallback
+    process.env.CODEATLAS_TEST_NEGATIVE = '-50';
+    assert.equal(getEnvVarNumber('CODEATLAS_TEST_NEGATIVE', 300), 300);
   });
 
   test('getNormalizedVector correctly normalizes and handles zero-norm vectors', () => {
