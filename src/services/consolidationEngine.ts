@@ -121,6 +121,7 @@ export class ConsolidationEngine {
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
   private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = Number.parseInt(process.env.CODEATLAS_BATCH_UPDATE_RETRIES || '3', 10)): Promise<boolean> {
+    const backoffBaseMs = Number.parseInt(process.env.CODEATLAS_BATCH_UPDATE_BACKOFF_MS || '500', 10);
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await db.executeMany(updateSql, chunk);
@@ -131,8 +132,8 @@ export class ConsolidationEngine {
           const sampleIds = chunk.slice(0, 3).map(c => c.id).join(', ');
           logger.error(`[Consolidation] All ${maxRetries} attempts failed batch update for chunk. Sample failed IDs: ${sampleIds}`);
         } else {
-          // Exponential backoff: 500ms, 1000ms, etc.
-          await new Promise(res => setTimeout(res, attempt * 500));
+          // Exponential backoff
+          await new Promise(res => setTimeout(res, attempt * backoffBaseMs));
         }
       }
     }
@@ -484,7 +485,8 @@ export class ConsolidationEngine {
         }
 
         if (failedChunks.length > 0) {
-          logger.error(`[Consolidation] ${failedChunks.length} chunks failed during concept scoring. Total rows failed: ${failedChunks.reduce((acc, c) => acc + c.length, 0)}`);
+          const totalFailedRows = failedChunks.reduce((acc, c) => acc + c.length, 0);
+          logger.error(`[Consolidation] ${failedChunks.length} chunks failed during concept scoring. Total rows failed: ${totalFailedRows}`);
           if (report) {
             report.failedScoringChunks = failedChunks;
           }
