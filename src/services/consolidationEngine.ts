@@ -418,7 +418,8 @@ export class ConsolidationEngine {
             await db.executeMany(updateSql, chunk as any);
           } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            logger.error(`[Consolidation] Batch update failed for chunk starting at index ${i}, error: ${msg}`);
+            const sampleIds = chunk.slice(0, 3).map(c => c.id).join(', ');
+            logger.error(`[Consolidation] Batch update failed for tenant ${tenantId}, chunk starting at index ${i} (sample ids: ${sampleIds}), error: ${msg}`);
           }
         }
       }
