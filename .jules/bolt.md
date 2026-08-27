@@ -41,3 +41,7 @@
 ## 2026-08-25 - Iteration over Directory Entries
 **Learning:** Using `Array.prototype.forEach` to iterate over arrays returned by `fs.promises.readdir` prevents early returns and adds slight overhead compared to standard `for...of` loops. This can accumulate overhead during large directory scans.
 **Action:** Replace `forEach` with `for...of` when iterating over `fs.Dirent` arrays in project discovery to ensure optimal iteration performance and modern async control flow compatibility.
+
+## 2026-08-25 - Avoid chained .filter().length
+**Learning:** To optimize performance during AST traversal or file indexing, chaining `.filter().length` creates intermediate array allocations that must then be scanned and garbage collected. This hurts performance significantly in hot paths like text classification checks.
+**Action:** Replace `.filter(condition).length` with a direct `for` loop that iterates over the original array and counts the occurrences that match the condition. This avoids allocating a new array and reduces garbage collection pressure.
