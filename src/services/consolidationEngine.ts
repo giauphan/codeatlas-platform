@@ -56,6 +56,14 @@ export interface ConsolidationReport {
   failedScoringChunks?: ConceptConfidenceUpdate[][];
 }
 
+/**
+ * Core processor for AI memory consolidation.
+ * Handles deduplication, concept extraction, and confidence scoring.
+ *
+ * Includes robust retry limits, exponential backoff, and
+ * configurable chunking mechanisms to safely execute mass operations
+ * without blocking database connections or encountering latency spikes.
+ */
 export class ConsolidationEngine {
 
   private getVal(row: any, index: number, keyStr: string): any {
@@ -469,11 +477,12 @@ export class ConsolidationEngine {
 
         const failedChunks: ConceptConfidenceUpdate[][] = [];
         let totalConsecutiveFailures = 0;
-        const ABORT_THRESHOLD = 5;
+        const abortThreshold = Number.parseInt(process.env.CODEATLAS_BATCH_ABORT_THRESHOLD?.trim() || '5', 10);
+        const abortFraction = Number.parseFloat(process.env.CODEATLAS_BATCH_ABORT_FRACTION?.trim() || '0.5');
         const totalRunCount = Math.ceil(bindsBatch.length / chunkSize);
 
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
-          if (totalConsecutiveFailures >= ABORT_THRESHOLD || (totalRunCount >= 10 && failedChunks.length / totalRunCount > 0.5)) {
+          if (totalConsecutiveFailures >= abortThreshold || (totalRunCount >= 10 && failedChunks.length / totalRunCount > abortFraction)) {
             logger.error(`[Consolidation] Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
             break;
           }
