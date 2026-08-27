@@ -184,9 +184,17 @@ export class ConsolidationEngine {
 
   private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
     return rows.reduce((acc: ConceptConfidenceUpdate[], row) => {
-      const id = String(this.getVal(row, R_IDX.ID, 'ID'));
+      const idStr = this.getVal(row, R_IDX.ID, 'ID');
+      const confStr = this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE');
+
+      if (idStr === undefined || confStr === undefined) {
+        logger.error("[Consolidation] Missing required fields in database row. Skipping.");
+        return acc;
+      }
+
+      const id = String(idStr);
       const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
-      const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
+      const currentConf = Number(confStr);
 
       // Bayesian confidence update: each piece of evidence increases confidence
       const newConf = this.computeConfidence(currentConf, evidenceCount);
