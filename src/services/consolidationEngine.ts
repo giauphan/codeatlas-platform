@@ -310,10 +310,7 @@ export class ConsolidationEngine {
           }
 
           // Exponential backoff with jitter
-          const jitter = Math.random() * 100;
-          const waitTime = (attempt * backoffBaseMs) + jitter;
-          cumulativeRetryTime += waitTime;
-          await new Promise(res => setTimeout(res, waitTime));
+          cumulativeRetryTime += await this.applyExponentialBackoff(attempt, backoffBaseMs);
         }
       }
     }
@@ -329,6 +326,10 @@ export class ConsolidationEngine {
   }
 
   private computeConfidence(currentConf: number, evidenceCount: number, customDecay?: number): number {
+    if (evidenceCount === 0) {
+      return currentConf; // No change in confidence for 0 evidence
+    }
+
     let decayConstant = customDecay !== undefined ? customDecay : this.initConfig().decayConstant;
 
     // Safety guard against invalid negative decay constants
@@ -352,16 +353,30 @@ export class ConsolidationEngine {
   private sanitizeIdForUpdate(idStr: unknown): string {
     const id = String(idStr).trim();
     const idRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    if (!idRegex.test(id)) {
-      // Non-UUID IDs are sometimes valid in CodeAtlas depending on the provider,
-      // but for strict ID sanitation we will ensure no SQL injection characters
-      const sanitized = id.replace(/[^a-zA-Z0-9\-_]/g, '');
-      if (id !== sanitized) {
-         logger.debug(`[Consolidation] Sanitized non-UUID ID from "${id}" to "${sanitized}"`);
-      }
-      return sanitized;
+
+    if (idRegex.test(id)) {
+        return id;
     }
-    return id;
+
+    // Non-UUID IDs are sometimes valid in CodeAtlas depending on the provider,
+    // but for strict ID sanitation we will ensure no SQL injection characters
+    const sanitized = id.replace(/[^a-zA-Z0-9\-_]/g, '');
+
+    if (sanitized.length === 0) {
+        throw new Error(`[Consolidation] Invalid sanitized ID: "${id}". Possible injection attempt or malformed input.`);
+    }
+
+    if (id !== sanitized) {
+       logger.debug(`[Consolidation] Sanitized non-UUID ID from "${id}" to "${sanitized}"`);
+    }
+    return sanitized;
+  }
+
+  private async applyExponentialBackoff(attempt: number, baseMs: number): Promise<number> {
+    const jitter = Math.random() * 100;
+    const waitTime = (attempt * baseMs) + jitter;
+    await new Promise(res => setTimeout(res, waitTime));
+    return waitTime;
   }
 
   private shouldAbortBatchProcessing(consecutiveFailures: number, abortThreshold: number, totalFailed: number, totalChunks: number, abortFraction: number): boolean {
