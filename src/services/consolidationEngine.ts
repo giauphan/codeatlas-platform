@@ -46,7 +46,7 @@ export interface ConsolidationReport {
   dreamsSuperseded: number;
   invalidEmbeddingsSkipped: number;
   errors: string[];
-  failedScoringChunks?: any[][];
+  failedScoringChunks?: Record<string, unknown>[][];
 }
 
 export class ConsolidationEngine {
@@ -423,7 +423,7 @@ export class ConsolidationEngine {
           }
         }
 
-        const failedChunks: any[][] = [];
+        const failedChunks: Record<string, unknown>[][] = [];
 
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
           const chunk = bindsBatch.slice(i, i + chunkSize);
