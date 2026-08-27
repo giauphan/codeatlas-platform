@@ -156,7 +156,8 @@ export class ConsolidationEngine {
   }
 
   private computeConfidence(currentConf: number, evidenceCount: number): number {
-    return Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
+    const decayConstant = Number.parseFloat(process.env.CODEATLAS_CONFIDENCE_DECAY_CONSTANT || '0.2');
+    return Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
   }
 
   private getNormalizedVector(embedding: Float32Array, id: string): Float32Array {
