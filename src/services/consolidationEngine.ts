@@ -60,6 +60,17 @@ const DEFAULTS = {
   MAX_ABORT_FRACTION: 1.0
 };
 
+interface EngineConfig {
+   batchSize: number;
+   maxUpdateRecords: number;
+   abortThreshold: number;
+   abortFraction: number;
+   decayConstant: number;
+   confidenceCeiling: number;
+   maxRetries: number;
+   backoffMs: number;
+}
+
 export interface ConsolidationReport {
   id: string;
   jobType: string;
@@ -101,6 +112,26 @@ export class ConsolidationEngine {
    * Helper to parse and validate environment variables with fallbacks
    */
   private _configCache = new Map<string, number>();
+  private _engineConfig: EngineConfig | null = null;
+
+  /**
+   * Caches configuration globally to avoid redundant Env var checks per method
+   */
+  private initConfig(): EngineConfig {
+    if (this._engineConfig) return this._engineConfig;
+
+    this._engineConfig = {
+       batchSize: this.getEnvVarNumber('CODEATLAS_DB_BATCH_SIZE', DEFAULTS.BATCH_SIZE, EnvVarType.INT, DEFAULTS.MAX_CHUNK_SIZE),
+       maxUpdateRecords: this.getEnvVarNumber('CODEATLAS_MAX_UPDATE_RECORDS', DEFAULTS.MAX_UPDATE_RECORDS, EnvVarType.INT, DEFAULTS.MAX_UPDATE_LIMIT),
+       abortThreshold: this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_THRESHOLD', DEFAULTS.ABORT_THRESHOLD, EnvVarType.INT, DEFAULTS.MAX_ABORT_THRESHOLD),
+       abortFraction: this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', DEFAULTS.ABORT_FRACTION, EnvVarType.FLOAT, DEFAULTS.MAX_ABORT_FRACTION),
+       decayConstant: this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', DEFAULTS.DECAY_CONSTANT, EnvVarType.FLOAT, DEFAULTS.MAX_DECAY),
+       confidenceCeiling: this.getEnvVarNumber('CODEATLAS_CONFIDENCE_CEILING', DEFAULTS.CONFIDENCE_CEILING, EnvVarType.FLOAT, 1.0),
+       maxRetries: this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', DEFAULTS.BATCH_UPDATE_RETRIES, EnvVarType.INT, DEFAULTS.MAX_RETRIES),
+       backoffMs: this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', DEFAULTS.BACKOFF_MS)
+    };
+    return this._engineConfig;
+  }
 
   private getEnvVarNumber(name: string, defaultVal: number, type: EnvVarType = EnvVarType.INT, maxLimit?: number): number {
     if (this._configCache.has(name)) {
@@ -251,8 +282,11 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, fallbackState: { logCount: number } = { logCount: 0 }, maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', DEFAULTS.BATCH_UPDATE_RETRIES, EnvVarType.INT, DEFAULTS.MAX_RETRIES)): Promise<boolean> {
-    const backoffBaseMs = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', DEFAULTS.BACKOFF_MS);
+  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, fallbackState: { logCount: number } = { logCount: 0 }, maxRetries = this.initConfig().maxRetries): Promise<boolean> {
+    const backoffBaseMs = this.initConfig().backoffMs;
+    const MAX_CUMULATIVE_RETRY_MS = this.getEnvVarNumber('CODEATLAS_MAX_CUMULATIVE_RETRY_MS', 600000, EnvVarType.INT, 1800000); // Default 10 mins, Max 30 mins
+    let cumulativeRetryTime = 0;
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await db.executeMany(updateSql, chunk);
@@ -263,17 +297,25 @@ export class ConsolidationEngine {
         if (attempt === maxRetries) {
           return await this.executeRowFallback(db, updateSql, chunk, batchId, fallbackState);
         } else {
+          // Check global time cap before applying next retry backoff
+          if (cumulativeRetryTime >= MAX_CUMULATIVE_RETRY_MS) {
+            this.logBatchDetails('error', 'Timeout', `Cumulative retry time (${cumulativeRetryTime}ms) exceeded maximum allowed limit (${MAX_CUMULATIVE_RETRY_MS}ms). Aborting retries and falling back.`, { txId: batchId });
+            return await this.executeRowFallback(db, updateSql, chunk, batchId, fallbackState);
+          }
+
           // Exponential backoff with jitter
           const jitter = Math.random() * 100;
-          await new Promise(res => setTimeout(res, (attempt * backoffBaseMs) + jitter));
+          const waitTime = (attempt * backoffBaseMs) + jitter;
+          cumulativeRetryTime += waitTime;
+          await new Promise(res => setTimeout(res, waitTime));
         }
       }
     }
     return false;
   }
 
-  private getBatchChunkSize(defaultSize = DEFAULTS.BATCH_SIZE, maxLimit = DEFAULTS.MAX_CHUNK_SIZE): number {
-    const chunkSize = this.getEnvVarNumber('CODEATLAS_DB_BATCH_SIZE', defaultSize, EnvVarType.INT, maxLimit);
+  private getBatchChunkSize(): number {
+    const chunkSize = this.initConfig().batchSize;
     if (process.env.CODEATLAS_BATCH_VERBOSE_LOGGING === 'true') {
       logger.info(`[Consolidation] Using batch chunk size of ${chunkSize}`);
     }
@@ -281,8 +323,15 @@ export class ConsolidationEngine {
   }
 
   private computeConfidence(currentConf: number, evidenceCount: number, customDecay?: number): number {
-    const decayConstant = customDecay !== undefined ? customDecay : this.getEnvVarNumber('CODEATLAS_CONFIDENCE_DECAY_CONSTANT', DEFAULTS.DECAY_CONSTANT, EnvVarType.FLOAT, DEFAULTS.MAX_DECAY);
-    const ceiling = this.getEnvVarNumber('CODEATLAS_CONFIDENCE_CEILING', DEFAULTS.CONFIDENCE_CEILING, EnvVarType.FLOAT, 1.0);
+    let decayConstant = customDecay !== undefined ? customDecay : this.initConfig().decayConstant;
+
+    // Safety guard against invalid negative decay constants
+    if (decayConstant < 0) {
+       logger.warn(`[Consolidation] Negative decay constant provided (${decayConstant}). Clamping to 0 to prevent algorithm corruption.`);
+       decayConstant = 0;
+    }
+
+    const ceiling = this.initConfig().confidenceCeiling;
     return Math.min(ceiling, currentConf + (1 - currentConf) * (1 - Math.exp(-decayConstant * evidenceCount)));
   }
 
@@ -315,7 +364,7 @@ export class ConsolidationEngine {
 
   private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
     const results: ConceptConfidenceUpdate[] = [];
-    const maxLimit = this.getEnvVarNumber('CODEATLAS_MAX_UPDATE_RECORDS', DEFAULTS.MAX_UPDATE_RECORDS, EnvVarType.INT, DEFAULTS.MAX_UPDATE_LIMIT);
+    const maxLimit = this.initConfig().maxUpdateRecords;
 
     for (const row of rows) {
       if (results.length >= maxLimit) {
@@ -645,12 +694,12 @@ export class ConsolidationEngine {
         // Chunk batches to prevent very large batches from hitting database size limits or latency spikes.
         const DEFAULT_CHUNK_SIZE = 500;
         const MAX_CHUNK_LIMIT = 2000;
-        const chunkSize = this.getBatchChunkSize(DEFAULT_CHUNK_SIZE, MAX_CHUNK_LIMIT);
+        const chunkSize = this.getBatchChunkSize();
 
         const failedChunks: ConceptConfidenceUpdate[][] = [];
         let totalConsecutiveFailures = 0;
-        const abortThreshold = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_THRESHOLD', DEFAULTS.ABORT_THRESHOLD, EnvVarType.INT, DEFAULTS.MAX_ABORT_THRESHOLD);
-        const abortFraction = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', DEFAULTS.ABORT_FRACTION, EnvVarType.FLOAT, DEFAULTS.MAX_ABORT_FRACTION);
+        const abortThreshold = this.initConfig().abortThreshold;
+        const abortFraction = this.initConfig().abortFraction;
         const totalRunCount = Math.ceil(updateRecords.length / chunkSize);
 
         const MAX_HARD_ABORT = 100;

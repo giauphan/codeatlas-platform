@@ -158,6 +158,7 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
 
   test('getEnvVarNumber applies valid sizes and fallbacks correctly', () => {
     (consolidationEngine as any)._configCache.clear();
+    (consolidationEngine as any)._engineConfig = null;
     const getEnvVarNumber = (consolidationEngine as any).getEnvVarNumber.bind(consolidationEngine);
 
     // Default configuration fallback
