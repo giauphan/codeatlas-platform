@@ -776,13 +776,19 @@ export class ConsolidationEngine {
                    });
                    success = true;
                } else {
-                   this.logBatchDetails('debug', 'Transaction', `Adapter does not support native db.transaction(); falling back to explicit BEGIN/COMMIT statements`, { txId: batchId });
-                   await db.execute('BEGIN TRANSACTION', {});
-                   success = await this.attemptBatchUpdate({ db, updateSql, chunk, batchId, fallbackState });
-                   if (success) {
-                      await db.execute('COMMIT', {});
+                   const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
+                   if (dbType === 'sqlite' || dbType === 'postgres') {
+                     this.logBatchDetails('debug', 'Transaction', `Adapter does not support native db.transaction(); falling back to explicit BEGIN/COMMIT statements`, { txId: batchId });
+                     await db.execute('BEGIN TRANSACTION', {});
+                     success = await this.attemptBatchUpdate({ db, updateSql, chunk, batchId, fallbackState });
+                     if (success) {
+                        await db.execute('COMMIT', {});
+                     } else {
+                        try { await db.execute('ROLLBACK', {}); } catch (e) { this.logBatchDetails('error', 'Transaction', 'ROLLBACK failed', { txId: batchId, error: e }); }
+                     }
                    } else {
-                      try { await db.execute('ROLLBACK', {}); } catch (e) { this.logBatchDetails('error', 'Transaction', 'ROLLBACK failed', { txId: batchId, error: e }); }
+                     this.logBatchDetails('debug', 'Transaction', `Adapter does not support native db.transaction(); running directly without explicit transaction wrapping`, { txId: batchId });
+                     success = await this.attemptBatchUpdate({ db, updateSql, chunk, batchId, fallbackState });
                    }
                }
             } catch (txErr) {
