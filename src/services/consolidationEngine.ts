@@ -413,9 +413,19 @@ export class ConsolidationEngine {
         `;
 
         // Chunk batches to prevent very large batches from hitting database size limits or latency spikes.
-        const CHUNK_SIZE = 500;
-        for (let i = 0; i < bindsBatch.length; i += CHUNK_SIZE) {
-          const chunk = bindsBatch.slice(i, i + CHUNK_SIZE);
+        let chunkSize = 500;
+        if (process.env.CODEATLAS_DB_BATCH_SIZE) {
+          const parsed = Number.parseInt(process.env.CODEATLAS_DB_BATCH_SIZE, 10);
+          if (!Number.isNaN(parsed) && parsed > 0) {
+            chunkSize = parsed;
+          }
+        }
+
+        const failedChunks: any[][] = [];
+
+        for (let i = 0; i < bindsBatch.length; i += chunkSize) {
+          const chunk = bindsBatch.slice(i, i + chunkSize);
+          logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
           try {
             await db.executeMany(updateSql, chunk);
 
@@ -423,8 +433,13 @@ export class ConsolidationEngine {
             // but this protects the overall batch execution.
             updated += chunk.length;
           } catch (err: any) {
+            failedChunks.push(chunk);
             logger.error(`[Consolidation] Failed batch update for chunk: ${err.message || err}`);
           }
+        }
+
+        if (failedChunks.length > 0) {
+          logger.error(`[Consolidation] ${failedChunks.length} chunks failed during concept scoring. Total rows failed: ${failedChunks.reduce((acc, c) => acc + c.length, 0)}`);
         }
       }
 
