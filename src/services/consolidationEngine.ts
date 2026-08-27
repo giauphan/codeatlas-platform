@@ -411,14 +411,20 @@ export class ConsolidationEngine {
           SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
           WHERE id = :id AND tenant_id = :tenantId
         `;
-        try {
-          await db.executeMany(updateSql, bindsBatch);
 
-          // Note: we're ignoring batchErrors since the adapter's executeMany behavior
-          // doesn't inherently return batchErrors outside of oracle, but this protects the batch.
-          updated = bindsBatch.length;
-        } catch (err: any) {
-          logger.error(`[Consolidation] Failed batch update: ${err.message || err}`);
+        // Chunk batches to prevent very large batches from hitting database size limits or latency spikes.
+        const CHUNK_SIZE = 500;
+        for (let i = 0; i < bindsBatch.length; i += CHUNK_SIZE) {
+          const chunk = bindsBatch.slice(i, i + CHUNK_SIZE);
+          try {
+            await db.executeMany(updateSql, chunk);
+
+            // Note: batchErrors are intentionally ignored for most adapters except Oracle,
+            // but this protects the overall batch execution.
+            updated += chunk.length;
+          } catch (err: any) {
+            logger.error(`[Consolidation] Failed batch update for chunk: ${err.message || err}`);
+          }
         }
       }
 
