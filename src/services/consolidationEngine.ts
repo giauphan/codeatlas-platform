@@ -411,11 +411,15 @@ export class ConsolidationEngine {
           SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
           WHERE id = :id AND tenant_id = :tenantId
         `;
-        await db.executeMany(updateSql, bindsBatch);
+        try {
+          await db.executeMany(updateSql, bindsBatch);
 
-        // Note: we're ignoring batchErrors since the adapter's executeMany behavior
-        // doesn't inherently return batchErrors outside of oracle, but this protects the batch.
-        updated = bindsBatch.length;
+          // Note: we're ignoring batchErrors since the adapter's executeMany behavior
+          // doesn't inherently return batchErrors outside of oracle, but this protects the batch.
+          updated = bindsBatch.length;
+        } catch (err: any) {
+          logger.error(`[Consolidation] Failed batch update: ${err.message || err}`);
+        }
       }
 
       logger.info(`[Consolidation] Scored ${rows.length} concepts, updated ${updated}`);
