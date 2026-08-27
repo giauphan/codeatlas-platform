@@ -444,9 +444,13 @@ export class ConsolidationEngine {
 
       // Enforce robust type conversions to prevent NaN propagation
       const evidenceCount = evidenceCountRaw !== undefined && evidenceCountRaw !== null ? Number(evidenceCountRaw) : 1;
-      const currentConf = Number(confStr);
+      let currentConf = Number(confStr);
+      if (confStr === undefined || confStr === null || Number.isNaN(currentConf)) {
+         logger.warn(`[Consolidation] Row (${id}) skipped due to invalid confidence property (${confStr}). Defaulting to safe floor.`);
+         currentConf = 0;
+      }
 
-      if (Number.isNaN(evidenceCount) || Number.isNaN(currentConf)) {
+      if (Number.isNaN(evidenceCount)) {
          logger.warn(`[Consolidation] Row (${id}) skipped due to NaN properties.`);
          continue;
       }
