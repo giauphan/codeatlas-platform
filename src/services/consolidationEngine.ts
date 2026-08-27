@@ -100,6 +100,10 @@ export class ConsolidationEngine {
    * Helper to parse and validate environment variables with fallbacks
    */
   private getEnvVarNumber(name: string, defaultVal: number, type: EnvVarType = EnvVarType.INT, maxLimit?: number): number {
+    if (defaultVal === undefined || defaultVal === null) {
+      throw new Error(`[Consolidation] Developer Error: defaultVal must be provided for getEnvVarNumber('${name}')`);
+    }
+
     const rawValue = process.env[name];
     if (!rawValue) return defaultVal;
 
@@ -204,7 +208,14 @@ export class ConsolidationEngine {
         successCount++;
       } catch (rowErr) {
         const rowMsg = rowErr instanceof Error ? rowErr.message : String(rowErr);
-        this.logBatchDetails('error', 'FallbackRow', `Invalid row during fallback execution (id: ${row.id}): ${rowMsg}`, { txId: batchId, rowId: row.id, error: rowErr });
+
+        // Suppress repetitive row-level fallback logs if we've seen too many
+        if (this._fallbackLogCount < 50) {
+           this.logBatchDetails('error', 'FallbackRow', `Invalid row during fallback execution (id: ${row.id}): ${rowMsg}`, { txId: batchId, rowId: row.id, error: rowErr });
+        } else if (this._fallbackLogCount === 50) {
+           this.logBatchDetails('error', 'FallbackRow', `Too many row fallback failures. Suppressing further row-level fallback logs for this run.`, { txId: batchId });
+        }
+        this._fallbackLogCount++;
       }
     }
     if (successCount > 0) {
@@ -268,7 +279,11 @@ export class ConsolidationEngine {
     if (!idRegex.test(id)) {
       // Non-UUID IDs are sometimes valid in CodeAtlas depending on the provider,
       // but for strict ID sanitation we will ensure no SQL injection characters
-      return id.replace(/[^a-zA-Z0-9\-_]/g, '');
+      const sanitized = id.replace(/[^a-zA-Z0-9\-_]/g, '');
+      if (id !== sanitized) {
+         logger.debug(`[Consolidation] Sanitized non-UUID ID from "${id}" to "${sanitized}"`);
+      }
+      return sanitized;
     }
     return id;
   }
@@ -609,8 +624,9 @@ export class ConsolidationEngine {
         const abortFraction = this.getEnvVarNumber('CODEATLAS_BATCH_ABORT_FRACTION', DEFAULTS.ABORT_FRACTION, EnvVarType.FLOAT, DEFAULTS.MAX_ABORT_FRACTION);
         const totalRunCount = Math.ceil(updateRecords.length / chunkSize);
 
+        const MAX_HARD_ABORT = 100;
         for (let i = 0; i < updateRecords.length; i += chunkSize) {
-          if (this.shouldAbortBatchProcessing(totalConsecutiveFailures, abortThreshold, failedChunks.length, totalRunCount, abortFraction)) {
+          if (this.shouldAbortBatchProcessing(totalConsecutiveFailures, abortThreshold, failedChunks.length, totalRunCount, abortFraction) || failedChunks.length >= MAX_HARD_ABORT) {
             this.logBatchDetails('error', 'Execution', `Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
             break;
           }
