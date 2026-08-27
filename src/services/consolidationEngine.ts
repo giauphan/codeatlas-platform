@@ -457,9 +457,7 @@ export class ConsolidationEngine {
 
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
           const chunk = bindsBatch.slice(i, i + chunkSize);
-          if (process.env.DEBUG || process.env.VERBOSE) {
-            logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
-          }
+          logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
           const success = await this.attemptBatchUpdate(db, updateSql, chunk);
           if (success) {
              updated += chunk.length;
