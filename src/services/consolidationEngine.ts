@@ -139,6 +139,20 @@ export class ConsolidationEngine {
     return false;
   }
 
+  private getBatchChunkSize(defaultSize = 500, maxLimit = 2000): number {
+    let chunkSize = defaultSize;
+    if (process.env.CODEATLAS_DB_BATCH_SIZE) {
+      const parsed = Number.parseInt(process.env.CODEATLAS_DB_BATCH_SIZE, 10);
+      // Enforce hard upper limit to prevent misconfiguration from degrading DB performance
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        chunkSize = Math.min(parsed, maxLimit);
+      } else {
+        logger.warn(`[Consolidation] Invalid CODEATLAS_DB_BATCH_SIZE: ${process.env.CODEATLAS_DB_BATCH_SIZE}. Must be a positive integer <= ${maxLimit}. Falling back to default chunk size ${chunkSize}.`);
+      }
+    }
+    return chunkSize;
+  }
+
   private getNormalizedVector(embedding: Float32Array, id: string): Float32Array {
     const vec = embedding.slice();
     let norm = 0;
@@ -442,16 +456,7 @@ export class ConsolidationEngine {
         `;
 
         // Chunk batches to prevent very large batches from hitting database size limits or latency spikes.
-        let chunkSize = 500;
-        if (process.env.CODEATLAS_DB_BATCH_SIZE) {
-          const parsed = Number.parseInt(process.env.CODEATLAS_DB_BATCH_SIZE, 10);
-          // Enforce hard upper limit of 2000 to prevent misconfiguration from degrading DB performance
-          if (!Number.isNaN(parsed) && parsed > 0) {
-            chunkSize = Math.min(parsed, 2000);
-          } else {
-            logger.warn(`[Consolidation] Invalid CODEATLAS_DB_BATCH_SIZE: ${process.env.CODEATLAS_DB_BATCH_SIZE}. Must be a positive integer <= 2000. Falling back to default chunk size ${chunkSize}.`);
-          }
-        }
+        const chunkSize = this.getBatchChunkSize(500, 2000);
 
         const failedChunks: ConceptConfidenceUpdate[][] = [];
 
