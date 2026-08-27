@@ -148,8 +148,14 @@ export class ConsolidationEngine {
     const parsed = type === EnvVarType.FLOAT ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
 
     if (Number.isNaN(parsed) || parsed <= 0) {
-      logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a positive number greater than zero. Falling back to default ${defaultVal}.`);
-      return defaultVal;
+      if (parsed === 0 && name === 'CODEATLAS_CONFIDENCE_DECAY_CONSTANT') {
+          // Special exception: A decay constant of 0 means NO decay (score does not drop), which is a valid math state
+          // but we still want to warn
+          logger.warn(`[Consolidation] Configured ${name} as 0. This disables decay completely.`);
+      } else {
+          logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a strictly positive number greater than zero. Falling back to default ${defaultVal}.`);
+          return defaultVal;
+      }
     }
 
     if (maxLimit !== undefined && parsed > maxLimit) {
