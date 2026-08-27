@@ -155,7 +155,8 @@ export class ConsolidationEngine {
    * Helper to encapsulate batch logging and reduce redundancy.
    */
   private logBatchDetails(level: 'debug' | 'info' | 'warn' | 'error', action: string, message: string, meta?: any): void {
-    const msg = `[Consolidation] [Batch:${action}] ${message}`;
+    const txId = meta?.txId || 'no-tx';
+    const msg = `[Consolidation] [Batch:${action}] [TxID:${txId}] ${message}`;
     if (meta) logger[level](msg, meta);
     else logger[level](msg);
   }
@@ -164,7 +165,7 @@ export class ConsolidationEngine {
    * Deep copies and pre-normalizes a vector.
    * If the vector norm is 0, it logs a debug message and returns the unmodified (copied) vector.
    */
-  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', 3, EnvVarType.INT, 10)): Promise<boolean> {
+  private async attemptBatchUpdate(db: IDatabaseAdapter, updateSql: string, chunk: ConceptConfidenceUpdate[], batchId: string, maxRetries = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_RETRIES', 3, EnvVarType.INT, 10)): Promise<boolean> {
     const backoffBaseMs = this.getEnvVarNumber('CODEATLAS_BATCH_UPDATE_BACKOFF_MS', 500);
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -172,9 +173,9 @@ export class ConsolidationEngine {
         return true;
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        this.logBatchDetails('warn', 'Attempt', `Retrying update #${attempt} of ${maxRetries} for failed chunk... (${errorMessage})`, { error: err });
+        this.logBatchDetails('warn', 'Attempt', `Retrying update #${attempt} of ${maxRetries} for failed chunk... (${errorMessage})`, { error: err, txId: batchId });
         if (attempt === maxRetries) {
-          this.logBatchDetails('warn', 'Fallback', `Chunk failed all retries. Falling back to row-by-row execution to salvage valid rows.`);
+          this.logBatchDetails('warn', 'Fallback', `Chunk failed all retries. Falling back to row-by-row execution to salvage valid rows.`, { txId: batchId });
           let successCount = 0;
           for (const row of chunk) {
             try {
@@ -182,15 +183,15 @@ export class ConsolidationEngine {
               successCount++;
             } catch (rowErr) {
               const rowMsg = rowErr instanceof Error ? rowErr.message : String(rowErr);
-              this.logBatchDetails('error', 'FallbackRow', `Invalid row during fallback execution (id: ${row.id}): ${rowMsg}`);
+              this.logBatchDetails('error', 'FallbackRow', `Invalid row during fallback execution (id: ${row.id}): ${rowMsg}`, { txId: batchId, rowId: row.id, error: rowErr });
             }
           }
           if (successCount > 0) {
-            this.logBatchDetails('info', 'FallbackResult', `Row-by-row fallback succeeded for ${successCount}/${chunk.length} rows.`);
+            this.logBatchDetails('info', 'FallbackResult', `Row-by-row fallback succeeded for ${successCount}/${chunk.length} rows.`, { txId: batchId });
             return successCount === chunk.length;
           }
           const sampleIds = chunk.slice(0, 3).map((c: any) => c.id).join(', ');
-          this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk. Sample failed IDs: ${sampleIds}`);
+          this.logBatchDetails('error', 'Failure', `All row-by-row attempts failed for chunk. Sample failed IDs: ${sampleIds}`, { txId: batchId });
         } else {
           // Exponential backoff
           await new Promise(res => setTimeout(res, attempt * backoffBaseMs));
@@ -562,7 +563,8 @@ export class ConsolidationEngine {
           }
 
           const chunk = updateRecords.slice(i, i + chunkSize);
-          this.logBatchDetails('debug', 'Execution', `Executing batch update for ${chunk.length} rows.`);
+          const batchId = randomUUID();
+          this.logBatchDetails('debug', 'Execution', `Executing batch update for ${chunk.length} rows.`, { txId: batchId });
           try {
             let success = false;
 
@@ -571,7 +573,7 @@ export class ConsolidationEngine {
             // so we fall back to raw query execution for BEGIN/COMMIT if necessary, or just run it.
             try {
                await db.execute('BEGIN TRANSACTION', {});
-               success = await this.attemptBatchUpdate(db, updateSql, chunk);
+               success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId);
                if (success) {
                   await db.execute('COMMIT', {});
                } else {
@@ -579,7 +581,7 @@ export class ConsolidationEngine {
                }
             } catch (txErr) {
                // If transaction commands fail (e.g., unsupported by adapter), just run directly
-               success = await this.attemptBatchUpdate(db, updateSql, chunk);
+               success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId);
             }
 
             if (success) {

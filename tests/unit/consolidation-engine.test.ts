@@ -141,12 +141,13 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
   test('attemptBatchUpdate performs retries and handles errors correctly', async () => {
     const attemptBatchUpdate = (consolidationEngine as any).attemptBatchUpdate.bind(consolidationEngine);
     const mockDb = {
-      executeMany: mock.fn(async () => { throw new Error('DB Error'); })
+      executeMany: mock.fn(async () => { throw new Error('DB Error'); }),
+      execute: mock.fn(async () => { throw new Error('DB Error'); })
     };
 
     // Test that it fails after all retries
     const start = Date.now();
-    const result = await attemptBatchUpdate(mockDb, 'SQL', [{ id: '1' }], 2); // 2 retries
+    const result = await attemptBatchUpdate(mockDb, 'SQL', [{ id: '1' }], 'test-batch', 2); // 2 retries
     const duration = Date.now() - start;
 
     assert.equal(result, false);
