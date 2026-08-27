@@ -416,8 +416,9 @@ export class ConsolidationEngine {
         let chunkSize = 500;
         if (process.env.CODEATLAS_DB_BATCH_SIZE) {
           const parsed = Number.parseInt(process.env.CODEATLAS_DB_BATCH_SIZE, 10);
+          // Enforce hard upper limit of 2000 to prevent misconfiguration from degrading DB performance
           if (!Number.isNaN(parsed) && parsed > 0) {
-            chunkSize = parsed;
+            chunkSize = Math.min(parsed, 2000);
           }
         }
 
@@ -426,15 +427,23 @@ export class ConsolidationEngine {
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
           const chunk = bindsBatch.slice(i, i + chunkSize);
           logger.debug(`[Consolidation] Executing batch update for ${chunk.length} rows.`);
-          try {
-            await db.executeMany(updateSql, chunk);
-
-            // Note: batchErrors are intentionally ignored for most adapters except Oracle,
-            // but this protects the overall batch execution.
-            updated += chunk.length;
-          } catch (err: any) {
+          let success = false;
+          // Implement simple retry mechanism (up to 3 attempts)
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              await db.executeMany(updateSql, chunk);
+              updated += chunk.length;
+              success = true;
+              break;
+            } catch (err: any) {
+              logger.warn(`[Consolidation] Attempt ${attempt} failed batch update for chunk: ${err.message || err}`);
+              if (attempt === 3) {
+                logger.error(`[Consolidation] All 3 attempts failed batch update for chunk: ${err.message || err}`);
+              }
+            }
+          }
+          if (!success) {
             failedChunks.push(chunk);
-            logger.error(`[Consolidation] Failed batch update for chunk: ${err.message || err}`);
           }
         }
 
