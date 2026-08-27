@@ -271,6 +271,12 @@ export class ConsolidationEngine {
 
         // We aggregate errors to avoid excessive I/O overhead on high-failure jobs
         fallbackState.logCount++;
+
+        // Safety abort for runaway errors in large batches
+        if (fallbackState.logCount > suppressLimit * 2) {
+            this.logBatchDetails('error', 'FallbackAbort', `Row fallback error count (${fallbackState.logCount}) exceeded maximum allowed threshold. Aborting remaining row execution for chunk to preserve system stability.`, { txId: batchId });
+            break;
+        }
       }
     }
     if (successCount > 0) {
