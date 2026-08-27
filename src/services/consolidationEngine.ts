@@ -90,7 +90,7 @@ export class ConsolidationEngine {
     const parsed = type === EnvVarType.FLOAT ? Number.parseFloat(rawValue.trim()) : Number.parseInt(rawValue.trim(), 10);
 
     if (Number.isNaN(parsed) || parsed <= 0) {
-      logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a positive number. Falling back to default ${defaultVal}.`);
+      logger.error(`[Consolidation] Invalid configuration for ${name}: ${rawValue}. Must be a positive number greater than zero. Falling back to default ${defaultVal}.`);
       return defaultVal;
     }
 
@@ -250,6 +250,10 @@ export class ConsolidationEngine {
     // although bind params mitigate direct SQLi, strict ID typing helps avoid errors.
     const safeId = id.replace(/[^a-zA-Z0-9\-_]/g, '');
     return safeId;
+  }
+
+  private shouldAbortBatchProcessing(consecutiveFailures: number, abortThreshold: number, totalFailed: number, totalChunks: number, abortFraction: number): boolean {
+    return consecutiveFailures >= abortThreshold || (totalChunks >= 10 && totalFailed / totalChunks > abortFraction);
   }
 
   private prepareConfidenceUpdates(rows: any[], tenantId: string): ConceptConfidenceUpdate[] {
@@ -585,13 +589,15 @@ export class ConsolidationEngine {
         const totalRunCount = Math.ceil(updateRecords.length / chunkSize);
 
         for (let i = 0; i < updateRecords.length; i += chunkSize) {
-          if (totalConsecutiveFailures >= abortThreshold || (totalRunCount >= 10 && failedChunks.length / totalRunCount > abortFraction)) {
+          if (this.shouldAbortBatchProcessing(totalConsecutiveFailures, abortThreshold, failedChunks.length, totalRunCount, abortFraction)) {
             this.logBatchDetails('error', 'Execution', `Too many chunks failed (${failedChunks.length}/${totalRunCount}). Aborting batch processing.`);
             break;
           }
 
           const chunk = updateRecords.slice(i, i + chunkSize);
           const batchId = randomUUID();
+
+          const tStart = Date.now();
           this.logBatchDetails('debug', 'Execution', `Executing batch update for ${chunk.length} rows.`, { txId: batchId });
           try {
             let success = false;
@@ -611,6 +617,8 @@ export class ConsolidationEngine {
                // If transaction commands fail (e.g., unsupported by adapter), just run directly
                success = await this.attemptBatchUpdate(db, updateSql, chunk, batchId);
             }
+            const duration = Date.now() - tStart;
+            this.logBatchDetails('debug', 'Performance', `Batch executed in ${duration}ms`, { txId: batchId, durationMs: duration, rows: chunk.length });
 
             if (success) {
                updated += chunk.length;
