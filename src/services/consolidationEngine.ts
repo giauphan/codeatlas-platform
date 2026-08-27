@@ -449,7 +449,7 @@ export class ConsolidationEngine {
           if (!Number.isNaN(parsed) && parsed > 0) {
             chunkSize = Math.min(parsed, 2000);
           } else {
-            logger.warn(`[Consolidation] Invalid CODEATLAS_DB_BATCH_SIZE: ${process.env.CODEATLAS_DB_BATCH_SIZE}. Falling back to default chunk size ${chunkSize}.`);
+            logger.warn(`[Consolidation] Invalid CODEATLAS_DB_BATCH_SIZE: ${process.env.CODEATLAS_DB_BATCH_SIZE}. Must be a positive integer <= 2000. Falling back to default chunk size ${chunkSize}.`);
           }
         }
 
