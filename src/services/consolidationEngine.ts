@@ -36,6 +36,12 @@ export interface ConsolidationJob {
   operations: ("dedup" | "extract_concepts" | "score" | "score_dreams")[];
 }
 
+export interface ConceptConfidenceUpdate extends Record<string, unknown> {
+  conf: number;
+  id: string;
+  tenantId: string;
+}
+
 export interface ConsolidationReport {
   id: string;
   jobType: string;
@@ -46,7 +52,7 @@ export interface ConsolidationReport {
   dreamsSuperseded: number;
   invalidEmbeddingsSkipped: number;
   errors: string[];
-  failedScoringChunks?: Record<string, unknown>[][];
+  failedScoringChunks?: ConceptConfidenceUpdate[][];
 }
 
 export class ConsolidationEngine {
@@ -390,7 +396,7 @@ export class ConsolidationEngine {
 
       const rows = await db.query<any[]>(sql, binds);
 
-      const bindsBatch: Record<string, unknown>[] = [];
+      const bindsBatch: ConceptConfidenceUpdate[] = [];
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
@@ -423,7 +429,7 @@ export class ConsolidationEngine {
           }
         }
 
-        const failedChunks: Record<string, unknown>[][] = [];
+        const failedChunks: ConceptConfidenceUpdate[][] = [];
 
         for (let i = 0; i < bindsBatch.length; i += chunkSize) {
           const chunk = bindsBatch.slice(i, i + chunkSize);
