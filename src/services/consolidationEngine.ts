@@ -136,7 +136,7 @@ export class ConsolidationEngine {
       let success = false;
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          const res = await db.executeMany(updateSql, updateBindings as any);
+          const res = await db.executeMany(updateSql, updateBindings as Record<string, unknown>[]);
           successfulCount += (res.rowsAffected || updateBindings.length);
           success = true;
           break;
@@ -164,7 +164,7 @@ export class ConsolidationEngine {
       let success = false;
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          const res = await db.executeMany(updateSql, chunk as any);
+          const res = await db.executeMany(updateSql, chunk as Record<string, unknown>[]);
           successfulCount += (res.rowsAffected || chunk.length);
           success = true;
           break;
