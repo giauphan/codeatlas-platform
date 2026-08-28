@@ -65,7 +65,7 @@ export class ConsolidationEngine {
     this.dbBatchChunkSize = this.parseConfig("DB_BATCH_CHUNK_SIZE", 500, 1, 10000);
     this.dbUpdateMaxRetries = this.parseConfig("DB_UPDATE_MAX_RETRIES", 3, 1, 10);
     this.dbInitialBackoffMs = this.parseConfig("DB_INITIAL_BACKOFF_MS", 50, 10, 5000);
-    this.dbMaxBackoffDelayMs = this.parseConfig("DB_MAX_BACKOFF_DELAY_MS", 5000, 1000, 30000);
+    this.dbMaxBackoffDelayMs = this.parseConfig("DB_MAX_BACKOFF_DELAY_MS", 5000, 1000, 10000); // Reduced upper bound to 10s based on PR feedback
 
     logger.info(`[Consolidation] Engine initialized with DB_BATCH_CHUNK_SIZE=${this.dbBatchChunkSize}, DB_UPDATE_MAX_RETRIES=${this.dbUpdateMaxRetries}, DB_INITIAL_BACKOFF_MS=${this.dbInitialBackoffMs}, DB_MAX_BACKOFF_DELAY_MS=${this.dbMaxBackoffDelayMs}`);
   }
@@ -93,6 +93,9 @@ export class ConsolidationEngine {
    * Helper to determine if the calculated confidence delta is statistically significant.
    */
   private isConfidenceStatisticallySignificant(currentConf: number, newConf: number): boolean {
+    // We only execute a database update if the confidence changes by at least 1% (0.01).
+    // This threshold prevents the system from generating thousands of microscopic updates
+    // for concepts whose Bayesian evidence scores have effectively plateaued.
     return Math.abs(newConf - currentConf) > 0.01;
   }
 
@@ -628,7 +631,6 @@ export class ConsolidationEngine {
 
       const rows = await db.query<any[]>(sql, binds);
 
-      let toBeUpdated = 0;
       const updateBindings: Array<UpdateBinding> = [];
 
       // Iterate over the concepts and determine if their confidence score requires an update.
@@ -644,7 +646,6 @@ export class ConsolidationEngine {
         // Only queue an update if the calculated confidence delta is statistically significant.
         if (this.isConfidenceStatisticallySignificant(currentConf, newConf)) {
           updateBindings.push({ conf: newConf, id, tenantId });
-          toBeUpdated++;
         }
       }
 
