@@ -211,6 +211,13 @@ h1, h2, h3, .tech-font {
 }
 
 /* Search Input */
+.search-input-icon {
+  position: absolute;
+  left: 1rem;
+  top: 0.85rem;
+  color: var(--text-muted);
+}
+
 .search-input-field {
   width: 100%;
   padding-left: 3rem;
