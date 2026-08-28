@@ -124,8 +124,8 @@ export function OrchestrationTasksView() {
             }}
           />
           <div style={{ position: 'absolute', right: '0.75rem', top: '0.65rem', pointerEvents: 'none' }}>
-            <kbd style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem', background: 'rgba(255,255,255,0.1)', borderRadius: '6px', color: 'var(--text-muted)', fontFamily: 'monospace', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-              <span style={{ fontSize: '0.8rem', lineHeight: 1 }}>↵</span> Enter
+            <kbd className="search-kbd-hint">
+              <span className="search-kbd-hint-icon">↵</span> Enter
             </kbd>
           </div>
         </div>
