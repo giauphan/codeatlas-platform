@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
-import { KbdHint } from '../KbdHint';
+import { KbdHint } from '../ui/KbdHint';
 
 describe('KbdHint', () => {
   it('renders correctly with given props', () => {

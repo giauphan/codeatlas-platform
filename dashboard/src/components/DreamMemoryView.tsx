@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
-import { SearchInputWithHint } from './SearchInputWithHint';
+import { SearchInputWithHint } from './ui/SearchInputWithHint';
 import {
   DREAM_CONFIG_LOADING_BUTTON_STYLE,
   DREAM_CONFIG_RUN_BUTTON_STYLE,

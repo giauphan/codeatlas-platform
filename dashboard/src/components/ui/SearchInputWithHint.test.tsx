@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { SearchInputWithHint } from '../SearchInputWithHint';
+import { SearchInputWithHint } from './SearchInputWithHint';
 
 describe('SearchInputWithHint', () => {
   it('renders input, placeholder, and kbd hint', () => {

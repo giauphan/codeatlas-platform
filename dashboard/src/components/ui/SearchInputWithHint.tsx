@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, X } from 'lucide-react';
 import { KbdHint } from './KbdHint';
-import { FOCUS_RING_CLASS } from '../lib/constants';
+import { FOCUS_RING_CLASS } from '../../lib/constants';
 
 interface BaseSearchInputWithHintProps {
   value: string;

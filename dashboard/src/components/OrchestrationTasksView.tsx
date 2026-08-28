@@ -3,7 +3,7 @@ import { Network, Search, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBran
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth'; // Reusing auth headers utility
 import type { A2AOrchestrationTask, OrchestrationState } from '../../../src/types/a2a'; // Importing types
-import { SearchInputWithHint } from './SearchInputWithHint';
+import { SearchInputWithHint } from './ui/SearchInputWithHint';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 
 export function OrchestrationTasksView() {

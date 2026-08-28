@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
-import { SearchInputWithHint } from './SearchInputWithHint';
+import { SearchInputWithHint } from './ui/SearchInputWithHint';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 
 interface Concept {
