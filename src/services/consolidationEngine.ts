@@ -43,7 +43,7 @@ export interface ConsolidationJob {
 export interface UpdateBinding {
   conf: number;
   id: string;
-  tenantId?: string;
+  tenantId?: string | null;
 }
 
 export interface ConsolidationReport {
@@ -199,10 +199,13 @@ export class ConsolidationEngine {
 
     // Abstracted factory layer for SQL generation. Returns a cached instance based on dialect.
     if (!ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[normalized]) {
+      // In standalone contexts tenantId may be optional. If :tenantId isn't bound later,
+      // some drivers (like better-sqlite3) may object if the parameter isn't present in the binding map.
+      // However, our data pipeline currently guarantees tenantId will be injected by the orchestrator.
       ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[normalized] = `
         UPDATE codeatlas_concepts
         SET confidence = :conf, updated_at = ${this.getCurrentTimestampSql(dbType)}
-        WHERE id = :id AND tenant_id = :tenantId
+        WHERE id = :id AND (tenant_id = :tenantId OR :tenantId IS NULL)
       `;
     }
 
@@ -457,16 +460,19 @@ export class ConsolidationEngine {
     let successful = 0;
     let failed = 0;
 
+    // Default tenantId bindings to null to prevent SQL driver 'missing parameter' errors for optional types
+    const mappedChunk = chunk.map(b => ({ ...b, tenantId: b.tenantId || null }));
+
     try {
       const res = await this.executeRetry<{ rowsAffected?: number }>(
-        () => db.executeMany(updateSql, chunk as unknown as Record<string, unknown>[]),
+        () => db.executeMany(updateSql, mappedChunk as unknown as Record<string, unknown>[]),
         context,
         sampleIds,
         maskedTenant
       );
-      successful += (res.rowsAffected || chunk.length);
+      successful += (res.rowsAffected || mappedChunk.length);
     } catch (error) {
-      const fallbackRes = await this.executeIndividualUpdatesFallback(db, updateSql, chunk, maskedTenant);
+      const fallbackRes = await this.executeIndividualUpdatesFallback(db, updateSql, mappedChunk, maskedTenant);
       successful += fallbackRes.successful;
       failed += fallbackRes.failed;
     }
