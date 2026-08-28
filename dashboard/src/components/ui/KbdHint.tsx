@@ -6,8 +6,8 @@ interface KbdHintProps {
   id?: string;
   icon: '↵' | string;
   text: string;
-  top: CSSLength;
-  right: CSSLength;
+  top?: CSSLength;
+  right?: CSSLength;
   transform?: string;
 }
 
@@ -16,7 +16,7 @@ interface KbdHintProps {
  *
  * Used primarily inside search inputs to visually indicate an action requirement.
  */
-export const KbdHint: React.FC<KbdHintProps> = ({ id, icon, text, top, right, transform }) => {
+export const KbdHint: React.FC<KbdHintProps> = ({ id, icon, text, top = '0px', right = '0px', transform }) => {
   return (
     <div id={id} className="search-kbd-hint-wrapper" style={{ right, top, transform }} aria-hidden="true">
       <kbd className="search-kbd-hint">

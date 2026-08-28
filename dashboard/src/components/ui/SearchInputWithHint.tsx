@@ -50,7 +50,8 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   hasClearButton = false
 }) => {
   if (hasClearButton && !onClear) {
-    if (process.env.NODE_ENV === 'development') {
+    const isDev = typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development';
+    if (isDev) {
       console.warn("SearchInputWithHint: 'onClear' must be defined when 'hasClearButton' is true.");
     }
   }
