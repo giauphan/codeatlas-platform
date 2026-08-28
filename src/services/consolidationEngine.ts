@@ -78,6 +78,9 @@ export class ConsolidationEngine {
    * Helper to clamp a numeric value within strict bounds.
    */
   private clamp(value: number, min: number, max: number): number {
+    if (min > max) {
+      throw new Error(`[Consolidation] Invalid range in clamp: min (${min}) cannot be greater than max (${max}).`);
+    }
     return Math.min(max, Math.max(min, value));
   }
 
@@ -94,12 +97,11 @@ export class ConsolidationEngine {
       throw new Error(`[Consolidation] Invalid configuration for ${name}: '${rawValue}' is not a valid integer.`);
     }
 
-    const clamped = this.clamp(numValue, min, max);
-    if (clamped !== numValue) {
-      logger.warn(`[Consolidation] Environment variable ${name} value ${numValue} is outside allowed bounds [${min}, ${max}]. Clamping to ${clamped}.`);
+    if (numValue < min || numValue > max) {
+      throw new Error(`[Consolidation] Invalid configuration for ${name}: value ${numValue} is outside allowed bounds [${min}, ${max}].`);
     }
 
-    return clamped;
+    return numValue;
   }
 
   /**
@@ -260,7 +262,7 @@ export class ConsolidationEngine {
    * Generic retry mechanism for transient database operations with exponential backoff.
    */
   private async executeRetry<T>(
-    taskFn: () => Promise<T>,
+    taskFn: () => Promise<Required<T>>,
     errorContext: string,
     sampleIds: string,
     maskedTenant: string
@@ -295,7 +297,7 @@ export class ConsolidationEngine {
    * wait-time explosion when operating in failure recovery modes.
    */
   private async executeFallbackRetry<T>(
-    taskFn: () => Promise<T>,
+    taskFn: () => Promise<Required<T>>,
     errorContext: string,
     sampleIds: string,
     maskedTenant: string
@@ -326,6 +328,32 @@ export class ConsolidationEngine {
     let failedCount = 0;
     const failedIds: string[] = [];
     logger.warn(`[Consolidation] Falling back to individual updates for ${bindings.length} rows (tenant: ${maskedTenant}).`);
+
+    // Process individual fallback updates using adaptive dynamic chunking to prevent O(N) network call explosion
+    // If the original chunk size was e.g. 500, we fallback to mini-chunks of 50 before resorting to single row execution.
+    const miniChunkSize = Math.max(1, Math.floor(this.dbBatchChunkSize / 10));
+
+    if (bindings.length > miniChunkSize && miniChunkSize > 1) {
+       for (let i = 0; i < bindings.length; i += miniChunkSize) {
+         const miniChunk = bindings.slice(i, i + miniChunkSize);
+         try {
+           const miniRes = await this.executeFallbackRetry<{ rowsAffected?: number }>(
+             () => db.executeMany(updateSql, miniChunk as unknown as Record<string, unknown>[]),
+             `Mini-chunk fallback`,
+             miniChunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', '),
+             maskedTenant
+           );
+           successfulCount += (miniRes.rowsAffected || miniChunk.length);
+         } catch (e) {
+           // Mini-chunk failed, recurse to process these specifically row-by-row
+           const rowRes = await this.executeIndividualUpdatesFallback(db, updateSql, miniChunk, maskedTenant);
+           successfulCount += rowRes.successful;
+           failedCount += rowRes.failed;
+         }
+       }
+       return { successful: successfulCount, failed: failedCount };
+    }
+
     for (const binding of bindings) {
       try {
         const indRes = await this.executeFallbackRetry<{ rowsAffected?: number }>(
