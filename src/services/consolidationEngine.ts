@@ -455,7 +455,7 @@ export class ConsolidationEngine {
   /**
    * Validates embedding on a row before mathematical processing.
    */
-  private validateRowEmbedding(row: Record<string, unknown> | unknown[], embeddingIdx: number, idIdx: number, stepName: string): boolean {
+  private validateRowEmbedding(row: unknown, embeddingIdx: number, idIdx: number, stepName: string): boolean {
     const rawEmb = this.getVal(row, embeddingIdx, 'EMBEDDING');
     const parsed = this.parseEmbedding(rawEmb);
     if (!parsed || parsed.length === 0) {
