@@ -36,6 +36,12 @@ export interface ConsolidationJob {
   operations: ("dedup" | "extract_concepts" | "score" | "score_dreams")[];
 }
 
+export interface UpdateBinding {
+  conf: number;
+  id: string;
+  tenantId: string;
+}
+
 export interface ConsolidationReport {
   id: string;
   jobType: string;
@@ -96,47 +102,77 @@ export class ConsolidationEngine {
 
   /**
    * Helper to perform batched updates for concept confidence scores safely.
+   * Batching significantly reduces the number of database round-trips compared
+   * to updating rows one-by-one, which minimizes connection pool exhaustion
+   * and mitigates N+1 query bottlenecks on large datasets.
    */
   private async updateConfidenceBatch(
     db: any,
-    updateBindings: Array<{ conf: number, id: string, tenantId: string }>,
+    updateBindings: Array<UpdateBinding>,
     dbType: string
-  ): Promise<void> {
-    if (!updateBindings || updateBindings.length === 0) return;
+  ): Promise<{ successful: number, failed: number }> {
+    if (!updateBindings || updateBindings.length === 0) return { successful: 0, failed: 0 };
 
     const updateSql = `
       UPDATE codeatlas_concepts
       SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
       WHERE id = :id AND tenant_id = :tenantId
     `;
-    const chunkSize = process.env.DB_BATCH_CHUNK_SIZE ? parseInt(process.env.DB_BATCH_CHUNK_SIZE, 10) : 500;
+    const chunkSize = Math.max(1, parseInt(process.env.DB_BATCH_CHUNK_SIZE || "500", 10) || 500);
+    const MAX_RETRIES = 3;
+    let successfulCount = 0;
+    let failedCount = 0;
 
     if (updateBindings.length <= chunkSize) {
       // Fast path for small payloads to avoid loop overhead
-      try {
-        await db.executeMany(updateSql, updateBindings as any);
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        const sampleIds = updateBindings.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
-        const tId = updateBindings[0]?.tenantId || 'unknown';
-        const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
-        logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant} (masked sample ids: ${sampleIds}), error: ${msg}`);
+      let success = false;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const res = await db.executeMany(updateSql, updateBindings as any);
+          successfulCount += (res.rowsAffected || updateBindings.length);
+          success = true;
+          break;
+        } catch (error) {
+          if (attempt === MAX_RETRIES) {
+            const msg = error instanceof Error ? error.message : String(error);
+            const sampleIds = updateBindings.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
+            const tId = updateBindings[0]?.tenantId || 'unknown';
+            const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
+            logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant} after ${MAX_RETRIES} attempts (masked sample ids: ${sampleIds}), error: ${msg}`);
+          }
+        }
       }
-      return;
+      if (!success) {
+        failedCount += updateBindings.length;
+      }
+      return { successful: successfulCount, failed: failedCount };
     }
 
     for (let i = 0; i < updateBindings.length; i += chunkSize) {
       const chunk = updateBindings.slice(i, i + chunkSize);
-      try {
-        await db.executeMany(updateSql, chunk as any);
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
-        const tId = chunk[0]?.tenantId || 'unknown';
-        const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
-        logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant}, chunk starting at index ${i} (masked sample ids: ${sampleIds}), error: ${msg}`);
+      let success = false;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const res = await db.executeMany(updateSql, chunk as any);
+          successfulCount += (res.rowsAffected || chunk.length);
+          success = true;
+          break;
+        } catch (error) {
+          if (attempt === MAX_RETRIES) {
+            const msg = error instanceof Error ? error.message : String(error);
+            const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
+            const tId = chunk[0]?.tenantId || 'unknown';
+            const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
+            logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant}, chunk starting at index ${i} after ${MAX_RETRIES} attempts (masked sample ids: ${sampleIds}), error: ${msg}`);
+          }
+        }
+      }
+      if (!success) {
+        failedCount += chunk.length;
       }
     }
+
+    return { successful: successfulCount, failed: failedCount };
   }
 
   /**
@@ -435,7 +471,7 @@ export class ConsolidationEngine {
       const rows = await db.query<any[]>(sql, binds);
 
       let toBeUpdated = 0;
-      const updateBindings: Array<{ conf: number, id: string, tenantId: string }> = [];
+      const updateBindings: Array<UpdateBinding> = [];
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
@@ -450,11 +486,15 @@ export class ConsolidationEngine {
         }
       }
 
+      let successful = 0;
+      let failed = 0;
       if (updateBindings.length > 0) {
-        await this.updateConfidenceBatch(db, updateBindings, dbType);
+        const result = await this.updateConfidenceBatch(db, updateBindings, dbType);
+        successful = result.successful;
+        failed = result.failed;
       }
 
-      logger.info(`[Consolidation] Processed ${rows.length} concepts, prepared ${updateBindings.length} updates, successfully applied ${toBeUpdated}`);
+      logger.info(`[Consolidation] Processed ${rows.length} concepts, prepared ${updateBindings.length} updates. Successfully applied: ${successful}, Failed: ${failed}`);
   }
 
   /**
