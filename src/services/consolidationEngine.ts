@@ -127,6 +127,7 @@ export class ConsolidationEngine {
     maskedTenant: string
   ): Promise<T | null> {
     const INITIAL_BACKOFF_MS = 50;
+    const MAX_DELAY_MS = 5000;
     for (let attempt = 1; attempt <= this.dbUpdateMaxRetries; attempt++) {
       try {
         return await taskFn();
@@ -138,7 +139,7 @@ export class ConsolidationEngine {
           logger.warn(`[Consolidation] ${errorContext} retry ${attempt}/${this.dbUpdateMaxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
           const baseDelay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
           const jitter = baseDelay * 0.2 * (Math.random() - 0.5); // +/- 10% jitter
-          const delay = Math.max(0, baseDelay + jitter);
+          const delay = Math.min(MAX_DELAY_MS, Math.max(0, baseDelay + jitter));
           await new Promise(res => setTimeout(res, delay));
         }
       }
@@ -528,6 +529,10 @@ export class ConsolidationEngine {
         const result = await this.updateConfidenceBatch(db, updateBindings, dbType);
         successful = result.successful;
         failed = result.failed;
+
+        if (failed === updateBindings.length && failed > 0) {
+          logger.error(`[Consolidation] All ${failed} batch updates failed for tenant ${tenantId}. Manual intervention may be required.`);
+        }
       }
 
       logger.info(`[Consolidation] Processed ${rows.length} concepts, prepared ${updateBindings.length} updates. Successfully applied: ${successful}, Failed: ${failed}`);
