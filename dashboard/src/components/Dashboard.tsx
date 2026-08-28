@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { db } from '../lib/firebase';
 import { 
   collection, 
@@ -19,17 +19,21 @@ import {
   ShieldCheck, 
   LayoutDashboard,
   BookOpen,
-  Lightbulb
+  Lightbulb,
+  GitBranch
 } from 'lucide-react';
 
 // Decoupled sub-views
 import { ControlCenterView } from './ControlCenterView';
-import { KnowledgeGraphView } from './KnowledgeGraphView';
-import { SphericalKnowledgeGraph } from './KnowledgeNetwork3D';
+const KnowledgeGraphView = lazy(async () => {
+  const module = await import('./KnowledgeGraphView');
+  return { default: module.KnowledgeGraphView };
+});
 import { CloudIndexView } from './CloudIndexView';
 import { DreamMemoryView } from './DreamMemoryView';
 import { SecondBrainView } from './SecondBrainView';
 import { DocumentationView } from './DocumentationView';
+import { MemoryTreeView } from './MemoryTreeView';
 import { OrchestrationTasksView } from './OrchestrationTasksView';
 import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
 import { getAuthHeaders } from '../lib/auth';
@@ -476,13 +480,15 @@ export const Dashboard: React.FC = () => {
           loading={loading}
         />;
       case 'Knowledge Graph':
-        return <KnowledgeGraphView
-          projects={projects}
-          selectedProjectDir={selectedProjectDir}
-          onProjectChange={handleProjectChange}
-          onDeleteProject={() => handleDeleteProject(selectedProjectDir)}
-          analysis={analysis}
-        />;
+        return <Suspense fallback={<div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Loading knowledge graph…</div>}>
+          <KnowledgeGraphView
+            projects={projects}
+            selectedProjectDir={selectedProjectDir}
+            onProjectChange={handleProjectChange}
+            onDeleteProject={() => handleDeleteProject(selectedProjectDir)}
+            analysis={analysis}
+          />
+        </Suspense>;
       case 'Cloud Index':
         return <CloudIndexView 
           analysis={analysis}
@@ -500,6 +506,8 @@ export const Dashboard: React.FC = () => {
         return <OrchestrationTasksView />;
       case 'Documentation':
         return <DocumentationView />;
+      case 'Memory Tree':
+        return <MemoryTreeView />;
       default:
         return <ControlCenterView
           stats={stats}
@@ -524,7 +532,7 @@ export const Dashboard: React.FC = () => {
         width: '240px', background: 'var(--background-light)', padding: '2rem 1.5rem',
         display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-color)'
       }}>
-        <div style={{ flexGrow: 1 }}>
+        <div style={{ flexGrow: 1, minHeight: 0, overflowY: 'auto' }}>
           <h1 className="tech-font" style={{
             fontSize: '1.5rem', letterSpacing: '0.1em', marginBottom: '3rem',
             display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-neon)'
@@ -532,7 +540,7 @@ export const Dashboard: React.FC = () => {
             CODEATLAS <ShieldCheck size={20} />
           </h1>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {['Control Center', 'Knowledge Graph', 'Cloud Index', 'Dream Memories', 'Second Brain', 'Orchestration Tasks', 'Documentation'].map(tab => (
+            {['Control Center', 'Knowledge Graph', 'Memory Tree', 'Cloud Index', 'Dream Memories', 'Second Brain', 'Orchestration Tasks', 'Documentation'].map(tab => (
               <li key={tab} style={{ marginBottom: '1rem' }}>
                 <button
                   onClick={() => setActiveTab(tab)}
@@ -555,6 +563,7 @@ export const Dashboard: React.FC = () => {
                   {tab === 'Second Brain' && <Lightbulb size={18} />}
                   {tab === 'Orchestration Tasks' && <Network size={18} />}
                   {tab === 'Documentation' && <BookOpen size={18} />}
+                  {tab === 'Memory Tree' && <GitBranch size={18} />}
                   {tab}
                 </button>
               </li>
