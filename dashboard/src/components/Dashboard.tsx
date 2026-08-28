@@ -524,12 +524,12 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div style={{
-      display: 'flex', minHeight: '100vh', background: 'var(--background-dark)', color: '#fff',
+      display: 'flex', height: '100vh', minHeight: 0, background: 'var(--background-dark)', color: '#fff',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif'
     }}>
       {/* Sidebar Navigation */}
       <nav aria-label="Main Navigation" style={{
-        width: '240px', background: 'var(--background-light)', padding: '2rem 1.5rem',
+        width: '240px', flexShrink: 0, background: 'var(--background-light)', padding: '2rem 1.5rem',
         display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-color)'
       }}>
         <div style={{ flexGrow: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -595,7 +595,7 @@ export const Dashboard: React.FC = () => {
       </nav>
 
       {/* Main Content Area */}
-      <main style={{ flexGrow: 1, padding: '2rem', overflowY: 'auto' }}>
+      <main style={{ flex: '1 1 auto', minWidth: 0, minHeight: 0, padding: '2rem', overflowY: 'auto' }}>
         {renderCurrentView()}
       </main>
 

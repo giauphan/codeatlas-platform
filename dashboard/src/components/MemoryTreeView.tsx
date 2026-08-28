@@ -40,13 +40,13 @@ const MAX_DIAGRAM_MEMORIES_PER_TYPE = 12;
 const ROOT_X = 70;
 const PROJECT_X = 220;
 const TYPE_X = 410;
-const MEMORY_X = 650;
+const MEMORY_X = 720;
 const PROJECT_START_Y = 70;
-const PROJECT_GAP_Y = 180;
 const TYPE_GAP_Y = 90;
 const TYPE_OFFSET_Y = 45;
 const MEMORY_OFFSET_Y = 55;
-const MEMORY_GAP_Y = 24;
+const MEMORY_GAP_Y = 44;
+const PROJECT_PADDING_Y = 30;
 
 function isMemory(value: unknown): value is Memory {
   if (!value || typeof value !== 'object') return false;
@@ -82,41 +82,53 @@ function groupMemories(memories: Memory[]): Map<string, Map<string, Memory[]>> {
 function MemoryTreeDiagram({ memories }: { memories: Memory[] }) {
   const { nodes, edges, height } = useMemo(() => {
     const tree = groupMemories(memories);
-    const nodes: TreeNode[] = [{ id: 'root', label: 'MEMORY', kind: 'root', color: '#00F0FF', x: ROOT_X, y: 190 }];
+    const nodes: TreeNode[] = [];
     const edges: Array<[TreeNode, TreeNode]> = [];
     const projectEntries = Array.from(tree.entries());
-
-    projectEntries.forEach(([project, types], projectIndex) => {
-    const projectNode: TreeNode = {
-      id: `project:${project}`, label: project, kind: 'project', color: '#00F0FF',
-      x: PROJECT_X, y: PROJECT_START_Y + projectIndex * PROJECT_GAP_Y,
-    };
-    nodes.push(projectNode);
-    edges.push([nodes[0], projectNode]);
-    Array.from(types.entries()).forEach(([type, items], typeIndex) => {
-      const typeNode: TreeNode = {
-        id: `${projectNode.id}:${type}`, label: `${type.replace('_', ' ')} (${items.length})`, kind: 'type',
-        color: TYPE_COLORS[type] || '#888', x: TYPE_X, y: projectNode.y - TYPE_OFFSET_Y + typeIndex * TYPE_GAP_Y,
-      };
-      nodes.push(typeNode);
-      edges.push([projectNode, typeNode]);
-      items.slice(0, MAX_DIAGRAM_MEMORIES_PER_TYPE).forEach((memory, memoryIndex) => {
-        const memoryNode: TreeNode = {
-          id: `${typeNode.id}:${memory.id}`, label: (memory.content || 'Empty memory').slice(0, 42), kind: 'memory',
-          color: typeNode.color, x: MEMORY_X, y: typeNode.y - MEMORY_OFFSET_Y + memoryIndex * MEMORY_GAP_Y, memory,
-        };
-        nodes.push(memoryNode);
-        edges.push([typeNode, memoryNode]);
-      });
+    const projectLayouts = projectEntries.map(([project, types]) => {
+      const typeHeights = Array.from(types.values()).map(items => Math.max(TYPE_GAP_Y, MEMORY_OFFSET_Y + Math.min(items.length, MAX_DIAGRAM_MEMORIES_PER_TYPE) * MEMORY_GAP_Y));
+      return { project, types, height: typeHeights.reduce((total, value) => total + value, 0) + PROJECT_PADDING_Y };
     });
+    const totalHeight = projectLayouts.reduce((total, layout) => total + layout.height, 0);
+    const root: TreeNode = { id: 'root', label: 'MEMORY', kind: 'root', color: '#00F0FF', x: ROOT_X, y: Math.max(190, totalHeight / 2) };
+    nodes.push(root);
+    let projectTop = PROJECT_START_Y;
+
+    projectLayouts.forEach(({ project, types, height }) => {
+      const projectNode: TreeNode = {
+        id: `project:${project}`, label: project, kind: 'project', color: '#00F0FF',
+        x: PROJECT_X, y: projectTop + (height - PROJECT_PADDING_Y) / 2,
+      };
+      nodes.push(projectNode);
+      edges.push([root, projectNode]);
+      let typeY = projectTop;
+      Array.from(types.entries()).forEach(([type, items]) => {
+        const visibleItems = items.slice(0, MAX_DIAGRAM_MEMORIES_PER_TYPE);
+        const typeNode: TreeNode = {
+          id: `${projectNode.id}:${type}`, label: `${type.replace(/_/g, ' ')} (${items.length})`, kind: 'type',
+          color: TYPE_COLORS[type] || '#888', x: TYPE_X, y: typeY + TYPE_OFFSET_Y,
+        };
+        nodes.push(typeNode);
+        edges.push([projectNode, typeNode]);
+        visibleItems.forEach((memory, memoryIndex) => {
+          const memoryNode: TreeNode = {
+            id: `${typeNode.id}:${memory.id}`, label: (memory.content || 'Empty memory').slice(0, 42), kind: 'memory',
+            color: typeNode.color, x: MEMORY_X, y: typeNode.y + MEMORY_OFFSET_Y + memoryIndex * MEMORY_GAP_Y, memory,
+          };
+          nodes.push(memoryNode);
+          edges.push([typeNode, memoryNode]);
+        });
+        typeY += Math.max(TYPE_GAP_Y, MEMORY_OFFSET_Y + visibleItems.length * MEMORY_GAP_Y);
+      });
+      projectTop += height;
     });
 
     return { nodes, edges, height: Math.max(380, ...nodes.map(node => node.y + 45)) };
   }, [memories]);
 
   return (
-    <div style={{ overflow: 'auto', border: '1px solid rgba(0,240,255,0.18)', borderRadius: 16, background: 'radial-gradient(circle at 10% 50%, rgba(0,240,255,0.08), transparent 35%), #05080f' }}>
-      <svg role="img" aria-label="Visual memory tree" width="100%" height={height} viewBox={`0 0 900 ${height}`} preserveAspectRatio="xMinYMin meet" style={{ display: 'block', minWidth: 760 }}>
+    <div style={{ overflow: 'auto', maxWidth: '100%', border: '1px solid rgba(0,240,255,0.18)', borderRadius: 16, background: 'radial-gradient(circle at 10% 50%, rgba(0,240,255,0.08), transparent 35%), #05080f' }}>
+      <svg role="img" aria-label="Visual memory tree" width="980" height={height} viewBox={`0 0 980 ${height}`} preserveAspectRatio="xMinYMin meet" style={{ display: 'block', minWidth: 860 }}>
         <defs>
           <filter id="memory-tree-glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
         </defs>
@@ -158,6 +170,7 @@ export function MemoryTreeView() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['project:Global']));
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
+  const [selectedProject, setSelectedProject] = useState('');
 
   const fetchMemories = useCallback(async () => {
     setLoading(true);
@@ -185,12 +198,14 @@ export function MemoryTreeView() {
 
   useEffect(() => { fetchMemories(); }, [fetchMemories]);
 
-  const tree = useMemo(() => groupMemories(memories), [memories]);
-  const typeCounts = useMemo(() => memories.reduce<Record<string, number>>((counts, memory) => {
+  const projects = useMemo(() => Array.from(new Set(memories.map(memory => memory.project || 'Global'))).sort(), [memories]);
+  const displayedMemories = useMemo(() => selectedProject ? memories.filter(memory => (memory.project || 'Global') === selectedProject) : memories, [memories, selectedProject]);
+  const tree = useMemo(() => groupMemories(displayedMemories), [displayedMemories]);
+  const typeCounts = useMemo(() => displayedMemories.reduce<Record<string, number>>((counts, memory) => {
     const type = memory.memory_type || 'OTHER';
     counts[type] = (counts[type] || 0) + 1;
     return counts;
-  }, {}), [memories]);
+  }, {}), [displayedMemories]);
   const maxCount = Math.max(...Object.values(typeCounts), 1);
 
   const toggle = (key: string) => setExpanded(current => {
@@ -206,9 +221,16 @@ export function MemoryTreeView() {
           <h2 className="tech-font" style={{ margin: 0, color: 'var(--primary-neon)', letterSpacing: '0.08em' }}>MEMORY TREE</h2>
           <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 0' }}>Explore stored memories by project and type.</p>
         </div>
-        <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.9rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: 'rgba(0,240,255,0.08)', color: 'var(--primary-neon)', cursor: 'pointer' }}>
-          <RefreshCw size={16} /> Refresh
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <label htmlFor="memory-project" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Project</label>
+          <select id="memory-project" value={selectedProject} onChange={event => setSelectedProject(event.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.6rem 0.75rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: '#05080f', color: '#fff', cursor: 'pointer' }}>
+            <option value="">All projects</option>
+            {projects.map(project => <option key={project} value={project}>{project}</option>)}
+          </select>
+          <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.9rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: 'rgba(0,240,255,0.08)', color: 'var(--primary-neon)', cursor: 'pointer' }}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        </div>
       </header>
 
       {error && <div role="alert" style={{ color: '#FF4B4B', padding: '1rem', border: '1px solid rgba(255,75,75,0.3)', borderRadius: 10, marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
@@ -216,7 +238,7 @@ export function MemoryTreeView() {
         <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} style={{ padding: '0.45rem 0.75rem', borderRadius: 7, border: '1px solid rgba(255,75,75,0.5)', background: 'rgba(255,75,75,0.1)', color: '#FF4B4B', cursor: 'pointer' }}>Retry</button>
       </div>}
 
-      <MemoryTreeDiagram memories={memories} />
+      <MemoryTreeDiagram memories={displayedMemories} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.8fr) minmax(0, 1.2fr)', gap: '1.5rem', alignItems: 'start', marginTop: '1.5rem' }}>
         <div style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: 16, background: 'rgba(5,8,15,0.65)' }}>
@@ -228,7 +250,7 @@ export function MemoryTreeView() {
               <div style={{ height: 7, background: 'rgba(255,255,255,0.08)', borderRadius: 8 }}><div style={{ width: `${(count / maxCount) * 100}%`, height: '100%', borderRadius: 8, background: color, boxShadow: `0 0 10px ${color}` }} /></div>
             </div>;
           })}
-          {!loading && memories.length === 0 && <span style={{ color: 'var(--text-muted)' }}>No memories found.</span>}
+          {!loading && displayedMemories.length === 0 && <span style={{ color: 'var(--text-muted)' }}>No memories found.</span>}
         </div>
 
         <div style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: 16, background: 'rgba(5,8,15,0.65)' }}>
