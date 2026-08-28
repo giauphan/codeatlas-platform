@@ -138,7 +138,7 @@ export class ConsolidationEngine {
     const normalized = (dbType || "").toLowerCase();
     if (normalized === "postgres") return "CURRENT_TIMESTAMP";
     if (normalized === "sqlite") return "datetime('now')";
-    throw new Error(`[Consolidation] Unsupported dbType for timestamp mapping: ${dbType}`);
+    throw new Error(`[Consolidation] Unsupported dbType for timestamp mapping: ${dbType}. Supported dialects are: postgres, sqlite.`);
   }
 
   /**
