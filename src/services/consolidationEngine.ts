@@ -131,8 +131,9 @@ export class ConsolidationEngine {
    * Returns the dialect-specific SQL string to get the current timestamp.
    */
   private getCurrentTimestampSql(dbType: string): string {
-    if (dbType === "postgres") return "CURRENT_TIMESTAMP";
-    if (dbType === "sqlite") return "datetime('now')";
+    const normalized = (dbType || "").toLowerCase();
+    if (normalized === "postgres") return "CURRENT_TIMESTAMP";
+    if (normalized === "sqlite") return "datetime('now')";
     throw new Error(`[Consolidation] Unsupported dbType for timestamp mapping: ${dbType}`);
   }
 
@@ -142,6 +143,25 @@ export class ConsolidationEngine {
   private getMaskedTenantId(bindings: Array<UpdateBinding>): string {
     const tId = bindings[0]?.tenantId || 'unknown';
     return tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
+  }
+
+  /**
+   * Formats error/retry messages consistently for batch operations.
+   */
+  private logBatchError(
+    level: "warn" | "error",
+    context: string,
+    attempt: number,
+    maxRetries: number,
+    maskedTenant: string,
+    msg: string,
+    sampleIds?: string
+  ): void {
+    if (level === "error") {
+      logger.error(`[Consolidation] ${context} failed for tenant ${maskedTenant} after ${maxRetries} attempts${sampleIds ? ` (masked sample ids: ${sampleIds})` : ''}. Error: ${msg}`);
+    } else {
+      logger.warn(`[Consolidation] ${context} retry ${attempt}/${maxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
+    }
   }
 
   /**
@@ -160,10 +180,10 @@ export class ConsolidationEngine {
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (attempt === this.dbUpdateMaxRetries) {
-          logger.error(`[Consolidation] ${errorContext} failed for tenant ${maskedTenant} after ${this.dbUpdateMaxRetries} attempts (masked sample ids: ${sampleIds}). Error: ${msg}`);
+          this.logBatchError("error", errorContext, attempt, this.dbUpdateMaxRetries, maskedTenant, msg, sampleIds);
           throw error;
         } else {
-          logger.warn(`[Consolidation] ${errorContext} retry ${attempt}/${this.dbUpdateMaxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
+          this.logBatchError("warn", errorContext, attempt, this.dbUpdateMaxRetries, maskedTenant, msg);
           const baseDelay = this.dbInitialBackoffMs * Math.pow(2, attempt - 1);
           const jitter = baseDelay * 0.2 * (Math.random() - 0.5); // +/- 10% jitter
           const delay = this.clamp(baseDelay + jitter, 0, MAX_DELAY_MS);
@@ -203,7 +223,8 @@ export class ConsolidationEngine {
     }
 
     if (failedCount > 0) {
-      logger.error(`[Consolidation] Individual fallback failed for ${failedCount} rows (tenant: ${maskedTenant}). Masked IDs: ${failedIds.join(', ')}`);
+      const displayIds = failedIds.slice(0, 20).join(', ') + (failedIds.length > 20 ? '... (truncated)' : '');
+      logger.error(`[Consolidation] Individual fallback failed for ${failedCount} rows (tenant: ${maskedTenant}). Masked IDs: ${displayIds}`);
     }
 
     return { successful: successfulCount, failed: failedCount };
