@@ -3,12 +3,17 @@ import React from 'react';
 export type CSSLength = `${number}px` | `${number}rem` | `${number}%`;
 
 interface KbdHintProps {
-  icon: string;
+  icon: '↵' | string;
   text: string;
   top: CSSLength;
   right: CSSLength;
 }
 
+/**
+ * A reusable component to render keyboard hints (e.g. "↵ Enter").
+ *
+ * Used primarily inside search inputs to visually indicate an action requirement.
+ */
 export const KbdHint: React.FC<KbdHintProps> = ({ icon, text, top, right }) => {
   return (
     <div className="search-kbd-hint-wrapper" style={{ right, top }} aria-hidden="true">

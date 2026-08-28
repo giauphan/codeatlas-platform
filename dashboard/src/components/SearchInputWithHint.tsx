@@ -33,9 +33,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   hasClearButton = false
 }) => {
   if (hasClearButton && !onClear) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn("SearchInputWithHint: 'hasClearButton' is true but 'onClear' was not provided. The clear button will not function correctly.");
-    }
+    throw new Error("SearchInputWithHint: 'hasClearButton' requires 'onClear' to be implemented.");
   }
 
   // Compute styling logic here (using useMemo to avoid re-renders)
