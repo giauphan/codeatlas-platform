@@ -181,6 +181,11 @@ export function DreamMemoryView() {
     if (firebaseReady) fetchMemories(searchQuery, 0, dreamConfig);
   }, [firebaseReady, dreamConfig]);
 
+  /**
+   * Handles the search submission.
+   * Accepts an optional FormEvent to support both programmatic invocation
+   * (e.g. via 'Enter' key inside SearchInputWithHint) and native form submission.
+   */
   const handleSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setPage(0);
