@@ -64,6 +64,8 @@ export class ConsolidationEngine {
     this.dbBatchChunkSize = this.parseConfig("DB_BATCH_CHUNK_SIZE", 500, 1, 10000);
     this.dbUpdateMaxRetries = this.parseConfig("DB_UPDATE_MAX_RETRIES", 3, 1, 10);
     this.dbInitialBackoffMs = this.parseConfig("DB_INITIAL_BACKOFF_MS", 50, 10, 5000);
+
+    logger.info(`[Consolidation] Engine initialized with DB_BATCH_CHUNK_SIZE=${this.dbBatchChunkSize}, DB_UPDATE_MAX_RETRIES=${this.dbUpdateMaxRetries}, DB_INITIAL_BACKOFF_MS=${this.dbInitialBackoffMs}`);
   }
 
   /**
