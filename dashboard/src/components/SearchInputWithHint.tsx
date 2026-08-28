@@ -72,13 +72,16 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
         className={`search-input-field ${FOCUS_RING_CLASS}`}
         placeholder={placeholder}
         aria-label={ariaLabel}
+        aria-describedby="search-kbd-hint"
         style={{ paddingRight: styles.inputPaddingRight }}
         value={value}
         onChange={onChange}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
-            onSearch();
+            if (value.trim()) {
+              onSearch();
+            }
           }
         }}
       />

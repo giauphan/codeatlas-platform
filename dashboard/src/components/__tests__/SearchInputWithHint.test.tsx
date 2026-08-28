@@ -7,7 +7,7 @@ describe('SearchInputWithHint', () => {
     const onChange = vi.fn();
     const onSearch = vi.fn();
 
-    render(
+    const { rerender } = render(
       <SearchInputWithHint
         value=""
         onChange={onChange}
@@ -53,7 +53,7 @@ describe('SearchInputWithHint', () => {
     const onChange = vi.fn();
     const onSearch = vi.fn();
 
-    render(
+    const { rerender } = render(
       <SearchInputWithHint
         value=""
         onChange={onChange}
@@ -65,8 +65,34 @@ describe('SearchInputWithHint', () => {
     fireEvent.change(input, { target: { value: 'test' } });
     expect(onChange).toHaveBeenCalledTimes(1);
 
+    // Provide a non-empty string to satisfy `value.trim()`
+    rerender(
+      <SearchInputWithHint
+        value="test"
+        onChange={onChange}
+        onSearch={onSearch}
+      />
+    );
+
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     expect(onSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onSearch when value is empty or only whitespace', () => {
+    const onChange = vi.fn();
+    const onSearch = vi.fn();
+
+    render(
+      <SearchInputWithHint
+        value="   "
+        onChange={onChange}
+        onSearch={onSearch}
+      />
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    expect(onSearch).not.toHaveBeenCalled();
   });
 
   it('logs a console.warn when hasClearButton is true but onClear is missing in development', () => {
