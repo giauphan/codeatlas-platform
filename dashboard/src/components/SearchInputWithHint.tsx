@@ -41,7 +41,12 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   hasClearButton = false
 }) => {
   if (hasClearButton && !onClear) {
-    throw new Error("SearchInputWithHint: 'hasClearButton' requires 'onClear' to be implemented.");
+    if (process.env.NODE_ENV === 'development') {
+      console.error(
+        "SearchInputWithHint: 'hasClearButton' requires 'onClear' to be implemented. " +
+        "The clear button will not render or function properly without an onClear handler."
+      );
+    }
   }
 
   // Compute styling logic here (using useMemo to avoid re-renders)
@@ -50,7 +55,8 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
     const showClearBtn = hasClearButton && value.length > 0;
     return {
       paddingRight: showClearBtn ? '4.5rem' : '3.5rem',
-      kbdHintRight: showClearBtn ? '2.5rem' : '1rem'
+      // Instead of changing `right`, we change `transform` to prevent layout thrashing
+      kbdHintTransform: showClearBtn ? 'translateX(-1.5rem)' : 'translateX(0)'
     } as const;
   }, [value, hasClearButton]);
 
@@ -71,7 +77,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
           }
         }}
       />
-      <KbdHint icon="↵" text="Enter" top="0.85rem" right={styles.kbdHintRight} />
+      <KbdHint icon="↵" text="Enter" top="0.85rem" right="1rem" transform={styles.kbdHintTransform} />
 
       {hasClearButton && value && onClear && (
         <button

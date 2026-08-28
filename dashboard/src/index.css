@@ -177,7 +177,7 @@ h1, h2, h3, .tech-font {
   position: absolute;
   /* Prevent interaction so the input underneath remains clickable */
   pointer-events: none;
-  transition: right 0.2s ease;
+  transition: transform 0.2s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

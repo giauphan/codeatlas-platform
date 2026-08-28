@@ -181,8 +181,8 @@ export function DreamMemoryView() {
     if (firebaseReady) fetchMemories(searchQuery, 0, dreamConfig);
   }, [firebaseReady, dreamConfig]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setPage(0);
     fetchMemories(searchQuery, 0, dreamConfig);
   };
@@ -242,7 +242,7 @@ export function DreamMemoryView() {
           <SearchInputWithHint
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            onSearch={() => fetchMemories(searchQuery, 0, dreamConfig)}
+            onSearch={() => handleSearch()}
             onClear={clearSearch}
             placeholder="Search memories semantically..."
             ariaLabel="Search memories semantically"
