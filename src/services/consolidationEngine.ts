@@ -637,7 +637,8 @@ export class ConsolidationEngine {
         failed = result.failed;
 
         if (failed === updateBindings.length && failed > 0) {
-          logger.error(`[Consolidation] All ${failed} batch updates failed for tenant ${tenantId}. Manual intervention may be required.`);
+          const sampleIds = updateBindings.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
+          logger.error(`[Consolidation] All ${failed} batch updates failed for tenant ${tenantId} (masked sample ids: ${sampleIds}). Manual intervention may be required.`);
         }
       }
 
