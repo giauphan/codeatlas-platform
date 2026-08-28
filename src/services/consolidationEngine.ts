@@ -19,6 +19,8 @@ import { DreamingService } from "./dreamingService.js";
 const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.85;
 const MAX_CONCEPT_CONFIDENCE = 0.99;
 const MIN_CONCEPT_CONFIDENCE = 0.05;
+const CONFIDENCE_STATISTICAL_SIGNIFICANCE_THRESHOLD = 0.01;
+const BAYESIAN_EVIDENCE_DECAY_RATE = 0.2;
 
 const R_IDX = Object.freeze({
   ID: 0, CONTENT: 1, EMBEDDING: 2, IMPORTANCE: 3,
@@ -108,10 +110,11 @@ export class ConsolidationEngine {
    * Helper to determine if the calculated confidence delta is statistically significant.
    */
   private isConfidenceStatisticallySignificant(currentConf: number, newConf: number): boolean {
-    // We only execute a database update if the confidence changes by at least 1% (0.01).
-    // This threshold prevents the system from generating thousands of microscopic updates
-    // for concepts whose Bayesian evidence scores have effectively plateaued.
-    return Math.abs(newConf - currentConf) > 0.01;
+    // We only execute a database update if the confidence changes by at least the
+    // statistical significance threshold. This prevents the system from generating
+    // thousands of microscopic updates for concepts whose Bayesian evidence scores
+    // have effectively plateaued.
+    return Math.abs(newConf - currentConf) > CONFIDENCE_STATISTICAL_SIGNIFICANCE_THRESHOLD;
   }
 
   /**
@@ -776,7 +779,7 @@ export class ConsolidationEngine {
 
         // Bayesian confidence update: each piece of evidence increases confidence.
         // We cap the maximum confidence to allow for future fluctuation.
-        const rawNewConf = currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount));
+        const rawNewConf = currentConf + (1 - currentConf) * (1 - Math.exp(-BAYESIAN_EVIDENCE_DECAY_RATE * evidenceCount));
         const newConf = this.clampConfidence(rawNewConf);
 
         // Only queue an update if the calculated confidence delta is statistically significant.
