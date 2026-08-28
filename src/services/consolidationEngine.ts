@@ -304,7 +304,8 @@ export class ConsolidationEngine {
     db: IDatabaseAdapter,
     updateSql: string,
     bindings: Array<UpdateBinding>,
-    maskedTenant: string
+    maskedTenant: string,
+    hasTenantId: boolean = true
   ): Promise<{ successful: number, failed: number }> {
     let successfulCount = 0;
     let failedCount = 0;
@@ -318,12 +319,21 @@ export class ConsolidationEngine {
     if (bindings.length > miniChunkSize && miniChunkSize > 1) {
        for (let i = 0; i < bindings.length; i += miniChunkSize) {
          const miniChunk = bindings.slice(i, i + miniChunkSize);
+
+         const mappedMiniChunk = miniChunk.map(b => {
+           const rec: Record<string, unknown> = { conf: b.conf, id: b.id };
+           if (hasTenantId) {
+             rec.tenantId = b.tenantId ?? null;
+           }
+           return rec;
+         });
+
          try {
-           const miniRes = await db.executeMany(updateSql, miniChunk as unknown as Record<string, unknown>[]);
+           const miniRes = await db.executeMany(updateSql, mappedMiniChunk);
            successfulCount += (miniRes.rowsAffected || miniChunk.length);
          } catch (e) {
            // Mini-chunk failed, recurse to process these specifically row-by-row
-           const rowRes = await this.executeIndividualUpdatesFallback(db, updateSql, miniChunk, maskedTenant);
+           const rowRes = await this.executeIndividualUpdatesFallback(db, updateSql, miniChunk, maskedTenant, hasTenantId);
            successfulCount += rowRes.successful;
            failedCount += rowRes.failed;
          }
@@ -333,7 +343,12 @@ export class ConsolidationEngine {
 
     for (const binding of bindings) {
       try {
-        const indRes = await db.execute(updateSql, binding as unknown as Record<string, unknown>);
+        const rec: Record<string, unknown> = { conf: binding.conf, id: binding.id };
+        if (hasTenantId) {
+          rec.tenantId = binding.tenantId ?? null;
+        }
+
+        const indRes = await db.execute(updateSql, rec);
         successfulCount += (indRes.rowsAffected || 1);
       } catch (e) {
         failedCount++;
