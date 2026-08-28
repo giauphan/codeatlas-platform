@@ -62,13 +62,19 @@ export class ConsolidationEngine {
 
   constructor() {
     const rawChunkSize = process.env.DB_BATCH_CHUNK_SIZE || "500";
-    const parsedChunkSize = parseInt(rawChunkSize, 10);
-    if (isNaN(parsedChunkSize)) throw new Error("Invalid DB_BATCH_CHUNK_SIZE value.");
+    let parsedChunkSize = parseInt(rawChunkSize, 10);
+    if (isNaN(parsedChunkSize)) {
+      logger.warn(`[Consolidation] Invalid DB_BATCH_CHUNK_SIZE value '${rawChunkSize}'. Falling back to default 500.`);
+      parsedChunkSize = 500;
+    }
     this.dbBatchChunkSize = Math.min(10000, Math.max(1, parsedChunkSize));
 
     const rawMaxRetries = process.env.DB_UPDATE_MAX_RETRIES || "3";
-    const parsedMaxRetries = parseInt(rawMaxRetries, 10);
-    if (isNaN(parsedMaxRetries)) throw new Error("Invalid DB_UPDATE_MAX_RETRIES value.");
+    let parsedMaxRetries = parseInt(rawMaxRetries, 10);
+    if (isNaN(parsedMaxRetries)) {
+      logger.warn(`[Consolidation] Invalid DB_UPDATE_MAX_RETRIES value '${rawMaxRetries}'. Falling back to default 3.`);
+      parsedMaxRetries = 3;
+    }
     this.dbUpdateMaxRetries = Math.min(10, Math.max(1, parsedMaxRetries));
   }
 
@@ -554,14 +560,18 @@ export class ConsolidationEngine {
 
       let toBeUpdated = 0;
       const updateBindings: Array<UpdateBinding> = [];
+
+      // Iterate over the concepts and determine if their confidence score requires an update.
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
         const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
 
-        // Bayesian confidence update: each piece of evidence increases confidence
+        // Bayesian confidence update: each piece of evidence increases confidence.
+        // We cap the maximum confidence at 0.99 to allow for future fluctuation.
         const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
 
+        // Only queue an update if the calculated confidence delta is statistically significant.
         if (Math.abs(newConf - currentConf) > 0.01) {
           updateBindings.push({ conf: newConf, id, tenantId });
           toBeUpdated++;
