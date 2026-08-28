@@ -59,13 +59,15 @@ export class ConsolidationEngine {
   private readonly dbBatchChunkSize: number;
   private readonly dbUpdateMaxRetries: number;
   private readonly dbInitialBackoffMs: number;
+  private readonly dbMaxBackoffDelayMs: number;
 
   constructor() {
     this.dbBatchChunkSize = this.parseConfig("DB_BATCH_CHUNK_SIZE", 500, 1, 10000);
     this.dbUpdateMaxRetries = this.parseConfig("DB_UPDATE_MAX_RETRIES", 3, 1, 10);
     this.dbInitialBackoffMs = this.parseConfig("DB_INITIAL_BACKOFF_MS", 50, 10, 5000);
+    this.dbMaxBackoffDelayMs = this.parseConfig("DB_MAX_BACKOFF_DELAY_MS", 5000, 1000, 30000);
 
-    logger.info(`[Consolidation] Engine initialized with DB_BATCH_CHUNK_SIZE=${this.dbBatchChunkSize}, DB_UPDATE_MAX_RETRIES=${this.dbUpdateMaxRetries}, DB_INITIAL_BACKOFF_MS=${this.dbInitialBackoffMs}`);
+    logger.info(`[Consolidation] Engine initialized with DB_BATCH_CHUNK_SIZE=${this.dbBatchChunkSize}, DB_UPDATE_MAX_RETRIES=${this.dbUpdateMaxRetries}, DB_INITIAL_BACKOFF_MS=${this.dbInitialBackoffMs}, DB_MAX_BACKOFF_DELAY_MS=${this.dbMaxBackoffDelayMs}`);
   }
 
   /**
@@ -188,7 +190,6 @@ export class ConsolidationEngine {
     sampleIds: string,
     maskedTenant: string
   ): Promise<T> {
-    const MAX_DELAY_MS = 5000;
     for (let attempt = 1; attempt <= this.dbUpdateMaxRetries; attempt++) {
       try {
         return await taskFn();
@@ -201,7 +202,7 @@ export class ConsolidationEngine {
           this.logBatchError("warn", errorContext, attempt, this.dbUpdateMaxRetries, maskedTenant, msg);
           const baseDelay = this.dbInitialBackoffMs * Math.pow(2, attempt - 1);
           const jitter = baseDelay * 0.2 * (Math.random() - 0.5); // +/- 10% jitter
-          const delay = this.clamp(baseDelay + jitter, 0, MAX_DELAY_MS);
+          const delay = this.clamp(baseDelay + jitter, 0, this.dbMaxBackoffDelayMs);
           await new Promise(res => setTimeout(res, delay));
         }
       }
