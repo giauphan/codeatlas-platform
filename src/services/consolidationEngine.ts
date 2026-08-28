@@ -59,6 +59,7 @@ export class ConsolidationEngine {
 
   private readonly dbBatchChunkSize: number;
   private readonly dbUpdateMaxRetries: number;
+  private readonly dbInitialBackoffMs: number;
 
   constructor() {
     const rawChunkSize = process.env.DB_BATCH_CHUNK_SIZE || "500";
@@ -76,6 +77,14 @@ export class ConsolidationEngine {
       parsedMaxRetries = 3;
     }
     this.dbUpdateMaxRetries = Math.min(10, Math.max(1, parsedMaxRetries));
+
+    const rawInitialBackoff = process.env.DB_INITIAL_BACKOFF_MS || "50";
+    let parsedInitialBackoff = parseInt(rawInitialBackoff, 10);
+    if (isNaN(parsedInitialBackoff)) {
+      logger.warn(`[Consolidation] Invalid DB_INITIAL_BACKOFF_MS value '${rawInitialBackoff}'. Falling back to default 50.`);
+      parsedInitialBackoff = 50;
+    }
+    this.dbInitialBackoffMs = Math.min(5000, Math.max(10, parsedInitialBackoff));
   }
 
   private getVal(row: any, index: number, keyStr: string): any {
@@ -148,7 +157,6 @@ export class ConsolidationEngine {
     sampleIds: string,
     maskedTenant: string
   ): Promise<T> {
-    const INITIAL_BACKOFF_MS = 50;
     const MAX_DELAY_MS = 5000;
     for (let attempt = 1; attempt <= this.dbUpdateMaxRetries; attempt++) {
       try {
@@ -160,7 +168,7 @@ export class ConsolidationEngine {
           throw error;
         } else {
           logger.warn(`[Consolidation] ${errorContext} retry ${attempt}/${this.dbUpdateMaxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
-          const baseDelay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+          const baseDelay = this.dbInitialBackoffMs * Math.pow(2, attempt - 1);
           const jitter = baseDelay * 0.2 * (Math.random() - 0.5); // +/- 10% jitter
           const delay = Math.min(MAX_DELAY_MS, Math.max(0, baseDelay + jitter));
           await new Promise(res => setTimeout(res, delay));
@@ -181,6 +189,7 @@ export class ConsolidationEngine {
   ): Promise<{ successful: number, failed: number }> {
     let successfulCount = 0;
     let failedCount = 0;
+    const failedIds: string[] = [];
     logger.warn(`[Consolidation] Falling back to individual updates for ${bindings.length} rows (tenant: ${maskedTenant}).`);
     for (const binding of bindings) {
       try {
@@ -193,8 +202,14 @@ export class ConsolidationEngine {
         successfulCount += (indRes.rowsAffected || 1);
       } catch (e) {
         failedCount++;
+        failedIds.push(binding.id.substring(0, 4) + '***');
       }
     }
+
+    if (failedCount > 0) {
+      logger.error(`[Consolidation] Individual fallback failed for ${failedCount} rows (tenant: ${maskedTenant}). Masked IDs: ${failedIds.join(', ')}`);
+    }
+
     return { successful: successfulCount, failed: failedCount };
   }
 
