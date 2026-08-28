@@ -72,7 +72,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
 
   return (
     <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
-      <Search size={18} className="search-input-icon" />
+      <Search size={18} className="search-input-icon" aria-hidden="true" focusable="false" />
       <input
         type="text"
         className={`search-input-field ${FOCUS_RING_CLASS}`}
