@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
+import { KbdHint } from './KbdHint';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 
 interface Concept {
@@ -137,11 +138,7 @@ export function SecondBrainView() {
               color: '#fff', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box'
             }}
           />
-          <div style={{ position: 'absolute', right: '0.75rem', top: '0.65rem', pointerEvents: 'none' }}>
-            <kbd className="search-kbd-hint">
-              <span className="search-kbd-hint-icon">↵</span> Enter
-            </kbd>
-          </div>
+          <KbdHint icon="↵" text="Enter" top="0.65rem" right="0.75rem" />
         </div>
         <div role="group" aria-label="Filter concepts by category" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {categories.map(cat => (

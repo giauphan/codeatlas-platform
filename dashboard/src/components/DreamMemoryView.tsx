@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
+import { KbdHint } from './KbdHint';
 import {
   DREAM_CONFIG_LOADING_BUTTON_STYLE,
   DREAM_CONFIG_RUN_BUTTON_STYLE,
@@ -245,11 +246,7 @@ export function DreamMemoryView() {
             style={{ paddingLeft: '3.25rem', paddingRight: searchQuery ? '4.5rem' : '3.5rem', width: '100%' }}
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           />
-          <div style={{ position: 'absolute', right: searchQuery ? '2.5rem' : '1rem', top: '1rem', pointerEvents: 'none', transition: 'right 0.2s ease' }}>
-            <kbd className="search-kbd-hint">
-              <span className="search-kbd-hint-icon">↵</span> Enter
-            </kbd>
-          </div>
+          <KbdHint icon="↵" text="Enter" top="1rem" right={searchQuery ? '2.5rem' : '1rem'} />
           {searchQuery && (
             <button
               type="button"

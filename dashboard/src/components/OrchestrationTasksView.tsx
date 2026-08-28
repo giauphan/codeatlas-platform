@@ -3,6 +3,7 @@ import { Network, Search, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBran
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth'; // Reusing auth headers utility
 import type { A2AOrchestrationTask, OrchestrationState } from '../../../src/types/a2a'; // Importing types
+import { KbdHint } from './KbdHint';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 
 export function OrchestrationTasksView() {
@@ -123,11 +124,7 @@ export function OrchestrationTasksView() {
               color: '#fff', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box'
             }}
           />
-          <div style={{ position: 'absolute', right: '0.75rem', top: '0.65rem', pointerEvents: 'none' }}>
-            <kbd className="search-kbd-hint">
-              <span className="search-kbd-hint-icon">↵</span> Enter
-            </kbd>
-          </div>
+          <KbdHint icon="↵" text="Enter" top="0.65rem" right="0.75rem" />
         </div>
         <div role="group" aria-label="Filter tasks by state" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {availableStates.map(state => (
