@@ -224,3 +224,10 @@ h1, h2, h3, .tech-font {
   outline: none;
   box-sizing: border-box;
 }
+
+@media (max-width: 768px) {
+  .search-input-field {
+    padding-left: 2.5rem;
+    font-size: 0.9rem;
+  }
+}
