@@ -40,7 +40,6 @@ export interface UpdateBinding {
   conf: number;
   id: string;
   tenantId: string;
-  [key: string]: unknown;
 }
 
 export interface ConsolidationReport {
@@ -62,29 +61,19 @@ export class ConsolidationEngine {
   private readonly dbInitialBackoffMs: number;
 
   constructor() {
-    const rawChunkSize = process.env.DB_BATCH_CHUNK_SIZE || "500";
-    let parsedChunkSize = parseInt(rawChunkSize, 10);
-    if (isNaN(parsedChunkSize)) {
-      logger.warn(`[Consolidation] Invalid DB_BATCH_CHUNK_SIZE value '${rawChunkSize}'. Falling back to default 500.`);
-      parsedChunkSize = 500;
-    }
-    this.dbBatchChunkSize = Math.min(10000, Math.max(1, parsedChunkSize));
+    this.dbBatchChunkSize = this.parseConfig("DB_BATCH_CHUNK_SIZE", 500, 1, 10000);
+    this.dbUpdateMaxRetries = this.parseConfig("DB_UPDATE_MAX_RETRIES", 3, 1, 10);
+    this.dbInitialBackoffMs = this.parseConfig("DB_INITIAL_BACKOFF_MS", 50, 10, 5000);
+  }
 
-    const rawMaxRetries = process.env.DB_UPDATE_MAX_RETRIES || "3";
-    let parsedMaxRetries = parseInt(rawMaxRetries, 10);
-    if (isNaN(parsedMaxRetries)) {
-      logger.warn(`[Consolidation] Invalid DB_UPDATE_MAX_RETRIES value '${rawMaxRetries}'. Falling back to default 3.`);
-      parsedMaxRetries = 3;
+  private parseConfig(name: string, defaultValue: number, min: number, max: number): number {
+    const value = process.env[name] || String(defaultValue);
+    const parsedValue = parseInt(value, 10);
+    if (isNaN(parsedValue)) {
+      logger.warn(`[Consolidation] Invalid value for ${name}: '${value}'. Falling back to default ${defaultValue}.`);
+      return defaultValue;
     }
-    this.dbUpdateMaxRetries = Math.min(10, Math.max(1, parsedMaxRetries));
-
-    const rawInitialBackoff = process.env.DB_INITIAL_BACKOFF_MS || "50";
-    let parsedInitialBackoff = parseInt(rawInitialBackoff, 10);
-    if (isNaN(parsedInitialBackoff)) {
-      logger.warn(`[Consolidation] Invalid DB_INITIAL_BACKOFF_MS value '${rawInitialBackoff}'. Falling back to default 50.`);
-      parsedInitialBackoff = 50;
-    }
-    this.dbInitialBackoffMs = Math.min(5000, Math.max(10, parsedInitialBackoff));
+    return Math.min(max, Math.max(min, parsedValue));
   }
 
   private getVal(row: any, index: number, keyStr: string): any {
@@ -241,7 +230,7 @@ export class ConsolidationEngine {
 
       try {
         const res = await this.executeWithRetry<{ rowsAffected?: number }>(
-          () => db.executeMany(updateSql, updateBindings),
+          () => db.executeMany(updateSql, updateBindings as unknown as Record<string, unknown>[]),
           'Batch update',
           sampleIds,
           maskedTenant
@@ -262,7 +251,7 @@ export class ConsolidationEngine {
 
       try {
         const res = await this.executeWithRetry<{ rowsAffected?: number }>(
-          () => db.executeMany(updateSql, chunk),
+          () => db.executeMany(updateSql, chunk as unknown as Record<string, unknown>[]),
           `Batch update chunk starting at index ${i}`,
           sampleIds,
           maskedTenant
