@@ -197,3 +197,18 @@ h1, h2, h3, .tech-font {
   font-size: var(--hint-icon-font-size, 0.8rem);
   line-height: 1;
 }
+
+/* Search Input */
+.search-input-field {
+  width: 100%;
+  padding-left: 3rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 0.95rem;
+  outline: none;
+  box-sizing: border-box;
+}

@@ -23,6 +23,10 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   ariaLabel = "Search input",
   hasClearButton = false
 }) => {
+  if (hasClearButton && !onClear) {
+    console.warn("SearchInputWithHint: 'hasClearButton' is true but 'onClear' was not provided. The clear button will not function correctly.");
+  }
+
   // Compute styling logic here (using useMemo to avoid re-renders)
   const styles = useMemo(() => {
     // If we expect a clear button AND there's text, we need extra room
@@ -38,23 +42,10 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
       <Search size={18} style={{ position: 'absolute', left: '1rem', top: '0.85rem', color: 'var(--text-muted)' }} />
       <input
         type="text"
-        className={`glass-input ${FOCUS_RING_CLASS}`}
+        className={`search-input-field ${FOCUS_RING_CLASS}`}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        style={{
-          width: '100%',
-          paddingLeft: '3rem',
-          paddingRight: styles.paddingRight,
-          paddingTop: '0.75rem',
-          paddingBottom: '0.75rem',
-          borderRadius: '12px',
-          border: '1px solid rgba(255,255,255,0.1)',
-          background: 'rgba(255,255,255,0.05)',
-          color: '#fff',
-          fontSize: '0.95rem',
-          outline: 'none',
-          boxSizing: 'border-box'
-        }}
+        style={{ paddingRight: styles.paddingRight }}
         value={value}
         onChange={onChange}
         onKeyDown={onKeyDown}
