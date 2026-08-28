@@ -101,6 +101,13 @@ export class ConsolidationEngine {
   }
 
   /**
+   * Returns the dialect-specific SQL string to get the current timestamp.
+   */
+  private getCurrentTimestampSql(dbType: string): string {
+    return dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')";
+  }
+
+  /**
    * Helper to perform batched updates for concept confidence scores safely.
    * Batching significantly reduces the number of database round-trips compared
    * to updating rows one-by-one, which minimizes connection pool exhaustion
@@ -115,11 +122,12 @@ export class ConsolidationEngine {
 
     const updateSql = `
       UPDATE codeatlas_concepts
-      SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
+      SET confidence = :conf, updated_at = ${this.getCurrentTimestampSql(dbType)}
       WHERE id = :id AND tenant_id = :tenantId
     `;
     const chunkSize = Math.max(1, parseInt(process.env.DB_BATCH_CHUNK_SIZE || "500", 10) || 500);
     const MAX_RETRIES = 3;
+    const INITIAL_BACKOFF_MS = 50;
     let successfulCount = 0;
     let failedCount = 0;
 
@@ -139,6 +147,9 @@ export class ConsolidationEngine {
             const tId = updateBindings[0]?.tenantId || 'unknown';
             const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
             logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant} after ${MAX_RETRIES} attempts (masked sample ids: ${sampleIds}), error: ${msg}`);
+          } else {
+            const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+            await new Promise(res => setTimeout(res, delay));
           }
         }
       }
@@ -164,6 +175,9 @@ export class ConsolidationEngine {
             const tId = chunk[0]?.tenantId || 'unknown';
             const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
             logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant}, chunk starting at index ${i} after ${MAX_RETRIES} attempts (masked sample ids: ${sampleIds}), error: ${msg}`);
+          } else {
+            const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+            await new Promise(res => setTimeout(res, delay));
           }
         }
       }
