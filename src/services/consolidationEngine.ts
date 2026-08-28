@@ -17,6 +17,8 @@ import { DreamingService } from "./dreamingService.js";
 
 // Row index helpers for concept/dream queries
 const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.85;
+const MAX_CONCEPT_CONFIDENCE = 0.99;
+const MIN_CONCEPT_CONFIDENCE = 0.05;
 
 const R_IDX = Object.freeze({
   ID: 0, CONTENT: 1, EMBEDDING: 2, IMPORTANCE: 3,
@@ -156,7 +158,11 @@ export class ConsolidationEngine {
     const normalized = (dbType || "").toLowerCase();
     const sql = ConsolidationEngine.TIMESTAMP_SQL_MAP[normalized];
     if (sql) return sql;
-    throw new Error(`[Consolidation] Unsupported dbType for timestamp mapping: ${dbType}. Supported dialects are: postgres, sqlite.`);
+
+    // Log a warning and fallback to a default generic timestamp if the dialect isn't natively supported,
+    // rather than throwing a hard error and crashing the batch process.
+    logger.warn(`[Consolidation] Unsupported dbType for timestamp mapping: ${dbType}. Falling back to default 'CURRENT_TIMESTAMP'.`);
+    return "CURRENT_TIMESTAMP";
   }
 
   /**
@@ -180,7 +186,10 @@ export class ConsolidationEngine {
     // Collect unique tenant IDs from the chunk. In single-tenant mode, this will only be one.
     // In multi-tenant batch scenarios, this correctly captures the mixed tenants.
     const tenants = Array.from(new Set(bindings.map(b => b.tenantId || 'unknown')));
-    const masked = tenants.map(tId => tId.length > 4 ? tId.substring(0, 4) + '***' : '***');
+    // For maximum security and zero-knowledge environments, replace the entire tenant ID with a hash.
+    // However, to keep logs somewhat human-readable for immediate debugging, we use a fixed pattern
+    // rather than exposing the first 4 characters.
+    const masked = tenants.map(tId => tId === 'unknown' ? 'unknown' : '***[TENANT_MASKED]***');
     return masked.join(', ');
   }
 
@@ -217,7 +226,7 @@ export class ConsolidationEngine {
     errorContext: string,
     sampleIds: string,
     maskedTenant: string,
-    isIndividualFallback: boolean = false
+    isIndividualFallback: boolean = false // Set to true during fallback execution to disable nested retries
   ): Promise<T> {
     // If we're already in a fallback state, skip individual retries to avoid an exponential explosion of wait times.
     const maxRetries = isIndividualFallback ? 1 : this.dbUpdateMaxRetries;
@@ -270,13 +279,14 @@ export class ConsolidationEngine {
         successfulCount += (indRes.rowsAffected || 1);
       } catch (e) {
         failedCount++;
-        failedIds.push(binding.id.substring(0, 4) + '***');
+        const errMsg = e instanceof Error ? e.message : String(e);
+        failedIds.push(`${binding.id.substring(0, 4)}*** (Error: ${errMsg})`);
       }
     }
 
     if (failedCount > 0) {
-      const displayIds = failedIds.slice(0, 20).join(', ') + (failedIds.length > 20 ? `... (truncated ${failedIds.length - 20} more)` : '');
-      logger.error(`[Consolidation] Individual fallback failed for ${failedCount} rows (tenant: ${maskedTenant}). Masked IDs: ${displayIds}. Next steps: Investigate specific row IDs for data corruption or constraint violations.`);
+      const displayIds = failedIds.slice(0, 10).join(' | ') + (failedIds.length > 10 ? ` ... (truncated ${failedIds.length - 10} more)` : '');
+      logger.error(`[Consolidation] Individual fallback failed for ${failedCount} rows (tenant: ${maskedTenant}). Row Details: ${displayIds}. Next steps: Investigate specific row IDs for data corruption or constraint violations.`);
     }
 
     return { successful: successfulCount, failed: failedCount };
@@ -652,8 +662,8 @@ export class ConsolidationEngine {
         const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
 
         // Bayesian confidence update: each piece of evidence increases confidence.
-        // We cap the maximum confidence at 0.99 to allow for future fluctuation.
-        const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
+        // We cap the maximum confidence to allow for future fluctuation.
+        const newConf = Math.min(MAX_CONCEPT_CONFIDENCE, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
 
         // Only queue an update if the calculated confidence delta is statistically significant.
         if (this.isConfidenceStatisticallySignificant(currentConf, newConf)) {
@@ -724,7 +734,7 @@ export class ConsolidationEngine {
     // 2. Evidence boost
     const boostSql = `
       UPDATE ai_dreaming_memory
-      SET confidence = LEAST(0.99, GREATEST(0.05,
+      SET confidence = LEAST(${MAX_CONCEPT_CONFIDENCE}, GREATEST(${MIN_CONCEPT_CONFIDENCE},
         confidence + 0.05 * ${logExpr}
       ))
       WHERE status = 'active' AND evidence_count > 1 AND ${whereCond}
@@ -734,7 +744,7 @@ export class ConsolidationEngine {
     // 3. Access bonus
     const accessSql = `
       UPDATE ai_dreaming_memory
-      SET confidence = LEAST(0.99, GREATEST(0.05,
+      SET confidence = LEAST(${MAX_CONCEPT_CONFIDENCE}, GREATEST(${MIN_CONCEPT_CONFIDENCE},
         confidence + 0.02 * ${logExprAccess}
       ))
       WHERE status = 'active' AND access_count > 0 AND ${whereCond}

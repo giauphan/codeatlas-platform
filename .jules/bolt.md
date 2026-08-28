@@ -47,4 +47,14 @@
 **Action:** Replace `.filter(condition).length` with a direct `for` loop that iterates over the original array and counts the occurrences that match the condition. This avoids allocating a new array and reduces garbage collection pressure.
 ## 2026-08-27 - N+1 Query in database updates
 **Learning:** Executing individual `db.execute` updates inside a loop for a large dataset incurs significant database round-trip overhead, severely impacting backend performance.
-**Action:** Always collect query bindings in an array during the loop and execute them in a single batched `db.executeMany` call to minimize database round-trips. An example of this pattern is `updateConfidenceBatch` in `consolidationEngine.ts`.
+**Action:** Always collect query bindings in an array during the loop and execute them in a single batched `db.executeMany` call to minimize database round-trips. Example:
+```typescript
+// ❌ Bad: N+1 queries
+for (const item of items) {
+  await db.execute('UPDATE x SET y = :val WHERE id = :id', item);
+}
+
+// ✅ Good: Batched query
+const bindings = items.map(item => ({ val: item.val, id: item.id }));
+await db.executeMany('UPDATE x SET y = :val WHERE id = :id', bindings);
+```
