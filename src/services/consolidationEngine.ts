@@ -314,36 +314,16 @@ export class ConsolidationEngine {
     let successfulCount = 0;
     let failedCount = 0;
 
-    if (updateBindings.length <= this.dbBatchChunkSize) {
-      // Fast path for small payloads to avoid loop overhead
-      const maskedTenant = this.getMaskedTenantId(updateBindings);
-      const sampleIds = updateBindings.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
-
-      try {
-        const res = await this.executeWithRetry<{ rowsAffected?: number }>(
-          () => db.executeMany(updateSql, updateBindings as unknown as Record<string, unknown>[]),
-          'Batch update',
-          sampleIds,
-          maskedTenant
-        );
-        successfulCount += (res.rowsAffected || updateBindings.length);
-      } catch (error) {
-        const fallbackRes = await this.executeIndividualUpdatesFallback(db, updateSql, updateBindings, maskedTenant);
-        successfulCount += fallbackRes.successful;
-        failedCount += fallbackRes.failed;
-      }
-      return { successful: successfulCount, failed: failedCount };
-    }
-
-    for (let i = 0; i < updateBindings.length; i += this.dbBatchChunkSize) {
-      const chunk = updateBindings.slice(i, i + this.dbBatchChunkSize);
+    // Helper closure to centralize the execution, retry, and fallback flow for a chunk of bindings.
+    const processChunk = async (chunk: Array<UpdateBinding>, chunkIndex?: number) => {
       const maskedTenant = this.getMaskedTenantId(chunk);
       const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
+      const context = chunkIndex !== undefined ? `Batch update chunk starting at index ${chunkIndex}` : 'Batch update';
 
       try {
         const res = await this.executeWithRetry<{ rowsAffected?: number }>(
           () => db.executeMany(updateSql, chunk as unknown as Record<string, unknown>[]),
-          `Batch update chunk starting at index ${i}`,
+          context,
           sampleIds,
           maskedTenant
         );
@@ -352,6 +332,16 @@ export class ConsolidationEngine {
         const fallbackRes = await this.executeIndividualUpdatesFallback(db, updateSql, chunk, maskedTenant);
         successfulCount += fallbackRes.successful;
         failedCount += fallbackRes.failed;
+      }
+    };
+
+    if (updateBindings.length <= this.dbBatchChunkSize) {
+      // Fast path for small payloads to avoid loop overhead
+      await processChunk(updateBindings);
+    } else {
+      for (let i = 0; i < updateBindings.length; i += this.dbBatchChunkSize) {
+        const chunk = updateBindings.slice(i, i + this.dbBatchChunkSize);
+        await processChunk(chunk, i);
       }
     }
 
