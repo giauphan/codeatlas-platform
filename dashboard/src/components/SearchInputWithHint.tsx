@@ -1,18 +1,27 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Search, X } from 'lucide-react';
 import { KbdHint } from './KbdHint';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 
-interface SearchInputWithHintProps {
+interface BaseSearchInputWithHintProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSearch: () => void;
-  onClear?: () => void;
   placeholder?: string;
   ariaLabel?: string;
-  // If true, the clear button takes up space and we need to push the kbd hint left
-  hasClearButton?: boolean;
 }
+
+interface ClearableSearchProps extends BaseSearchInputWithHintProps {
+  hasClearButton: true;
+  onClear: () => void;
+}
+
+interface NonClearableSearchProps extends BaseSearchInputWithHintProps {
+  hasClearButton?: false;
+  onClear?: never;
+}
+
+type SearchInputWithHintProps = ClearableSearchProps | NonClearableSearchProps;
 
 /**
  * A reusable search input component that provides a standardized UI for search fields.
@@ -41,24 +50,17 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   hasClearButton = false
 }) => {
   if (hasClearButton && !onClear) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error(
-        "SearchInputWithHint: 'hasClearButton' requires 'onClear' to be implemented. " +
-        "The clear button will not render or function properly without an onClear handler."
-      );
-    }
+    throw new Error("SearchInputWithHint: 'onClear' must be defined when 'hasClearButton' is true.");
   }
 
-  // Compute styling logic here (using useMemo to avoid re-renders)
-  const styles = useMemo(() => {
-    // If we expect a clear button AND there's text, we need extra room
-    const showClearBtn = hasClearButton && value.length > 0;
-    return {
-      paddingRight: showClearBtn ? '4.5rem' : '3.5rem',
-      // Instead of changing `right`, we change `transform` to prevent layout thrashing
-      kbdHintTransform: showClearBtn ? 'translateX(-1.5rem)' : 'translateX(0)'
-    } as const;
-  }, [value, hasClearButton]);
+  // If we expect a clear button AND there's text, we need extra room
+  const showClearBtn = hasClearButton && value.length > 0;
+
+  const styles = {
+    paddingRight: showClearBtn ? '4.5rem' : '3.5rem',
+    // Instead of changing `right`, we change `transform` to prevent layout thrashing
+    kbdHintTransform: showClearBtn ? 'translateX(-1.5rem)' : 'translateX(0)'
+  };
 
   return (
     <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
@@ -73,6 +75,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
         onChange={onChange}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
+            e.preventDefault();
             onSearch();
           }
         }}

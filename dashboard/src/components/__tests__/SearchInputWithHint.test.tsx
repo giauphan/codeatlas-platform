@@ -69,25 +69,22 @@ describe('SearchInputWithHint', () => {
     expect(onSearch).toHaveBeenCalledTimes(1);
   });
 
-  it('logs a console.error when hasClearButton is true but onClear is missing in development', () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('throws an error when hasClearButton is true but onClear is missing', () => {
+    // Suppress React error boundary logging to keep test output clean
+    const suppressReactError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    render(
-      <SearchInputWithHint
-        value="something"
-        onChange={vi.fn()}
-        onSearch={vi.fn()}
-        hasClearButton={true}
-      />
-    );
+    expect(() => {
+      render(
+        // @ts-expect-error intentionally missing onClear to test runtime error
+        <SearchInputWithHint
+          value="Test"
+          onChange={vi.fn()}
+          onSearch={vi.fn()}
+          hasClearButton={true}
+        />
+      );
+    }).toThrowError(/must be defined when 'hasClearButton' is true/);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("SearchInputWithHint: 'hasClearButton' requires 'onClear' to be implemented")
-    );
-
-    consoleErrorSpy.mockRestore();
-    process.env.NODE_ENV = originalEnv;
+    suppressReactError.mockRestore();
   });
 });

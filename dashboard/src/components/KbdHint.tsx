@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type CSSLength = `${number}px` | `${number}rem` | `${number}%`;
+export type CSSLength = string;
 
 interface KbdHintProps {
   icon: '↵' | string;
