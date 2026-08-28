@@ -77,12 +77,14 @@ export class ConsolidationEngine {
 
   private parseConfig(name: string, defaultValue: number, min: number, max: number): number {
     const value = process.env[name] || String(defaultValue);
-    const parsedValue = parseInt(value, 10);
-    if (isNaN(parsedValue)) {
-      logger.warn(`[Consolidation] Invalid value for ${name}: '${value}'. Falling back to default ${defaultValue}.`);
+    const numValue = Number(value);
+
+    if (isNaN(numValue) || !Number.isInteger(numValue)) {
+      logger.warn(`[Consolidation] Invalid non-integer value for ${name}: '${value}'. Falling back to default ${defaultValue}.`);
       return defaultValue;
     }
-    return this.clamp(parsedValue, min, max);
+
+    return this.clamp(numValue, min, max);
   }
 
   private getVal(row: any, index: number, keyStr: string): any {
