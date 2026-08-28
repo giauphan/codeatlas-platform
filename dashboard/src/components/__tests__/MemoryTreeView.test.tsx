@@ -80,6 +80,24 @@ describe('MemoryTreeView', () => {
     expect(screen.getByText('Importance: 8/10 · 8/27/2026 · typescript')).toBeInTheDocument();
   });
 
+  it('filters tree content by selected project', async () => {
+    mockFetch.mockResolvedValue(response({
+      memories: [
+        ...memories.memories,
+        { id: 'other-project-1', project: 'other-project', memory_type: 'PREFERENCE', content: 'Other project memory' },
+      ],
+    }));
+    render(<MemoryTreeView />);
+    await screen.findByRole('img', { name: 'Visual memory tree' });
+
+    fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'other-project' } });
+
+    const diagram = screen.getByRole('img', { name: 'Visual memory tree' });
+    expect(diagram).toHaveTextContent('other-project');
+    expect(diagram).toHaveTextContent('Other project memory');
+    expect(diagram).not.toHaveTextContent('codeatlas-platform');
+  });
+
   it('refreshes memories when refresh clicked', async () => {
     render(<MemoryTreeView />);
     await screen.findByRole('img', { name: 'Visual memory tree' });
