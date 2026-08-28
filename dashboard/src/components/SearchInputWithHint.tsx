@@ -50,14 +50,16 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   hasClearButton = false
 }) => {
   if (hasClearButton && !onClear) {
-    throw new Error("SearchInputWithHint: 'onClear' must be defined when 'hasClearButton' is true.");
+    if (process.env.NODE_ENV === 'development') {
+      console.warn("SearchInputWithHint: 'onClear' must be defined when 'hasClearButton' is true.");
+    }
   }
 
   // If we expect a clear button AND there's text, we need extra room
   const showClearBtn = hasClearButton && value.length > 0;
 
   const styles = {
-    paddingRight: showClearBtn ? '4.5rem' : '3.5rem',
+    inputPaddingRight: showClearBtn ? '4.5rem' : '3.5rem',
     // Instead of changing `right`, we change `transform` to prevent layout thrashing
     kbdHintTransform: showClearBtn ? 'translateX(-1.5rem)' : 'translateX(0)'
   };
@@ -70,7 +72,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
         className={`search-input-field ${FOCUS_RING_CLASS}`}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        style={{ paddingRight: styles.paddingRight }}
+        style={{ paddingRight: styles.inputPaddingRight }}
         value={value}
         onChange={onChange}
         onKeyDown={(e) => {

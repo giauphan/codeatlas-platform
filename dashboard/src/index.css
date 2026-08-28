@@ -172,6 +172,12 @@ h1, h2, h3, .tech-font {
   border-radius: 50%;
 }
 
+.search-form {
+  flex: 1 1 250px;
+  position: relative;
+  display: flex;
+}
+
 /* Kbd Hint */
 .search-kbd-hint-wrapper {
   position: absolute;
