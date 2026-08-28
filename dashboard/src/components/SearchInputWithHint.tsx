@@ -14,6 +14,15 @@ interface SearchInputWithHintProps {
   hasClearButton?: boolean;
 }
 
+/**
+ * A reusable search input component that provides a standardized UI for search fields.
+ * Includes a semantic search icon, an "Enter" key hint (`KbdHint`), and an optional clear button.
+ * It automatically adjusts inner padding to make room for the hint and clear button based on input state.
+ *
+ * Critical use cases:
+ * - Full-width semantic search bars where an explicit "Enter" is needed to execute.
+ * - Views needing a unified design language for their search queries.
+ */
 export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   value,
   onChange,
@@ -24,7 +33,9 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   hasClearButton = false
 }) => {
   if (hasClearButton && !onClear) {
-    console.warn("SearchInputWithHint: 'hasClearButton' is true but 'onClear' was not provided. The clear button will not function correctly.");
+    if (process.env.NODE_ENV === 'development') {
+      console.warn("SearchInputWithHint: 'hasClearButton' is true but 'onClear' was not provided. The clear button will not function correctly.");
+    }
   }
 
   // Compute styling logic here (using useMemo to avoid re-renders)
@@ -34,7 +45,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
     return {
       paddingRight: showClearBtn ? '4.5rem' : '3.5rem',
       kbdHintRight: showClearBtn ? '2.5rem' : '1rem'
-    };
+    } as const;
   }, [value, hasClearButton]);
 
   return (
@@ -50,7 +61,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
         onChange={onChange}
         onKeyDown={onKeyDown}
       />
-      <KbdHint icon="↵" text="Enter" top="0.85rem" right={styles.kbdHintRight as any} />
+      <KbdHint icon="↵" text="Enter" top="0.85rem" right={styles.kbdHintRight} />
 
       {hasClearButton && value && onClear && (
         <button

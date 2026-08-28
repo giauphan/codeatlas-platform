@@ -68,4 +68,26 @@ describe('SearchInputWithHint', () => {
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     expect(onKeyDown).toHaveBeenCalledTimes(1);
   });
+
+  it('logs a warning when hasClearButton is true but onClear is missing in development', () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    render(
+      <SearchInputWithHint
+        value="something"
+        onChange={vi.fn()}
+        onKeyDown={vi.fn()}
+        hasClearButton={true}
+      />
+    );
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("SearchInputWithHint: 'hasClearButton' is true but 'onClear' was not provided")
+    );
+
+    consoleWarnSpy.mockRestore();
+    process.env.NODE_ENV = originalEnv;
+  });
 });

@@ -180,6 +180,12 @@ h1, h2, h3, .tech-font {
   transition: right 0.2s ease;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .search-kbd-hint-wrapper {
+    transition: none;
+  }
+}
+
 .search-kbd-hint {
   font-size: var(--hint-font-size, 0.7rem);
   padding: var(--hint-padding, 0.2rem 0.4rem);

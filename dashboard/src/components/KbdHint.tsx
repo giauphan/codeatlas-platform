@@ -11,7 +11,7 @@ interface KbdHintProps {
 
 export const KbdHint: React.FC<KbdHintProps> = ({ icon, text, top, right }) => {
   return (
-    <div className="search-kbd-hint-wrapper" style={{ right, top }}>
+    <div className="search-kbd-hint-wrapper" style={{ right, top }} aria-hidden="true">
       <kbd className="search-kbd-hint">
         <span className="search-kbd-hint-icon">{icon}</span> {text}
       </kbd>
