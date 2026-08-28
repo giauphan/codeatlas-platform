@@ -105,7 +105,7 @@ function MemoryTreeDiagram({ memories }: { memories: Memory[] }) {
       Array.from(types.entries()).forEach(([type, items]) => {
         const visibleItems = items.slice(0, MAX_DIAGRAM_MEMORIES_PER_TYPE);
         const typeNode: TreeNode = {
-          id: `${projectNode.id}:${type}`, label: `${type.replace(/_/g, ' ') (${items.length})`, kind: 'type',
+          id: `${projectNode.id}:${type}`, label: `${type.replace(/_/g, ' ')} (${items.length})`, kind: 'type',
           color: TYPE_COLORS[type] || '#888', x: TYPE_X, y: typeY + TYPE_OFFSET_Y,
         };
         nodes.push(typeNode);
@@ -170,6 +170,7 @@ export function MemoryTreeView() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['project:Global']));
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
+  const [selectedProject, setSelectedProject] = useState('');
 
   const fetchMemories = useCallback(async () => {
     setLoading(true);
@@ -197,12 +198,14 @@ export function MemoryTreeView() {
 
   useEffect(() => { fetchMemories(); }, [fetchMemories]);
 
-  const tree = useMemo(() => groupMemories(memories), [memories]);
-  const typeCounts = useMemo(() => memories.reduce<Record<string, number>>((counts, memory) => {
+  const projects = useMemo(() => Array.from(new Set(memories.map(memory => memory.project || 'Global'))).sort(), [memories]);
+  const displayedMemories = useMemo(() => selectedProject ? memories.filter(memory => (memory.project || 'Global') === selectedProject) : memories, [memories, selectedProject]);
+  const tree = useMemo(() => groupMemories(displayedMemories), [displayedMemories]);
+  const typeCounts = useMemo(() => displayedMemories.reduce<Record<string, number>>((counts, memory) => {
     const type = memory.memory_type || 'OTHER';
     counts[type] = (counts[type] || 0) + 1;
     return counts;
-  }, {}), [memories]);
+  }, {}), [displayedMemories]);
   const maxCount = Math.max(...Object.values(typeCounts), 1);
 
   const toggle = (key: string) => setExpanded(current => {
@@ -218,9 +221,16 @@ export function MemoryTreeView() {
           <h2 className="tech-font" style={{ margin: 0, color: 'var(--primary-neon)', letterSpacing: '0.08em' }}>MEMORY TREE</h2>
           <p style={{ color: 'var(--text-muted)', margin: '0.5rem 0 0' }}>Explore stored memories by project and type.</p>
         </div>
-        <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.9rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: 'rgba(0,240,255,0.08)', color: 'var(--primary-neon)', cursor: 'pointer' }}>
-          <RefreshCw size={16} /> Refresh
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <label htmlFor="memory-project" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Project</label>
+          <select id="memory-project" value={selectedProject} onChange={event => setSelectedProject(event.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.6rem 0.75rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: '#05080f', color: '#fff', cursor: 'pointer' }}>
+            <option value="">All projects</option>
+            {projects.map(project => <option key={project} value={project}>{project}</option>)}
+          </select>
+          <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.9rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: 'rgba(0,240,255,0.08)', color: 'var(--primary-neon)', cursor: 'pointer' }}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        </div>
       </header>
 
       {error && <div role="alert" style={{ color: '#FF4B4B', padding: '1rem', border: '1px solid rgba(255,75,75,0.3)', borderRadius: 10, marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
@@ -228,7 +238,7 @@ export function MemoryTreeView() {
         <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} style={{ padding: '0.45rem 0.75rem', borderRadius: 7, border: '1px solid rgba(255,75,75,0.5)', background: 'rgba(255,75,75,0.1)', color: '#FF4B4B', cursor: 'pointer' }}>Retry</button>
       </div>}
 
-      <MemoryTreeDiagram memories={memories} />
+      <MemoryTreeDiagram memories={displayedMemories} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.8fr) minmax(0, 1.2fr)', gap: '1.5rem', alignItems: 'start', marginTop: '1.5rem' }}>
         <div style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: 16, background: 'rgba(5,8,15,0.65)' }}>
@@ -240,7 +250,7 @@ export function MemoryTreeView() {
               <div style={{ height: 7, background: 'rgba(255,255,255,0.08)', borderRadius: 8 }}><div style={{ width: `${(count / maxCount) * 100}%`, height: '100%', borderRadius: 8, background: color, boxShadow: `0 0 10px ${color}` }} /></div>
             </div>;
           })}
-          {!loading && memories.length === 0 && <span style={{ color: 'var(--text-muted)' }}>No memories found.</span>}
+          {!loading && displayedMemories.length === 0 && <span style={{ color: 'var(--text-muted)' }}>No memories found.</span>}
         </div>
 
         <div style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: 16, background: 'rgba(5,8,15,0.65)' }}>
