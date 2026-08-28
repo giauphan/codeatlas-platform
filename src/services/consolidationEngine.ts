@@ -8,7 +8,7 @@
  * Some helpers still accept positional indexes for backward compatibility.
  */
 
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
@@ -217,9 +217,13 @@ export class ConsolidationEngine {
     }
 
     // For maximum security and zero-knowledge environments, replace the entire tenant ID with a hash.
-    // However, to keep logs somewhat human-readable for immediate debugging, we use a fixed pattern
-    // rather than exposing the first 4 characters.
-    const masked = tenants.map(tId => tId === 'unknown' ? 'unknown' : '***[TENANT_MASKED]***');
+    // By using a one-way SHA-256 hash instead of a static mask, we prevent PII leakage while
+    // preserving the ability for operators to cross-reference deterministic identifiers in logs
+    // during multi-tenant data corruption incidents.
+    const masked = tenants.map(tId => {
+      if (tId === 'unknown') return 'unknown';
+      return createHash('sha256').update(tId).digest('hex').substring(0, 12);
+    });
     return masked.join(', ');
   }
 
@@ -253,42 +257,58 @@ export class ConsolidationEngine {
   /**
    * Generic retry mechanism for transient database operations with exponential backoff.
    */
-  private async executeWithRetry<T>(
+  private async executeRetry<T>(
     taskFn: () => Promise<T>,
     errorContext: string,
     sampleIds: string,
-    maskedTenant: string,
-    isIndividualFallback: boolean = false // Set to true during fallback execution to disable nested retries
+    maskedTenant: string
   ): Promise<T> {
     // Assert taskFn returns a Promise to enforce type safety per code-review
     if (typeof taskFn !== 'function') {
-      throw new Error(`[Consolidation] executeWithRetry expects taskFn to be a function returning a Promise. Got: ${typeof taskFn}`);
+      throw new Error(`[Consolidation] executeRetry expects taskFn to be a function returning a Promise. Got: ${typeof taskFn}`);
     }
 
-    // If we're already in a fallback state, skip individual retries to avoid an exponential explosion of wait times.
-    const maxRetries = isIndividualFallback ? 1 : this.dbUpdateMaxRetries;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    for (let attempt = 1; attempt <= this.dbUpdateMaxRetries; attempt++) {
       try {
         return await taskFn();
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (attempt === maxRetries) {
-          // Suppress noise for expected failures in fallback mode.
-          if (!isIndividualFallback) {
-             this.logBatchError("error", errorContext, attempt, maxRetries, maskedTenant, msg, sampleIds);
-          }
+        if (attempt === this.dbUpdateMaxRetries) {
+          this.logBatchError("error", errorContext, attempt, this.dbUpdateMaxRetries, maskedTenant, msg, sampleIds);
           throw error;
         } else {
-          this.logBatchError("warn", errorContext, attempt, maxRetries, maskedTenant, msg);
+          this.logBatchError("warn", errorContext, attempt, this.dbUpdateMaxRetries, maskedTenant, msg);
           const baseDelay = this.dbInitialBackoffMs * Math.pow(2, attempt - 1);
-          const jitter = baseDelay * 0.1 * (Math.random() - 0.5); // +/- 5% jitter for smoother retry distribution
+          const jitter = baseDelay * 0.5 * (Math.random() - 0.5); // +/- 25% jitter for a wider, safer retry distribution window
           const delay = this.clamp(baseDelay + jitter, 0, this.dbMaxBackoffDelayMs);
           await new Promise(res => setTimeout(res, delay));
         }
       }
     }
-    throw new Error(`[Consolidation] Task ${errorContext} failed after ${maxRetries} attempts. Sample IDs: ${sampleIds}`);
+    throw new Error(`[Consolidation] Task ${errorContext} failed after ${this.dbUpdateMaxRetries} attempts. Sample IDs: ${sampleIds}`);
+  }
+
+  /**
+   * Focused fallback handler that strips exponential backoff looping to prevent
+   * wait-time explosion when operating in failure recovery modes.
+   */
+  private async executeFallbackRetry<T>(
+    taskFn: () => Promise<T>,
+    errorContext: string,
+    sampleIds: string,
+    maskedTenant: string
+  ): Promise<T> {
+    if (typeof taskFn !== 'function') {
+      throw new Error(`[Consolidation] executeFallbackRetry expects taskFn to be a function returning a Promise. Got: ${typeof taskFn}`);
+    }
+
+    try {
+      return await taskFn();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      // Fallback runs don't log errors via logBatchError since the outer orchestrator groups and logs them natively.
+      throw error;
+    }
   }
 
   /**
@@ -306,12 +326,11 @@ export class ConsolidationEngine {
     logger.warn(`[Consolidation] Falling back to individual updates for ${bindings.length} rows (tenant: ${maskedTenant}).`);
     for (const binding of bindings) {
       try {
-        const indRes = await this.executeWithRetry<{ rowsAffected?: number }>(
+        const indRes = await this.executeFallbackRetry<{ rowsAffected?: number }>(
           () => db.execute(updateSql, binding),
           `Individual update fallback`,
           binding.id.substring(0, 4) + '***',
-          maskedTenant,
-          true // Pass true to disable nested retries in fallback mode
+          maskedTenant
         );
         successfulCount += (indRes.rowsAffected || 1);
       } catch (e) {
@@ -351,38 +370,76 @@ export class ConsolidationEngine {
     let successfulCount = 0;
     let failedCount = 0;
 
-    // Helper closure to centralize the execution, retry, and fallback flow for a chunk of bindings.
-    const processChunk = async (chunk: Array<UpdateBinding>, chunkIndex?: number) => {
-      const maskedTenant = this.getMaskedTenantId(chunk);
-      const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
-      const context = chunkIndex !== undefined ? `Batch update chunk starting at index ${chunkIndex}` : 'Batch update';
-
-      try {
-        const res = await this.executeWithRetry<{ rowsAffected?: number }>(
-          () => db.executeMany(updateSql, chunk as unknown as Record<string, unknown>[]),
-          context,
-          sampleIds,
-          maskedTenant
-        );
-        successfulCount += (res.rowsAffected || chunk.length);
-      } catch (error) {
-        const fallbackRes = await this.executeIndividualUpdatesFallback(db, updateSql, chunk, maskedTenant);
-        successfulCount += fallbackRes.successful;
-        failedCount += fallbackRes.failed;
-      }
-    };
-
     if (updateBindings.length <= this.dbBatchChunkSize) {
       // Fast path for small payloads to avoid loop overhead
-      await processChunk(updateBindings);
+      const result = await this.processBindingsChunk(db, updateSql, updateBindings);
+      successfulCount += result.successful;
+      failedCount += result.failed;
     } else {
+      // For large payloads, process chunks in parallel with a concurrency limit
+      // to maximize throughput without overwhelming the connection pool
+      const MAX_CONCURRENCY = 5;
+      const chunkPromises: Promise<{ successful: number; failed: number }>[] = [];
+
       for (let i = 0; i < updateBindings.length; i += this.dbBatchChunkSize) {
         const chunk = updateBindings.slice(i, i + this.dbBatchChunkSize);
-        await processChunk(chunk, i);
+        chunkPromises.push(this.processBindingsChunk(db, updateSql, chunk, i));
+
+        if (chunkPromises.length >= MAX_CONCURRENCY) {
+          const results = await Promise.all(chunkPromises);
+          for (const res of results) {
+            successfulCount += res.successful;
+            failedCount += res.failed;
+          }
+          chunkPromises.length = 0; // Clear the batch array for the next round
+        }
+      }
+
+      // Flush any remaining promises
+      if (chunkPromises.length > 0) {
+        const results = await Promise.all(chunkPromises);
+        for (const res of results) {
+          successfulCount += res.successful;
+          failedCount += res.failed;
+        }
       }
     }
 
     return { successful: successfulCount, failed: failedCount };
+  }
+
+  /**
+   * Helper method to centralize the execution, retry, and fallback flow for a single chunk of bindings.
+   * Extracted for testability and parallel concurrency management.
+   */
+  private async processBindingsChunk(
+    db: any,
+    updateSql: string,
+    chunk: Array<UpdateBinding>,
+    chunkIndex?: number
+  ): Promise<{ successful: number, failed: number }> {
+    const maskedTenant = this.getMaskedTenantId(chunk);
+    const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
+    const context = chunkIndex !== undefined ? `Batch update chunk starting at index ${chunkIndex}` : 'Batch update';
+
+    let successful = 0;
+    let failed = 0;
+
+    try {
+      const res = await this.executeRetry<{ rowsAffected?: number }>(
+        () => db.executeMany(updateSql, chunk as unknown as Record<string, unknown>[]),
+        context,
+        sampleIds,
+        maskedTenant
+      );
+      successful += (res.rowsAffected || chunk.length);
+    } catch (error) {
+      const fallbackRes = await this.executeIndividualUpdatesFallback(db, updateSql, chunk, maskedTenant);
+      successful += fallbackRes.successful;
+      failed += fallbackRes.failed;
+    }
+
+    return { successful, failed };
   }
 
   /**
