@@ -40,6 +40,7 @@ export interface UpdateBinding {
   conf: number;
   id: string;
   tenantId: string;
+  [key: string]: unknown;
 }
 
 export interface ConsolidationReport {
@@ -175,7 +176,7 @@ export class ConsolidationEngine {
       const sampleIds = updateBindings.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
 
       const res = await this.executeWithRetry<{ rowsAffected?: number }>(
-        () => db.executeMany(updateSql, updateBindings as unknown as Record<string, unknown>[]),
+        () => db.executeMany(updateSql, updateBindings),
         'Batch update',
         sampleIds,
         maskedTenant
@@ -184,7 +185,15 @@ export class ConsolidationEngine {
       if (res) {
         successfulCount += (res.rowsAffected || updateBindings.length);
       } else {
-        failedCount += updateBindings.length;
+        logger.warn(`[Consolidation] Falling back to individual updates for ${updateBindings.length} rows.`);
+        for (const binding of updateBindings) {
+          try {
+            const indRes = await db.execute(updateSql, binding);
+            successfulCount += (indRes.rowsAffected || 1);
+          } catch (e) {
+            failedCount++;
+          }
+        }
       }
       return { successful: successfulCount, failed: failedCount };
     }
@@ -196,7 +205,7 @@ export class ConsolidationEngine {
       const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
 
       const res = await this.executeWithRetry<{ rowsAffected?: number }>(
-        () => db.executeMany(updateSql, chunk as unknown as Record<string, unknown>[]),
+        () => db.executeMany(updateSql, chunk),
         `Batch update chunk starting at index ${i}`,
         sampleIds,
         maskedTenant
@@ -205,7 +214,15 @@ export class ConsolidationEngine {
       if (res) {
         successfulCount += (res.rowsAffected || chunk.length);
       } else {
-        failedCount += chunk.length;
+        logger.warn(`[Consolidation] Falling back to individual updates for chunk starting at ${i} (${chunk.length} rows).`);
+        for (const binding of chunk) {
+          try {
+            const indRes = await db.execute(updateSql, binding);
+            successfulCount += (indRes.rowsAffected || 1);
+          } catch (e) {
+            failedCount++;
+          }
+        }
       }
     }
 
