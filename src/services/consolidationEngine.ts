@@ -95,6 +95,37 @@ export class ConsolidationEngine {
   }
 
   /**
+   * Helper to perform batched updates for concept confidence scores safely.
+   */
+  private async updateConfidenceBatch(
+    db: any,
+    updateBindings: Array<{ conf: number, id: string, tenantId: string }>,
+    dbType: string
+  ): Promise<void> {
+    if (!updateBindings || updateBindings.length === 0) return;
+
+    const updateSql = `
+      UPDATE codeatlas_concepts
+      SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
+      WHERE id = :id AND tenant_id = :tenantId
+    `;
+    const chunkSize = process.env.DB_BATCH_CHUNK_SIZE ? parseInt(process.env.DB_BATCH_CHUNK_SIZE, 10) : 500;
+
+    for (let i = 0; i < updateBindings.length; i += chunkSize) {
+      const chunk = updateBindings.slice(i, i + chunkSize);
+      try {
+        await db.executeMany(updateSql, chunk as any);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
+        const tId = chunk[0]?.tenantId || 'unknown';
+        const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
+        logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant}, chunk starting at index ${i} (masked sample ids: ${sampleIds}), error: ${msg}`);
+      }
+    }
+  }
+
+  /**
    * Validates embedding on a row before mathematical processing.
    */
   private validateRowEmbedding(row: any, embeddingIdx: number, idIdx: number, stepName: string): boolean {
@@ -406,22 +437,7 @@ export class ConsolidationEngine {
       }
 
       if (updateBindings.length > 0) {
-        const updateSql = `
-          UPDATE codeatlas_concepts
-          SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
-          WHERE id = :id AND tenant_id = :tenantId
-        `;
-        const chunkSize = process.env.DB_BATCH_CHUNK_SIZE ? parseInt(process.env.DB_BATCH_CHUNK_SIZE, 10) : 500;
-        for (let i = 0; i < updateBindings.length; i += chunkSize) {
-          const chunk = updateBindings.slice(i, i + chunkSize);
-          try {
-            await db.executeMany(updateSql, chunk as any);
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            const sampleIds = chunk.slice(0, 3).map(c => c.id).join(', ');
-            logger.error(`[Consolidation] Batch update failed for tenant ${tenantId}, chunk starting at index ${i} (sample ids: ${sampleIds}), error: ${msg}`);
-          }
-        }
+        await this.updateConfidenceBatch(db, updateBindings, dbType);
       }
 
       logger.info(`[Consolidation] Processed ${rows.length} concepts, prepared ${updateBindings.length} updates, successfully applied ${updated}`);
