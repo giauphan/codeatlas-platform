@@ -111,6 +111,20 @@ export class ConsolidationEngine {
     `;
     const chunkSize = process.env.DB_BATCH_CHUNK_SIZE ? parseInt(process.env.DB_BATCH_CHUNK_SIZE, 10) : 500;
 
+    if (updateBindings.length <= chunkSize) {
+      // Fast path for small payloads to avoid loop overhead
+      try {
+        await db.executeMany(updateSql, updateBindings as any);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        const sampleIds = updateBindings.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
+        const tId = updateBindings[0]?.tenantId || 'unknown';
+        const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
+        logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant} (masked sample ids: ${sampleIds}), error: ${msg}`);
+      }
+      return;
+    }
+
     for (let i = 0; i < updateBindings.length; i += chunkSize) {
       const chunk = updateBindings.slice(i, i + chunkSize);
       try {
@@ -420,7 +434,7 @@ export class ConsolidationEngine {
 
       const rows = await db.query<any[]>(sql, binds);
 
-      let updated = 0;
+      let toBeUpdated = 0;
       const updateBindings: Array<{ conf: number, id: string, tenantId: string }> = [];
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
@@ -432,7 +446,7 @@ export class ConsolidationEngine {
 
         if (Math.abs(newConf - currentConf) > 0.01) {
           updateBindings.push({ conf: newConf, id, tenantId });
-          updated++;
+          toBeUpdated++;
         }
       }
 
@@ -440,7 +454,7 @@ export class ConsolidationEngine {
         await this.updateConfidenceBatch(db, updateBindings, dbType);
       }
 
-      logger.info(`[Consolidation] Processed ${rows.length} concepts, prepared ${updateBindings.length} updates, successfully applied ${updated}`);
+      logger.info(`[Consolidation] Processed ${rows.length} concepts, prepared ${updateBindings.length} updates, successfully applied ${toBeUpdated}`);
   }
 
   /**
