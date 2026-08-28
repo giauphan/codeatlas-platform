@@ -3,6 +3,7 @@ import React from 'react';
 export type CSSLength = string;
 
 interface KbdHintProps {
+  id?: string;
   icon: '↵' | string;
   text: string;
   top: CSSLength;
@@ -15,9 +16,9 @@ interface KbdHintProps {
  *
  * Used primarily inside search inputs to visually indicate an action requirement.
  */
-export const KbdHint: React.FC<KbdHintProps> = ({ icon, text, top, right, transform }) => {
+export const KbdHint: React.FC<KbdHintProps> = ({ id, icon, text, top, right, transform }) => {
   return (
-    <div id="search-kbd-hint" className="search-kbd-hint-wrapper" style={{ right, top, transform }} aria-hidden="true">
+    <div id={id} className="search-kbd-hint-wrapper" style={{ right, top, transform }} aria-hidden="true">
       <kbd className="search-kbd-hint">
         <span className="search-kbd-hint-icon">{icon}</span> {text}
       </kbd>

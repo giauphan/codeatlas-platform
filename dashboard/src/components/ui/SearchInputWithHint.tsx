@@ -66,6 +66,9 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
     kbdHintTransform: showClearBtn ? 'translateX(-1.5rem)' : 'translateX(0)'
   };
 
+  // Generate a reasonably unique ID for the ARIA description link
+  const hintId = React.useId ? React.useId() : `search-kbd-hint-${Math.random().toString(36).slice(2, 9)}`;
+
   return (
     <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
       <Search size={18} className="search-input-icon" />
@@ -74,7 +77,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
         className={`search-input-field ${FOCUS_RING_CLASS}`}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        aria-describedby="search-kbd-hint"
+        aria-describedby={hintId}
         style={{ paddingRight: styles.inputPaddingRight }}
         value={value}
         onChange={onChange}
@@ -87,7 +90,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
           }
         }}
       />
-      <KbdHint icon="↵" text="Enter" top="0.85rem" right="1rem" transform={styles.kbdHintTransform} />
+      <KbdHint id={hintId} icon="↵" text="Enter" top="0.85rem" right="1rem" transform={styles.kbdHintTransform} />
 
       {hasClearButton && value && onClear && (
         <button
