@@ -36,11 +36,18 @@ Initialize or seed database with `pnpm run db-seed`. SQLite is the default and r
 |---|---|---|
 | `GOOGLE_APPLICATION_CREDENTIALS` | `./serviceAccountKey.json` | Path to Firebase service account JSON. |
 
-## NVIDIA NIM
+## Embeddings (NVIDIA NIM + Mistral)
 
 | Variable | Default | Description |
 |---|---|---|
-| `NVIDIA_API_KEY` | required | NVIDIA NIM API key for vector embeddings. Without it, queries fall back to date-ordered results. |
+| `MISTRAL_API_KEY` | recommended | Mistral API key(s) for vector embeddings. Accepts a comma-separated pool; on `401`/`403`/`429` the service rotates to the next key. |
+| `NVIDIA_API_KEY` | optional | NVIDIA NIM API key(s), same comma-separated pool behavior. Used as fallback in the default chain. |
+| `EMBEDDING_MODELS` | `mistral/codestral-embed,mistral/mistral-embed,nvidia/llama-nemotron-embed-vl-1b-v2,nvidia/nemotron-3-embed-1b` | Comma-separated cross-provider failover list (first = primary). Prefix ids with `mistral/` or `nvidia/`; bare ids default to NVIDIA. On a 4xx/5xx or wrong-dimension response the service rotates to the next model and keeps the one that worked as primary. |
+| `EMBEDDING_DIM` | `1024` | Requested embedding dimension (`output_dimension` for Mistral, `dimensions` for NVIDIA). Must match the DB schema (`vector(1024)` / 1024-float BLOB). Changing it requires a schema migration and re-embedding existing rows. |
+
+Without any provider key, vector search is skipped and queries fall back to
+date-ordered results. `NVIDIA_EMBEDDING_MODELS` and `NVIDIA_EMBEDDING_DIM` are
+still honored as legacy aliases for the two `EMBEDDING_*` variables.
 
 ## Security
 

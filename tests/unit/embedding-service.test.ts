@@ -30,7 +30,8 @@ describe('Embedding Service', async () => {
         const result = await generateEmbedding('test text', 'passage');
 
         assert.strictEqual(result, null);
-        assert.strictEqual((logger.error as any).mock.calls.length, 1);
+        // One log per model in the failover list, plus a final summary line
+        assert.ok((logger.error as any).mock.calls.length > 1);
         assert.ok((logger.error as any).mock.calls[0].arguments[0].includes('Connection error'));
       } finally {
         global.fetch = originalFetch;

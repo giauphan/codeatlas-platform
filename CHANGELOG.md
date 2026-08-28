@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.14.6] - 2026-08-28
+
+### Added
+- **Mistral Embeddings + Cross-Provider Failover**: Added Mistral (`api.mistral.ai`) as an embedding provider alongside NVIDIA NIM. The embedding service now runs a single cross-provider failover chain (default: `mistral/codestral-embed`, `mistral/mistral-embed`, `nvidia/llama-nemotron-embed-vl-1b-v2`, `nvidia/nemotron-3-embed-1b`), verified live against both APIs. `codestral-embed` leads because CodeAtlas embeds source code. Per-provider request shaping is handled automatically (`output_dimension` for codestral-embed, plain body for mistral-embed which rejects it with 400 code 3051, `dimensions`/`input_type` for NVIDIA). Each provider key can be a comma-separated pool that rotates on `401`/`403`/`429`. Configurable via `MISTRAL_API_KEY`, `EMBEDDING_MODELS`, and `EMBEDDING_DIM` (legacy `NVIDIA_EMBEDDING_*` aliases still honored).
+
+## [2.14.5] - 2026-08-27
+
+### Fixed
+- **Embedding Model Failover (410/404 Gone)**: The hardcoded `nvidia/nv-embed-v1` embedding endpoint was retired by NVIDIA and began returning `410 Gone`, breaking all vector embedding generation. Replaced it with a round-robin failover list (`nvidia/llama-nemotron-embed-vl-1b-v2`, `nvidia/nemotron-3-embed-1b`) verified live against `integrate.api.nvidia.com`. On any 4xx/5xx or wrong-dimension response the service rotates to the next model and pins the one that worked as primary. Requested dimension is enforced (`dimensions: 1024`, matching the `vector(1024)` schema) and mismatched vectors are rejected before hitting the store. Configurable via `NVIDIA_EMBEDDING_MODELS` and `NVIDIA_EMBEDDING_DIM`.
+
 ## [2.14.4] - 2026-07-17
 
 ### Fixed
