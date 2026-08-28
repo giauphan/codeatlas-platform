@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
-import { KbdHint } from './KbdHint';
+import { SearchInputWithHint } from './SearchInputWithHint';
 import {
   DREAM_CONFIG_LOADING_BUTTON_STYLE,
   DREAM_CONFIG_RUN_BUTTON_STYLE,
@@ -225,9 +225,6 @@ export function DreamMemoryView() {
     PATTERN: '#FFB400',
   };
 
-  const searchInputPaddingRight = searchQuery ? '4.5rem' : '3.5rem';
-  const kbdHintRight = searchQuery ? '2.5rem' : '1rem';
-
   return (
     <div style={{ height: 'calc(100vh - 8rem)', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
       <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -241,25 +238,16 @@ export function DreamMemoryView() {
       </header>
 
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <form onSubmit={handleSearch} style={{ flex: '1 1 250px', position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', left: '1.25rem', top: '1.1rem', color: 'var(--text-muted)' }} />
-          <input
-            type="text" className="glass-input" placeholder="Search memories semantically..."
-            aria-label="Search memories semantically"
-            style={{ paddingLeft: '3.25rem', paddingRight: searchInputPaddingRight, width: '100%' }}
-            value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+        <form onSubmit={handleSearch} style={{ flex: '1 1 250px', position: 'relative', display: 'flex' }}>
+          <SearchInputWithHint
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && fetchMemories(searchQuery, 0, dreamConfig)}
+            onClear={clearSearch}
+            placeholder="Search memories semantically..."
+            ariaLabel="Search memories semantically"
+            hasClearButton={true}
           />
-          <KbdHint icon="↵" text="Enter" top="1rem" right={kbdHintRight} />
-          {searchQuery && (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={clearSearch}
-              className={`clear-search-btn ${FOCUS_RING_CLASS}`}
-            >
-              <X size={16} />
-            </button>
-          )}
         </form>
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.25rem 0.75rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>

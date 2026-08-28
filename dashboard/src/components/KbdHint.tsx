@@ -1,10 +1,12 @@
 import React from 'react';
 
+export type CSSLength = `${number}px` | `${number}rem` | `${number}%`;
+
 interface KbdHintProps {
   icon: string;
   text: string;
-  top: string;
-  right: string;
+  top: CSSLength;
+  right: CSSLength;
 }
 
 export const KbdHint: React.FC<KbdHintProps> = ({ icon, text, top, right }) => {

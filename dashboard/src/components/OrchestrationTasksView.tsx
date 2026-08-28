@@ -3,7 +3,7 @@ import { Network, Search, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBran
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth'; // Reusing auth headers utility
 import type { A2AOrchestrationTask, OrchestrationState } from '../../../src/types/a2a'; // Importing types
-import { KbdHint } from './KbdHint';
+import { SearchInputWithHint } from './SearchInputWithHint';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 
 export function OrchestrationTasksView() {
@@ -110,21 +110,15 @@ export function OrchestrationTasksView() {
 
       {/* Search & filters */}
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-muted)' }} />
-          <input
+        <div style={{ flex: 1, minWidth: '280px', position: 'relative', display: 'flex' }}>
+          <SearchInputWithHint
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             placeholder="Search tasks by ID, description, or agent…"
-            aria-label="Search orchestration tasks"
-            style={{
-              width: '100%', padding: '0.7rem 4rem 0.7rem 2.5rem', borderRadius: '10px',
-              border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)',
-              color: '#fff', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box'
-            }}
+            ariaLabel="Search orchestration tasks"
+            hasClearButton={false}
           />
-          <KbdHint icon="↵" text="Enter" top="0.65rem" right="0.75rem" />
         </div>
         <div role="group" aria-label="Filter tasks by state" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {availableStates.map(state => (

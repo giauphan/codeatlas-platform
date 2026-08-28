@@ -175,6 +175,7 @@ h1, h2, h3, .tech-font {
 /* Kbd Hint */
 .search-kbd-hint-wrapper {
   position: absolute;
+  /* Prevent interaction so the input underneath remains clickable */
   pointer-events: none;
   transition: right 0.2s ease;
 }
