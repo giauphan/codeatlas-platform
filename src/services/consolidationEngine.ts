@@ -62,14 +62,16 @@ export class ConsolidationEngine {
   private readonly dbUpdateMaxRetries: number;
   private readonly dbInitialBackoffMs: number;
   private readonly dbMaxBackoffDelayMs: number;
+  private readonly dbBatchMaxConcurrency: number;
 
   constructor() {
     this.dbBatchChunkSize = this.parseConfig("DB_BATCH_CHUNK_SIZE", 500, 1, 10000);
     this.dbUpdateMaxRetries = this.parseConfig("DB_UPDATE_MAX_RETRIES", 3, 1, 10);
     this.dbInitialBackoffMs = this.parseConfig("DB_INITIAL_BACKOFF_MS", 50, 10, 5000);
     this.dbMaxBackoffDelayMs = this.parseConfig("DB_MAX_BACKOFF_DELAY_MS", 5000, 1000, 10000); // Reduced upper bound to 10s based on PR feedback
+    this.dbBatchMaxConcurrency = this.parseConfig("DB_BATCH_MAX_CONCURRENCY", 5, 1, 50);
 
-    logger.info(`[Consolidation] Engine initialized with DB_BATCH_CHUNK_SIZE=${this.dbBatchChunkSize}, DB_UPDATE_MAX_RETRIES=${this.dbUpdateMaxRetries}, DB_INITIAL_BACKOFF_MS=${this.dbInitialBackoffMs}, DB_MAX_BACKOFF_DELAY_MS=${this.dbMaxBackoffDelayMs}`);
+    logger.info(`[Consolidation] Engine initialized with DB_BATCH_CHUNK_SIZE=${this.dbBatchChunkSize}, DB_UPDATE_MAX_RETRIES=${this.dbUpdateMaxRetries}, DB_INITIAL_BACKOFF_MS=${this.dbInitialBackoffMs}, DB_MAX_BACKOFF_DELAY_MS=${this.dbMaxBackoffDelayMs}, DB_BATCH_MAX_CONCURRENCY=${this.dbBatchMaxConcurrency}`);
   }
 
   /**
@@ -378,14 +380,13 @@ export class ConsolidationEngine {
     } else {
       // For large payloads, process chunks in parallel with a concurrency limit
       // to maximize throughput without overwhelming the connection pool
-      const MAX_CONCURRENCY = 5;
       const chunkPromises: Promise<{ successful: number; failed: number }>[] = [];
 
       for (let i = 0; i < updateBindings.length; i += this.dbBatchChunkSize) {
         const chunk = updateBindings.slice(i, i + this.dbBatchChunkSize);
         chunkPromises.push(this.processBindingsChunk(db, updateSql, chunk, i));
 
-        if (chunkPromises.length >= MAX_CONCURRENCY) {
+        if (chunkPromises.length >= this.dbBatchMaxConcurrency) {
           const results = await Promise.all(chunkPromises);
           for (const res of results) {
             successfulCount += res.successful;
