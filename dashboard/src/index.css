@@ -173,20 +173,26 @@ h1, h2, h3, .tech-font {
 }
 
 /* Kbd Hint */
+.search-kbd-hint-wrapper {
+  position: absolute;
+  pointer-events: none;
+  transition: right 0.2s ease;
+}
+
 .search-kbd-hint {
-  font-size: 0.7rem;
-  padding: 0.2rem 0.4rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: var(--text-muted);
+  font-size: var(--hint-font-size, 0.7rem);
+  padding: var(--hint-padding, 0.2rem 0.4rem);
+  background: var(--hint-bg-color, rgba(255, 255, 255, 0.1));
+  border-radius: var(--hint-border-radius, 6px);
+  color: var(--hint-text-color, var(--text-muted));
   font-family: monospace;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: var(--hint-border, 1px solid rgba(255, 255, 255, 0.15));
   display: flex;
   align-items: center;
   gap: 0.2rem;
 }
 
 .search-kbd-hint-icon {
-  font-size: 0.8rem;
+  font-size: var(--hint-icon-font-size, 0.8rem);
   line-height: 1;
 }

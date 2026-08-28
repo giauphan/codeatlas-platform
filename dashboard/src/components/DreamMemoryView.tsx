@@ -225,6 +225,9 @@ export function DreamMemoryView() {
     PATTERN: '#FFB400',
   };
 
+  const searchInputPaddingRight = searchQuery ? '4.5rem' : '3.5rem';
+  const kbdHintRight = searchQuery ? '2.5rem' : '1rem';
+
   return (
     <div style={{ height: 'calc(100vh - 8rem)', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
       <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -243,10 +246,10 @@ export function DreamMemoryView() {
           <input
             type="text" className="glass-input" placeholder="Search memories semantically..."
             aria-label="Search memories semantically"
-            style={{ paddingLeft: '3.25rem', paddingRight: searchQuery ? '4.5rem' : '3.5rem', width: '100%' }}
+            style={{ paddingLeft: '3.25rem', paddingRight: searchInputPaddingRight, width: '100%' }}
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
           />
-          <KbdHint icon="↵" text="Enter" top="1rem" right={searchQuery ? '2.5rem' : '1rem'} />
+          <KbdHint icon="↵" text="Enter" top="1rem" right={kbdHintRight} />
           {searchQuery && (
             <button
               type="button"
