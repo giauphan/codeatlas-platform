@@ -6,7 +6,7 @@ import { FOCUS_RING_CLASS } from '../lib/constants';
 interface SearchInputWithHintProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onSearch: () => void;
   onClear?: () => void;
   placeholder?: string;
   ariaLabel?: string;
@@ -22,11 +22,19 @@ interface SearchInputWithHintProps {
  * Critical use cases:
  * - Full-width semantic search bars where an explicit "Enter" is needed to execute.
  * - Views needing a unified design language for their search queries.
+ *
+ * @example
+ * <SearchInputWithHint
+ *    value={query}
+ *    onChange={e => setQuery(e.target.value)}
+ *    onSearch={() => fetchResults(query)}
+ *    placeholder="Search items..."
+ * />
  */
 export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   value,
   onChange,
-  onKeyDown,
+  onSearch,
   onClear,
   placeholder = "Search...",
   ariaLabel = "Search input",
@@ -57,7 +65,11 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
         style={{ paddingRight: styles.paddingRight }}
         value={value}
         onChange={onChange}
-        onKeyDown={onKeyDown}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            onSearch();
+          }
+        }}
       />
       <KbdHint icon="↵" text="Enter" top="0.85rem" right={styles.kbdHintRight} />
 

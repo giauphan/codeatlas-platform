@@ -128,7 +128,7 @@ export function SecondBrainView() {
           <SearchInputWithHint
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onSearch={handleSearch}
             placeholder="Search concepts…"
             ariaLabel="Search concepts"
             hasClearButton={false}

@@ -114,7 +114,7 @@ export function OrchestrationTasksView() {
           <SearchInputWithHint
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onSearch={handleSearch}
             placeholder="Search tasks by ID, description, or agent…"
             ariaLabel="Search orchestration tasks"
             hasClearButton={false}

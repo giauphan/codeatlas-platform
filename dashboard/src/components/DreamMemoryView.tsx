@@ -242,7 +242,7 @@ export function DreamMemoryView() {
           <SearchInputWithHint
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && fetchMemories(searchQuery, 0, dreamConfig)}
+            onSearch={() => fetchMemories(searchQuery, 0, dreamConfig)}
             onClear={clearSearch}
             placeholder="Search memories semantically..."
             ariaLabel="Search memories semantically"

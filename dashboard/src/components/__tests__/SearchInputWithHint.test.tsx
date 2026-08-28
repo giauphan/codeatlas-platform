@@ -5,13 +5,13 @@ import { SearchInputWithHint } from '../SearchInputWithHint';
 describe('SearchInputWithHint', () => {
   it('renders input, placeholder, and kbd hint', () => {
     const onChange = vi.fn();
-    const onKeyDown = vi.fn();
+    const onSearch = vi.fn();
 
     render(
       <SearchInputWithHint
         value=""
         onChange={onChange}
-        onKeyDown={onKeyDown}
+        onSearch={onSearch}
         placeholder="Test placeholder"
         ariaLabel="Test label"
       />
@@ -29,14 +29,14 @@ describe('SearchInputWithHint', () => {
 
   it('renders clear button and calls onClear when clicked', () => {
     const onChange = vi.fn();
-    const onKeyDown = vi.fn();
+    const onSearch = vi.fn();
     const onClear = vi.fn();
 
     render(
       <SearchInputWithHint
         value="something"
         onChange={onChange}
-        onKeyDown={onKeyDown}
+        onSearch={onSearch}
         onClear={onClear}
         hasClearButton={true}
       />
@@ -49,15 +49,15 @@ describe('SearchInputWithHint', () => {
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onChange and onKeyDown when user interacts', () => {
+  it('calls onChange and onSearch when user interacts', () => {
     const onChange = vi.fn();
-    const onKeyDown = vi.fn();
+    const onSearch = vi.fn();
 
     render(
       <SearchInputWithHint
         value=""
         onChange={onChange}
-        onKeyDown={onKeyDown}
+        onSearch={onSearch}
       />
     );
 
@@ -66,7 +66,7 @@ describe('SearchInputWithHint', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
 
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    expect(onSearch).toHaveBeenCalledTimes(1);
   });
 
   it('throws an error when hasClearButton is true but onClear is missing', () => {
@@ -75,7 +75,7 @@ describe('SearchInputWithHint', () => {
         <SearchInputWithHint
           value="something"
           onChange={vi.fn()}
-          onKeyDown={vi.fn()}
+          onSearch={vi.fn()}
           hasClearButton={true}
         />
       );
