@@ -80,12 +80,16 @@ export class ConsolidationEngine {
   }
 
   private parseConfig(name: string, defaultValue: number, min: number, max: number): number {
-    const value = process.env[name] || String(defaultValue);
-    const numValue = Number(value);
+    const rawValue = process.env[name];
+    if (typeof rawValue === 'undefined') {
+      logger.debug(`[Consolidation] Environment variable ${name} not set, using default: ${defaultValue}`);
+      return defaultValue;
+    }
+
+    const numValue = Number(rawValue);
 
     if (isNaN(numValue) || !Number.isInteger(numValue)) {
-      logger.warn(`[Consolidation] Invalid non-integer value for ${name}: '${value}'. Falling back to default ${defaultValue}.`);
-      return defaultValue;
+      throw new Error(`[Consolidation] Invalid configuration for ${name}: '${rawValue}' is not a valid integer.`);
     }
 
     return this.clamp(numValue, min, max);
@@ -168,15 +172,22 @@ export class ConsolidationEngine {
   /**
    * Generates the SQL query for updating concept confidence.
    */
+  // Precomputed maps for batch optimization and SQL Dialects Factory
+  private static readonly CONFIDENCE_UPDATE_SQL_MAP: Record<string, string> = {};
+
   private getConfidenceUpdateSql(dbType: string): string {
-    // Generate the SQL string dynamically, utilizing the precomputed timestamp fragment.
-    // Given the batch update architecture, this function is only executed once per dbType per execution,
-    // avoiding N+1 string generation overhead inside the chunk loops.
-    return `
-      UPDATE codeatlas_concepts
-      SET confidence = :conf, updated_at = ${this.getCurrentTimestampSql(dbType)}
-      WHERE id = :id AND tenant_id = :tenantId
-    `;
+    const normalized = (dbType || "").toLowerCase();
+
+    // Abstracted factory layer for SQL generation. Returns a cached instance based on dialect.
+    if (!ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[normalized]) {
+      ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[normalized] = `
+        UPDATE codeatlas_concepts
+        SET confidence = :conf, updated_at = ${this.getCurrentTimestampSql(dbType)}
+        WHERE id = :id AND tenant_id = :tenantId
+      `;
+    }
+
+    return ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[normalized];
   }
 
   /**
@@ -228,6 +239,11 @@ export class ConsolidationEngine {
     maskedTenant: string,
     isIndividualFallback: boolean = false // Set to true during fallback execution to disable nested retries
   ): Promise<T> {
+    // Assert taskFn returns a Promise to enforce type safety per code-review
+    if (typeof taskFn !== 'function') {
+      throw new Error(`[Consolidation] executeWithRetry expects taskFn to be a function returning a Promise. Got: ${typeof taskFn}`);
+    }
+
     // If we're already in a fallback state, skip individual retries to avoid an exponential explosion of wait times.
     const maxRetries = isIndividualFallback ? 1 : this.dbUpdateMaxRetries;
 
