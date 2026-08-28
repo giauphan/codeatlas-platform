@@ -266,7 +266,12 @@ export class ConsolidationEngine {
   ): Promise<{ successful: number, failed: number }> {
     if (!updateBindings || updateBindings.length === 0) return { successful: 0, failed: 0 };
 
-    const updateSql = this.getConfidenceUpdateSql(dbType);
+    const normalizedDbType = (dbType || "").toLowerCase();
+    if (normalizedDbType !== "postgres" && normalizedDbType !== "sqlite") {
+      throw new Error(`[Consolidation] Unsupported dbType for confidence batch update: ${dbType}. Supported dialects are: postgres, sqlite.`);
+    }
+
+    const updateSql = this.getConfidenceUpdateSql(normalizedDbType);
     let successfulCount = 0;
     let failedCount = 0;
 
