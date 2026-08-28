@@ -143,13 +143,19 @@ export class ConsolidationEngine {
     return null;
   }
 
+  // Precomputed map for timestamp SQL strings to avoid dynamic string generation overhead in tight loops
+  private static readonly TIMESTAMP_SQL_MAP: Record<string, string> = {
+    "postgres": "CURRENT_TIMESTAMP",
+    "sqlite": "datetime('now')"
+  };
+
   /**
    * Returns the dialect-specific SQL string to get the current timestamp.
    */
   private getCurrentTimestampSql(dbType: string): string {
     const normalized = (dbType || "").toLowerCase();
-    if (normalized === "postgres") return "CURRENT_TIMESTAMP";
-    if (normalized === "sqlite") return "datetime('now')";
+    const sql = ConsolidationEngine.TIMESTAMP_SQL_MAP[normalized];
+    if (sql) return sql;
     throw new Error(`[Consolidation] Unsupported dbType for timestamp mapping: ${dbType}. Supported dialects are: postgres, sqlite.`);
   }
 
@@ -157,6 +163,9 @@ export class ConsolidationEngine {
    * Generates the SQL query for updating concept confidence.
    */
   private getConfidenceUpdateSql(dbType: string): string {
+    // Generate the SQL string dynamically, utilizing the precomputed timestamp fragment.
+    // Given the batch update architecture, this function is only executed once per dbType per execution,
+    // avoiding N+1 string generation overhead inside the chunk loops.
     return `
       UPDATE codeatlas_concepts
       SET confidence = :conf, updated_at = ${this.getCurrentTimestampSql(dbType)}
@@ -168,8 +177,11 @@ export class ConsolidationEngine {
    * Extracts and masks the tenant ID from an array of bindings for safe logging.
    */
   private getMaskedTenantId(bindings: Array<UpdateBinding>): string {
-    const tId = bindings[0]?.tenantId || 'unknown';
-    return tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
+    // Collect unique tenant IDs from the chunk. In single-tenant mode, this will only be one.
+    // In multi-tenant batch scenarios, this correctly captures the mixed tenants.
+    const tenants = Array.from(new Set(bindings.map(b => b.tenantId || 'unknown')));
+    const masked = tenants.map(tId => tId.length > 4 ? tId.substring(0, 4) + '***' : '***');
+    return masked.join(', ');
   }
 
   /**
@@ -191,7 +203,7 @@ export class ConsolidationEngine {
     }
 
     if (level === "error") {
-      logger.error(`[Consolidation] ${context} failed for tenant ${maskedTenant} after ${maxRetries} attempts${sampleIds ? ` (masked sample ids: ${sampleIds})` : ''}. Error: ${msg}`);
+      logger.error(`[Consolidation] ${context} failed for tenant ${maskedTenant} after ${maxRetries} attempts${sampleIds ? ` (masked sample ids: ${sampleIds})` : ''}. Error: ${msg}. Next steps: Verify database connectivity and load. Check for blocked queries.`);
     } else {
       logger.warn(`[Consolidation] ${context} retry ${attempt}/${maxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
     }
@@ -224,7 +236,7 @@ export class ConsolidationEngine {
         } else {
           this.logBatchError("warn", errorContext, attempt, maxRetries, maskedTenant, msg);
           const baseDelay = this.dbInitialBackoffMs * Math.pow(2, attempt - 1);
-          const jitter = baseDelay * 0.2 * (Math.random() - 0.5); // +/- 10% jitter
+          const jitter = baseDelay * 0.1 * (Math.random() - 0.5); // +/- 5% jitter for smoother retry distribution
           const delay = this.clamp(baseDelay + jitter, 0, this.dbMaxBackoffDelayMs);
           await new Promise(res => setTimeout(res, delay));
         }
@@ -264,7 +276,7 @@ export class ConsolidationEngine {
 
     if (failedCount > 0) {
       const displayIds = failedIds.slice(0, 20).join(', ') + (failedIds.length > 20 ? `... (truncated ${failedIds.length - 20} more)` : '');
-      logger.error(`[Consolidation] Individual fallback failed for ${failedCount} rows (tenant: ${maskedTenant}). Masked IDs: ${displayIds}`);
+      logger.error(`[Consolidation] Individual fallback failed for ${failedCount} rows (tenant: ${maskedTenant}). Masked IDs: ${displayIds}. Next steps: Investigate specific row IDs for data corruption or constraint violations.`);
     }
 
     return { successful: successfulCount, failed: failedCount };
