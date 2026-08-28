@@ -61,8 +61,8 @@ export class ConsolidationEngine {
   private readonly dbUpdateMaxRetries: number;
 
   constructor() {
-    this.dbBatchChunkSize = Math.max(1, parseInt(process.env.DB_BATCH_CHUNK_SIZE || "500", 10) || 500);
-    this.dbUpdateMaxRetries = Math.max(1, parseInt(process.env.DB_UPDATE_MAX_RETRIES || "3", 10) || 3);
+    this.dbBatchChunkSize = Math.min(10000, Math.max(1, parseInt(process.env.DB_BATCH_CHUNK_SIZE || "500", 10) || 500));
+    this.dbUpdateMaxRetries = Math.min(10, Math.max(1, parseInt(process.env.DB_UPDATE_MAX_RETRIES || "3", 10) || 3));
   }
 
   private getVal(row: any, index: number, keyStr: string): any {
@@ -126,7 +126,7 @@ export class ConsolidationEngine {
     errorContext: string,
     sampleIds: string,
     maskedTenant: string
-  ): Promise<T | null> {
+  ): Promise<T> {
     const INITIAL_BACKOFF_MS = 50;
     const MAX_DELAY_MS = 5000;
     for (let attempt = 1; attempt <= this.dbUpdateMaxRetries; attempt++) {
@@ -136,6 +136,7 @@ export class ConsolidationEngine {
         const msg = error instanceof Error ? error.message : String(error);
         if (attempt === this.dbUpdateMaxRetries) {
           logger.error(`[Consolidation] ${errorContext} failed for tenant ${maskedTenant} after ${this.dbUpdateMaxRetries} attempts (masked sample ids: ${sampleIds}). Error: ${msg}`);
+          throw error;
         } else {
           logger.warn(`[Consolidation] ${errorContext} retry ${attempt}/${this.dbUpdateMaxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
           const baseDelay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
@@ -145,7 +146,7 @@ export class ConsolidationEngine {
         }
       }
     }
-    return null;
+    throw new Error('Unreachable code in executeWithRetry');
   }
 
   /**
@@ -175,20 +176,24 @@ export class ConsolidationEngine {
       const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
       const sampleIds = updateBindings.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
 
-      const res = await this.executeWithRetry<{ rowsAffected?: number }>(
-        () => db.executeMany(updateSql, updateBindings),
-        'Batch update',
-        sampleIds,
-        maskedTenant
-      );
-
-      if (res) {
+      try {
+        const res = await this.executeWithRetry<{ rowsAffected?: number }>(
+          () => db.executeMany(updateSql, updateBindings),
+          'Batch update',
+          sampleIds,
+          maskedTenant
+        );
         successfulCount += (res.rowsAffected || updateBindings.length);
-      } else {
+      } catch (error) {
         logger.warn(`[Consolidation] Falling back to individual updates for ${updateBindings.length} rows.`);
         for (const binding of updateBindings) {
           try {
-            const indRes = await db.execute(updateSql, binding);
+            const indRes = await this.executeWithRetry<{ rowsAffected?: number }>(
+              () => db.execute(updateSql, binding),
+              `Individual update fallback`,
+              binding.id.substring(0, 4) + '***',
+              maskedTenant
+            );
             successfulCount += (indRes.rowsAffected || 1);
           } catch (e) {
             failedCount++;
@@ -204,20 +209,24 @@ export class ConsolidationEngine {
       const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
       const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
 
-      const res = await this.executeWithRetry<{ rowsAffected?: number }>(
-        () => db.executeMany(updateSql, chunk),
-        `Batch update chunk starting at index ${i}`,
-        sampleIds,
-        maskedTenant
-      );
-
-      if (res) {
+      try {
+        const res = await this.executeWithRetry<{ rowsAffected?: number }>(
+          () => db.executeMany(updateSql, chunk),
+          `Batch update chunk starting at index ${i}`,
+          sampleIds,
+          maskedTenant
+        );
         successfulCount += (res.rowsAffected || chunk.length);
-      } else {
+      } catch (error) {
         logger.warn(`[Consolidation] Falling back to individual updates for chunk starting at ${i} (${chunk.length} rows).`);
         for (const binding of chunk) {
           try {
-            const indRes = await db.execute(updateSql, binding);
+            const indRes = await this.executeWithRetry<{ rowsAffected?: number }>(
+              () => db.execute(updateSql, binding),
+              `Individual update fallback`,
+              binding.id.substring(0, 4) + '***',
+              maskedTenant
+            );
             successfulCount += (indRes.rowsAffected || 1);
           } catch (e) {
             failedCount++;
