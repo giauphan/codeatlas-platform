@@ -66,6 +66,13 @@ export class ConsolidationEngine {
     this.dbInitialBackoffMs = this.parseConfig("DB_INITIAL_BACKOFF_MS", 50, 10, 5000);
   }
 
+  /**
+   * Helper to clamp a numeric value within strict bounds.
+   */
+  private clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+
   private parseConfig(name: string, defaultValue: number, min: number, max: number): number {
     const value = process.env[name] || String(defaultValue);
     const parsedValue = parseInt(value, 10);
@@ -73,7 +80,7 @@ export class ConsolidationEngine {
       logger.warn(`[Consolidation] Invalid value for ${name}: '${value}'. Falling back to default ${defaultValue}.`);
       return defaultValue;
     }
-    return Math.min(max, Math.max(min, parsedValue));
+    return this.clamp(parsedValue, min, max);
   }
 
   private getVal(row: any, index: number, keyStr: string): any {
@@ -159,7 +166,7 @@ export class ConsolidationEngine {
           logger.warn(`[Consolidation] ${errorContext} retry ${attempt}/${this.dbUpdateMaxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
           const baseDelay = this.dbInitialBackoffMs * Math.pow(2, attempt - 1);
           const jitter = baseDelay * 0.2 * (Math.random() - 0.5); // +/- 10% jitter
-          const delay = Math.min(MAX_DELAY_MS, Math.max(0, baseDelay + jitter));
+          const delay = this.clamp(baseDelay + jitter, 0, MAX_DELAY_MS);
           await new Promise(res => setTimeout(res, delay));
         }
       }
