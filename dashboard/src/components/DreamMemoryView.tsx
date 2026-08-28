@@ -242,7 +242,7 @@ export function DreamMemoryView() {
         </div>
       </header>
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="search-controls-container">
         <form onSubmit={handleSearch} className="search-form">
           <SearchInputWithHint
             value={searchQuery}

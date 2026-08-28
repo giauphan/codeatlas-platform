@@ -156,6 +156,14 @@ h1, h2, h3, .tech-font {
   border-radius: 4px;
 }
 
+.search-controls-container {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 /* Clear Search Button */
 .clear-search-btn {
   position: absolute;

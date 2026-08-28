@@ -109,8 +109,8 @@ export function OrchestrationTasksView() {
       </div>
 
       {/* Search & filters */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '280px', position: 'relative', display: 'flex' }}>
+      <div className="search-controls-container">
+        <div className="search-form">
           <SearchInputWithHint
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
