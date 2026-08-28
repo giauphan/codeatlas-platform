@@ -56,6 +56,14 @@ export interface ConsolidationReport {
 
 export class ConsolidationEngine {
 
+  private readonly dbBatchChunkSize: number;
+  private readonly dbUpdateMaxRetries: number;
+
+  constructor() {
+    this.dbBatchChunkSize = Math.max(1, parseInt(process.env.DB_BATCH_CHUNK_SIZE || "500", 10) || 500);
+    this.dbUpdateMaxRetries = Math.max(1, parseInt(process.env.DB_UPDATE_MAX_RETRIES || "3", 10) || 3);
+  }
+
   private getVal(row: any, index: number, keyStr: string): any {
     if (!row) return undefined;
     if (row[index] !== undefined) return row[index];
@@ -104,7 +112,36 @@ export class ConsolidationEngine {
    * Returns the dialect-specific SQL string to get the current timestamp.
    */
   private getCurrentTimestampSql(dbType: string): string {
-    return dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')";
+    if (dbType === "postgres") return "CURRENT_TIMESTAMP";
+    if (dbType === "sqlite") return "datetime('now')";
+    throw new Error(`[Consolidation] Unsupported dbType for timestamp mapping: ${dbType}`);
+  }
+
+  /**
+   * Generic retry mechanism for transient database operations with exponential backoff.
+   */
+  private async executeWithRetry<T>(
+    taskFn: () => Promise<T>,
+    errorContext: string,
+    sampleIds: string,
+    maskedTenant: string
+  ): Promise<T | null> {
+    const INITIAL_BACKOFF_MS = 50;
+    for (let attempt = 1; attempt <= this.dbUpdateMaxRetries; attempt++) {
+      try {
+        return await taskFn();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (attempt === this.dbUpdateMaxRetries) {
+          logger.error(`[Consolidation] ${errorContext} failed for tenant ${maskedTenant} after ${this.dbUpdateMaxRetries} attempts (masked sample ids: ${sampleIds}). Error: ${msg}`);
+        } else {
+          logger.warn(`[Consolidation] ${errorContext} retry ${attempt}/${this.dbUpdateMaxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
+          const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+          await new Promise(res => setTimeout(res, delay));
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -125,65 +162,46 @@ export class ConsolidationEngine {
       SET confidence = :conf, updated_at = ${this.getCurrentTimestampSql(dbType)}
       WHERE id = :id AND tenant_id = :tenantId
     `;
-    const chunkSize = Math.max(1, parseInt(process.env.DB_BATCH_CHUNK_SIZE || "500", 10) || 500);
-    const MAX_RETRIES = Math.max(1, parseInt(process.env.DB_UPDATE_MAX_RETRIES || "3", 10) || 3);
-    const INITIAL_BACKOFF_MS = 50;
     let successfulCount = 0;
     let failedCount = 0;
 
-    if (updateBindings.length <= chunkSize) {
+    if (updateBindings.length <= this.dbBatchChunkSize) {
       // Fast path for small payloads to avoid loop overhead
-      let success = false;
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          const res = await db.executeMany(updateSql, updateBindings as unknown as Record<string, unknown>[]);
-          successfulCount += (res.rowsAffected || updateBindings.length);
-          success = true;
-          break;
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          const tId = updateBindings[0]?.tenantId || 'unknown';
-          const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
-          if (attempt === MAX_RETRIES) {
-            const sampleIds = updateBindings.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
-            logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant} after ${MAX_RETRIES} attempts (masked sample ids: ${sampleIds}), error: ${msg}`);
-          } else {
-            logger.warn(`[Consolidation] Batch update retry ${attempt}/${MAX_RETRIES} for tenant ${maskedTenant}... error: ${msg}`);
-            const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
-            await new Promise(res => setTimeout(res, delay));
-          }
-        }
-      }
-      if (!success) {
+      const tId = updateBindings[0]?.tenantId || 'unknown';
+      const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
+      const sampleIds = updateBindings.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
+
+      const res = await this.executeWithRetry<{ rowsAffected?: number }>(
+        () => db.executeMany(updateSql, updateBindings as unknown as Record<string, unknown>[]),
+        'Batch update',
+        sampleIds,
+        maskedTenant
+      );
+
+      if (res) {
+        successfulCount += (res.rowsAffected || updateBindings.length);
+      } else {
         failedCount += updateBindings.length;
       }
       return { successful: successfulCount, failed: failedCount };
     }
 
-    for (let i = 0; i < updateBindings.length; i += chunkSize) {
-      const chunk = updateBindings.slice(i, i + chunkSize);
-      let success = false;
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          const res = await db.executeMany(updateSql, chunk as unknown as Record<string, unknown>[]);
-          successfulCount += (res.rowsAffected || chunk.length);
-          success = true;
-          break;
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          const tId = chunk[0]?.tenantId || 'unknown';
-          const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
-          if (attempt === MAX_RETRIES) {
-            const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
-            logger.error(`[Consolidation] Batch update failed for tenant ${maskedTenant}, chunk starting at index ${i} after ${MAX_RETRIES} attempts (masked sample ids: ${sampleIds}), error: ${msg}`);
-          } else {
-            logger.warn(`[Consolidation] Batch update retry ${attempt}/${MAX_RETRIES} for tenant ${maskedTenant}, chunk starting at index ${i}... error: ${msg}`);
-            const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
-            await new Promise(res => setTimeout(res, delay));
-          }
-        }
-      }
-      if (!success) {
+    for (let i = 0; i < updateBindings.length; i += this.dbBatchChunkSize) {
+      const chunk = updateBindings.slice(i, i + this.dbBatchChunkSize);
+      const tId = chunk[0]?.tenantId || 'unknown';
+      const maskedTenant = tId.length > 4 ? tId.substring(0, 4) + '***' : '***';
+      const sampleIds = chunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', ');
+
+      const res = await this.executeWithRetry<{ rowsAffected?: number }>(
+        () => db.executeMany(updateSql, chunk as unknown as Record<string, unknown>[]),
+        `Batch update chunk starting at index ${i}`,
+        sampleIds,
+        maskedTenant
+      );
+
+      if (res) {
+        successfulCount += (res.rowsAffected || chunk.length);
+      } else {
         failedCount += chunk.length;
       }
     }
