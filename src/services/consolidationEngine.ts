@@ -198,22 +198,21 @@ export class ConsolidationEngine {
   // Precomputed maps for batch optimization and SQL Dialects Factory
   private static readonly CONFIDENCE_UPDATE_SQL_MAP: Record<string, string> = {};
 
-  private getConfidenceUpdateSql(dbType: string): string {
+  private getConfidenceUpdateSql(dbType: string, hasTenantId: boolean = true): string {
     const normalized = (dbType || "").toLowerCase();
+    const cacheKey = `${normalized}_${hasTenantId}`;
 
     // Abstracted factory layer for SQL generation. Returns a cached instance based on dialect.
-    if (!ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[normalized]) {
-      // In standalone contexts tenantId may be optional. If :tenantId isn't bound later,
-      // some drivers (like better-sqlite3) may object if the parameter isn't present in the binding map.
-      // However, our data pipeline currently guarantees tenantId will be injected by the orchestrator.
-      ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[normalized] = `
+    if (!ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[cacheKey]) {
+      const tenantClause = hasTenantId ? `AND tenant_id = :tenantId` : ``;
+      ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[cacheKey] = `
         UPDATE codeatlas_concepts
         SET confidence = :conf, updated_at = ${this.getCurrentTimestampSql(dbType)}
-        WHERE id = :id AND (tenant_id = :tenantId OR :tenantId IS NULL)
+        WHERE id = :id ${tenantClause}
       `;
     }
 
-    return ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[normalized];
+    return ConsolidationEngine.CONFIDENCE_UPDATE_SQL_MAP[cacheKey];
   }
 
   /**
@@ -299,11 +298,6 @@ export class ConsolidationEngine {
   }
 
   /**
-   * Focused fallback handler that strips exponential backoff looping to prevent
-   * wait-time explosion when operating in failure recovery modes.
-   */
-
-  /**
    * Fallback method to individually execute updates if a batch chunk completely fails.
    */
   private async executeIndividualUpdatesFallback(
@@ -374,7 +368,10 @@ export class ConsolidationEngine {
       throw new Error(`[Consolidation] Unsupported dbType for confidence batch update: ${dbType}. Supported dialects are: postgres, sqlite.`);
     }
 
-    const updateSql = this.getConfidenceUpdateSql(normalizedDbType);
+    // Check if the bindings array actually provides tenant IDs to generate the correct parameterized SQL
+    const hasTenantId = updateBindings.some(b => b.tenantId !== undefined && b.tenantId !== null);
+    const updateSql = this.getConfidenceUpdateSql(normalizedDbType, hasTenantId);
+
     let successfulCount = 0;
     let failedCount = 0;
 
@@ -432,19 +429,27 @@ export class ConsolidationEngine {
     let successful = 0;
     let failed = 0;
 
-    // Default tenantId bindings to null to prevent SQL driver 'missing parameter' errors for optional types
-    const mappedChunk = chunk.map(b => ({ ...b, tenantId: b.tenantId || null }));
+    // Filter bindings to strip out undefined tenantIds if they aren't part of the SQL payload
+    // to prevent strict SQL drivers from throwing "too many parameters" or "missing parameter" errors.
+    const mappedChunk = chunk.map(b => {
+      const rec: Record<string, unknown> = { conf: b.conf, id: b.id };
+      if (b.tenantId !== undefined && b.tenantId !== null) {
+        rec.tenantId = b.tenantId;
+      }
+      return rec;
+    });
 
     try {
       const res = await this.executeRetry<{ rowsAffected?: number }>(
-        () => db.executeMany(updateSql, mappedChunk as unknown as Record<string, unknown>[]),
+        () => db.executeMany(updateSql, mappedChunk),
         context,
         sampleIds,
         maskedTenant
       );
       successful += (res.rowsAffected || mappedChunk.length);
     } catch (error) {
-      const fallbackRes = await this.executeIndividualUpdatesFallback(db, updateSql, mappedChunk, maskedTenant);
+      // Re-cast back to UpdateBinding for the fallback array loop iteration
+      const fallbackRes = await this.executeIndividualUpdatesFallback(db, updateSql, chunk, maskedTenant);
       successful += fallbackRes.successful;
       failed += fallbackRes.failed;
     }
