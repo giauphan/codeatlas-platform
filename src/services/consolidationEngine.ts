@@ -181,6 +181,12 @@ export class ConsolidationEngine {
     msg: string,
     sampleIds?: string
   ): void {
+    // Basic rate-limiting for WARN-level logs: only log the first and last retry attempts
+    // to prevent flooding the log system during rapid continuous failure of large chunks.
+    if (level === "warn" && attempt > 1 && attempt < maxRetries - 1) {
+       return;
+    }
+
     if (level === "error") {
       logger.error(`[Consolidation] ${context} failed for tenant ${maskedTenant} after ${maxRetries} attempts${sampleIds ? ` (masked sample ids: ${sampleIds})` : ''}. Error: ${msg}`);
     } else {
@@ -195,18 +201,25 @@ export class ConsolidationEngine {
     taskFn: () => Promise<T>,
     errorContext: string,
     sampleIds: string,
-    maskedTenant: string
+    maskedTenant: string,
+    isIndividualFallback: boolean = false
   ): Promise<T> {
-    for (let attempt = 1; attempt <= this.dbUpdateMaxRetries; attempt++) {
+    // If we're already in a fallback state, skip individual retries to avoid an exponential explosion of wait times.
+    const maxRetries = isIndividualFallback ? 1 : this.dbUpdateMaxRetries;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         return await taskFn();
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (attempt === this.dbUpdateMaxRetries) {
-          this.logBatchError("error", errorContext, attempt, this.dbUpdateMaxRetries, maskedTenant, msg, sampleIds);
+        if (attempt === maxRetries) {
+          // Suppress noise for expected failures in fallback mode.
+          if (!isIndividualFallback) {
+             this.logBatchError("error", errorContext, attempt, maxRetries, maskedTenant, msg, sampleIds);
+          }
           throw error;
         } else {
-          this.logBatchError("warn", errorContext, attempt, this.dbUpdateMaxRetries, maskedTenant, msg);
+          this.logBatchError("warn", errorContext, attempt, maxRetries, maskedTenant, msg);
           const baseDelay = this.dbInitialBackoffMs * Math.pow(2, attempt - 1);
           const jitter = baseDelay * 0.2 * (Math.random() - 0.5); // +/- 10% jitter
           const delay = this.clamp(baseDelay + jitter, 0, this.dbMaxBackoffDelayMs);
@@ -214,7 +227,7 @@ export class ConsolidationEngine {
         }
       }
     }
-    throw new Error(`[Consolidation] Task ${errorContext} failed after ${this.dbUpdateMaxRetries} attempts. Sample IDs: ${sampleIds}`);
+    throw new Error(`[Consolidation] Task ${errorContext} failed after ${maxRetries} attempts. Sample IDs: ${sampleIds}`);
   }
 
   /**
@@ -236,7 +249,8 @@ export class ConsolidationEngine {
           () => db.execute(updateSql, binding),
           `Individual update fallback`,
           binding.id.substring(0, 4) + '***',
-          maskedTenant
+          maskedTenant,
+          true // Pass true to disable nested retries in fallback mode
         );
         successfulCount += (indRes.rowsAffected || 1);
       } catch (e) {
