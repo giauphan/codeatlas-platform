@@ -68,7 +68,8 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   };
 
   // Generate a reasonably unique ID for the ARIA description link
-  const hintId = React.useId ? React.useId() : `search-kbd-hint-${Math.random().toString(36).slice(2, 9)}`;
+  // Memoized for older React versions to prevent ID mismatch across renders
+  const hintId = React.useId ? React.useId() : React.useMemo(() => `search-kbd-hint-${Math.random().toString(36).slice(2, 9)}`, []);
 
   return (
     <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
