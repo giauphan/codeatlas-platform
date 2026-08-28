@@ -238,7 +238,7 @@ export class ConsolidationEngine {
     }
 
     if (failedCount > 0) {
-      const displayIds = failedIds.slice(0, 20).join(', ') + (failedIds.length > 20 ? '... (truncated)' : '');
+      const displayIds = failedIds.slice(0, 20).join(', ') + (failedIds.length > 20 ? `... (truncated ${failedIds.length - 20} more)` : '');
       logger.error(`[Consolidation] Individual fallback failed for ${failedCount} rows (tenant: ${maskedTenant}). Masked IDs: ${displayIds}`);
     }
 
