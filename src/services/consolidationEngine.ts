@@ -41,7 +41,7 @@ export interface ConsolidationJob {
 export interface UpdateBinding {
   conf: number;
   id: string;
-  tenantId: string;
+  tenantId?: string;
 }
 
 export interface ConsolidationReport {
@@ -108,6 +108,13 @@ export class ConsolidationEngine {
     // This threshold prevents the system from generating thousands of microscopic updates
     // for concepts whose Bayesian evidence scores have effectively plateaued.
     return Math.abs(newConf - currentConf) > 0.01;
+  }
+
+  /**
+   * Helper to clamp calculated confidence updates within standard domain boundaries.
+   */
+  private clampConfidence(value: number): number {
+    return Math.min(MAX_CONCEPT_CONFIDENCE, Math.max(MIN_CONCEPT_CONFIDENCE, value));
   }
 
   private getVal(row: any, index: number, keyStr: string): any {
@@ -202,6 +209,13 @@ export class ConsolidationEngine {
     // Collect unique tenant IDs from the chunk. In single-tenant mode, this will only be one.
     // In multi-tenant batch scenarios, this correctly captures the mixed tenants.
     const tenants = Array.from(new Set(bindings.map(b => b.tenantId || 'unknown')));
+
+    // Explicitly log an info counter for unknown tenants if any are found to aid in ops debugging
+    const unknownCount = tenants.filter(tId => tId === 'unknown').length;
+    if (unknownCount > 0) {
+      logger.debug(`[Consolidation] Encountered ${unknownCount} unknown tenant IDs in batch chunk.`);
+    }
+
     // For maximum security and zero-knowledge environments, replace the entire tenant ID with a hash.
     // However, to keep logs somewhat human-readable for immediate debugging, we use a fixed pattern
     // rather than exposing the first 4 characters.
@@ -676,7 +690,8 @@ export class ConsolidationEngine {
 
         // Bayesian confidence update: each piece of evidence increases confidence.
         // We cap the maximum confidence to allow for future fluctuation.
-        const newConf = Math.min(MAX_CONCEPT_CONFIDENCE, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
+        const rawNewConf = currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount));
+        const newConf = this.clampConfidence(rawNewConf);
 
         // Only queue an update if the calculated confidence delta is statistically significant.
         if (this.isConfidenceStatisticallySignificant(currentConf, newConf)) {
