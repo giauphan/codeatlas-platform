@@ -61,8 +61,15 @@ export class ConsolidationEngine {
   private readonly dbUpdateMaxRetries: number;
 
   constructor() {
-    this.dbBatchChunkSize = Math.min(10000, Math.max(1, parseInt(process.env.DB_BATCH_CHUNK_SIZE || "500", 10) || 500));
-    this.dbUpdateMaxRetries = Math.min(10, Math.max(1, parseInt(process.env.DB_UPDATE_MAX_RETRIES || "3", 10) || 3));
+    const rawChunkSize = process.env.DB_BATCH_CHUNK_SIZE || "500";
+    const parsedChunkSize = parseInt(rawChunkSize, 10);
+    if (isNaN(parsedChunkSize)) throw new Error("Invalid DB_BATCH_CHUNK_SIZE value.");
+    this.dbBatchChunkSize = Math.min(10000, Math.max(1, parsedChunkSize));
+
+    const rawMaxRetries = process.env.DB_UPDATE_MAX_RETRIES || "3";
+    const parsedMaxRetries = parseInt(rawMaxRetries, 10);
+    if (isNaN(parsedMaxRetries)) throw new Error("Invalid DB_UPDATE_MAX_RETRIES value.");
+    this.dbUpdateMaxRetries = Math.min(10, Math.max(1, parsedMaxRetries));
   }
 
   private getVal(row: any, index: number, keyStr: string): any {
@@ -154,7 +161,7 @@ export class ConsolidationEngine {
         }
       }
     }
-    throw new Error('Unreachable code in executeWithRetry');
+    throw new Error(`[Consolidation] Task ${errorContext} failed after ${this.dbUpdateMaxRetries} attempts. Sample IDs: ${sampleIds}`);
   }
 
   /**
