@@ -10,6 +10,7 @@
 
 import { randomUUID, createHash } from "node:crypto";
 import { createDatabaseAdapter } from "../database/factory.js";
+import type { IDatabaseAdapter } from "../database/adapters/interface.js";
 import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
@@ -124,19 +125,22 @@ export class ConsolidationEngine {
     return Math.min(MAX_CONCEPT_CONFIDENCE, Math.max(MIN_CONCEPT_CONFIDENCE, value));
   }
 
-  private getVal(row: any, index: number, keyStr: string): any {
+  private getVal(row: unknown, index: number, keyStr: string): unknown {
     if (!row) return undefined;
-    if (row[index] !== undefined) return row[index];
-    if (row[keyStr] !== undefined) return row[keyStr];
+    if (Array.isArray(row)) {
+      return row[index];
+    }
+    const rec = row as Record<string, unknown>;
+    if (rec[keyStr] !== undefined) return rec[keyStr];
     const lowerKey = keyStr.toLowerCase();
-    if (row[lowerKey] !== undefined) return row[lowerKey];
+    if (rec[lowerKey] !== undefined) return rec[lowerKey];
     return undefined;
   }
 
   /**
    * Helper to parse BLOB, Float32Array, number[], or JSON-string embedding into Float32Array.
    */
-  private parseEmbedding(rawEmb: any): Float32Array | null {
+  private parseEmbedding(rawEmb: unknown): Float32Array | null {
     if (!rawEmb) return null;
 
     if (rawEmb instanceof Float32Array) {
@@ -268,15 +272,11 @@ export class ConsolidationEngine {
    * Generic retry mechanism for transient database operations with exponential backoff.
    */
   private async executeRetry<T>(
-    taskFn: () => Promise<Required<T>>,
+    taskFn: () => Promise<T>,
     errorContext: string,
     sampleIds: string,
     maskedTenant: string
   ): Promise<T> {
-    // Assert taskFn returns a Promise to enforce type safety per code-review
-    if (typeof taskFn !== 'function') {
-      throw new Error(`[Consolidation] executeRetry expects taskFn to be a function returning a Promise. Got: ${typeof taskFn}`);
-    }
 
     for (let attempt = 1; attempt <= this.dbUpdateMaxRetries; attempt++) {
       try {
@@ -302,30 +302,12 @@ export class ConsolidationEngine {
    * Focused fallback handler that strips exponential backoff looping to prevent
    * wait-time explosion when operating in failure recovery modes.
    */
-  private async executeFallbackRetry<T>(
-    taskFn: () => Promise<Required<T>>,
-    errorContext: string,
-    sampleIds: string,
-    maskedTenant: string
-  ): Promise<T> {
-    if (typeof taskFn !== 'function') {
-      throw new Error(`[Consolidation] executeFallbackRetry expects taskFn to be a function returning a Promise. Got: ${typeof taskFn}`);
-    }
-
-    try {
-      return await taskFn();
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      // Fallback runs don't log errors via logBatchError since the outer orchestrator groups and logs them natively.
-      throw error;
-    }
-  }
 
   /**
    * Fallback method to individually execute updates if a batch chunk completely fails.
    */
   private async executeIndividualUpdatesFallback(
-    db: any,
+    db: IDatabaseAdapter,
     updateSql: string,
     bindings: Array<UpdateBinding>,
     maskedTenant: string
@@ -343,12 +325,7 @@ export class ConsolidationEngine {
        for (let i = 0; i < bindings.length; i += miniChunkSize) {
          const miniChunk = bindings.slice(i, i + miniChunkSize);
          try {
-           const miniRes = await this.executeFallbackRetry<{ rowsAffected?: number }>(
-             () => db.executeMany(updateSql, miniChunk as unknown as Record<string, unknown>[]),
-             `Mini-chunk fallback`,
-             miniChunk.slice(0, 3).map(c => c.id.substring(0, 4) + '***').join(', '),
-             maskedTenant
-           );
+           const miniRes = await db.executeMany(updateSql, miniChunk as unknown as Record<string, unknown>[]);
            successfulCount += (miniRes.rowsAffected || miniChunk.length);
          } catch (e) {
            // Mini-chunk failed, recurse to process these specifically row-by-row
@@ -362,12 +339,7 @@ export class ConsolidationEngine {
 
     for (const binding of bindings) {
       try {
-        const indRes = await this.executeFallbackRetry<{ rowsAffected?: number }>(
-          () => db.execute(updateSql, binding),
-          `Individual update fallback`,
-          binding.id.substring(0, 4) + '***',
-          maskedTenant
-        );
+        const indRes = await db.execute(updateSql, binding as unknown as Record<string, unknown>);
         successfulCount += (indRes.rowsAffected || 1);
       } catch (e) {
         failedCount++;
@@ -391,7 +363,7 @@ export class ConsolidationEngine {
    * and mitigates N+1 query bottlenecks on large datasets.
    */
   private async updateConfidenceBatch(
-    db: any,
+    db: IDatabaseAdapter,
     updateBindings: Array<UpdateBinding>,
     dbType: string
   ): Promise<{ successful: number, failed: number }> {
@@ -448,7 +420,7 @@ export class ConsolidationEngine {
    * Extracted for testability and parallel concurrency management.
    */
   private async processBindingsChunk(
-    db: any,
+    db: IDatabaseAdapter,
     updateSql: string,
     chunk: Array<UpdateBinding>,
     chunkIndex?: number
@@ -483,7 +455,7 @@ export class ConsolidationEngine {
   /**
    * Validates embedding on a row before mathematical processing.
    */
-  private validateRowEmbedding(row: any, embeddingIdx: number, idIdx: number, stepName: string): boolean {
+  private validateRowEmbedding(row: Record<string, unknown> | unknown[], embeddingIdx: number, idIdx: number, stepName: string): boolean {
     const rawEmb = this.getVal(row, embeddingIdx, 'EMBEDDING');
     const parsed = this.parseEmbedding(rawEmb);
     if (!parsed || parsed.length === 0) {
@@ -586,7 +558,7 @@ export class ConsolidationEngine {
         WHERE ${conditions.join(' AND ')}
       `;
 
-      const rows = await db.query<any[]>(sql, binds);
+      const rows = await db.query<unknown[]>(sql, binds);
       report!.dreamsProcessed += rows.length;
 
       if (rows.length < 2) {
@@ -652,7 +624,7 @@ export class ConsolidationEngine {
             const binds = Array.from(toRemove).map((id) => ({ id }));
             await db.executeMany(
               `DELETE FROM ai_dreaming_memory WHERE id = :id`,
-              binds as any
+              binds as unknown as Record<string, unknown>[]
             );
             merged += toRemove.size;
           } catch {
@@ -684,7 +656,7 @@ export class ConsolidationEngine {
         WHERE ${conditions.join(' AND ')}
       `;
 
-      const rows = await db.query<any[]>(sql, binds);
+      const rows = await db.query<unknown[]>(sql, binds);
 
       if (rows.length < 3) {
         logger.info(`[Consolidation] Extract Concepts: ${rows.length} dreams found (min 3 required), skipping`);
@@ -692,7 +664,7 @@ export class ConsolidationEngine {
       }
 
       // Group dreams by project & type
-      const clusters = new Map<string, any[]>();
+      const clusters = new Map<string, unknown[]>();
       for (const row of rows) {
         const proj = String(this.getVal(row, R_IDX.PROJECT, 'PROJECT') || "default");
         const mtype = String(this.getVal(row, R_IDX.MEMORY_TYPE, 'MEMORY_TYPE') || "GENERAL");
@@ -773,7 +745,7 @@ export class ConsolidationEngine {
         WHERE ${conditions.join(' AND ')}
       `;
 
-      const rows = await db.query<any[]>(sql, binds);
+      const rows = await db.query<unknown[]>(sql, binds);
 
       const updateBindings: Array<UpdateBinding> = [];
 
@@ -892,7 +864,7 @@ export class ConsolidationEngine {
       ORDER BY project, memory_type, created_at ASC
     `;
 
-    const rows = await db.query<any[]>(fetchSql, binds);
+    const rows = await db.query<unknown[]>(fetchSql, binds);
     let supersededCount = 0;
 
     if (rows.length > 1) {
@@ -947,7 +919,7 @@ export class ConsolidationEngine {
         const batch = Array.from(toSupersede).map((id: string) => ({ sid: id, tid: authStorage.getStore()!.uid }));
         await db.executeMany(
           `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id = :sid AND tenant_id = :tid`,
-          batch as any
+          batch as unknown as Record<string, unknown>[]
         );
         supersededCount = toSupersede.size;
       }
