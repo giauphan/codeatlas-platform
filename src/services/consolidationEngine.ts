@@ -138,6 +138,17 @@ export class ConsolidationEngine {
   }
 
   /**
+   * Generates the SQL query for updating concept confidence.
+   */
+  private getConfidenceUpdateSql(dbType: string): string {
+    return `
+      UPDATE codeatlas_concepts
+      SET confidence = :conf, updated_at = ${this.getCurrentTimestampSql(dbType)}
+      WHERE id = :id AND tenant_id = :tenantId
+    `;
+  }
+
+  /**
    * Extracts and masks the tenant ID from an array of bindings for safe logging.
    */
   private getMaskedTenantId(bindings: Array<UpdateBinding>): string {
@@ -243,11 +254,7 @@ export class ConsolidationEngine {
   ): Promise<{ successful: number, failed: number }> {
     if (!updateBindings || updateBindings.length === 0) return { successful: 0, failed: 0 };
 
-    const updateSql = `
-      UPDATE codeatlas_concepts
-      SET confidence = :conf, updated_at = ${this.getCurrentTimestampSql(dbType)}
-      WHERE id = :id AND tenant_id = :tenantId
-    `;
+    const updateSql = this.getConfidenceUpdateSql(dbType);
     let successfulCount = 0;
     let failedCount = 0;
 
