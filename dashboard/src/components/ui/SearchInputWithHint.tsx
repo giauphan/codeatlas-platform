@@ -60,7 +60,9 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
 
   const styles = {
     inputPaddingRight: showClearBtn ? '4.5rem' : '3.5rem',
-    // Instead of changing `right`, we change `transform` to prevent layout thrashing
+    // Instead of changing layout properties like `right` or `margin` to shift the KbdHint when the
+    // clear button appears, we use CSS `transform`. This forces the animation onto the GPU layer,
+    // thereby completely avoiding costly browser layout recalculations and repaints (layout thrashing).
     kbdHintTransform: showClearBtn ? 'translateX(-1.5rem)' : 'translateX(0)'
   };
 
