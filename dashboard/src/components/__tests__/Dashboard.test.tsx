@@ -54,6 +54,7 @@ vi.mock('lucide-react', () => {
     BookOpen: MockIcon,
     Brain: MockIcon,
     Lightbulb: MockIcon,
+    GitBranch: MockIcon,
     Activity: MockIcon,
     Database: MockIcon,
     Copy: MockIcon,
