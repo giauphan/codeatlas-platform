@@ -92,7 +92,12 @@ export class ConsolidationEngine {
       throw new Error(`[Consolidation] Invalid configuration for ${name}: '${rawValue}' is not a valid integer.`);
     }
 
-    return this.clamp(numValue, min, max);
+    const clamped = this.clamp(numValue, min, max);
+    if (clamped !== numValue) {
+      logger.warn(`[Consolidation] Environment variable ${name} value ${numValue} is outside allowed bounds [${min}, ${max}]. Clamping to ${clamped}.`);
+    }
+
+    return clamped;
   }
 
   /**
@@ -216,16 +221,18 @@ export class ConsolidationEngine {
     msg: string,
     sampleIds?: string
   ): void {
-    // Basic rate-limiting for WARN-level logs: only log the first and last retry attempts
-    // to prevent flooding the log system during rapid continuous failure of large chunks.
-    if (level === "warn" && attempt > 1 && attempt < maxRetries - 1) {
-       return;
-    }
+    const baseMsg = `[Consolidation] ${context} for tenant ${maskedTenant}`;
 
     if (level === "error") {
-      logger.error(`[Consolidation] ${context} failed for tenant ${maskedTenant} after ${maxRetries} attempts${sampleIds ? ` (masked sample ids: ${sampleIds})` : ''}. Error: ${msg}. Next steps: Verify database connectivity and load. Check for blocked queries.`);
-    } else {
-      logger.warn(`[Consolidation] ${context} retry ${attempt}/${maxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
+      const sampleInfo = sampleIds ? ` (masked sample ids: ${sampleIds})` : '';
+      logger.error(`${baseMsg} failed after ${maxRetries} attempts${sampleInfo}. Error: ${msg}. Next steps: Verify database connectivity and load. Check for blocked queries.`);
+      return;
+    }
+
+    // Basic rate-limiting for WARN-level logs: only log the first and last retry attempts
+    // to prevent flooding the log system during rapid continuous failure of large chunks.
+    if (attempt === 1 || attempt === maxRetries - 1) {
+      logger.warn(`${baseMsg} retry ${attempt}/${maxRetries}... Error: ${msg}`);
     }
   }
 
