@@ -40,13 +40,13 @@ const MAX_DIAGRAM_MEMORIES_PER_TYPE = 12;
 const ROOT_X = 70;
 const PROJECT_X = 220;
 const TYPE_X = 410;
-const MEMORY_X = 650;
+const MEMORY_X = 720;
 const PROJECT_START_Y = 70;
-const PROJECT_GAP_Y = 180;
 const TYPE_GAP_Y = 90;
 const TYPE_OFFSET_Y = 45;
 const MEMORY_OFFSET_Y = 55;
-const MEMORY_GAP_Y = 24;
+const MEMORY_GAP_Y = 44;
+const PROJECT_PADDING_Y = 30;
 
 function isMemory(value: unknown): value is Memory {
   if (!value || typeof value !== 'object') return false;
@@ -82,41 +82,53 @@ function groupMemories(memories: Memory[]): Map<string, Map<string, Memory[]>> {
 function MemoryTreeDiagram({ memories }: { memories: Memory[] }) {
   const { nodes, edges, height } = useMemo(() => {
     const tree = groupMemories(memories);
-    const nodes: TreeNode[] = [{ id: 'root', label: 'MEMORY', kind: 'root', color: '#00F0FF', x: ROOT_X, y: 190 }];
+    const nodes: TreeNode[] = [];
     const edges: Array<[TreeNode, TreeNode]> = [];
     const projectEntries = Array.from(tree.entries());
-
-    projectEntries.forEach(([project, types], projectIndex) => {
-    const projectNode: TreeNode = {
-      id: `project:${project}`, label: project, kind: 'project', color: '#00F0FF',
-      x: PROJECT_X, y: PROJECT_START_Y + projectIndex * PROJECT_GAP_Y,
-    };
-    nodes.push(projectNode);
-    edges.push([nodes[0], projectNode]);
-    Array.from(types.entries()).forEach(([type, items], typeIndex) => {
-      const typeNode: TreeNode = {
-        id: `${projectNode.id}:${type}`, label: `${type.replace('_', ' ')} (${items.length})`, kind: 'type',
-        color: TYPE_COLORS[type] || '#888', x: TYPE_X, y: projectNode.y - TYPE_OFFSET_Y + typeIndex * TYPE_GAP_Y,
-      };
-      nodes.push(typeNode);
-      edges.push([projectNode, typeNode]);
-      items.slice(0, MAX_DIAGRAM_MEMORIES_PER_TYPE).forEach((memory, memoryIndex) => {
-        const memoryNode: TreeNode = {
-          id: `${typeNode.id}:${memory.id}`, label: (memory.content || 'Empty memory').slice(0, 42), kind: 'memory',
-          color: typeNode.color, x: MEMORY_X, y: typeNode.y - MEMORY_OFFSET_Y + memoryIndex * MEMORY_GAP_Y, memory,
-        };
-        nodes.push(memoryNode);
-        edges.push([typeNode, memoryNode]);
-      });
+    const projectLayouts = projectEntries.map(([project, types]) => {
+      const typeHeights = Array.from(types.values()).map(items => Math.max(TYPE_GAP_Y, MEMORY_OFFSET_Y + Math.min(items.length, MAX_DIAGRAM_MEMORIES_PER_TYPE) * MEMORY_GAP_Y));
+      return { project, types, height: typeHeights.reduce((total, value) => total + value, 0) + PROJECT_PADDING_Y };
     });
+    const totalHeight = projectLayouts.reduce((total, layout) => total + layout.height, 0);
+    const root: TreeNode = { id: 'root', label: 'MEMORY', kind: 'root', color: '#00F0FF', x: ROOT_X, y: Math.max(190, totalHeight / 2) };
+    nodes.push(root);
+    let projectTop = PROJECT_START_Y;
+
+    projectLayouts.forEach(({ project, types, height }) => {
+      const projectNode: TreeNode = {
+        id: `project:${project}`, label: project, kind: 'project', color: '#00F0FF',
+        x: PROJECT_X, y: projectTop + (height - PROJECT_PADDING_Y) / 2,
+      };
+      nodes.push(projectNode);
+      edges.push([root, projectNode]);
+      let typeY = projectTop;
+      Array.from(types.entries()).forEach(([type, items]) => {
+        const visibleItems = items.slice(0, MAX_DIAGRAM_MEMORIES_PER_TYPE);
+        const typeNode: TreeNode = {
+          id: `${projectNode.id}:${type}`, label: `${type.replace(/_/g, ' ') (${items.length})`, kind: 'type',
+          color: TYPE_COLORS[type] || '#888', x: TYPE_X, y: typeY + TYPE_OFFSET_Y,
+        };
+        nodes.push(typeNode);
+        edges.push([projectNode, typeNode]);
+        visibleItems.forEach((memory, memoryIndex) => {
+          const memoryNode: TreeNode = {
+            id: `${typeNode.id}:${memory.id}`, label: (memory.content || 'Empty memory').slice(0, 42), kind: 'memory',
+            color: typeNode.color, x: MEMORY_X, y: typeNode.y + MEMORY_OFFSET_Y + memoryIndex * MEMORY_GAP_Y, memory,
+          };
+          nodes.push(memoryNode);
+          edges.push([typeNode, memoryNode]);
+        });
+        typeY += Math.max(TYPE_GAP_Y, MEMORY_OFFSET_Y + visibleItems.length * MEMORY_GAP_Y);
+      });
+      projectTop += height;
     });
 
     return { nodes, edges, height: Math.max(380, ...nodes.map(node => node.y + 45)) };
   }, [memories]);
 
   return (
-    <div style={{ overflow: 'auto', border: '1px solid rgba(0,240,255,0.18)', borderRadius: 16, background: 'radial-gradient(circle at 10% 50%, rgba(0,240,255,0.08), transparent 35%), #05080f' }}>
-      <svg role="img" aria-label="Visual memory tree" width="100%" height={height} viewBox={`0 0 900 ${height}`} preserveAspectRatio="xMinYMin meet" style={{ display: 'block', minWidth: 760 }}>
+    <div style={{ overflow: 'auto', maxWidth: '100%', border: '1px solid rgba(0,240,255,0.18)', borderRadius: 16, background: 'radial-gradient(circle at 10% 50%, rgba(0,240,255,0.08), transparent 35%), #05080f' }}>
+      <svg role="img" aria-label="Visual memory tree" width="980" height={height} viewBox={`0 0 980 ${height}`} preserveAspectRatio="xMinYMin meet" style={{ display: 'block', minWidth: 860 }}>
         <defs>
           <filter id="memory-tree-glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
         </defs>
