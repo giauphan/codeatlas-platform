@@ -89,6 +89,13 @@ export class ConsolidationEngine {
     return this.clamp(numValue, min, max);
   }
 
+  /**
+   * Helper to determine if the calculated confidence delta is statistically significant.
+   */
+  private isConfidenceStatisticallySignificant(currentConf: number, newConf: number): boolean {
+    return Math.abs(newConf - currentConf) > 0.01;
+  }
+
   private getVal(row: any, index: number, keyStr: string): any {
     if (!row) return undefined;
     if (row[index] !== undefined) return row[index];
@@ -608,7 +615,7 @@ export class ConsolidationEngine {
       // Iterate over the concepts and determine if their confidence score requires an update.
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
-        const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
+        const evidenceCount = Math.max(0, Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1));
         const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
 
         // Bayesian confidence update: each piece of evidence increases confidence.
@@ -616,7 +623,7 @@ export class ConsolidationEngine {
         const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
 
         // Only queue an update if the calculated confidence delta is statistically significant.
-        if (Math.abs(newConf - currentConf) > 0.01) {
+        if (this.isConfidenceStatisticallySignificant(currentConf, newConf)) {
           updateBindings.push({ conf: newConf, id, tenantId });
           toBeUpdated++;
         }
