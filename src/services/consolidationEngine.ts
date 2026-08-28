@@ -136,7 +136,9 @@ export class ConsolidationEngine {
           logger.error(`[Consolidation] ${errorContext} failed for tenant ${maskedTenant} after ${this.dbUpdateMaxRetries} attempts (masked sample ids: ${sampleIds}). Error: ${msg}`);
         } else {
           logger.warn(`[Consolidation] ${errorContext} retry ${attempt}/${this.dbUpdateMaxRetries} for tenant ${maskedTenant}... Error: ${msg}`);
-          const delay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+          const baseDelay = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+          const jitter = baseDelay * 0.2 * (Math.random() - 0.5); // +/- 10% jitter
+          const delay = Math.max(0, baseDelay + jitter);
           await new Promise(res => setTimeout(res, delay));
         }
       }
