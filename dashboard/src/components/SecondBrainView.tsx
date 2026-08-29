@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
 import { FOCUS_RING_CLASS } from '../lib/constants';
@@ -132,11 +132,27 @@ export function SecondBrainView() {
             placeholder="Search concepts…"
             aria-label="Search concepts"
             style={{
-              width: '100%', padding: '0.7rem 1rem 0.7rem 2.5rem', borderRadius: '10px',
+              width: '100%', padding: '0.7rem 2.5rem 0.7rem 2.5rem', borderRadius: '10px',
               border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)',
               color: '#fff', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box'
             }}
           />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              title="Clear search"
+              onClick={() => { setSearchQuery(''); fetchConcepts(''); }}
+              className={FOCUS_RING_CLASS}
+              style={{
+                position: 'absolute', right: '12px', top: '12px',
+                background: 'transparent', border: 'none', color: 'var(--text-muted)',
+                cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
         <div role="group" aria-label="Filter concepts by category" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {categories.map(cat => (
