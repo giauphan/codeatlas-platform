@@ -53,12 +53,17 @@ export function SecondBrainView() {
     fetchConcepts();
   }, [fetchConcepts]);
 
-  const handleSearch = () => fetchConcepts(searchQuery);
-
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    fetchConcepts('');
-    searchInputRef.current?.focus();
+  const handleAction = async (search: string = '') => {
+    setSearchQuery(search);
+    try {
+      await fetchConcepts(search);
+      if (search === '') {
+        searchInputRef.current?.focus();
+      }
+    } catch (err) {
+      console.error(err);
+      setError('An error occurred while searching. Please try again.');
+    }
   };
 
   const handleConsolidate = async () => {
@@ -136,7 +141,7 @@ export function SecondBrainView() {
             ref={searchInputRef}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onKeyDown={e => e.key === 'Enter' && handleAction(searchQuery)}
             placeholder="Search concepts…"
             aria-label="Search concepts"
             style={{
@@ -150,14 +155,8 @@ export function SecondBrainView() {
               type="button"
               aria-label="Clear search"
               title="Clear search"
-              onClick={handleClearSearch}
-              className={FOCUS_RING_CLASS}
-              style={{
-                position: 'absolute', right: '12px', top: '50%',
-                transform: 'translateY(-50%)',
-                background: 'transparent', border: 'none', color: 'var(--text-muted)',
-                cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}
+              onClick={() => handleAction('')}
+              className={`${FOCUS_RING_CLASS} clear-search-button`}
             >
               <X size={16} />
             </button>
