@@ -55,22 +55,21 @@ export function SecondBrainView() {
   }, [fetchConcepts]);
 
   const handleAction = async (search: string = '', callback?: () => void) => {
-    setSearchQuery(search);
     try {
       await fetchConcepts(search);
-      if (search === '') {
-        searchInputRef.current?.focus();
-      }
       if (callback) callback();
+      if (search === '' && searchInputRef.current) searchInputRef.current.focus();
     } catch (err) {
       if (process.env.NODE_ENV !== 'production') {
         console.error(err);
       }
-      setError(`An error occurred while searching: ${err instanceof Error ? err.message : String(err)}`);
+      setError('Unable to fetch search results right now. Please try again later.');
     }
   };
 
   const handleClear = () => {
+    // Clear local state query before fetching to prevent redundant state updates
+    setSearchQuery('');
     handleAction('', () => {
       setClearMessage('Search cleared');
       // Clear the message after a short delay so it can be announced again if needed

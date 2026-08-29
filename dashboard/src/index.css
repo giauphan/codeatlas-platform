@@ -157,22 +157,6 @@ h1, h2, h3, .tech-font {
   border-radius: 4px;
 }
 
-/* Clear Search Button */
-.clear-search-btn {
-  position: absolute;
-  right: 0.5rem;
-  top: 0.85rem;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-}
-
 /* Basic button reset utility */
 .btn-reset {
   background: transparent;
