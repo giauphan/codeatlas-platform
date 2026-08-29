@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
@@ -22,6 +22,7 @@ export function SecondBrainView() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [consolidating, setConsolidating] = useState(false);
   const [consolidationMsg, setConsolidationMsg] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const API_BASE = window.location.origin.includes('localhost:5173')
     ? 'http://localhost:8080'
@@ -57,6 +58,7 @@ export function SecondBrainView() {
   const handleClearSearch = () => {
     setSearchQuery('');
     fetchConcepts('');
+    searchInputRef.current?.focus();
   };
 
   const handleConsolidate = async () => {
@@ -131,6 +133,7 @@ export function SecondBrainView() {
         <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
           <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-muted)' }} />
           <input
+            ref={searchInputRef}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
