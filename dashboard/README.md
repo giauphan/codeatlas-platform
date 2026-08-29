@@ -65,3 +65,7 @@ pnpm run dev
 - **Key management**: Create, name, and delete API keys easily.
 - **Usage tracking**: Track when each key was last used (Last Used).
 - **Responsive**: Works well across multiple devices.
+
+### UX Scripts
+
+- \`patch_css.js\`: Programmatically adds the \`.clear-search-button\` utility class to \`index.css\` if missing to ensure UX styling integrity for the clear search button.

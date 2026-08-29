@@ -22,6 +22,7 @@ export function SecondBrainView() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [consolidating, setConsolidating] = useState(false);
   const [consolidationMsg, setConsolidationMsg] = useState<string | null>(null);
+  const [clearMessage, setClearMessage] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const API_BASE = window.location.origin.includes('localhost:5173')
@@ -62,8 +63,15 @@ export function SecondBrainView() {
       }
     } catch (err) {
       console.error(err);
-      setError('An error occurred while searching. Please try again.');
+      setError(`An error occurred while searching: ${err instanceof Error ? err.message : String(err)}`);
     }
+  };
+
+  const handleClear = () => {
+    handleAction('');
+    setClearMessage('Search cleared');
+    // Clear the message after a short delay so it can be announced again if needed
+    setTimeout(() => setClearMessage(''), 1000);
   };
 
   const handleConsolidate = async () => {
@@ -136,7 +144,7 @@ export function SecondBrainView() {
       {/* Search & filters */}
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-muted)' }} />
+          <Search size={18} style={{ position: 'absolute', left: 'var(--button-spacing)', top: '12px', color: 'var(--text-muted)' }} />
           <input
             ref={searchInputRef}
             value={searchQuery}
@@ -151,16 +159,19 @@ export function SecondBrainView() {
             }}
           />
           {searchQuery && (
+            <>
             <button
               type="button"
               aria-label="Clear search"
               title="Clear search"
-              onClick={() => handleAction('')}
+              onClick={handleClear}
               className={`${FOCUS_RING_CLASS} clear-search-button`}
             >
               <X size={16} />
             </button>
+            </>
           )}
+          <div role="alert" className="sr-only" aria-live="polite">{clearMessage}</div>
         </div>
         <div role="group" aria-label="Filter concepts by category" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {categories.map(cat => (

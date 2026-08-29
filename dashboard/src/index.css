@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 :root {
+  --button-spacing: 12px;
   /* Colors - Deep Space Palette */
   --background: #0A0C10;
   --surface-glass: rgba(16, 20, 29, 0.6);
@@ -174,7 +175,7 @@ h1, h2, h3, .tech-font {
 
 .clear-search-button {
   position: absolute;
-  right: 12px;
+  right: var(--button-spacing);
   top: 50%;
   transform: translateY(-50%);
   background: transparent;
@@ -185,4 +186,18 @@ h1, h2, h3, .tech-font {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+
+/* Accessibility - Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
