@@ -59,7 +59,6 @@ export function SecondBrainView() {
     fetchConcepts('');
   };
 
-
   const handleConsolidate = async () => {
     setConsolidating(true);
     setConsolidationMsg(null);
