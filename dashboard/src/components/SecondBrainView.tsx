@@ -145,7 +145,8 @@ export function SecondBrainView() {
               onClick={() => { setSearchQuery(''); fetchConcepts(''); }}
               className={FOCUS_RING_CLASS}
               style={{
-                position: 'absolute', right: '12px', top: '12px',
+                position: 'absolute', right: '12px', top: '50%',
+                transform: 'translateY(-50%)',
                 background: 'transparent', border: 'none', color: 'var(--text-muted)',
                 cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}
