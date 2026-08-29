@@ -54,24 +54,28 @@ export function SecondBrainView() {
     fetchConcepts();
   }, [fetchConcepts]);
 
-  const handleAction = async (search: string = '') => {
+  const handleAction = async (search: string = '', callback?: () => void) => {
     setSearchQuery(search);
     try {
       await fetchConcepts(search);
       if (search === '') {
         searchInputRef.current?.focus();
       }
+      if (callback) callback();
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error(err);
+      }
       setError(`An error occurred while searching: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   const handleClear = () => {
-    handleAction('');
-    setClearMessage('Search cleared');
-    // Clear the message after a short delay so it can be announced again if needed
-    setTimeout(() => setClearMessage(''), 1000);
+    handleAction('', () => {
+      setClearMessage('Search cleared');
+      // Clear the message after a short delay so it can be announced again if needed
+      setTimeout(() => setClearMessage(''), 1000);
+    });
   };
 
   const handleConsolidate = async () => {
@@ -165,7 +169,7 @@ export function SecondBrainView() {
               aria-label="Clear search"
               title="Clear search"
               onClick={handleClear}
-              className={`${FOCUS_RING_CLASS} clear-search-button`}
+              className={`${FOCUS_RING_CLASS} btn-reset clear-search-button`}
             >
               <X size={16} />
             </button>
