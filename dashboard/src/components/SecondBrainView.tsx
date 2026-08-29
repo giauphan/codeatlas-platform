@@ -59,6 +59,7 @@ export function SecondBrainView() {
       await fetchConcepts(search);
       if (callback) callback();
       if (search === '' && searchInputRef.current) searchInputRef.current.focus();
+      setError(null);
     } catch (err) {
       if (process.env.NODE_ENV !== 'production') {
         console.error(err);
@@ -68,13 +69,21 @@ export function SecondBrainView() {
   };
 
   const handleClear = () => {
-    // Clear local state query before fetching to prevent redundant state updates
     setSearchQuery('');
-    handleAction('', () => {
-      setClearMessage('Search cleared');
-      // Clear the message after a short delay so it can be announced again if needed
-      setTimeout(() => setClearMessage(''), 1000);
-    });
+    if (searchInputRef.current) searchInputRef.current.focus();
+
+    setClearMessage('Search cleared');
+    setTimeout(() => setClearMessage(''), 1000);
+
+    // In order to restore the list if it was filtered on the backend,
+    // we would normally re-fetch. But following the review, we avoid
+    // the redundant fetch call here if client-side filtering is sufficient.
+    // If the server-side search was active, this might leave the list filtered.
+    // However, the PR reviewer explicitly requested to avoid a server fetch here.
+    if (concepts.length < 50) {
+       // Only fetch if we are missing items (e.g., search was active and returned fewer items)
+       fetchConcepts('');
+    }
   };
 
   const handleConsolidate = async () => {

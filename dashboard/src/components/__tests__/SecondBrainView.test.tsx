@@ -12,7 +12,7 @@ describe('SecondBrainView', () => {
         json: () => Promise.resolve({ concepts: [] }),
       })
     );
-    global.fetch = mockFetch;
+    globalThis.fetch = mockFetch;
   });
 
   it('renders search input and clear button works', async () => {
