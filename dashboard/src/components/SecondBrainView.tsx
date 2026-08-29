@@ -54,6 +54,12 @@ export function SecondBrainView() {
 
   const handleSearch = () => fetchConcepts(searchQuery);
 
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    fetchConcepts('');
+  };
+
+
   const handleConsolidate = async () => {
     setConsolidating(true);
     setConsolidationMsg(null);
@@ -142,7 +148,7 @@ export function SecondBrainView() {
               type="button"
               aria-label="Clear search"
               title="Clear search"
-              onClick={() => { setSearchQuery(''); fetchConcepts(''); }}
+              onClick={handleClearSearch}
               className={FOCUS_RING_CLASS}
               style={{
                 position: 'absolute', right: '12px', top: '50%',
