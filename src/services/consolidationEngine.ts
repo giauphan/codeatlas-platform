@@ -404,7 +404,7 @@ export class ConsolidationEngine {
       }
 
       if (batchBinds.length > 0) {
-        // ⚡ Bolt Optimization: Batch update concepts using executeMany instead of
+        // Bolt Optimization: Batch update concepts using executeMany instead of
         // executing individual UPDATE queries in a loop to prevent N+1 bottleneck.
         const updateSql = `
           UPDATE codeatlas_concepts

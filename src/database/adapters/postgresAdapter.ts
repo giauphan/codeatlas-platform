@@ -18,6 +18,36 @@ type PgPoolConstructor = new (config: Record<string, unknown>) => PgPool;
 let PoolClass: PgPoolConstructor | undefined;
 let toSql: ((value: number[] | Float32Array) => string) | undefined;
 
+const NAMED_PLACEHOLDER = /[:@\$][a-zA-Z_][a-zA-Z0-9_]*/g;
+
+function formatPgQuery(sql: string, params: Record<string, unknown> | unknown[]): { pgSql: string, paramValues: unknown[] } {
+  if (Array.isArray(params)) return { pgSql: sql, paramValues: params };
+
+  let pgSql = sql;
+  const paramNames: string[] = [];
+  let match;
+
+  while ((match = NAMED_PLACEHOLDER.exec(sql)) !== null) {
+    const param = match[0];
+    if (param.startsWith('$') && !isNaN(parseInt(param.slice(1), 10))) {
+      continue;
+    }
+
+    const name = param.slice(1);
+    if (!paramNames.includes(name)) {
+      paramNames.push(name);
+      pgSql = pgSql.replaceAll(param, `$${paramNames.length}`);
+    }
+  }
+
+  if (paramNames.length === 0) {
+    return { pgSql: sql, paramValues: Object.values(params) };
+  }
+
+  const paramValues = paramNames.map((n) => params[n]);
+  return { pgSql, paramValues };
+}
+
 function findExportFn<T>(obj: unknown, prop: string): T | undefined {
   if (!obj) return undefined;
   if (typeof obj === "function") return obj as T;
@@ -104,15 +134,15 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   async query<T>(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<T[]> {
     if (!this.pool) await this.connect();
-    const paramArray = Array.isArray(params) ? params : Object.values(params);
-    const res = await this.pool!.query(sql, paramArray);
+    const { pgSql, paramValues } = formatPgQuery(sql, params);
+    const res = await this.pool!.query(pgSql, paramValues);
     return res.rows as T[];
   }
 
   async execute(sql: string, params: Record<string, unknown> | unknown[] = {}): Promise<{ rowsAffected: number }> {
     if (!this.pool) await this.connect();
-    const paramArray = Array.isArray(params) ? params : Object.values(params);
-    const res = await this.pool!.query(sql, paramArray);
+    const { pgSql, paramValues } = formatPgQuery(sql, params);
+    const res = await this.pool!.query(pgSql, paramValues);
     return { rowsAffected: res.rowCount ?? 0 };
   }
 
@@ -122,8 +152,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
     try {
       await client.query("BEGIN");
       let totalChanges = 0;
+      // Extract the pg format once
+      const firstParam = params.length > 0 ? params[0] : {};
+      const { pgSql } = formatPgQuery(sql, firstParam);
+
       for (const p of params) {
-        const res = await client.query(sql, Object.values(p));
+        const { paramValues } = formatPgQuery(sql, p);
+        const res = await client.query(pgSql, paramValues);
         totalChanges += res.rowCount ?? 0;
       }
       await client.query("COMMIT");
