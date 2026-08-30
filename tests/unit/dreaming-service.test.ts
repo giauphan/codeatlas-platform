@@ -432,6 +432,7 @@ describe('DreamingService', () => {
         { id: 'memory_1', score: 0.9 },
         { id: 'memory_2', score: 0.8 },
       ]));
+      mockDbAdapter.executeMany.mock.resetCalls();
     });
 
     for (const dbType of ['sqlite', 'postgres']) {
@@ -618,7 +619,7 @@ describe('DreamingService', () => {
     test('access_count bump failure (sqlite) is non-fatal', async () => {
       process.env.CODEATLAS_DB_TYPE = 'sqlite';
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
-      mockDbAdapter.execute.mock.mockImplementation(async () => {
+      mockDbAdapter.executeMany.mock.mockImplementation(async () => {
         throw new Error('database is locked');
       });
 
@@ -634,12 +635,12 @@ describe('DreamingService', () => {
     test('access_count bump (sqlite) updates each returned row', async () => {
       process.env.CODEATLAS_DB_TYPE = 'sqlite';
       mockDbAdapter.query.mock.mockImplementation(async () => sqliteRows);
-      mockDbAdapter.execute.mock.mockImplementation(async () => ({ rowsAffected: 1 }));
+      mockDbAdapter.executeMany.mock.mockImplementation(async () => ({ rowsAffected: 2 }));
 
       await DreamingService.queryDreamMemories('test-project', 'bump ok', 10);
 
-      assert.strictEqual(mockDbAdapter.execute.mock.calls.length, 2);
-      const sql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
+      assert.strictEqual(mockDbAdapter.executeMany.mock.calls.length, 1);
+      const sql = mockDbAdapter.executeMany.mock.calls[0].arguments[0] as string;
       assert.ok(sql.includes('access_count = access_count + 1'));
       assert.ok(sql.includes('last_accessed_at = CURRENT_TIMESTAMP'));
     });
