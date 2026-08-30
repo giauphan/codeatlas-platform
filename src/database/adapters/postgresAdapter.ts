@@ -23,22 +23,22 @@ const NAMED_PLACEHOLDER = /[:@\$][a-zA-Z_][a-zA-Z0-9_]*/g;
 function formatPgQuery(sql: string, params: Record<string, unknown> | unknown[]): { pgSql: string, paramValues: unknown[] } {
   if (Array.isArray(params)) return { pgSql: sql, paramValues: params };
 
-  let pgSql = sql;
+  let idx = 0;
+  const nameToIdx = new Map<string, number>();
   const paramNames: string[] = [];
-  let match;
 
-  while ((match = NAMED_PLACEHOLDER.exec(sql)) !== null) {
-    const param = match[0];
-    if (param.startsWith('$') && !isNaN(parseInt(param.slice(1), 10))) {
-      continue;
+  const pgSql = sql.replace(NAMED_PLACEHOLDER, (full) => {
+    if (full.startsWith('$') && !isNaN(parseInt(full.slice(1), 10))) {
+      return full;
     }
-
-    const name = param.slice(1);
-    if (!paramNames.includes(name)) {
+    const name = full.slice(1);
+    if (!nameToIdx.has(name)) {
+      idx++;
+      nameToIdx.set(name, idx);
       paramNames.push(name);
-      pgSql = pgSql.replaceAll(param, `$${paramNames.length}`);
     }
-  }
+    return `$${nameToIdx.get(name)}`;
+  });
 
   if (paramNames.length === 0) {
     return { pgSql: sql, paramValues: Object.values(params) };
