@@ -389,7 +389,7 @@ export class ConsolidationEngine {
 
       const rows = await db.query<any[]>(sql, binds);
 
-      let updated = 0;
+      const batchBinds: Record<string, unknown>[] = [];
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
@@ -399,17 +399,22 @@ export class ConsolidationEngine {
         const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
 
         if (Math.abs(newConf - currentConf) > 0.01) {
-          const updateSql = `
-            UPDATE codeatlas_concepts
-            SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
-            WHERE id = :id AND tenant_id = :tenantId
-          `;
-          await db.execute(updateSql, { conf: newConf, id, tenantId });
-          updated++;
+          batchBinds.push({ conf: newConf, id, tenantId });
         }
       }
 
-      logger.info(`[Consolidation] Scored ${rows.length} concepts, updated ${updated}`);
+      if (batchBinds.length > 0) {
+        // ⚡ Bolt Optimization: Batch update concepts using executeMany instead of
+        // executing individual UPDATE queries in a loop to prevent N+1 bottleneck.
+        const updateSql = `
+          UPDATE codeatlas_concepts
+          SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
+          WHERE id = :id AND tenant_id = :tenantId
+        `;
+        await db.executeMany(updateSql, batchBinds);
+      }
+
+      logger.info(`[Consolidation] Scored ${rows.length} concepts, updated ${batchBinds.length}`);
   }
 
   /**
