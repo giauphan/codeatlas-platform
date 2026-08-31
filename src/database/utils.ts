@@ -4,6 +4,7 @@
  * @param ids Array of ID strings
  * @param baseBinds Base bind variables (e.g. project, tenantId)
  */
+import { randomUUID } from "node:crypto";
 import { logger } from "../utils/logger.js";
 
 export function buildInClause(ids: string[], baseBinds: Record<string, unknown> = {}): { clause: string; binds: Record<string, unknown> } {
@@ -28,6 +29,12 @@ export class BatchExecutionError extends Error {
     this.name = "BatchExecutionError";
     this.originalError = originalError;
     this.failedChunkIndex = failedChunkIndex;
+
+    // Explicitly inherit the stack trace from the original error if available
+    // to improve debuggability while maintaining our custom error type.
+    if (originalError instanceof Error && originalError.stack) {
+      this.stack = `${this.stack}\nCaused by: ${originalError.stack}`;
+    }
   }
 }
 
@@ -40,15 +47,18 @@ export class BatchExecutionError extends Error {
  * @returns A guaranteed positive integer.
  */
 export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number): number {
-  const safeDefault = Number.isNaN(defaultValue) || defaultValue <= 0 ? 1 : defaultValue;
+  const safeDefault = !Number.isSafeInteger(defaultValue) || defaultValue <= 0 ? 1 : defaultValue;
   const parsed = Number(envVarValue);
-  return Number.isNaN(parsed) || parsed <= 0 ? safeDefault : parsed;
+  return !Number.isSafeInteger(parsed) || parsed <= 0 ? safeDefault : parsed;
 }
 
 /**
  * Executes batch inserts in chunks, addressing N+1 query bottlenecks.
  * Prevents excessive memory consumption during high-volume inserts.
  * Implements retries with exponential backoff for transient DB failures.
+ *
+ * Note: Be mindful of database-specific parameter limits when tuning chunk sizes
+ * (e.g. SQLite's SQLITE_MAX_VARIABLE_NUMBER default limit of 999 or 32766).
  */
 export async function batchExecuteMany(
   db: { executeMany: (sql: string, params: Array<Record<string, unknown>>) => Promise<{ rowsAffected: number }> },
@@ -62,6 +72,7 @@ export async function batchExecuteMany(
   const retries = maxRetries ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_RETRIES, 3);
   const maxDelayMs = parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_DELAY, 2000);
   const startTime = Date.now();
+  const traceId = randomUUID();
 
   for (let i = 0; i < rows.length; i += size) {
     const chunk = rows.slice(i, i + size);
@@ -76,16 +87,18 @@ export async function batchExecuteMany(
         lastError = err instanceof Error ? err : new Error(String(err));
         attempt++;
         if (attempt < retries) {
-          logger.warn(`[BatchExecute] Batch ${i / size} execution failed. Retrying attempt ${attempt + 1}/${retries}...`);
-          // Small exponential backoff with jitter and a configurable max cap
+          // Math.random() * 100 adds jitter to the exponential backoff delay.
+          // This prevents "thundering herd" scenarios where multiple concurrent
+          // failing batches wake up and retry against the database at the exact same time.
           const delay = Math.min(Math.floor(Math.random() * 100 + Math.pow(2, attempt) * 100), maxDelayMs);
+          logger.warn(`[BatchExecute][${traceId}] Batch ${i / size} execution failed. Retrying attempt ${attempt + 1}/${retries} in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
 
     if (attempt >= retries) {
-      const errMsg = `[BatchExecute] Batch ${i / size} execution failed after ${retries} attempts.`;
+      const errMsg = `[BatchExecute][${traceId}] Batch ${i / size} execution failed after ${retries} attempts.`;
       logger.error(errMsg);
       throw new BatchExecutionError(errMsg, lastError, i / size);
     }
@@ -93,6 +106,6 @@ export async function batchExecuteMany(
 
   if (rows.length > 0) {
     const elapsed = Date.now() - startTime;
-    logger.debug(`[BatchExecute] Successfully executed ${rows.length} rows in ${Math.ceil(rows.length / size)} batches (chunk size: ${size}) in ${elapsed}ms.`);
+    logger.debug(`[BatchExecute][${traceId}] Successfully executed ${rows.length} rows in ${Math.ceil(rows.length / size)} batches (chunk size: ${size}) in ${elapsed}ms.`);
   }
 }
