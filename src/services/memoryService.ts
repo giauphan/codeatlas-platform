@@ -38,6 +38,19 @@ function col<T = unknown>(row: Record<string, unknown>, name: string): T | undef
  * and relational knowledge-graph edges. Every statement goes through the
  * configured database adapter (SQLite + sqlite-vec by default).
  */
+/** Helper function to pre-validate rows before database insertion. */
+function validateRows<T>(rows: T[], fieldsToCheck: (keyof T)[]): void {
+  for (const row of rows) {
+    for (const field of fieldsToCheck) {
+      if (typeof row[field] !== 'string') {
+        const errMsg = `[MemoryService] Pre-validation failed: row contains invalid or missing field '${String(field)}'.`;
+        logger.error(errMsg);
+        throw new Error(errMsg);
+      }
+    }
+  }
+}
+
 export class MemoryService {
   /** Tier 1: Episodic — business rules and change logs. */
   static async saveEpisodicMemory(
@@ -121,13 +134,7 @@ export class MemoryService {
       tenantId: tid,
     }));
 
-    for (const r of rows) {
-      if (typeof r.id !== 'string' || typeof r.project !== 'string') {
-        const errMsg = "[MemoryService] Pre-validation failed: semantic memory row contains invalid id or project type.";
-        logger.error(errMsg);
-        throw new Error(errMsg);
-      }
-    }
+    validateRows(rows, ['id', 'project']);
 
     try {
       await batchExecuteMany(db, sql, rows);
@@ -170,13 +177,7 @@ export class MemoryService {
         tenantId: tid,
       }));
 
-      for (const r of rows) {
-        if (typeof r.src !== 'string' || typeof r.tgt !== 'string') {
-          const errMsg = "[MemoryService] Pre-validation failed: relational memory row contains invalid src or tgt type.";
-          logger.error(errMsg);
-          throw new Error(errMsg);
-        }
-      }
+      validateRows(rows, ['src', 'tgt']);
 
       await batchExecuteMany(db, sql, rows);
     } catch (err) {

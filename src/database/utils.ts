@@ -42,10 +42,10 @@ export class BatchExecutionError extends Error {
   }
 }
 
-function isValidPositiveInt(value: number): boolean {
+function isValidPositiveInt(value: number, variableName?: string): boolean {
   const isValid = Number.isSafeInteger(value) && value > 0 && Number.isFinite(value);
   if (!isValid) {
-    logger.debug(`[Config] Validation failed for positive integer: ${value}`);
+    logger.debug(`[Config] Validation failed for positive integer${variableName ? ` (${variableName})` : ''}: ${value}`);
   }
   return isValid;
 }
@@ -56,10 +56,11 @@ function isValidPositiveInt(value: number): boolean {
  *
  * @param envVarValue The raw string value from process.env to parse.
  * @param defaultValue The fallback positive integer to return if parsing fails.
+ * @param variableName Optional variable name to include in debug logs.
  * @returns A guaranteed positive integer.
  */
-export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number): number {
-  if (!isValidPositiveInt(defaultValue)) {
+export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number, variableName?: string): number {
+  if (!isValidPositiveInt(defaultValue, variableName ? `${variableName} default` : undefined)) {
     throw new Error(`[Config] Invalid defaultValue provided to parsePositiveInt: ${defaultValue}. Must be a positive integer.`);
   }
 
@@ -68,8 +69,8 @@ export function parsePositiveInt(envVarValue: string | undefined, defaultValue: 
   }
 
   const parsed = Number(envVarValue);
-  if (!isValidPositiveInt(parsed)) {
-    logger.warn(`[Config] Invalid positive integer value provided: "${envVarValue}". Using fallback: ${defaultValue}.`);
+  if (!isValidPositiveInt(parsed, variableName)) {
+    logger.warn(`[Config] Invalid positive integer value provided${variableName ? ` for ${variableName}` : ''}: "${envVarValue}". Using fallback: ${defaultValue}.`);
     return defaultValue;
   }
 
