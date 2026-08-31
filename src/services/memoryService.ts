@@ -113,9 +113,9 @@ export class MemoryService {
     }));
 
     try {
-      for (const row of rows) {
-        await db.execute(sql, row);
-      }
+      // ⚡ Bolt Optimization: Batch semantic memory inserts using executeMany
+      // to avoid N+1 query problems and significantly speed up large graph syncs.
+      await db.executeMany(sql, rows);
     } catch (err) {
       logger.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
       throw err;
@@ -135,15 +135,16 @@ export class MemoryService {
     `;
 
     try {
-      for (const l of links) {
-        await db.execute(sql, {
-          src: `${project}_${l.source}`,
-          tgt: `${project}_${l.target}`,
-          project,
-          type: l.type,
-          tenantId: tid,
-        });
-      }
+      const rows = links.map(l => ({
+        src: `${project}_${l.source}`,
+        tgt: `${project}_${l.target}`,
+        project,
+        type: l.type,
+        tenantId: tid,
+      }));
+      // ⚡ Bolt Optimization: Batch relational memory inserts using executeMany
+      // to avoid N+1 query problems and significantly speed up large graph syncs.
+      await db.executeMany(sql, rows);
     } catch (err) {
       logger.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
       throw err;
