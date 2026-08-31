@@ -412,13 +412,10 @@ export class DreamingService {
             if (ids.length > 0) {
               const baseBind = { tenantId };
               const binds = ids.map(id => ({ id, ...baseBind }));
-              const result = await db.executeMany(
+              await db.executeMany(
                 `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
                 binds
-              ) as { rowsAffected: number, batchErrors?: unknown[] };
-              if (result?.batchErrors && result.batchErrors.length > 0) {
-                logger.warn('[Dreaming] Failed to bump access_count for some rows:', result.batchErrors);
-              }
+              );
             }
           } catch (bumpErr) {
             logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
