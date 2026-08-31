@@ -3,7 +3,7 @@ import { logger } from "../utils/logger.js";
 import { initAdapter } from "../database/connection.js";
 import { generateEmbedding, generateEmbeddingsBatch } from "./embeddingService.js";
 import type { GraphEntity, GraphLink, ArchSmells } from "../types/index.js";
-import { buildInClause } from "../database/utils.js";
+import { buildInClause, batchExecuteMany } from "../database/utils.js";
 
 type Dialect = "sqlite" | "postgres";
 
@@ -116,11 +116,7 @@ export class MemoryService {
       // ⚡ Bolt Optimization: Batch semantic memory inserts using executeMany
       // to avoid N+1 query problems and significantly speed up large graph syncs.
       // Chunking is used to prevent memory consumption risks during massive batch inserts.
-      const CHUNK_SIZE = 500;
-      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-        const chunk = rows.slice(i, i + CHUNK_SIZE);
-        await db.executeMany(sql, chunk);
-      }
+      await batchExecuteMany(db, sql, rows);
     } catch (err) {
       logger.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
       throw err;
@@ -150,11 +146,7 @@ export class MemoryService {
       // ⚡ Bolt Optimization: Batch relational memory inserts using executeMany
       // to avoid N+1 query problems and significantly speed up large graph syncs.
       // Chunking is used to prevent memory consumption risks during massive batch inserts.
-      const CHUNK_SIZE = 500;
-      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-        const chunk = rows.slice(i, i + CHUNK_SIZE);
-        await db.executeMany(sql, chunk);
-      }
+      await batchExecuteMany(db, sql, rows);
     } catch (err) {
       logger.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
       throw err;

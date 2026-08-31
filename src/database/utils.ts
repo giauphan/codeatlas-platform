@@ -13,3 +13,19 @@ export function buildInClause(ids: string[], baseBinds: Record<string, unknown> 
   ids.forEach((id, i) => { binds[`id${i}`] = String(id); });
   return { clause, binds };
 }
+
+/**
+ * Utility to batch executeMany calls to prevent memory consumption risks
+ * during massive batch inserts.
+ */
+export async function batchExecuteMany(
+  db: { executeMany: (sql: string, params: Array<Record<string, unknown>>) => Promise<{ rowsAffected: number }> },
+  sql: string,
+  rows: Array<Record<string, unknown>>,
+  chunkSize = 500
+): Promise<void> {
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    await db.executeMany(sql, chunk);
+  }
+}
