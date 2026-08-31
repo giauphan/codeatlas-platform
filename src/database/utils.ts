@@ -40,8 +40,9 @@ export class BatchExecutionError extends Error {
  * @returns A guaranteed positive integer.
  */
 export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number): number {
+  const safeDefault = Number.isNaN(defaultValue) || defaultValue <= 0 ? 1 : defaultValue;
   const parsed = Number(envVarValue);
-  return Number.isNaN(parsed) || parsed <= 0 ? defaultValue : parsed;
+  return Number.isNaN(parsed) || parsed <= 0 ? safeDefault : parsed;
 }
 
 /**
