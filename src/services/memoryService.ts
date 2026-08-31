@@ -120,6 +120,14 @@ export class MemoryService {
       tenantId: tid,
     }));
 
+    for (const r of rows) {
+      if (typeof r.id !== 'string' || typeof r.project !== 'string') {
+        const errMsg = "[MemoryService] Pre-validation failed: semantic memory row contains invalid id or project type.";
+        logger.error(errMsg);
+        throw new Error(errMsg);
+      }
+    }
+
     try {
       await batchExecuteMany(db, sql, rows);
     } catch (err) {
@@ -147,7 +155,9 @@ export class MemoryService {
       const validLinks = links.filter(l => l.source && l.target);
 
       if (validLinks.length !== links.length) {
-        logger.warn(`[MemoryService] Skipped ${links.length - validLinks.length} malformed links in relational memory save.`);
+        const skippedCount = links.length - validLinks.length;
+        const firstSkipped = links.find(l => !l.source || !l.target);
+        logger.warn(`[MemoryService] Skipped ${skippedCount} malformed links in relational memory save. Sample: source=${firstSkipped?.source}, target=${firstSkipped?.target}`);
       }
 
       const rows = validLinks.map(l => ({
@@ -157,6 +167,15 @@ export class MemoryService {
         type: l.type,
         tenantId: tid,
       }));
+
+      for (const r of rows) {
+        if (typeof r.src !== 'string' || typeof r.tgt !== 'string') {
+          const errMsg = "[MemoryService] Pre-validation failed: relational memory row contains invalid src or tgt type.";
+          logger.error(errMsg);
+          throw new Error(errMsg);
+        }
+      }
+
       await batchExecuteMany(db, sql, rows);
     } catch (err) {
       logger.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
