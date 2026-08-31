@@ -38,6 +38,10 @@ export class BatchExecutionError extends Error {
   }
 }
 
+function isValidPositiveInt(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0 && Number.isFinite(value);
+}
+
 /**
  * Safely parses an environment variable into a positive integer,
  * returning the provided default if invalid (e.g., NaN, Infinity).
@@ -47,14 +51,14 @@ export class BatchExecutionError extends Error {
  * @returns A guaranteed positive integer.
  */
 export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number): number {
-  const safeDefault = !Number.isSafeInteger(defaultValue) || defaultValue <= 0 || !Number.isFinite(defaultValue) ? 1 : defaultValue;
+  const safeDefault = isValidPositiveInt(defaultValue) ? defaultValue : 1;
 
   if (envVarValue === undefined) {
     return safeDefault;
   }
 
   const parsed = Number(envVarValue);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0 || !Number.isFinite(parsed)) {
+  if (!isValidPositiveInt(parsed)) {
     logger.warn(`[Config] Invalid positive integer value provided: "${envVarValue}". Using safe fallback: ${safeDefault}.`);
     return safeDefault;
   }
@@ -115,9 +119,9 @@ export async function batchExecuteMany(
     }
 
     if (attempt >= retries) {
-      const errMsg = `[BatchExecute][${traceId}] Batch ${i / size} execution failed after ${retries} attempts.`;
-      logger.error(errMsg);
-      throw new BatchExecutionError(errMsg, lastError, i / size);
+      const retryInfo = `after ${retries} attempts. Caused by: ${lastError instanceof Error ? lastError.message : String(lastError)}`;
+      logger.error(`[BatchExecute][${traceId}] Batch ${i / size} failed ${retryInfo}`);
+      throw new BatchExecutionError(`Batch execution failed ${retryInfo}`, lastError, i / size);
     }
   }
 
