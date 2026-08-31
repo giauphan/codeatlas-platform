@@ -48,8 +48,18 @@ export class BatchExecutionError extends Error {
  */
 export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number): number {
   const safeDefault = !Number.isSafeInteger(defaultValue) || defaultValue <= 0 || !Number.isFinite(defaultValue) ? 1 : defaultValue;
+
+  if (envVarValue === undefined) {
+    return safeDefault;
+  }
+
   const parsed = Number(envVarValue);
-  return !Number.isSafeInteger(parsed) || parsed <= 0 || !Number.isFinite(parsed) ? safeDefault : parsed;
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || !Number.isFinite(parsed)) {
+    logger.warn(`[Config] Invalid positive integer value provided: "${envVarValue}". Using safe fallback: ${safeDefault}.`);
+    return safeDefault;
+  }
+
+  return parsed;
 }
 
 export interface BatchExecuteConfig {
@@ -72,6 +82,8 @@ export async function batchExecuteMany(
   rows: Array<Record<string, unknown>>,
   config: BatchExecuteConfig = {}
 ): Promise<void> {
+  if (rows.length === 0) return;
+
   const size = config.chunkSize ?? parsePositiveInt(process.env.CODEATLAS_BATCH_CHUNK_SIZE, 500);
   const retries = config.maxRetries ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_RETRIES, 3);
   const maxDelayMs = config.maxDelayMs ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_DELAY, 2000);
@@ -109,8 +121,6 @@ export async function batchExecuteMany(
     }
   }
 
-  if (rows.length > 0) {
-    const elapsed = Date.now() - startTime;
-    logger.debug(`[BatchExecute][${traceId}] Successfully executed ${rows.length} rows in ${Math.ceil(rows.length / size)} batches (chunk size: ${size}) in ${elapsed}ms.`);
-  }
+  const elapsed = Date.now() - startTime;
+  logger.debug(`[BatchExecute][${traceId}] Successfully executed ${rows.length} rows in ${Math.ceil(rows.length / size)} batches (chunk size: ${size}) in ${elapsed}ms.`);
 }

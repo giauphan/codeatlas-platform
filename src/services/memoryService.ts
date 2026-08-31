@@ -102,8 +102,9 @@ export class MemoryService {
     `;
 
     if (!embeddings || embeddings.length !== entities.length) {
-      logger.error(`[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Aborting save.`);
-      return;
+      const errMsg = `[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Aborting save.`;
+      logger.error(errMsg);
+      throw new Error(errMsg);
     }
 
     // Transform GraphEntity objects into database rows, mapping project-prefixed IDs
@@ -143,15 +144,19 @@ export class MemoryService {
       // Transform GraphLink objects into an array of parameter binds, ensuring
       // the source and target node IDs are correctly prefixed with the project name.
       // Filter out links that lack valid source or target identifiers.
-      const rows = links
-        .filter(l => l.source && l.target)
-        .map(l => ({
-          src: `${project}_${l.source}`,
-          tgt: `${project}_${l.target}`,
-          project,
-          type: l.type,
-          tenantId: tid,
-        }));
+      const validLinks = links.filter(l => l.source && l.target);
+
+      if (validLinks.length !== links.length) {
+        logger.warn(`[MemoryService] Skipped ${links.length - validLinks.length} malformed links in relational memory save.`);
+      }
+
+      const rows = validLinks.map(l => ({
+        src: `${project}_${l.source}`,
+        tgt: `${project}_${l.target}`,
+        project,
+        type: l.type,
+        tenantId: tid,
+      }));
       await batchExecuteMany(db, sql, rows);
     } catch (err) {
       logger.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
