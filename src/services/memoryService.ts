@@ -39,11 +39,11 @@ function col<T = unknown>(row: Record<string, unknown>, name: string): T | undef
  * configured database adapter (SQLite + sqlite-vec by default).
  */
 /** Helper function to pre-validate rows before database insertion. */
-function validateRows<T>(rows: T[], fieldsToCheck: (keyof T)[]): void {
+function validateRows<T>(rows: T[], expectedTypes: Partial<Record<keyof T, "string" | "number" | "boolean" | "object" | "undefined">>): void {
   for (const row of rows) {
-    for (const field of fieldsToCheck) {
-      if (typeof row[field] !== 'string') {
-        const errMsg = `[MemoryService] Pre-validation failed: row contains invalid or missing field '${String(field)}'.`;
+    for (const [field, expectedType] of Object.entries(expectedTypes) as [keyof T, string][]) {
+      if (expectedType && typeof row[field] !== expectedType) {
+        const errMsg = `[MemoryService] Pre-validation failed: row field '${String(field)}' expected ${expectedType}, got ${typeof row[field]}.`;
         logger.error(errMsg);
         throw new Error(errMsg);
       }
@@ -135,7 +135,7 @@ export class MemoryService {
       tenantId: tid,
     }));
 
-    validateRows(rows, ['id', 'project']);
+    validateRows(rows, { id: 'string', project: 'string' } as Partial<Record<keyof typeof rows[0], "string">>);
 
     try {
       await batchExecuteMany(db, sql, rows);
@@ -178,7 +178,7 @@ export class MemoryService {
         tenantId: tid,
       }));
 
-      validateRows(rows, ['src', 'tgt']);
+      validateRows(rows, { src: 'string', tgt: 'string' } as Partial<Record<keyof typeof rows[0], "string">>);
 
       await batchExecuteMany(db, sql, rows);
     } catch (err) {
