@@ -67,7 +67,9 @@ export function parsePositiveInt(envVarValue: string | undefined, defaultValue: 
 
   const parsed = Number(envVarValue);
   if (!isValidPositiveInt(parsed)) {
-    logger.warn(`[Config] Invalid positive integer value provided: "${envVarValue}". Using safe fallback: ${safeDefault}.`);
+    if (process.env.NODE_ENV !== 'production') {
+      logger.warn(`[Config] Invalid positive integer value provided: "${envVarValue}". Using safe fallback: ${safeDefault}.`);
+    }
     return safeDefault;
   }
 
@@ -78,6 +80,7 @@ export interface BatchExecuteConfig {
   chunkSize?: number;
   maxRetries?: number;
   maxDelayMs?: number;
+  timeoutMs?: number;
 }
 
 /**
@@ -88,10 +91,10 @@ export interface BatchExecuteConfig {
  * Note: Be mindful of database-specific parameter limits when tuning chunk sizes
  * (e.g. SQLite's SQLITE_MAX_VARIABLE_NUMBER default limit of 999 or 32766).
  */
-export async function batchExecuteMany(
-  db: { executeMany: (sql: string, params: Array<Record<string, unknown>>) => Promise<{ rowsAffected: number }> },
+export async function batchExecuteMany<T extends Record<string, unknown>>(
+  db: { executeMany: (sql: string, params: T[]) => Promise<{ rowsAffected: number }> },
   sql: string,
-  rows: Array<Record<string, unknown>>,
+  rows: T[],
   config: BatchExecuteConfig = {}
 ): Promise<void> {
   if (rows.length === 0) return;
@@ -99,6 +102,7 @@ export async function batchExecuteMany(
   const size = config.chunkSize ?? parsePositiveInt(process.env.CODEATLAS_BATCH_CHUNK_SIZE, DEFAULT_CHUNK_SIZE);
   const retries = config.maxRetries ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_RETRIES, DEFAULT_MAX_RETRIES);
   const maxDelayMs = config.maxDelayMs ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_DELAY, DEFAULT_MAX_DELAY);
+  const timeoutMs = config.timeoutMs ?? parsePositiveInt(process.env.CODEATLAS_BATCH_TIMEOUT, 30000);
 
   const startTime = Date.now();
   const traceId = randomUUID();
@@ -107,6 +111,7 @@ export async function batchExecuteMany(
     const chunk = rows.slice(i, i + size);
     let attempt = 0;
     let lastError: unknown;
+    const batchStartTime = Date.now();
 
     while (attempt < retries) {
       try {
@@ -127,6 +132,11 @@ export async function batchExecuteMany(
         }
 
         attempt++;
+        if (Date.now() - batchStartTime > timeoutMs) {
+          logger.error(`[BatchExecute][${traceId}] Batch ${i / size} exceeded cumulative timeout of ${timeoutMs}ms. Aborting retries.`);
+          throw new BatchExecutionError(`Batch execution timeout exceeded.`, parsedErr, i / size);
+        }
+
         if (attempt < retries) {
           // Math.random() * 100 adds jitter to the exponential backoff delay.
           // This prevents "thundering herd" scenarios where multiple concurrent
