@@ -148,11 +148,17 @@ export class MemoryService {
       // Transform GraphLink objects into an array of parameter binds, ensuring
       // the source and target node IDs are correctly prefixed with the project name.
       // Filter out links that lack valid source or target identifiers.
-      const validLinks = links.filter(l => l.source && l.target);
+      let skippedNoSource = 0;
+      let skippedNoTarget = 0;
+
+      const validLinks = links.filter(l => {
+        if (!l.source) skippedNoSource++;
+        if (!l.target) skippedNoTarget++;
+        return l.source && l.target;
+      });
 
       if (validLinks.length !== links.length) {
-        const skippedCount = links.length - validLinks.length;
-        logger.warn(`[MemoryService] Skipped ${skippedCount} malformed links in relational memory save (missing source or target).`);
+        logger.warn(`[MemoryService] Skipped malformed links for project '${project}': ${skippedNoSource} missing source, ${skippedNoTarget} missing target.`);
       }
 
       const rows = validLinks.map(l => ({

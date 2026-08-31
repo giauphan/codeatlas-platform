@@ -7,17 +7,21 @@
 import { randomUUID } from "node:crypto";
 import { logger } from "../utils/logger.js";
 
+/** Default configurations for batchExecuteMany retries and chunking. */
 export const BatchConfigDefaults = {
-  CHUNK_SIZE: 500,
-  MAX_RETRIES: 3,
-  MAX_DELAY: 2000,
-  TIMEOUT_MS: 30000,
-  RETRY_BASE_DELAY_MS: 100,
-  RETRY_JITTER_MS: 100,
+  CHUNK_SIZE: 500, // Number of rows per DB operation
+  MAX_RETRIES: 3, // Max DB retry attempts per chunk
+  MAX_DELAY: 2000, // Maximum cap on exponential backoff delay in ms
+  TIMEOUT_MS: 30000, // Overall execution timeout per chunk
+  RETRY_BASE_DELAY_MS: 100, // Base floor delay for first retry
+  RETRY_JITTER_MS: 100, // Max random jitter added to delay
 } as const;
 
+/** Known fatal errors where retrying will never succeed (e.g. constraints, syntax). */
 export const FatalErrorTypes = {
   SQLITE_CONSTRAINT: 'SQLITE_CONSTRAINT',
+  POSTGRES_UNIQUE_VIOLATION: '23505', // Postgres unique constraint violation code
+  POSTGRES_FOREIGN_KEY_VIOLATION: '23503', // Postgres FK constraint violation
   SYNTAX_ERROR: 'SyntaxError'
 } as const;
 
@@ -152,8 +156,11 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
         lastError = parsedErr;
 
         // Immediately fail on known non-transient / fatal errors
+        const errCode = (parsedErr as { code?: string }).code;
         const isFatal =
-          (parsedErr as { code?: string }).code === FatalErrorTypes.SQLITE_CONSTRAINT ||
+          errCode === FatalErrorTypes.SQLITE_CONSTRAINT ||
+          errCode === FatalErrorTypes.POSTGRES_UNIQUE_VIOLATION ||
+          errCode === FatalErrorTypes.POSTGRES_FOREIGN_KEY_VIOLATION ||
           parsedErr.name === FatalErrorTypes.SYNTAX_ERROR;
 
         if (isFatal) {
