@@ -81,7 +81,7 @@ export function parsePositiveInt(envVarValue: string | undefined, defaultValue: 
 
   const parsed = Number(envVarValue);
   if (!isValidPositiveInt(parsed, variableName)) {
-    logger.warn(`[Config] Invalid positive integer value provided${variableName ? ` for ${variableName}` : ''}: "${envVarValue}". Using fallback: ${defaultValue}.`);
+    logger.warn(`[Config] Invalid positive integer value provided${variableName ? ` for ${variableName}` : ''}: <masked>. Using fallback: ${defaultValue}.`);
     return defaultValue;
   }
 

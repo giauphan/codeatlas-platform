@@ -39,7 +39,7 @@ function col<T = unknown>(row: Record<string, unknown>, name: string): T | undef
  * configured database adapter (SQLite + sqlite-vec by default).
  */
 /** Helper function to pre-validate rows before database insertion. */
-function validateRows<T>(rows: T[], expectedTypes: Partial<Record<keyof T, "string" | "number" | "boolean" | "object" | "undefined">>): void {
+function validateRows<T extends Record<string, unknown>>(rows: T[], expectedTypes: Partial<Record<keyof T, "string" | "number" | "boolean" | "object" | "undefined">>): void {
   for (const row of rows) {
     for (const [field, expectedType] of Object.entries(expectedTypes) as [keyof T, string][]) {
       if (expectedType && typeof row[field] !== expectedType) {
@@ -165,9 +165,7 @@ export class MemoryService {
 
       if (validLinks.length !== links.length) {
         const skippedCount = links.length - validLinks.length;
-        const skippedLinks = links.filter(l => !l.source || !l.target);
-        logger.warn(`[MemoryService] Skipped ${skippedCount} malformed links in relational memory save. First 3 skipped: ${JSON.stringify(skippedLinks.slice(0, 3))}`);
-        // Optionally store the skipped links in a separate dead-letter queue or log file here for full recovery.
+        logger.warn(`[MemoryService] Skipped ${skippedCount} malformed links in relational memory save (missing source or target).`);
       }
 
       const rows = validLinks.map(l => ({
