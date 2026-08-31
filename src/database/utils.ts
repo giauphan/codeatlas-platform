@@ -59,6 +59,8 @@ export async function batchExecuteMany(
   const defaultSize = parsePositiveInt(process.env.CODEATLAS_BATCH_CHUNK_SIZE, 500);
   const size = chunkSize ?? defaultSize;
   const retries = maxRetries ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_RETRIES, 3);
+  const maxDelayMs = parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_DELAY, 2000);
+  const startTime = Date.now();
 
   for (let i = 0; i < rows.length; i += size) {
     const chunk = rows.slice(i, i + size);
@@ -74,8 +76,8 @@ export async function batchExecuteMany(
         attempt++;
         if (attempt < retries) {
           logger.warn(`[BatchExecute] Batch ${i / size} execution failed. Retrying attempt ${attempt + 1}/${retries}...`);
-          // Small exponential backoff with jitter and a max cap of 2000ms
-          const delay = Math.min(Math.floor(Math.random() * 100 + Math.pow(2, attempt) * 100), 2000);
+          // Small exponential backoff with jitter and a configurable max cap
+          const delay = Math.min(Math.floor(Math.random() * 100 + Math.pow(2, attempt) * 100), maxDelayMs);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
@@ -86,5 +88,10 @@ export async function batchExecuteMany(
       logger.error(errMsg);
       throw new BatchExecutionError(errMsg, lastError, i / size);
     }
+  }
+
+  if (rows.length > 0) {
+    const elapsed = Date.now() - startTime;
+    logger.debug(`[BatchExecute] Successfully executed ${rows.length} rows in ${Math.ceil(rows.length / size)} batches (chunk size: ${size}) in ${elapsed}ms.`);
   }
 }
