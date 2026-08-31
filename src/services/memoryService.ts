@@ -113,9 +113,6 @@ export class MemoryService {
     }));
 
     try {
-      // ⚡ Bolt Optimization: Batch semantic memory inserts using executeMany
-      // to avoid N+1 query problems and significantly speed up large graph syncs.
-      // Chunking is used to prevent memory consumption risks during massive batch inserts.
       await batchExecuteMany(db, sql, rows);
     } catch (err) {
       logger.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
@@ -143,9 +140,6 @@ export class MemoryService {
         type: l.type,
         tenantId: tid,
       }));
-      // ⚡ Bolt Optimization: Batch relational memory inserts using executeMany
-      // to avoid N+1 query problems and significantly speed up large graph syncs.
-      // Chunking is used to prevent memory consumption risks during massive batch inserts.
       await batchExecuteMany(db, sql, rows);
     } catch (err) {
       logger.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));

@@ -32,8 +32,18 @@ export class BatchExecutionError extends Error {
 }
 
 /**
- * Utility to batch executeMany calls to prevent memory consumption risks
- * during massive batch inserts. Includes retry logic for transient failures.
+ * Safely parses an environment variable into a positive integer,
+ * returning the provided default if invalid.
+ */
+export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number): number {
+  const parsed = Number(envVarValue);
+  return Number.isNaN(parsed) || parsed <= 0 ? defaultValue : parsed;
+}
+
+/**
+ * Executes batch inserts in chunks, addressing N+1 query bottlenecks.
+ * Prevents excessive memory consumption during high-volume inserts.
+ * Implements retries with exponential backoff for transient DB failures.
  */
 export async function batchExecuteMany(
   db: { executeMany: (sql: string, params: Array<Record<string, unknown>>) => Promise<{ rowsAffected: number }> },
@@ -42,8 +52,7 @@ export async function batchExecuteMany(
   chunkSize?: number,
   maxRetries = 3
 ): Promise<void> {
-  const parsedEnvSize = Number(process.env.CODEATLAS_BATCH_CHUNK_SIZE);
-  const defaultSize = Number.isNaN(parsedEnvSize) || parsedEnvSize <= 0 ? 500 : parsedEnvSize;
+  const defaultSize = parsePositiveInt(process.env.CODEATLAS_BATCH_CHUNK_SIZE, 500);
   const size = chunkSize ?? defaultSize;
 
   for (let i = 0; i < rows.length; i += size) {
@@ -56,12 +65,12 @@ export async function batchExecuteMany(
         await db.executeMany(sql, chunk);
         break; // Success, break out of retry loop
       } catch (err) {
-        lastError = err;
+        lastError = err instanceof Error ? err : new Error(String(err));
         attempt++;
         if (attempt < maxRetries) {
           logger.warn(`[BatchExecute] Batch ${i / size} execution failed. Retrying attempt ${attempt + 1}/${maxRetries}...`);
-          // Small exponential backoff
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100));
+          // Small exponential backoff with jitter
+          await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 100 + Math.pow(2, attempt) * 100)));
         }
       }
     }
