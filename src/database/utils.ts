@@ -7,9 +7,20 @@
 import { randomUUID } from "node:crypto";
 import { logger } from "../utils/logger.js";
 
-export const DEFAULT_CHUNK_SIZE = 500;
-export const DEFAULT_MAX_RETRIES = 3;
-export const DEFAULT_MAX_DELAY = 2000;
+export const BatchConfigDefaults = {
+  CHUNK_SIZE: 500,
+  MAX_RETRIES: 3,
+  MAX_DELAY: 2000,
+  TIMEOUT_MS: 30000,
+  RETRY_BASE_DELAY_MS: 100,
+  RETRY_JITTER_MS: 100,
+} as const;
+
+export const FatalErrorTypes = {
+  SQLITE_CONSTRAINT: 'SQLITE_CONSTRAINT',
+  SYNTAX_ERROR: 'SyntaxError'
+} as const;
+
 
 export function buildInClause(ids: string[], baseBinds: Record<string, unknown> = {}): { clause: string; binds: Record<string, unknown> } {
   const binds = { ...baseBinds };
@@ -102,17 +113,18 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
 ): Promise<void> {
   if (rows.length === 0) return;
 
-  const size = config.chunkSize ?? DEFAULT_CHUNK_SIZE;
-  const retries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
-  const maxDelayMs = config.maxDelayMs ?? DEFAULT_MAX_DELAY;
-  const timeoutMs = config.timeoutMs ?? 30000;
-  const retryBaseDelayMs = config.retryBaseDelayMs ?? 100;
-  const retryJitterMs = config.retryJitterMs ?? 100;
+  const size = config.chunkSize ?? BatchConfigDefaults.CHUNK_SIZE;
+  const retries = config.maxRetries ?? BatchConfigDefaults.MAX_RETRIES;
+  const maxDelayMs = config.maxDelayMs ?? BatchConfigDefaults.MAX_DELAY;
+  const timeoutMs = config.timeoutMs ?? BatchConfigDefaults.TIMEOUT_MS;
+  const retryBaseDelayMs = config.retryBaseDelayMs ?? BatchConfigDefaults.RETRY_BASE_DELAY_MS;
+  const retryJitterMs = config.retryJitterMs ?? BatchConfigDefaults.RETRY_JITTER_MS;
 
   const startTime = Date.now();
   const traceId = randomUUID();
 
   for (let i = 0; i < rows.length; i += size) {
+    const chunkIndex = i / size;
     const chunk = rows.slice(i, i + size);
     let attempt = 0;
     let lastError: unknown;
@@ -128,24 +140,24 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
 
         // Immediately fail on known non-transient / fatal errors
         const isFatal =
-          (parsedErr as { code?: string }).code === 'SQLITE_CONSTRAINT' ||
-          parsedErr.name === 'SyntaxError';
+          (parsedErr as { code?: string }).code === FatalErrorTypes.SQLITE_CONSTRAINT ||
+          parsedErr.name === FatalErrorTypes.SYNTAX_ERROR;
 
         if (isFatal) {
-          logger.error(`[BatchExecute][${traceId}] Fatal error encountered in batch ${i / size}. Aborting retries.`);
-          throw new BatchExecutionError(`Fatal batch execution error.`, parsedErr, i / size);
+          logger.error(`[BatchExecute][${traceId}] Fatal error encountered in batch chunk ${chunkIndex}. Aborting retries.`);
+          throw new BatchExecutionError(`Fatal batch execution error.`, parsedErr, chunkIndex);
         }
 
         attempt++;
         if (Date.now() - batchStartTime > timeoutMs) {
-          logger.error(`[BatchExecute][${traceId}] Batch ${i / size} exceeded cumulative timeout of ${timeoutMs}ms. Aborting retries.`);
-          throw new BatchExecutionError(`Batch execution timeout exceeded.`, parsedErr, i / size);
+          logger.error(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} exceeded cumulative timeout of ${timeoutMs}ms. Aborting retries.`);
+          throw new BatchExecutionError(`Batch execution timeout exceeded.`, parsedErr, chunkIndex);
         }
 
         if (attempt < retries) {
           // Adds jitter to the exponential backoff delay to prevent "thundering herd" scenarios.
           const delay = Math.min(Math.floor(Math.random() * retryJitterMs + (2 ** attempt) * retryBaseDelayMs), maxDelayMs);
-          logger.warn(`[BatchExecute][${traceId}] Batch ${i / size} execution failed. Retrying attempt ${attempt + 1}/${retries} in ${delay}ms...`);
+          logger.warn(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} execution failed. Retrying attempt ${attempt + 1}/${retries} in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
@@ -154,8 +166,8 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
     if (attempt >= retries) {
       // Redact sensitive details in logs by logging error name only (unless explicitly configured to trace)
       const errorName = lastError instanceof Error ? lastError.name : "UnknownError";
-      logger.error(`[BatchExecute][${traceId}] Batch ${i / size} failed after ${retries} attempts. ErrorType: ${errorName}`);
-      throw new BatchExecutionError(`Batch execution failed after ${retries} attempts.`, lastError as Error | string, i / size);
+      logger.error(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} failed after ${retries} attempts. ErrorType: ${errorName}`);
+      throw new BatchExecutionError(`Batch execution failed after ${retries} attempts.`, lastError as Error | string, chunkIndex);
     }
   }
 
