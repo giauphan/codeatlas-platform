@@ -50,33 +50,35 @@ export async function batchExecuteMany(
   sql: string,
   rows: Array<Record<string, unknown>>,
   chunkSize?: number,
-  maxRetries = 3
+  maxRetries?: number
 ): Promise<void> {
   const defaultSize = parsePositiveInt(process.env.CODEATLAS_BATCH_CHUNK_SIZE, 500);
   const size = chunkSize ?? defaultSize;
+  const retries = maxRetries ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_RETRIES, 3);
 
   for (let i = 0; i < rows.length; i += size) {
     const chunk = rows.slice(i, i + size);
     let attempt = 0;
     let lastError: unknown;
 
-    while (attempt < maxRetries) {
+    while (attempt < retries) {
       try {
         await db.executeMany(sql, chunk);
         break; // Success, break out of retry loop
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         attempt++;
-        if (attempt < maxRetries) {
-          logger.warn(`[BatchExecute] Batch ${i / size} execution failed. Retrying attempt ${attempt + 1}/${maxRetries}...`);
-          // Small exponential backoff with jitter
-          await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 100 + Math.pow(2, attempt) * 100)));
+        if (attempt < retries) {
+          logger.warn(`[BatchExecute] Batch ${i / size} execution failed. Retrying attempt ${attempt + 1}/${retries}...`);
+          // Small exponential backoff with jitter and a max cap of 2000ms
+          const delay = Math.min(Math.floor(Math.random() * 100 + Math.pow(2, attempt) * 100), 2000);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
 
-    if (attempt >= maxRetries) {
-      const errMsg = `[BatchExecute] Batch ${i / size} execution failed after ${maxRetries} attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`;
+    if (attempt >= retries) {
+      const errMsg = `[BatchExecute] Batch ${i / size} execution failed after ${retries} attempts.`;
       logger.error(errMsg);
       throw new BatchExecutionError(errMsg, lastError, i / size);
     }
