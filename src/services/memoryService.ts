@@ -103,7 +103,8 @@ export class MemoryService {
 
     if (!embeddings || embeddings.length !== entities.length) {
       const errMsg = `[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Aborting save.`;
-      logger.error(errMsg);
+      // Log specific mismatched details for debugging diagnostics
+      logger.error(`${errMsg} Mismatched entities: ${JSON.stringify(entities.map(e => e.id))}`);
       throw new Error(errMsg);
     }
 
@@ -156,8 +157,9 @@ export class MemoryService {
 
       if (validLinks.length !== links.length) {
         const skippedCount = links.length - validLinks.length;
-        const firstSkipped = links.find(l => !l.source || !l.target);
-        logger.warn(`[MemoryService] Skipped ${skippedCount} malformed links in relational memory save. Sample: source=${firstSkipped?.source}, target=${firstSkipped?.target}`);
+        const skippedLinks = links.filter(l => !l.source || !l.target);
+        logger.warn(`[MemoryService] Skipped ${skippedCount} malformed links in relational memory save. First 3 skipped: ${JSON.stringify(skippedLinks.slice(0, 3))}`);
+        // Optionally store the skipped links in a separate dead-letter queue or log file here for full recovery.
       }
 
       const rows = validLinks.map(l => ({

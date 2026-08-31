@@ -7,9 +7,9 @@
 import { randomUUID } from "node:crypto";
 import { logger } from "../utils/logger.js";
 
-const DEFAULT_CHUNK_SIZE = 500;
-const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_MAX_DELAY = 2000;
+export const DEFAULT_CHUNK_SIZE = 500;
+export const DEFAULT_MAX_RETRIES = 3;
+export const DEFAULT_MAX_DELAY = 2000;
 
 export function buildInClause(ids: string[], baseBinds: Record<string, unknown> = {}): { clause: string; binds: Record<string, unknown> } {
   const binds = { ...baseBinds };
@@ -59,18 +59,18 @@ function isValidPositiveInt(value: number): boolean {
  * @returns A guaranteed positive integer.
  */
 export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number): number {
-  const safeDefault = isValidPositiveInt(defaultValue) ? defaultValue : 1;
+  if (!isValidPositiveInt(defaultValue)) {
+    throw new Error(`[Config] Invalid defaultValue provided to parsePositiveInt: ${defaultValue}. Must be a positive integer.`);
+  }
 
   if (envVarValue === undefined) {
-    return safeDefault;
+    return defaultValue;
   }
 
   const parsed = Number(envVarValue);
   if (!isValidPositiveInt(parsed)) {
-    if (process.env.NODE_ENV !== 'production') {
-      logger.warn(`[Config] Invalid positive integer value provided: "${envVarValue}". Using safe fallback: ${safeDefault}.`);
-    }
-    return safeDefault;
+    logger.warn(`[Config] Invalid positive integer value provided: "${envVarValue}". Using fallback: ${defaultValue}.`);
+    return defaultValue;
   }
 
   return parsed;
@@ -81,6 +81,8 @@ export interface BatchExecuteConfig {
   maxRetries?: number;
   maxDelayMs?: number;
   timeoutMs?: number;
+  retryBaseDelayMs?: number;
+  retryJitterMs?: number;
 }
 
 /**
@@ -99,10 +101,12 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
 ): Promise<void> {
   if (rows.length === 0) return;
 
-  const size = config.chunkSize ?? parsePositiveInt(process.env.CODEATLAS_BATCH_CHUNK_SIZE, DEFAULT_CHUNK_SIZE);
-  const retries = config.maxRetries ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_RETRIES, DEFAULT_MAX_RETRIES);
-  const maxDelayMs = config.maxDelayMs ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_DELAY, DEFAULT_MAX_DELAY);
-  const timeoutMs = config.timeoutMs ?? parsePositiveInt(process.env.CODEATLAS_BATCH_TIMEOUT, 30000);
+  const size = config.chunkSize ?? DEFAULT_CHUNK_SIZE;
+  const retries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const maxDelayMs = config.maxDelayMs ?? DEFAULT_MAX_DELAY;
+  const timeoutMs = config.timeoutMs ?? 30000;
+  const retryBaseDelayMs = config.retryBaseDelayMs ?? 100;
+  const retryJitterMs = config.retryJitterMs ?? 100;
 
   const startTime = Date.now();
   const traceId = randomUUID();
@@ -138,10 +142,8 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
         }
 
         if (attempt < retries) {
-          // Math.random() * 100 adds jitter to the exponential backoff delay.
-          // This prevents "thundering herd" scenarios where multiple concurrent
-          // failing batches wake up and retry against the database at the exact same time.
-          const delay = Math.min(Math.floor(Math.random() * 100 + (2 ** attempt) * 100), maxDelayMs);
+          // Adds jitter to the exponential backoff delay to prevent "thundering herd" scenarios.
+          const delay = Math.min(Math.floor(Math.random() * retryJitterMs + (2 ** attempt) * retryBaseDelayMs), maxDelayMs);
           logger.warn(`[BatchExecute][${traceId}] Batch ${i / size} execution failed. Retrying attempt ${attempt + 1}/${retries} in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
@@ -149,9 +151,10 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
     }
 
     if (attempt >= retries) {
-      const retryInfo = `after ${retries} attempts. Caused by: ${lastError instanceof Error ? lastError.message : String(lastError)}`;
-      logger.error(`[BatchExecute][${traceId}] Batch ${i / size} failed ${retryInfo}`);
-      throw new BatchExecutionError(`Batch execution failed ${retryInfo}`, lastError as Error | string, i / size);
+      // Redact sensitive details in logs by logging error name only (unless explicitly configured to trace)
+      const errorName = lastError instanceof Error ? lastError.name : "UnknownError";
+      logger.error(`[BatchExecute][${traceId}] Batch ${i / size} failed after ${retries} attempts. ErrorType: ${errorName}`);
+      throw new BatchExecutionError(`Batch execution failed after ${retries} attempts.`, lastError as Error | string, i / size);
     }
   }
 
