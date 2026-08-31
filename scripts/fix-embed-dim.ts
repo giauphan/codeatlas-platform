@@ -37,36 +37,46 @@ for (const table of tables) {
   const updateStmt = db.prepare(`UPDATE ${table} SET embedding = ? WHERE id = ?`);
   const verifyStmt = db.prepare(`SELECT length(embedding) as new_bytes FROM ${table} WHERE id = ?`);
 
+  let totalFailed = 0;
+
   for (const { id, embedding: blob } of badRows) {
     if (!blob || blob.byteLength !== 16384) {
+      console.log(`[Fix] ${table}/${id}: skipping row — embedding blob byteLength is ${blob?.byteLength ?? 'null'}, expected 16384 (4096-dim). Possible NULL, empty, or already correct-dimension row.`);
       totalSkipped++;
       continue;
     }
 
-    // Extract first 1024 floats using the underlying buffer
-    const truncated = new Float32Array(blob.buffer, blob.byteOffset, targetDim);
-    
-    // Verify it's valid
-    if (truncated.length !== targetDim) {
-      console.error(`[Fix] ${table}/${id}: truncation failed, got ${truncated.length} dims.`);
-      totalSkipped++;
-      continue;
-    }
+    try {
+      // Extract first 1024 floats using the underlying buffer
+      const truncated = new Float32Array(blob.buffer, blob.byteOffset, targetDim);
 
-    // Convert to Buffer for SQLite
-    const buffer = Buffer.from(truncated.buffer, truncated.byteOffset, expectedBytes);
-    updateStmt.run(buffer, id);
+      // Verify it's valid
+      if (truncated.length !== targetDim) {
+        console.error(`[Fix] ${table}/${id}: truncation failed, got ${truncated.length} dims.`);
+        totalSkipped++;
+        continue;
+      }
 
-    // Verify
-    const verified = verifyStmt.get(id) as { new_bytes: number };
-    if (verified.new_bytes === expectedBytes) {
-      console.log(`[Fix] ${table}/${id}: 16384 -> ${verified.new_bytes} bytes`);
-      totalFixed++;
-    } else {
-      console.error(`[Fix] ${table}/${id}: verification failed, expected ${expectedBytes}, got ${verified.new_bytes}`);
+      // Convert to Buffer for SQLite
+      const buffer = Buffer.from(truncated.buffer, truncated.byteOffset, expectedBytes);
+      updateStmt.run(buffer, id);
+
+      // Verify
+      const verified = verifyStmt.get(id) as { new_bytes: number };
+      if (verified.new_bytes === expectedBytes) {
+        console.log(`[Fix] ${table}/${id}: 16384 -> ${verified.new_bytes} bytes`);
+        totalFixed++;
+      } else {
+        console.error(`[Fix] ${table}/${id}: verification failed, expected ${expectedBytes}, got ${verified.new_bytes}`);
+      }
+    } catch (err) {
+      console.error(`[Fix] ${table}/${id}: SQL/truncation error — ${(err as Error).message}`);
+      totalFailed++;
     }
   }
+
+  console.log(`[Fix] ${table}: done — fixed=${totalFixed}, skipped=${totalSkipped}, failed=${totalFailed}`);
 }
 
-console.log(`\n[Fix] Done. Fixed: ${totalFixed}, Skipped: ${totalSkipped}`);
+console.log(`\n[Fix] Done. Fixed: ${totalFixed}, Skipped: ${totalSkipped}, Failed: ${totalFailed}`);
 db.close();

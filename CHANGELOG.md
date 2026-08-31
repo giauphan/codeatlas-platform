@@ -4,6 +4,7 @@
 
 ### Fixed
 - **Vector Dimension Mismatch Crash (4096 vs 1024)**: `vec_distance_cosine` in SQLite crashed with "Vector dimension mismatch" when comparing old 4096-dim rows (from retired `nv-embed-v1`) against new 1024-dim query vectors. Added `length(embedding) = :expectedBytes` filter to `SQLiteAdapter.searchVector()` so wrong-dimension rows are silently skipped instead of crashing the query. Added `scripts/reembed-migrate.ts` to re-embed existing bad rows with the current model chain.
+- **PR Review Improvements**: Enhanced migration scripts with (1) detailed skip/fail logging with context, (2) try-catch error handling for SQL operations, (3) pagination (LIMIT 1000 per batch) to prevent memory strain on large tables, and (4) retry logic with exponential backoff for embedding API failures.
 
 ## [2.14.6] - 2026-08-28
 

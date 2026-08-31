@@ -42,15 +42,16 @@ for (const { table, contentCol, idCol } of TABLES) {
   }
 
   const badRows = db.prepare(
-    `SELECT ${idCol} as id, ${contentCol} as content, length(embedding) as old_bytes FROM ${table} WHERE embedding IS NOT NULL AND length(embedding) != ?`
+    `SELECT ${idCol} as id, ${contentCol} as content, length(embedding) as old_bytes FROM ${table} WHERE embedding IS NOT NULL AND length(embedding) != ? LIMIT 1000`
   ).all(expectedBytes) as Array<{ id: string; content: string; old_bytes: number }>;
 
   if (badRows.length === 0) {
-    console.log(`[Reembed] ${table}: no mismatched rows.`);
+    console.log(`[Reembed] ${table}: no mismatched rows in first 1000.`);
     continue;
   }
 
-  console.log(`[Reembed] ${table}: found ${badRows.length} mismatched rows.`);
+  const batchSize = badRows.length;
+  console.log(`[Reembed] ${table}: processing batch of ${batchSize} mismatched rows (pagination: LIMIT 1000 per run).`);
 
   const updateStmt = db.prepare(`UPDATE ${table} SET embedding = ? WHERE ${idCol} = ?`);
   const verifyStmt = db.prepare(`SELECT length(embedding) as new_bytes FROM ${table} WHERE ${idCol} = ?`);
@@ -64,7 +65,27 @@ for (const { table, contentCol, idCol } of TABLES) {
     }
 
     try {
-      const embedding = await generateEmbedding(row.content, 'passage');
+      let embedding: number[] | null = null;
+      const maxRetries = 3;
+      let retryCount = 0;
+
+      while (retryCount < maxRetries && !embedding) {
+        try {
+          embedding = await generateEmbedding(row.content, 'passage');
+        } catch (embedErr) {
+          retryCount++;
+          const errorMsg = (embedErr as Error).message;
+          console.warn(`[Reembed] ${table}/${row.id}: embedding failed (attempt ${retryCount}/${maxRetries}) — ${errorMsg}`);
+          if (retryCount >= maxRetries) {
+            console.error(`[Reembed] ${table}/${row.id}: all embedding attempts exhausted.`);
+            embedding = null;
+          } else {
+            // Brief pause before retry
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          }
+        }
+      }
+
       if (!embedding || embedding.length !== targetDim) {
         console.error(`[Reembed] ${table}/${row.id}: embedding returned null or wrong dim (${embedding?.length}).`);
         totalFailed++;
