@@ -41,6 +41,10 @@ const mockDbAdapter = {
   checkColumnExists: mock.fn(() => Promise.resolve(true)),
 };
 
+safeMockModule(path.join(srcDir, 'database/factory.js'), {
+  createDatabaseAdapter: () => mockDbAdapter,
+});
+
 safeMockModule(path.join(srcDir, 'utils/context.js'), {
   authStorage: {
     getStore: () => ({ uid: 'test-user-id', email: 'test@example.com' }),
