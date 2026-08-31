@@ -101,6 +101,8 @@ export class MemoryService {
       ON CONFLICT(id) DO UPDATE SET content = excluded.content, embedding = excluded.embedding
     `;
 
+    // Transform GraphEntity objects into database rows, mapping project-prefixed IDs
+    // and combining them with their generated semantic embeddings.
     const rows = entities.map((e, index) => ({
       id: `${project}_${e.id}`,
       project,
@@ -133,6 +135,8 @@ export class MemoryService {
     `;
 
     try {
+      // Transform GraphLink objects into an array of parameter binds, ensuring
+      // the source and target node IDs are correctly prefixed with the project name.
       const rows = links.map(l => ({
         src: `${project}_${l.source}`,
         tgt: `${project}_${l.target}`,

@@ -34,6 +34,10 @@ export class BatchExecutionError extends Error {
 /**
  * Safely parses an environment variable into a positive integer,
  * returning the provided default if invalid.
+ *
+ * @param envVarValue The raw string value from process.env to parse.
+ * @param defaultValue The fallback positive integer to return if parsing fails.
+ * @returns A guaranteed positive integer.
  */
 export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number): number {
   const parsed = Number(envVarValue);
