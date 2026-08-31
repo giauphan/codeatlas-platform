@@ -134,15 +134,18 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     const blob = new Uint8Array(new Float32Array(embedding).buffer);
 
     // sqlite-vec cosine distance function
+    // Filter by blob length to skip rows embedded with a different model/dimension.
+    // Each float32 = 4 bytes, so expected blob size = embedding.length * 4.
     const sql = `
       SELECT id, 1 - vec_distance_cosine(embedding, :queryVector) AS score
       FROM ${table}
       WHERE tenant_id = :tenantId AND embedding IS NOT NULL
+        AND length(embedding) = :expectedBytes
       ORDER BY vec_distance_cosine(embedding, :queryVector) ASC
       LIMIT :limit
     `;
 
-    const binds = { queryVector: blob, tenantId, limit, ...(filterBinds || {}) };
+    const binds = { queryVector: blob, tenantId, limit, expectedBytes: embedding.length * 4, ...(filterBinds || {}) };
     return this.query<VectorSearchResult>(sql, binds);
   }
 

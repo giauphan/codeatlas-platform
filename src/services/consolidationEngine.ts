@@ -444,9 +444,13 @@ export class ConsolidationEngine {
           ELSE POWER(0.997, CAST(julianday('now') - julianday(created_at) AS INTEGER))
          END`;
 
+    // SQLite uses scalar MAX/MIN rather than PostgreSQL's GREATEST/LEAST.
+    const greatest = dbType === "postgres" ? "GREATEST" : "MAX";
+    const least = dbType === "postgres" ? "LEAST" : "MIN";
+
     const decaySql = `
       UPDATE ai_dreaming_memory
-      SET confidence = GREATEST(0.05, confidence * ${decayExpr})
+      SET confidence = ${greatest}(0.05, confidence * ${decayExpr})
       WHERE status = 'active' AND ${whereCond}
     `;
     await db.execute(decaySql, binds);
@@ -459,7 +463,7 @@ export class ConsolidationEngine {
     // 2. Evidence boost
     const boostSql = `
       UPDATE ai_dreaming_memory
-      SET confidence = LEAST(0.99, GREATEST(0.05,
+      SET confidence = ${least}(0.99, ${greatest}(0.05,
         confidence + 0.05 * ${logExpr}
       ))
       WHERE status = 'active' AND evidence_count > 1 AND ${whereCond}
@@ -469,7 +473,7 @@ export class ConsolidationEngine {
     // 3. Access bonus
     const accessSql = `
       UPDATE ai_dreaming_memory
-      SET confidence = LEAST(0.99, GREATEST(0.05,
+      SET confidence = ${least}(0.99, ${greatest}(0.05,
         confidence + 0.02 * ${logExprAccess}
       ))
       WHERE status = 'active' AND access_count > 0 AND ${whereCond}
