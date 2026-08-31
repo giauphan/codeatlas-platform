@@ -3,7 +3,7 @@ import { logger } from "../utils/logger.js";
 import { initAdapter } from "../database/connection.js";
 import { generateEmbedding, generateEmbeddingsBatch } from "./embeddingService.js";
 import type { GraphEntity, GraphLink, ArchSmells } from "../types/index.js";
-import { buildInClause, batchExecuteMany } from "../database/utils.js";
+import { buildInClause, batchExecuteMany, validateRows } from "../database/utils.js";
 
 type Dialect = "sqlite" | "postgres";
 
@@ -38,19 +38,6 @@ function col<T = unknown>(row: Record<string, unknown>, name: string): T | undef
  * and relational knowledge-graph edges. Every statement goes through the
  * configured database adapter (SQLite + sqlite-vec by default).
  */
-/** Helper function to pre-validate rows before database insertion. */
-function validateRows<T extends Record<string, unknown>>(rows: T[], expectedTypes: Partial<Record<keyof T, "string" | "number" | "boolean" | "object" | "undefined">>): void {
-  for (const row of rows) {
-    for (const [field, expectedType] of Object.entries(expectedTypes) as [keyof T, string][]) {
-      if (expectedType && typeof row[field] !== expectedType) {
-        const errMsg = `[MemoryService] Pre-validation failed: row field '${String(field)}' expected ${expectedType}, got ${typeof row[field]}.`;
-        logger.error(errMsg);
-        throw new Error(errMsg);
-      }
-    }
-  }
-}
-
 export class MemoryService {
   /** Tier 1: Episodic — business rules and change logs. */
   static async saveEpisodicMemory(

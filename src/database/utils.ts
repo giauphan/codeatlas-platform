@@ -88,6 +88,19 @@ export function parsePositiveInt(envVarValue: string | undefined, defaultValue: 
   return parsed;
 }
 
+/** Helper function to pre-validate rows before database insertion. */
+export function validateRows<T extends Record<string, unknown>>(rows: T[], expectedTypes: Partial<Record<keyof T, "string" | "number" | "boolean" | "object" | "undefined">>): void {
+  for (const row of rows) {
+    for (const [field, expectedType] of Object.entries(expectedTypes) as [keyof T, string][]) {
+      if (expectedType && typeof row[field] !== expectedType) {
+        const errMsg = `[BatchExecute] Pre-validation failed: row field '${String(field)}' expected ${expectedType}, got ${typeof row[field]}.`;
+        logger.error(errMsg);
+        throw new Error(errMsg);
+      }
+    }
+  }
+}
+
 export interface BatchExecuteConfig {
   chunkSize?: number;
   maxRetries?: number;
@@ -156,7 +169,14 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
 
         if (attempt < retries) {
           // Adds jitter to the exponential backoff delay to prevent "thundering herd" scenarios.
-          const delay = Math.min(Math.floor(Math.random() * retryJitterMs + (2 ** attempt) * retryBaseDelayMs), maxDelayMs);
+          // Ensures a minimum delay bounded by retryBaseDelayMs even on the first attempt (when 2^0 = 1).
+          const delay = Math.min(
+            Math.max(
+              retryBaseDelayMs,
+              Math.floor(Math.random() * retryJitterMs + (2 ** attempt) * retryBaseDelayMs)
+            ),
+            maxDelayMs
+          );
           logger.warn(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} execution failed. Retrying attempt ${attempt + 1}/${retries} in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
