@@ -120,7 +120,14 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
 
     assert.ok(mockDbAdapter.execute.mock.calls.length > 0);
     const decaySql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
-    assert.ok(decaySql.includes("julianday('now')"), 'Decay SQL should use julianday for SQLite');
+    assert.ok(decaySql.includes("julianday('now')"), 'Decay SQL should use julianday("now") for SQLite');
+    assert.ok(decaySql.includes('MAX(0.05'), 'SQLite decay must use scalar MAX, not GREATEST');
+    assert.ok(!decaySql.includes('GREATEST('), 'SQLite does not provide GREATEST');
+
+    const boostSql = mockDbAdapter.execute.mock.calls[1].arguments[0] as string;
+    const accessSql = mockDbAdapter.execute.mock.calls[2].arguments[0] as string;
+    assert.ok(boostSql.includes('MIN(0.99, MAX(0.05'), 'SQLite evidence boost must use MIN/MAX');
+    assert.ok(accessSql.includes('MIN(0.99, MAX(0.05'), 'SQLite access bonus must use MIN/MAX');
   });
 
   test('getNormalizedVector correctly normalizes and handles zero-norm vectors', () => {
