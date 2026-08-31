@@ -4,8 +4,9 @@
  * @param ids Array of ID strings
  * @param baseBinds Base bind variables (e.g. project, tenantId)
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import { logger } from "../utils/logger.js";
+import { BatchExecutionError } from "../utils/errors.js";
 
 /** Default configurations for batchExecuteMany retries and chunking. */
 export const BatchConfigDefaults = {
@@ -36,27 +37,6 @@ export function buildInClause(ids: string[], baseBinds: Record<string, unknown> 
   return { clause, binds };
 }
 
-/**
- * Custom error class to provide context for batch execution failures.
- */
-export class BatchExecutionError extends Error {
-  public originalError: Error | string;
-  public failedChunkIndex: number;
-
-  constructor(message: string, originalError: Error | string, failedChunkIndex: number) {
-    super(message);
-    this.name = "BatchExecutionError";
-    this.originalError = originalError;
-    this.failedChunkIndex = failedChunkIndex;
-
-    // Explicitly inherit the stack trace from the original error if available
-    // to improve debuggability while maintaining our custom error type.
-    if (originalError instanceof Error && originalError.stack) {
-      this.stack = `${this.stack}\nCaused by: ${originalError.stack}`;
-    }
-  }
-}
-
 function isValidPositiveInt(value: number, variableName?: string): boolean {
   const isValid = value > 0 && Number.isSafeInteger(value) && Number.isFinite(value);
   if (!isValid) {
@@ -85,7 +65,7 @@ export function parsePositiveInt(envVarValue: string | undefined, defaultValue: 
 
   const parsed = Number(envVarValue);
   if (!isValidPositiveInt(parsed, variableName)) {
-    logger.warn(`[Config] Invalid positive integer value provided${variableName ? ` for ${variableName}` : ''}: <masked>. Using fallback: ${defaultValue}.`);
+    logger.warn(`[Config] parsePositiveInt invalid input: provided value${variableName ? ` for ${variableName}` : ''} must be a positive finite integer. Using fallback: ${defaultValue}.`);
     return defaultValue;
   }
 
@@ -175,12 +155,13 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
         }
 
         if (attempt < retries) {
-          // Adds jitter to the exponential backoff delay to prevent "thundering herd" scenarios.
+          // Adds jitter using a cryptographically secure random number generator to prevent "thundering herd" scenarios.
           // Ensures a minimum delay bounded by retryBaseDelayMs even on the first attempt (when 2^0 = 1).
+          const jitter = randomInt(0, retryJitterMs + 1);
           const delay = Math.min(
             Math.max(
               retryBaseDelayMs,
-              Math.floor(Math.random() * retryJitterMs + (2 ** attempt) * retryBaseDelayMs)
+              Math.floor(jitter + (2 ** attempt) * retryBaseDelayMs)
             ),
             maxDelayMs
           );
