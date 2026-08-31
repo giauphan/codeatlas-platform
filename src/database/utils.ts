@@ -40,16 +40,22 @@ export class BatchExecutionError extends Error {
 
 /**
  * Safely parses an environment variable into a positive integer,
- * returning the provided default if invalid.
+ * returning the provided default if invalid (e.g., NaN, Infinity).
  *
  * @param envVarValue The raw string value from process.env to parse.
  * @param defaultValue The fallback positive integer to return if parsing fails.
  * @returns A guaranteed positive integer.
  */
 export function parsePositiveInt(envVarValue: string | undefined, defaultValue: number): number {
-  const safeDefault = !Number.isSafeInteger(defaultValue) || defaultValue <= 0 ? 1 : defaultValue;
+  const safeDefault = !Number.isSafeInteger(defaultValue) || defaultValue <= 0 || !Number.isFinite(defaultValue) ? 1 : defaultValue;
   const parsed = Number(envVarValue);
-  return !Number.isSafeInteger(parsed) || parsed <= 0 ? safeDefault : parsed;
+  return !Number.isSafeInteger(parsed) || parsed <= 0 || !Number.isFinite(parsed) ? safeDefault : parsed;
+}
+
+export interface BatchExecuteConfig {
+  chunkSize?: number;
+  maxRetries?: number;
+  maxDelayMs?: number;
 }
 
 /**
@@ -64,13 +70,12 @@ export async function batchExecuteMany(
   db: { executeMany: (sql: string, params: Array<Record<string, unknown>>) => Promise<{ rowsAffected: number }> },
   sql: string,
   rows: Array<Record<string, unknown>>,
-  chunkSize?: number,
-  maxRetries?: number
+  config: BatchExecuteConfig = {}
 ): Promise<void> {
-  const defaultSize = parsePositiveInt(process.env.CODEATLAS_BATCH_CHUNK_SIZE, 500);
-  const size = chunkSize ?? defaultSize;
-  const retries = maxRetries ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_RETRIES, 3);
-  const maxDelayMs = parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_DELAY, 2000);
+  const size = config.chunkSize ?? parsePositiveInt(process.env.CODEATLAS_BATCH_CHUNK_SIZE, 500);
+  const retries = config.maxRetries ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_RETRIES, 3);
+  const maxDelayMs = config.maxDelayMs ?? parsePositiveInt(process.env.CODEATLAS_BATCH_MAX_DELAY, 2000);
+
   const startTime = Date.now();
   const traceId = randomUUID();
 
@@ -90,7 +95,7 @@ export async function batchExecuteMany(
           // Math.random() * 100 adds jitter to the exponential backoff delay.
           // This prevents "thundering herd" scenarios where multiple concurrent
           // failing batches wake up and retry against the database at the exact same time.
-          const delay = Math.min(Math.floor(Math.random() * 100 + Math.pow(2, attempt) * 100), maxDelayMs);
+          const delay = Math.min(Math.floor(Math.random() * 100 + (2 ** attempt) * 100), maxDelayMs);
           logger.warn(`[BatchExecute][${traceId}] Batch ${i / size} execution failed. Retrying attempt ${attempt + 1}/${retries} in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
