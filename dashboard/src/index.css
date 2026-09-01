@@ -156,6 +156,10 @@ h1, h2, h3, .tech-font {
   border-radius: 4px;
 }
 
+/* Loading Spinner Animations
+   Moved to global CSS from Auth.tsx to ensure spinners work across authenticated views
+   where Auth.tsx is unmounted. */
+
 /* Clear Search Button */
 .clear-search-btn {
   position: absolute;
