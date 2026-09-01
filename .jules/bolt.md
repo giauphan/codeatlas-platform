@@ -45,3 +45,7 @@
 ## 2026-08-25 - Avoid chained .filter().length
 **Learning:** To optimize performance during AST traversal or file indexing, chaining `.filter().length` creates intermediate array allocations that must then be scanned and garbage collected. This hurts performance significantly in hot paths like text classification checks.
 **Action:** Replace `.filter(condition).length` with a direct `for` loop that iterates over the original array and counts the occurrences that match the condition. This avoids allocating a new array and reduces garbage collection pressure.
+
+## 2026-09-01 - Avoid indexOf for Duplicate Item Object Identification
+**Learning:** When generating payloads via `.map` over associated arrays (e.g., mapping a list of validated entities back to a parallel content array), relying on `entities.indexOf(entity)` to grab the original array position is O(N^2) over the full collection, but more dangerously, it can return the wrong index if the payload legitimately contains duplicate references/structures.
+**Action:** When extracting a subset of an array while needing to retain original position mapping to a parallel associative array, map the initial array into a tuple `{ item, originalIndex }` first, filter the tuple, and then extract the `originalIndex` in O(1) time without risking duplicate collisions.
