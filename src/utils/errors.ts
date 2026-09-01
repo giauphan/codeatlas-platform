@@ -24,6 +24,11 @@ export class BatchExecutionError extends Error {
     failedDataChunk?: Record<string, unknown>[]
   ) {
     super(message);
+
+    // Explicitly set the prototype so that `instanceof BatchExecutionError` works correctly
+    // across environments and module boundary transpilation boundaries.
+    Object.setPrototypeOf(this, BatchExecutionError.prototype);
+
     this.name = "BatchExecutionError";
     this.code = "ERR_BATCH_EXECUTION_FAILED";
     this.originalError = originalError;
