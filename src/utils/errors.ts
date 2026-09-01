@@ -47,6 +47,17 @@ export class BatchExecutionError extends Error {
   /**
    * Safely serializes the error context for external logging sinks.
    * Redacts the failed data chunk by default to prevent PII leaks.
+   *
+   * Example output:
+   * {
+   *   "name": "BatchExecutionError",
+   *   "code": "ERR_BATCH_EXECUTION_FAILED",
+   *   "message": "Batch execution failed after 3 attempts in chunk 0 [TraceId: ...].",
+   *   "failedChunkIndex": 0,
+   *   "originalError": { "name": "Error", "message": "SQLITE_CONSTRAINT: UNIQUE constraint failed" },
+   *   "hasDataChunk": true,
+   *   "stack": "..."
+   * }
    */
   toJSON(): Record<string, unknown> {
     return {

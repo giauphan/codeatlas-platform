@@ -27,14 +27,17 @@ export const FatalErrorTypes = {
 } as const;
 
 
-export function buildInClause(ids: string[], baseBinds: Record<string, unknown> = {}): { clause: string; binds: Record<string, unknown> } {
-  const binds = { ...baseBinds };
+export function buildInClause<T extends Record<string, unknown>>(
+  ids: string[],
+  baseBinds: T = {} as T
+): { clause: string; binds: T & Record<string, string> } {
+  const binds: Record<string, unknown> = { ...baseBinds };
   if (ids.length === 0) {
-    return { clause: "NULL", binds };
+    return { clause: "NULL", binds: binds as T & Record<string, string> };
   }
   const clause = ids.map((_, i) => `:id${i}`).join(",");
   ids.forEach((id, i) => { binds[`id${i}`] = String(id); });
-  return { clause, binds };
+  return { clause, binds: binds as T & Record<string, string> };
 }
 
 function isValidPositiveInt(value: number, variableName?: string): boolean {

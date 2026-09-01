@@ -235,6 +235,7 @@ export class MemoryService {
         { project, tenantId: tid, limit }
       );
     } catch (err) {
+      // Avoid logging potentially sensitive user queries directly if the search query is included in the error message
       logger.error("Error searching semantic memory:", err instanceof Error ? err.message : String(err));
       throw err;
     }
