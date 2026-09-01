@@ -1,12 +1,19 @@
 export class BatchExecutionError extends Error {
   public originalError: Error | string;
   public failedChunkIndex: number;
+  public failedDataChunk?: Record<string, unknown>[];
 
-  constructor(message: string, originalError: Error | string, failedChunkIndex: number) {
+  constructor(
+    message: string,
+    originalError: Error | string,
+    failedChunkIndex: number,
+    failedDataChunk?: Record<string, unknown>[]
+  ) {
     super(message);
     this.name = "BatchExecutionError";
     this.originalError = originalError;
     this.failedChunkIndex = Math.max(0, failedChunkIndex);
+    this.failedDataChunk = failedDataChunk;
 
     // Explicitly inherit the stack trace from the original error if available
     // to improve debuggability while maintaining our custom error type.

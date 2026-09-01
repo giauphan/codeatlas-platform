@@ -77,6 +77,10 @@ export function parsePositiveInt(envVarValue: string | undefined, defaultValue: 
  * For large datasets, a sampleSize can be provided to only validate
  * the first N rows under the assumption of schema homogeneity,
  * trading strictness for performance.
+ *
+ * @example
+ * // Validates that 'id' and 'name' are strings on the first 10 rows
+ * validateRows(rows, { id: 'string', name: 'string' }, 10, 'UsersTable');
  */
 export function validateRows<T extends Record<string, unknown>>(
   rows: T[],
@@ -134,6 +138,10 @@ export interface BatchExecuteConfig {
  * `timeoutMs`, this function will throw a `BatchExecutionError`. Callers should
  * capture this error if they need to implement fallback recovery mechanisms (like
  * writing failed chunks to a dead-letter queue).
+ *
+ * @example
+ * // Inserts 10,000 rows in chunks of 500, retrying up to 3 times on lock errors
+ * await batchExecuteMany(db, "INSERT INTO table VALUES (:a, :b)", rows, { chunkSize: 500 });
  */
 export async function batchExecuteMany<T extends Record<string, unknown>>(
   db: { executeMany: (sql: string, params: T[]) => Promise<{ rowsAffected: number }> },
@@ -181,14 +189,14 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
 
         if (isFatal) {
           logger.error(`[BatchExecute][${traceId}] Fatal error encountered in batch chunk ${chunkIndex}. Aborting retries.`);
-          throw new BatchExecutionError(`Fatal batch execution error in chunk ${chunkIndex} [TraceId: ${traceId}].`, parsedErr, chunkIndex);
+          throw new BatchExecutionError(`Fatal batch execution error in chunk ${chunkIndex} [TraceId: ${traceId}].`, parsedErr, chunkIndex, chunk);
         }
 
         attempt++;
         const elapsedSinceBatchStart = performance.now() - batchStartTime;
         if (elapsedSinceBatchStart > timeoutMs) {
           logger.error(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} exceeded cumulative timeout of ${timeoutMs}ms. Aborting retries.`);
-          throw new BatchExecutionError(`Batch execution timeout exceeded for chunk ${chunkIndex} [TraceId: ${traceId}].`, parsedErr, chunkIndex);
+          throw new BatchExecutionError(`Batch execution timeout exceeded for chunk ${chunkIndex} [TraceId: ${traceId}].`, parsedErr, chunkIndex, chunk);
         }
 
         if (attempt < retries) {
@@ -217,7 +225,7 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
       // Redact sensitive details in logs by logging error name only (unless explicitly configured to trace)
       const errorName = lastError instanceof Error ? lastError.name : "UnknownError";
       logger.error(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} failed after ${retries} attempts. ErrorType: ${errorName}`);
-      throw new BatchExecutionError(`Batch execution failed after ${retries} attempts in chunk ${chunkIndex} [TraceId: ${traceId}].`, lastError as Error | string, chunkIndex);
+      throw new BatchExecutionError(`Batch execution failed after ${retries} attempts in chunk ${chunkIndex} [TraceId: ${traceId}].`, lastError as Error | string, chunkIndex, chunk);
     }
   }
 
