@@ -83,8 +83,8 @@ export function validateRows<T extends Record<string, unknown>>(
   expectedTypes: Partial<Record<keyof T, "string" | "number" | "boolean" | "object" | "undefined">>,
   sampleSize?: number
 ): void {
-  const rowsToCheck = sampleSize && sampleSize > 0 && sampleSize < rows.length
-    ? rows.slice(0, sampleSize)
+  const rowsToCheck = sampleSize && sampleSize > 0
+    ? rows.slice(0, Math.min(sampleSize, rows.length))
     : rows;
 
   for (const row of rowsToCheck) {
@@ -117,6 +117,11 @@ export interface BatchExecuteConfig {
  * If your SQL query uses 5 parameters per row and you set CHUNK_SIZE to 500,
  * you will pass 2500 variables, which exceeds older SQLite defaults. Adjust
  * config.chunkSize accordingly for your dialect.
+ *
+ * Behavior on failure: If execution fails after `maxRetries` attempts or exceeds
+ * `timeoutMs`, this function will throw a `BatchExecutionError`. Callers should
+ * capture this error if they need to implement fallback recovery mechanisms (like
+ * writing failed chunks to a dead-letter queue).
  */
 export async function batchExecuteMany<T extends Record<string, unknown>>(
   db: { executeMany: (sql: string, params: T[]) => Promise<{ rowsAffected: number }> },

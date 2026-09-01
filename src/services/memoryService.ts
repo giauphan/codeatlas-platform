@@ -101,23 +101,28 @@ export class MemoryService {
       ON CONFLICT(id) DO UPDATE SET content = excluded.content, embedding = excluded.embedding
     `;
 
+    let validEntities = entities;
+    let validEmbeddings = embeddings;
+
     if (!embeddings || embeddings.length !== entities.length) {
       const mismatchedCount = entities.length - (embeddings?.length || 0);
-      const errMsg = `[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Total mismatched entity count: ${mismatchedCount}. Aborting save.`;
-      logger.error(errMsg);
-      throw new Error(errMsg);
+      logger.warn(`[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Dropping ${mismatchedCount} unmatched entities.`);
+
+      // Filter down to the subset of entities that successfully generated embeddings
+      validEntities = entities.filter((_, index) => embeddings && embeddings[index] !== undefined);
+      validEmbeddings = embeddings ? embeddings.filter(emb => emb !== undefined) : [];
     }
 
     // Transform GraphEntity objects into database rows, mapping project-prefixed IDs
     // and combining them with their generated semantic embeddings.
-    const rows = entities.map((e, index) => ({
+    const rows = validEntities.map((e, index) => ({
       id: `${project}_${e.id}`,
       project,
       type: e.type,
       name: e.label,
       path: e.filePath || "",
       content: contents[index],
-      embedding: encodeEmbedding(embeddings[index]),
+      embedding: encodeEmbedding(validEmbeddings![index]),
       tenantId: tid,
     }));
 
