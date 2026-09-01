@@ -115,6 +115,17 @@ export function validateRows<T extends Record<string, unknown>>(
   }
 }
 
+/**
+ * Configuration options for `batchExecuteMany` retries and chunking.
+ *
+ * @example
+ * const config: BatchExecuteConfig = {
+ *   chunkSize: 200,      // Process 200 rows per query
+ *   maxRetries: 5,       // Allow up to 5 retries on transient errors
+ *   timeoutMs: 60000,    // Allow up to 60s total execution per chunk
+ *   retryJitterMs: 50    // Add up to 50ms randomness to delay backoffs
+ * };
+ */
 export interface BatchExecuteConfig {
   chunkSize?: number;
   maxRetries?: number;
@@ -124,6 +135,9 @@ export interface BatchExecuteConfig {
   retryJitterMs?: number;
 }
 
+/**
+ * Adapter interface required for database connections passed to `batchExecuteMany`.
+ */
 export interface BatchExecuteDatabaseAdapter<T extends Record<string, unknown>> {
   executeMany?: (sql: string, params: T[]) => Promise<{ rowsAffected: number }>;
 }
