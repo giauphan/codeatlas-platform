@@ -24,9 +24,17 @@ function filterValidItems<T>(
   isValid: (item: T, index: number) => boolean,
   logWarning: (skippedCount: number) => void
 ): T[] {
-  const valid = items.filter(isValid);
-  if (valid.length !== items.length) {
-    logWarning(items.length - valid.length);
+  const valid: T[] = [];
+  let skippedCount = 0;
+  for (let i = 0; i < items.length; i++) {
+    if (isValid(items[i], i)) {
+      valid.push(items[i]);
+    } else {
+      skippedCount++;
+    }
+  }
+  if (skippedCount > 0) {
+    logWarning(skippedCount);
   }
   return valid;
 }

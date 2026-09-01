@@ -92,8 +92,13 @@ export function validateRows<T extends Record<string, unknown>>(
   sampleSize?: number,
   traceIdContext?: string
 ): void {
-  const rowsToCheck = sampleSize && sampleSize > 0
-    ? rows.slice(0, Math.min(sampleSize, rows.length))
+  const isSampling = sampleSize !== undefined && sampleSize > 0 && sampleSize < rows.length;
+  if (isSampling) {
+    logger.debug(`[BatchExecute] validateRows sampling enabled: validating ${sampleSize} of ${rows.length} rows.`);
+  }
+
+  const rowsToCheck = isSampling
+    ? rows.slice(0, sampleSize)
     : rows;
 
   const logPrefix = traceIdContext ? `[BatchExecute][${traceIdContext}]` : `[BatchExecute]`;
