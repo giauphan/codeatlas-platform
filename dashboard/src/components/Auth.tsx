@@ -172,8 +172,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         .glass-input { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.875rem 1rem; border-radius: 14px; width: 100%; transition: all 0.3s; font-size: 0.95rem; }
         .glass-input:focus { outline: none; border-color: var(--primary-neon); box-shadow: 0 0 20px rgba(0, 240, 255, 0.15); }
         .tech-font { font-family: 'Inter', system-ui, sans-serif; }
-        .animate-spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+
       `}</style>
     </div>
   );

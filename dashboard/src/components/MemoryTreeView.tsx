@@ -254,7 +254,7 @@ export function MemoryTreeView() {
         </div>
 
         <div style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: 16, background: 'rgba(5,8,15,0.65)' }}>
-          {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: 'var(--primary-neon)' }}><Loader2 className="spin" size={24} /></div> : Array.from(tree.entries()).map(([project, types]) => {
+          {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: 'var(--primary-neon)' }}><Loader2 className="animate-spin" size={24} /></div> : Array.from(tree.entries()).map(([project, types]) => {
             const projectKey = `project:${project}`;
             const projectOpen = expanded.has(projectKey);
             return <div key={project} style={{ marginBottom: '0.8rem' }}>
