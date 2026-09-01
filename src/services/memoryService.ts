@@ -135,15 +135,29 @@ export class MemoryService {
 
     // Filter down to the subset of entities that successfully generated embeddings
     // We map to a tuple to preserve the original index for content lookup, preventing indexOf bugs
-    const validEntitiesWithIndices = filterValidItems(
-      entities.map((e, i) => ({ entity: e, originalIndex: i })),
-      (item) => !!(embeddings && embeddings[item.originalIndex] !== undefined),
-      (skippedCount) => {
-        const acceptedCount = entities.length - skippedCount;
-        logger.warn(`[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Accepted ${acceptedCount} valid entities, dropping ${skippedCount} unmatched entities.`);
+    const tuples = entities.map((e, i) => ({ entity: e, originalIndex: i }));
+
+    // Instead of filtering both arrays independently and assuming they align,
+    // we iterate exactly once pushing both the tuple and the embedding simultaneously.
+    // This removes the intermediate .filter() allocation and guarantees perfect index sync.
+    const validEntitiesWithIndices: typeof tuples = [];
+    const validEmbeddings: NonNullable<typeof embeddings> = [];
+
+    let skippedCount = 0;
+    for (let i = 0; i < tuples.length; i++) {
+      const emb = embeddings?.[tuples[i].originalIndex];
+      if (emb !== undefined) {
+        validEntitiesWithIndices.push(tuples[i]);
+        validEmbeddings.push(emb);
+      } else {
+        skippedCount++;
       }
-    );
-    const validEmbeddings = embeddings ? embeddings.filter(emb => emb !== undefined) : [];
+    }
+
+    if (skippedCount > 0) {
+      const acceptedCount = entities.length - skippedCount;
+      logger.warn(`[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Accepted ${acceptedCount} valid entities, dropping ${skippedCount} unmatched entities.`);
+    }
 
     // Transform GraphEntity objects into database rows, mapping project-prefixed IDs
     // and combining them with their generated semantic embeddings.

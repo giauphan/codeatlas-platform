@@ -30,14 +30,14 @@ export const FatalErrorTypes = {
 export function buildInClause<T extends Record<string, string | number>>(
   ids: string[],
   baseBinds: T = {} as T
-): { clause: string; binds: T & Record<string, string> } {
+): { clause: string; binds: T & Record<string, string | number> } {
   const binds: Record<string, string | number> = { ...baseBinds };
   if (ids.length === 0) {
-    return { clause: "NULL", binds: binds as T & Record<string, string> };
+    return { clause: "NULL", binds: binds as T & Record<string, string | number> };
   }
   const clause = ids.map((_, i) => `:id${i}`).join(",");
   ids.forEach((id, i) => { binds[`id${i}`] = String(id); });
-  return { clause, binds: binds as T & Record<string, string> };
+  return { clause, binds: binds as T & Record<string, string | number> };
 }
 
 function isValidPositiveInt(value: number, variableName?: string): boolean {
