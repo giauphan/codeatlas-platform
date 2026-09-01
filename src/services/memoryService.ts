@@ -118,23 +118,24 @@ export class MemoryService {
     `;
 
     // Filter down to the subset of entities that successfully generated embeddings
-    const validEntities = filterValidItems(
-      entities,
-      (_, index) => !!(embeddings && embeddings[index] !== undefined),
+    // We map to a tuple to preserve the original index for content lookup, preventing indexOf bugs
+    const validEntitiesWithIndices = filterValidItems(
+      entities.map((e, i) => ({ entity: e, originalIndex: i })),
+      (item) => !!(embeddings && embeddings[item.originalIndex] !== undefined),
       (skippedCount) => logger.warn(`[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Dropping ${skippedCount} unmatched entities.`)
     );
     const validEmbeddings = embeddings ? embeddings.filter(emb => emb !== undefined) : [];
 
     // Transform GraphEntity objects into database rows, mapping project-prefixed IDs
     // and combining them with their generated semantic embeddings.
-    const rows = validEntities.map((e, index) => ({
-      id: `${project}_${e.id}`,
+    const rows = validEntitiesWithIndices.map((item, mappedIndex) => ({
+      id: `${project}_${item.entity.id}`,
       project,
-      type: e.type,
-      name: e.label,
-      path: e.filePath || "",
-      content: contents[entities.indexOf(e)], // Map back to original index for content
-      embedding: encodeEmbedding(validEmbeddings[index]),
+      type: item.entity.type,
+      name: item.entity.label,
+      path: item.entity.filePath || "",
+      content: contents[item.originalIndex], // Safe O(1) direct mapping
+      embedding: encodeEmbedding(validEmbeddings[mappedIndex]),
       tenantId: tid,
     }));
 
