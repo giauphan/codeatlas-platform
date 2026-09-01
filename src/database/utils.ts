@@ -141,7 +141,11 @@ export interface BatchExecuteConfig {
   timeoutMs?: number;
   retryBaseDelayMs?: number;
   retryJitterMs?: number;
-  /** If true, swallows batch execution errors and allows subsequent chunks to continue processing. Defaults to false. */
+  /**
+   * If true, swallows terminal batch execution errors and allows subsequent chunks
+   * to continue processing. This essentially drops the bad chunk and moves on
+   * without crashing the entire import pipeline. Defaults to false.
+   */
   continueOnError?: boolean;
 }
 
