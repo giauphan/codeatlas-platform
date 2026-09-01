@@ -183,10 +183,10 @@ export class MemoryService {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error("Error saving semantic memory:", msg);
-      if (err instanceof Error) {
-         throw err;
-      }
-      throw new Error(`Error saving semantic memory: ${msg}`);
+
+      // Preserve the underlying BatchExecutionError or Error, avoiding generic wrapping
+      // when a typed error object is already provided, but normalize raw strings/unknowns
+      throw err instanceof Error ? err : new Error(`Error saving semantic memory: ${msg}`);
     }
   }
 
@@ -251,10 +251,10 @@ export class MemoryService {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error("Error saving relational memory:", msg);
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error(`Error saving relational memory: ${msg}`);
+
+      // Preserve the underlying BatchExecutionError or Error, avoiding generic wrapping
+      // when a typed error object is already provided, but normalize raw strings/unknowns
+      throw err instanceof Error ? err : new Error(`Error saving relational memory: ${msg}`);
     }
   }
 

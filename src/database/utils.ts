@@ -105,6 +105,8 @@ export function validateRows<T extends Record<string, unknown>>(
 
   for (let i = 0; i < rowsToCheck.length; i++) {
     const row = rowsToCheck[i];
+    // Cast to [keyof T, string] strictly enforces runtime type boundaries here,
+    // asserting Object.entries yields defined string literals matching expected record keys.
     for (const [field, expectedType] of Object.entries(expectedTypes) as [keyof T, string][]) {
       const val = row[field];
       if (expectedType && typeof val !== expectedType) {
