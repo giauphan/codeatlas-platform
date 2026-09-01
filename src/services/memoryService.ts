@@ -26,7 +26,11 @@ function filterValidItems<T>(
 ): T[] {
   const valid: T[] = [];
   let skippedCount = 0;
-  for (let i = 0; i < items.length; i++) {
+
+  // Guard against arbitrary large unbounded inputs or prototype pollution
+  const len = Array.isArray(items) ? items.length : 0;
+
+  for (let i = 0; i < len; i++) {
     if (isValid(items[i], i)) {
       valid.push(items[i]);
     } else {
