@@ -218,7 +218,7 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
 
     while (attempt < retries) {
       try {
-        await db.executeMany!(sql, chunk);
+        await db.executeMany(sql, chunk);
         break; // Success, break out of retry loop
       } catch (err) {
         const parsedErr = err instanceof Error ? err : new Error(String(err));
