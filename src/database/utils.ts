@@ -123,6 +123,10 @@ export interface BatchExecuteConfig {
   retryJitterMs?: number;
 }
 
+export interface BatchExecuteDatabaseAdapter<T extends Record<string, unknown>> {
+  executeMany?: (sql: string, params: T[]) => Promise<{ rowsAffected: number }>;
+}
+
 /**
  * Executes batch inserts in chunks, addressing N+1 query bottlenecks.
  * Prevents excessive memory consumption during high-volume inserts.
@@ -144,7 +148,7 @@ export interface BatchExecuteConfig {
  * await batchExecuteMany(db, "INSERT INTO table VALUES (:a, :b)", rows, { chunkSize: 500 });
  */
 export async function batchExecuteMany<T extends Record<string, unknown>>(
-  db: { executeMany?: (sql: string, params: T[]) => Promise<{ rowsAffected: number }> },
+  db: BatchExecuteDatabaseAdapter<T>,
   sql: string,
   rows: T[],
   config: BatchExecuteConfig = {}
