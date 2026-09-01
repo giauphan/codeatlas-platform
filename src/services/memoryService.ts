@@ -122,7 +122,10 @@ export class MemoryService {
     const validEntitiesWithIndices = filterValidItems(
       entities.map((e, i) => ({ entity: e, originalIndex: i })),
       (item) => !!(embeddings && embeddings[item.originalIndex] !== undefined),
-      (skippedCount) => logger.warn(`[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Dropping ${skippedCount} unmatched entities.`)
+      (skippedCount) => {
+        const acceptedCount = entities.length - skippedCount;
+        logger.warn(`[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Accepted ${acceptedCount} valid entities, dropping ${skippedCount} unmatched entities.`);
+      }
     );
     const validEmbeddings = embeddings ? embeddings.filter(emb => emb !== undefined) : [];
 
@@ -176,7 +179,10 @@ export class MemoryService {
           if (!l.target) skippedNoTarget++;
           return !!(l.source && l.target);
         },
-        () => logger.warn(`[MemoryService] Skipped malformed links for project '${project}': ${skippedNoSource} missing source, ${skippedNoTarget} missing target.`)
+        (skippedCount) => {
+          const acceptedCount = links.length - skippedCount;
+          logger.warn(`[MemoryService] Relational memory diagnostics for project '${project}': Accepted ${acceptedCount} valid links. Skipped ${skippedCount} malformed links (${skippedNoSource} missing source, ${skippedNoTarget} missing target).`);
+        }
       );
 
       const rows = validLinks.map(l => ({
