@@ -208,6 +208,7 @@ export class MemoryService {
       // Filter out links that lack valid source or target identifiers.
       let skippedNoSource = 0;
       let skippedNoTarget = 0;
+      let skippedBoth = 0;
 
       const validLinks = filterValidItems(
         links,
@@ -215,8 +216,7 @@ export class MemoryService {
           const hasSource = !!l.source;
           const hasTarget = !!l.target;
           if (!hasSource && !hasTarget) {
-            skippedNoSource++;
-            skippedNoTarget++;
+            skippedBoth++;
             return false;
           }
           if (!hasSource) {
@@ -231,7 +231,7 @@ export class MemoryService {
         },
         (skippedCount) => {
           const acceptedCount = links.length - skippedCount;
-          logger.warn(`[MemoryService] Relational memory diagnostics for project '${project}': Accepted ${acceptedCount} valid links. Skipped ${skippedCount} malformed links (${skippedNoSource} missing source, ${skippedNoTarget} missing target).`);
+          logger.warn(`[MemoryService] Relational memory diagnostics for project '${project}': Accepted ${acceptedCount} valid links. Skipped ${skippedCount} malformed links (${skippedNoSource} missing source, ${skippedNoTarget} missing target, ${skippedBoth} missing both).`);
         }
       );
 
