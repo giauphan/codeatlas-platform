@@ -81,25 +81,28 @@ export function parsePositiveInt(envVarValue: string | undefined, defaultValue: 
 export function validateRows<T extends Record<string, unknown>>(
   rows: T[],
   expectedTypes: Partial<Record<keyof T, "string" | "number" | "boolean" | "object" | "undefined">>,
-  sampleSize?: number
+  sampleSize?: number,
+  traceIdContext?: string
 ): void {
   const rowsToCheck = sampleSize && sampleSize > 0
     ? rows.slice(0, Math.min(sampleSize, rows.length))
     : rows;
+
+  const logPrefix = traceIdContext ? `[BatchExecute][${traceIdContext}]` : `[BatchExecute]`;
 
   for (let i = 0; i < rowsToCheck.length; i++) {
     const row = rowsToCheck[i];
     for (const [field, expectedType] of Object.entries(expectedTypes) as [keyof T, string][]) {
       const val = row[field];
       if (expectedType && typeof val !== expectedType) {
-        const errMsg = `[BatchExecute] Pre-validation failed at row index ${i}: field '${String(field)}' expected ${expectedType}, got ${typeof val}.`;
+        const errMsg = `${logPrefix} Pre-validation failed at row index ${i}: field '${String(field)}' expected ${expectedType}, got ${typeof val}.`;
         logger.error(errMsg);
         throw new Error(errMsg);
       }
 
       // Enforce non-empty string constraint
       if (expectedType === 'string' && (val as unknown as string).trim() === '') {
-        const errMsg = `[BatchExecute] Pre-validation failed at row index ${i}: field '${String(field)}' must not be an empty string.`;
+        const errMsg = `${logPrefix} Pre-validation failed at row index ${i}: field '${String(field)}' must not be an empty string.`;
         logger.error(errMsg);
         throw new Error(errMsg);
       }
@@ -150,6 +153,9 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
   const startTime = performance.now();
   const traceId = randomUUID();
 
+  // ==========================================
+  // EXECUTION & RETRY LOOP
+  // ==========================================
   for (let i = 0; i < rows.length; i += size) {
     const chunkIndex = i / size;
     const chunk = rows.slice(i, i + size);
@@ -215,6 +221,9 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
     }
   }
 
+  // ==========================================
+  // PERFORMANCE LOGGING
+  // ==========================================
   const elapsed = Math.round(performance.now() - startTime);
   logger.debug(`[BatchExecute][${traceId}] Successfully executed ${rows.length} rows in ${Math.ceil(rows.length / size)} batches (chunk size: ${size}) in ${elapsed}ms.`);
 }
