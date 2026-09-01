@@ -137,7 +137,7 @@ export class MemoryService {
       type: item.entity.type,
       name: item.entity.label,
       path: item.entity.filePath || "",
-      content: contents[item.originalIndex], // Safe O(1) direct mapping
+      content: contents[item.originalIndex] ?? "", // Safe O(1) direct mapping with bounds fallback
       embedding: encodeEmbedding(validEmbeddings[mappedIndex]),
       tenantId: tid,
     }));
