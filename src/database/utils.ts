@@ -259,12 +259,14 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
         if (attempt < retries) {
           totalRetries++;
           // Adds jitter using a cryptographically secure random number generator to prevent "thundering herd" scenarios.
-          // Ensures a minimum delay bounded by retryBaseDelayMs even on the first attempt (when 2^0 = 1).
+          // The base exponential backoff factor is calculated using attempt-1 so the first retry uses a factor of 2^0 (1).
+          // We add jitter and then ensure the final value doesn't drop below the minimum base delay or exceed the maximum.
           const jitter = randomInt(0, retryJitterMs + 1);
+          const exponentialFactor = 2 ** (attempt - 1);
           const targetDelay = Math.min(
             Math.max(
               retryBaseDelayMs,
-              Math.floor(jitter + (2 ** (attempt - 1)) * retryBaseDelayMs)
+              Math.floor(retryBaseDelayMs * exponentialFactor + jitter)
             ),
             maxDelayMs
           );

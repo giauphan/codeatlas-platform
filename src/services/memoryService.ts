@@ -173,10 +173,9 @@ export class MemoryService {
       };
     });
 
-    type SemanticMemoryRow = { id: string; project: string; type: string; name: string; path: string; content: string; embedding: any; tenantId: string };
-
     // Sample a subset for very large ingestion requests to optimize validation performance
-    validateRows<SemanticMemoryRow>(rows as SemanticMemoryRow[], { id: 'string', project: 'string' }, 10);
+    // Use typeof rows[0] explicitly to align strictly with the runtime mapped object type without duplication
+    validateRows<typeof rows[0]>(rows, { id: 'string', project: 'string' }, 10);
 
     try {
       await batchExecuteMany(db, sql, rows);
