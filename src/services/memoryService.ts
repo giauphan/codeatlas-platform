@@ -102,10 +102,9 @@ export class MemoryService {
     `;
 
     if (!embeddings || embeddings.length !== entities.length) {
-      const errMsg = `[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Aborting save.`;
-      // Log specific mismatched details for debugging diagnostics, without exposing full identifiers
       const mismatchedCount = entities.length - (embeddings?.length || 0);
-      logger.error(`${errMsg} Total mismatched entity count: ${mismatchedCount}`);
+      const errMsg = `[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Total mismatched entity count: ${mismatchedCount}. Aborting save.`;
+      logger.error(errMsg);
       throw new Error(errMsg);
     }
 

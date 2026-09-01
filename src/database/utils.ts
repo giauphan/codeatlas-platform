@@ -149,7 +149,8 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
         }
 
         attempt++;
-        if (performance.now() - batchStartTime > timeoutMs) {
+        const elapsedSinceBatchStart = performance.now() - batchStartTime;
+        if (elapsedSinceBatchStart > timeoutMs) {
           logger.error(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} exceeded cumulative timeout of ${timeoutMs}ms. Aborting retries.`);
           throw new BatchExecutionError(`Batch execution timeout exceeded for chunk ${chunkIndex} [TraceId: ${traceId}].`, parsedErr, chunkIndex);
         }
@@ -158,13 +159,18 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
           // Adds jitter using a cryptographically secure random number generator to prevent "thundering herd" scenarios.
           // Ensures a minimum delay bounded by retryBaseDelayMs even on the first attempt (when 2^0 = 1).
           const jitter = randomInt(0, retryJitterMs + 1);
-          const delay = Math.min(
+          const targetDelay = Math.min(
             Math.max(
               retryBaseDelayMs,
               Math.floor(jitter + (2 ** attempt) * retryBaseDelayMs)
             ),
             maxDelayMs
           );
+
+          // Cap the delay so we don't sleep longer than the remaining timeout budget
+          const remainingTimeout = timeoutMs - elapsedSinceBatchStart;
+          const delay = Math.min(targetDelay, remainingTimeout);
+
           logger.warn(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} execution failed. Retrying attempt ${attempt + 1}/${retries} in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
