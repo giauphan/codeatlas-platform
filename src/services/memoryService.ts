@@ -142,7 +142,12 @@ export class MemoryService {
       // if `validEmbeddings[mappedIndex]` is out of bounds during mapping.
       const emb = mappedIndex < validEmbeddings.length ? validEmbeddings[mappedIndex] : [];
       if (mappedIndex >= validEmbeddings.length) {
-         logger.warn(`[MemoryService] Mismatched index during row mapping for entity ${item.entity.id}. Falling back to empty embedding.`);
+         throw new Error(`[MemoryService] Critical Mismatch: Index out of bounds during row mapping for entity ${item.entity.id}. Expected at least ${mappedIndex + 1} valid embeddings but got ${validEmbeddings.length}.`);
+      }
+
+      const content = contents[item.originalIndex];
+      if (content === undefined) {
+         throw new Error(`[MemoryService] Critical Mismatch: Original index ${item.originalIndex} out of bounds for contents array of length ${contents.length}.`);
       }
 
       return {
@@ -151,14 +156,16 @@ export class MemoryService {
         type: item.entity.type,
         name: item.entity.label,
         path: item.entity.filePath || "",
-        content: contents[item.originalIndex] ?? "", // Safe O(1) direct mapping with bounds fallback
+        content, // Safe O(1) direct mapping guaranteed by index invariants
         embedding: encodeEmbedding(emb),
         tenantId: tid,
       };
     });
 
+    type SemanticMemoryRow = { id: string; project: string; type: string; name: string; path: string; content: string; embedding: any; tenantId: string };
+
     // Sample a subset for very large ingestion requests to optimize validation performance
-    validateRows(rows, { id: 'string', project: 'string' } as Partial<Record<keyof typeof rows[0], "string">>, 10);
+    validateRows<SemanticMemoryRow>(rows as SemanticMemoryRow[], { id: 'string', project: 'string' }, 10);
 
     try {
       await batchExecuteMany(db, sql, rows);
@@ -190,9 +197,22 @@ export class MemoryService {
       const validLinks = filterValidItems(
         links,
         (l) => {
-          if (!l.source) skippedNoSource++;
-          if (!l.target) skippedNoTarget++;
-          return !!(l.source && l.target);
+          const hasSource = !!l.source;
+          const hasTarget = !!l.target;
+          if (!hasSource && !hasTarget) {
+            skippedNoSource++;
+            skippedNoTarget++;
+            return false;
+          }
+          if (!hasSource) {
+             skippedNoSource++;
+             return false;
+          }
+          if (!hasTarget) {
+             skippedNoTarget++;
+             return false;
+          }
+          return true;
         },
         (skippedCount) => {
           const acceptedCount = links.length - skippedCount;
@@ -200,7 +220,8 @@ export class MemoryService {
         }
       );
 
-      const rows = validLinks.map(l => ({
+      type RelationalMemoryRow = { src: string; tgt: string; project: string; type: string; tenantId: string };
+      const rows: RelationalMemoryRow[] = validLinks.map(l => ({
         src: `${project}_${l.source}`,
         tgt: `${project}_${l.target}`,
         project,
@@ -209,7 +230,7 @@ export class MemoryService {
       }));
 
       // Sample a subset for very large ingestion requests to optimize validation performance
-      validateRows(rows, { src: 'string', tgt: 'string' } as Partial<Record<keyof typeof rows[0], "string">>, 10);
+      validateRows<RelationalMemoryRow>(rows, { src: 'string', tgt: 'string' }, 10);
 
       await batchExecuteMany(db, sql, rows);
     } catch (err) {

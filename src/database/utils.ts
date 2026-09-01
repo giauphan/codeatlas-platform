@@ -109,7 +109,7 @@ export function validateRows<T extends Record<string, unknown>>(
       }
 
       // Enforce non-empty string constraint
-      if (expectedType === 'string' && (val as unknown as string).trim() === '') {
+      if (expectedType === 'string' && typeof val === 'string' && val.trim() === '') {
         const errMsg = `${logPrefix} Pre-validation failed at row index ${i}: field '${String(field)}' must not be an empty string.`;
         logger.error(errMsg);
         throw new Error(errMsg);
@@ -234,7 +234,7 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
           const targetDelay = Math.min(
             Math.max(
               retryBaseDelayMs,
-              Math.floor(jitter + (2 ** attempt) * retryBaseDelayMs)
+              Math.floor(jitter + (2 ** (attempt - 1)) * retryBaseDelayMs)
             ),
             maxDelayMs
           );
