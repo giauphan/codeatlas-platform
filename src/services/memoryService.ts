@@ -150,12 +150,11 @@ export class MemoryService {
     const rows = validEntitiesWithIndices.map((item, mappedIndex) => {
       // In a well-formed response, validEmbeddings length perfectly matches validEntitiesWithIndices length.
       // However, if the generation batch failed partially or the arrays somehow drifted,
-      // we need to gracefully degrade to avoid runtime 'TypeError: cannot read properties of undefined'
-      // if `validEmbeddings[mappedIndex]` is out of bounds during mapping.
-      const emb = mappedIndex < validEmbeddings.length ? validEmbeddings[mappedIndex] : [];
+      // we need to fail fast to prevent silent data corruption or 'TypeError: cannot read properties of undefined'.
       if (mappedIndex >= validEmbeddings.length) {
          throw new Error(`[MemoryService] Critical Mismatch: Index out of bounds during row mapping for entity ${item.entity.id}. Expected at least ${mappedIndex + 1} valid embeddings but got ${validEmbeddings.length}.`);
       }
+      const emb = validEmbeddings[mappedIndex];
 
       const content = contents[item.originalIndex];
       if (content === undefined) {
