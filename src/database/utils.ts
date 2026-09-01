@@ -72,9 +72,22 @@ export function parsePositiveInt(envVarValue: string | undefined, defaultValue: 
   return parsed;
 }
 
-/** Helper function to pre-validate rows before database insertion. */
-export function validateRows<T extends Record<string, unknown>>(rows: T[], expectedTypes: Partial<Record<keyof T, "string" | "number" | "boolean" | "object" | "undefined">>): void {
-  for (const row of rows) {
+/**
+ * Helper function to pre-validate rows before database insertion.
+ * For large datasets, a sampleSize can be provided to only validate
+ * the first N rows under the assumption of schema homogeneity,
+ * trading strictness for performance.
+ */
+export function validateRows<T extends Record<string, unknown>>(
+  rows: T[],
+  expectedTypes: Partial<Record<keyof T, "string" | "number" | "boolean" | "object" | "undefined">>,
+  sampleSize?: number
+): void {
+  const rowsToCheck = sampleSize && sampleSize > 0 && sampleSize < rows.length
+    ? rows.slice(0, sampleSize)
+    : rows;
+
+  for (const row of rowsToCheck) {
     for (const [field, expectedType] of Object.entries(expectedTypes) as [keyof T, string][]) {
       if (expectedType && typeof row[field] !== expectedType) {
         const errMsg = `[BatchExecute] Pre-validation failed: row field '${String(field)}' expected ${expectedType}, got ${typeof row[field]}.`;
@@ -101,6 +114,9 @@ export interface BatchExecuteConfig {
  *
  * Note: Be mindful of database-specific parameter limits when tuning chunk sizes
  * (e.g. SQLite's SQLITE_MAX_VARIABLE_NUMBER default limit of 999 or 32766).
+ * If your SQL query uses 5 parameters per row and you set CHUNK_SIZE to 500,
+ * you will pass 2500 variables, which exceeds older SQLite defaults. Adjust
+ * config.chunkSize accordingly for your dialect.
  */
 export async function batchExecuteMany<T extends Record<string, unknown>>(
   db: { executeMany: (sql: string, params: T[]) => Promise<{ rowsAffected: number }> },

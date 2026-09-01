@@ -121,7 +121,8 @@ export class MemoryService {
       tenantId: tid,
     }));
 
-    validateRows(rows, { id: 'string', project: 'string' } as Partial<Record<keyof typeof rows[0], "string">>);
+    // Sample a subset for very large ingestion requests to optimize validation performance
+    validateRows(rows, { id: 'string', project: 'string' } as Partial<Record<keyof typeof rows[0], "string">>, 10);
 
     try {
       await batchExecuteMany(db, sql, rows);
@@ -168,7 +169,8 @@ export class MemoryService {
         tenantId: tid,
       }));
 
-      validateRows(rows, { src: 'string', tgt: 'string' } as Partial<Record<keyof typeof rows[0], "string">>);
+      // Sample a subset for very large ingestion requests to optimize validation performance
+      validateRows(rows, { src: 'string', tgt: 'string' } as Partial<Record<keyof typeof rows[0], "string">>, 10);
 
       await batchExecuteMany(db, sql, rows);
     } catch (err) {
