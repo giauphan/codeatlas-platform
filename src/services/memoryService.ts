@@ -11,6 +11,22 @@ export function activeDialect(): Dialect {
   return (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase() === "postgres" ? "postgres" : "sqlite";
 }
 
+/**
+ * Filters out malformed array items and optionally logs a warning with diagnostic counts.
+ * Prevents throwing errors for individual mismatched fields to improve resilience.
+ */
+function filterValidItems<T>(
+  items: T[],
+  isValid: (item: T, index: number) => boolean,
+  logWarning: (skippedCount: number) => void
+): T[] {
+  const valid = items.filter(isValid);
+  if (valid.length !== items.length) {
+    logWarning(items.length - valid.length);
+  }
+  return valid;
+}
+
 function tenantId(): string {
   const auth = authStorage.getStore();
   if (!auth?.uid) throw new Error("Auth context required — call within authStorage.run()");
@@ -101,17 +117,13 @@ export class MemoryService {
       ON CONFLICT(id) DO UPDATE SET content = excluded.content, embedding = excluded.embedding
     `;
 
-    let validEntities = entities;
-    let validEmbeddings = embeddings;
-
-    if (!embeddings || embeddings.length !== entities.length) {
-      const mismatchedCount = entities.length - (embeddings?.length || 0);
-      logger.warn(`[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Dropping ${mismatchedCount} unmatched entities.`);
-
-      // Filter down to the subset of entities that successfully generated embeddings
-      validEntities = entities.filter((_, index) => embeddings && embeddings[index] !== undefined);
-      validEmbeddings = embeddings ? embeddings.filter(emb => emb !== undefined) : [];
-    }
+    // Filter down to the subset of entities that successfully generated embeddings
+    const validEntities = filterValidItems(
+      entities,
+      (_, index) => !!(embeddings && embeddings[index] !== undefined),
+      (skippedCount) => logger.warn(`[MemoryService] Embedding generation mismatch for semantic memory. Expected ${entities.length}, got ${embeddings?.length}. Dropping ${skippedCount} unmatched entities.`)
+    );
+    const validEmbeddings = embeddings ? embeddings.filter(emb => emb !== undefined) : [];
 
     // Transform GraphEntity objects into database rows, mapping project-prefixed IDs
     // and combining them with their generated semantic embeddings.
@@ -121,8 +133,8 @@ export class MemoryService {
       type: e.type,
       name: e.label,
       path: e.filePath || "",
-      content: contents[index],
-      embedding: encodeEmbedding(validEmbeddings![index]),
+      content: contents[entities.indexOf(e)], // Map back to original index for content
+      embedding: encodeEmbedding(validEmbeddings[index]),
       tenantId: tid,
     }));
 
@@ -156,15 +168,15 @@ export class MemoryService {
       let skippedNoSource = 0;
       let skippedNoTarget = 0;
 
-      const validLinks = links.filter(l => {
-        if (!l.source) skippedNoSource++;
-        if (!l.target) skippedNoTarget++;
-        return l.source && l.target;
-      });
-
-      if (validLinks.length !== links.length) {
-        logger.warn(`[MemoryService] Skipped malformed links for project '${project}': ${skippedNoSource} missing source, ${skippedNoTarget} missing target.`);
-      }
+      const validLinks = filterValidItems(
+        links,
+        (l) => {
+          if (!l.source) skippedNoSource++;
+          if (!l.target) skippedNoTarget++;
+          return !!(l.source && l.target);
+        },
+        () => logger.warn(`[MemoryService] Skipped malformed links for project '${project}': ${skippedNoSource} missing source, ${skippedNoTarget} missing target.`)
+      );
 
       const rows = validLinks.map(l => ({
         src: `${project}_${l.source}`,

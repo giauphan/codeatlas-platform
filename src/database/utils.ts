@@ -87,18 +87,19 @@ export function validateRows<T extends Record<string, unknown>>(
     ? rows.slice(0, Math.min(sampleSize, rows.length))
     : rows;
 
-  for (const row of rowsToCheck) {
+  for (let i = 0; i < rowsToCheck.length; i++) {
+    const row = rowsToCheck[i];
     for (const [field, expectedType] of Object.entries(expectedTypes) as [keyof T, string][]) {
       const val = row[field];
       if (expectedType && typeof val !== expectedType) {
-        const errMsg = `[BatchExecute] Pre-validation failed: row field '${String(field)}' expected ${expectedType}, got ${typeof val}.`;
+        const errMsg = `[BatchExecute] Pre-validation failed at row index ${i}: field '${String(field)}' expected ${expectedType}, got ${typeof val}.`;
         logger.error(errMsg);
         throw new Error(errMsg);
       }
 
       // Enforce non-empty string constraint
       if (expectedType === 'string' && (val as unknown as string).trim() === '') {
-        const errMsg = `[BatchExecute] Pre-validation failed: row field '${String(field)}' must not be an empty string.`;
+        const errMsg = `[BatchExecute] Pre-validation failed at row index ${i}: field '${String(field)}' must not be an empty string.`;
         logger.error(errMsg);
         throw new Error(errMsg);
       }
