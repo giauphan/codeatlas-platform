@@ -170,8 +170,12 @@ export class MemoryService {
     try {
       await batchExecuteMany(db, sql, rows);
     } catch (err) {
-      logger.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
-      throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error("Error saving semantic memory:", msg);
+      if (err instanceof Error) {
+         throw err;
+      }
+      throw new Error(`Error saving semantic memory: ${msg}`);
     }
   }
 
@@ -234,8 +238,12 @@ export class MemoryService {
 
       await batchExecuteMany(db, sql, rows);
     } catch (err) {
-      logger.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
-      throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error("Error saving relational memory:", msg);
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(`Error saving relational memory: ${msg}`);
     }
   }
 
