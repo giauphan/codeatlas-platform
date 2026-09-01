@@ -105,14 +105,14 @@ export function validateRows<T extends Record<string, unknown>>(
       if (expectedType && typeof val !== expectedType) {
         const errMsg = `${logPrefix} Pre-validation failed at row index ${i}: field '${String(field)}' expected ${expectedType}, got ${typeof val}.`;
         logger.error(errMsg);
-        throw new Error(errMsg);
+        throw new TypeError(errMsg);
       }
 
       // Enforce non-empty string constraint
       if (expectedType === 'string' && typeof val === 'string' && val.trim() === '') {
         const errMsg = `${logPrefix} Pre-validation failed at row index ${i}: field '${String(field)}' must not be an empty string.`;
         logger.error(errMsg);
-        throw new Error(errMsg);
+        throw new TypeError(errMsg);
       }
     }
   }
@@ -136,6 +136,8 @@ export interface BatchExecuteConfig {
   timeoutMs?: number;
   retryBaseDelayMs?: number;
   retryJitterMs?: number;
+  /** If true, swallows batch execution errors and allows subsequent chunks to continue processing. Defaults to false. */
+  continueOnError?: boolean;
 }
 
 /**
@@ -216,14 +218,26 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
 
         if (isFatal) {
           logger.error(`[BatchExecute][${traceId}] Fatal error encountered in batch chunk ${chunkIndex}. Aborting retries.`);
-          throw new BatchExecutionError(`Fatal batch execution error in chunk ${chunkIndex} [TraceId: ${traceId}].`, parsedErr, chunkIndex, chunk);
+          const batchErr = new BatchExecutionError(`Fatal batch execution error in chunk ${chunkIndex} [TraceId: ${traceId}].`, parsedErr, chunkIndex, chunk);
+          if (config.continueOnError) {
+            lastError = batchErr;
+            attempt = retries; // Force loop exit
+            break;
+          }
+          throw batchErr;
         }
 
         attempt++;
         const elapsedSinceBatchStart = performance.now() - batchStartTime;
         if (elapsedSinceBatchStart > timeoutMs) {
           logger.error(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} exceeded cumulative timeout of ${timeoutMs}ms. Aborting retries.`);
-          throw new BatchExecutionError(`Batch execution timeout exceeded for chunk ${chunkIndex} [TraceId: ${traceId}].`, parsedErr, chunkIndex, chunk);
+          const batchErr = new BatchExecutionError(`Batch execution timeout exceeded for chunk ${chunkIndex} [TraceId: ${traceId}].`, parsedErr, chunkIndex, chunk);
+          if (config.continueOnError) {
+            lastError = batchErr;
+            attempt = retries; // Force loop exit
+            break;
+          }
+          throw batchErr;
         }
 
         if (attempt < retries) {
@@ -249,11 +263,16 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
       }
     }
 
-    if (attempt >= retries) {
+    if (attempt >= retries && lastError) {
       // Redact sensitive details in logs by logging error name only (unless explicitly configured to trace)
       const errorName = lastError instanceof Error ? lastError.name : "UnknownError";
       logger.error(`[BatchExecute][${traceId}] Batch chunk ${chunkIndex} failed after ${retries} attempts. ErrorType: ${errorName}`);
-      throw new BatchExecutionError(`Batch execution failed after ${retries} attempts in chunk ${chunkIndex} [TraceId: ${traceId}].`, lastError as Error | string, chunkIndex, chunk);
+
+      if (!config.continueOnError) {
+        throw lastError instanceof BatchExecutionError
+          ? lastError
+          : new BatchExecutionError(`Batch execution failed after ${retries} attempts in chunk ${chunkIndex} [TraceId: ${traceId}].`, lastError as Error | string, chunkIndex, chunk);
+      }
     }
   }
 
