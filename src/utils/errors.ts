@@ -12,6 +12,7 @@
  * }
  */
 export class BatchExecutionError extends Error {
+  public code: string;
   public originalError: Error | string;
   public failedChunkIndex: number;
   public failedDataChunk?: Record<string, unknown>[];
@@ -24,6 +25,7 @@ export class BatchExecutionError extends Error {
   ) {
     super(message);
     this.name = "BatchExecutionError";
+    this.code = "ERR_BATCH_EXECUTION_FAILED";
     this.originalError = originalError;
     this.failedChunkIndex = Math.max(0, failedChunkIndex);
     this.failedDataChunk = failedDataChunk;
@@ -49,6 +51,7 @@ export class BatchExecutionError extends Error {
   toJSON(): Record<string, unknown> {
     return {
       name: this.name,
+      code: this.code,
       message: this.message,
       failedChunkIndex: this.failedChunkIndex,
       originalError: this.originalError instanceof Error
