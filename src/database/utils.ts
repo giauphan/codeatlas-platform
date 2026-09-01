@@ -173,6 +173,7 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
   // ==========================================
   // EXECUTION & RETRY LOOP
   // ==========================================
+  let totalRetries = 0;
   for (let i = 0; i < rows.length; i += size) {
     const chunkIndex = i / size;
     const chunk = rows.slice(i, i + size);
@@ -209,6 +210,7 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
         }
 
         if (attempt < retries) {
+          totalRetries++;
           // Adds jitter using a cryptographically secure random number generator to prevent "thundering herd" scenarios.
           // Ensures a minimum delay bounded by retryBaseDelayMs even on the first attempt (when 2^0 = 1).
           const jitter = randomInt(0, retryJitterMs + 1);
@@ -243,5 +245,6 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
   // ==========================================
   const elapsed = Math.round(performance.now() - startTime);
   const totalChunks = Math.ceil(rows.length / size);
-  logger.debug(`[BatchExecute][${traceId}] Successfully executed ${rows.length} rows across ${totalChunks} chunks in ${elapsed}ms cumulative time (chunk size: ${size}).`);
+  const retryMetrics = totalRetries > 0 ? ` with ${totalRetries} retries` : '';
+  logger.debug(`[BatchExecute][${traceId}] Successfully executed ${rows.length} rows across ${totalChunks} chunks in ${elapsed}ms cumulative time${retryMetrics} (chunk size: ${size}).`);
 }

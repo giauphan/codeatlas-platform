@@ -1,3 +1,16 @@
+/**
+ * Custom error class thrown by `batchExecuteMany` when a chunk insertion
+ * repeatedly fails and exhausts all retry attempts.
+ *
+ * @example
+ * try {
+ *   await batchExecuteMany(db, sql, rows);
+ * } catch (err) {
+ *   if (err instanceof BatchExecutionError) {
+ *     logger.error(`Dead-letter queue dump: ${JSON.stringify(err.failedDataChunk)}`);
+ *   }
+ * }
+ */
 export class BatchExecutionError extends Error {
   public originalError: Error | string;
   public failedChunkIndex: number;
