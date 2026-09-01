@@ -15,6 +15,10 @@ export class BatchExecutionError extends Error {
     // query parameters in its stack trace before flushing to external sinks.
     if (originalError instanceof Error && originalError.stack) {
       this.stack = `${this.stack}\nCaused by: ${originalError.stack}`;
+    } else if (typeof originalError === 'string') {
+      this.stack = `${this.stack}\nCaused by: ${originalError}`;
+    } else {
+      this.stack = `${this.stack}\nCaused by: Unknown Error Type`;
     }
   }
 }
