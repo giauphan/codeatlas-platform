@@ -144,12 +144,16 @@ export interface BatchExecuteConfig {
  * await batchExecuteMany(db, "INSERT INTO table VALUES (:a, :b)", rows, { chunkSize: 500 });
  */
 export async function batchExecuteMany<T extends Record<string, unknown>>(
-  db: { executeMany: (sql: string, params: T[]) => Promise<{ rowsAffected: number }> },
+  db: { executeMany?: (sql: string, params: T[]) => Promise<{ rowsAffected: number }> },
   sql: string,
   rows: T[],
   config: BatchExecuteConfig = {}
 ): Promise<void> {
   if (rows.length === 0) return;
+
+  if (typeof db.executeMany !== 'function') {
+    throw new Error("[BatchExecute] Provided database adapter does not support 'executeMany'.");
+  }
 
   const size = config.chunkSize ?? BatchConfigDefaults.CHUNK_SIZE;
   const retries = config.maxRetries ?? BatchConfigDefaults.MAX_RETRIES;
@@ -173,7 +177,7 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
 
     while (attempt < retries) {
       try {
-        await db.executeMany(sql, chunk);
+        await db.executeMany!(sql, chunk);
         break; // Success, break out of retry loop
       } catch (err) {
         const parsedErr = err instanceof Error ? err : new Error(String(err));
