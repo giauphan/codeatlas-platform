@@ -179,12 +179,17 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
     throw new Error("[BatchExecute] Provided database adapter does not support 'executeMany'.");
   }
 
-  const size = config.chunkSize ?? BatchConfigDefaults.CHUNK_SIZE;
+  const envChunkSize = process.env.DB_BATCH_CHUNK_SIZE ? parseInt(process.env.DB_BATCH_CHUNK_SIZE, 10) : undefined;
+  const size = config.chunkSize ?? envChunkSize ?? BatchConfigDefaults.CHUNK_SIZE;
   const retries = config.maxRetries ?? BatchConfigDefaults.MAX_RETRIES;
   const maxDelayMs = config.maxDelayMs ?? BatchConfigDefaults.MAX_DELAY;
   const timeoutMs = config.timeoutMs ?? BatchConfigDefaults.TIMEOUT_MS;
   const retryBaseDelayMs = config.retryBaseDelayMs ?? BatchConfigDefaults.RETRY_BASE_DELAY_MS;
   const retryJitterMs = config.retryJitterMs ?? BatchConfigDefaults.RETRY_JITTER_MS;
+
+  if (size <= 0 || isNaN(size)) {
+    throw new Error(`[BatchExecute] Invalid chunkSize: ${size}. Must be a positive integer.`);
+  }
 
   const startTime = performance.now();
   const traceId = randomUUID();

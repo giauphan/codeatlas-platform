@@ -65,6 +65,35 @@ describe('Database Utils', () => {
       assert.strictEqual(executionCount, 2);
     });
 
+    it('honors continueOnError by swallowing terminal batch errors', async () => {
+      let executionCount = 0;
+      const db = {
+        executeMany: async (sql: string, params: any[]) => {
+          executionCount++;
+          // Fail deterministically for chunk index 1
+          if (params[0].id === 3) {
+            throw new Error('Persistent error chunk 2');
+          }
+          return { rowsAffected: params.length };
+        }
+      };
+      const rows = [{id: 1}, {id: 2}, {id: 3}, {id: 4}, {id: 5}];
+
+      // We expect the function to resolve successfully, despite chunk 2 failing 2 times.
+      await assert.doesNotReject(() =>
+        batchExecuteMany(db, 'INSERT', rows, {
+          chunkSize: 2,
+          maxRetries: 2,
+          retryBaseDelayMs: 1,
+          retryJitterMs: 0,
+          continueOnError: true
+        })
+      );
+
+      // execution count = 1 (chunk 0) + 2 (chunk 1 failed 2x) + 1 (chunk 2) = 4
+      assert.strictEqual(executionCount, 4);
+    });
+
     it('throws BatchExecutionError on fatal failure', async () => {
       const db = {
         executeMany: async () => {

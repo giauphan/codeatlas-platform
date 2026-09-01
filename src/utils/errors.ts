@@ -13,6 +13,7 @@
  */
 export class BatchExecutionError extends Error {
   public code: string;
+  public dbErrorCode?: string;
   public originalError: Error | string;
   public failedChunkIndex: number;
   public failedDataChunk?: Record<string, unknown>[];
@@ -31,6 +32,9 @@ export class BatchExecutionError extends Error {
 
     this.name = "BatchExecutionError";
     this.code = "ERR_BATCH_EXECUTION_FAILED";
+    if (originalError instanceof Error && 'code' in originalError) {
+      this.dbErrorCode = String((originalError as { code: unknown }).code);
+    }
     this.originalError = originalError;
     this.failedChunkIndex = Math.max(0, failedChunkIndex);
     this.failedDataChunk = failedDataChunk;
@@ -68,6 +72,7 @@ export class BatchExecutionError extends Error {
     return {
       name: this.name,
       code: this.code,
+      dbErrorCode: this.dbErrorCode,
       message: this.message,
       failedChunkIndex: this.failedChunkIndex,
       originalError: this.originalError instanceof Error
