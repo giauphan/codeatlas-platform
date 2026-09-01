@@ -131,16 +131,27 @@ export class MemoryService {
 
     // Transform GraphEntity objects into database rows, mapping project-prefixed IDs
     // and combining them with their generated semantic embeddings.
-    const rows = validEntitiesWithIndices.map((item, mappedIndex) => ({
-      id: `${project}_${item.entity.id}`,
-      project,
-      type: item.entity.type,
-      name: item.entity.label,
-      path: item.entity.filePath || "",
-      content: contents[item.originalIndex] ?? "", // Safe O(1) direct mapping with bounds fallback
-      embedding: encodeEmbedding(validEmbeddings[mappedIndex]),
-      tenantId: tid,
-    }));
+    const rows = validEntitiesWithIndices.map((item, mappedIndex) => {
+      // In a well-formed response, validEmbeddings length perfectly matches validEntitiesWithIndices length.
+      // However, if the generation batch failed partially or the arrays somehow drifted,
+      // we need to gracefully degrade to avoid runtime 'TypeError: cannot read properties of undefined'
+      // if `validEmbeddings[mappedIndex]` is out of bounds during mapping.
+      const emb = mappedIndex < validEmbeddings.length ? validEmbeddings[mappedIndex] : [];
+      if (mappedIndex >= validEmbeddings.length) {
+         logger.warn(`[MemoryService] Mismatched index during row mapping for entity ${item.entity.id}. Falling back to empty embedding.`);
+      }
+
+      return {
+        id: `${project}_${item.entity.id}`,
+        project,
+        type: item.entity.type,
+        name: item.entity.label,
+        path: item.entity.filePath || "",
+        content: contents[item.originalIndex] ?? "", // Safe O(1) direct mapping with bounds fallback
+        embedding: encodeEmbedding(emb),
+        tenantId: tid,
+      };
+    });
 
     // Sample a subset for very large ingestion requests to optimize validation performance
     validateRows(rows, { id: 'string', project: 'string' } as Partial<Record<keyof typeof rows[0], "string">>, 10);

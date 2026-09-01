@@ -146,8 +146,8 @@ export interface BatchExecuteDatabaseAdapter<T extends Record<string, unknown>> 
 }
 
 /**
- * Executes batch inserts in chunks, addressing N+1 query bottlenecks.
- * Prevents excessive memory consumption during high-volume inserts.
+ * Executes batch inserts in chunks.
+ * Addresses N+1 query bottlenecks and limits memory consumption during high-volume inserts.
  * Implements retries with exponential backoff for transient DB failures.
  *
  * Note: Be mindful of database-specific parameter limits when tuning chunk sizes
