@@ -117,6 +117,7 @@ export function OrchestrationTasksView() {
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             placeholder="Search tasks by ID, description, or agent…"
             aria-label="Search orchestration tasks"
+            className={FOCUS_RING_CLASS}
             style={{
               width: '100%', padding: '0.7rem 1rem 0.7rem 2.5rem', borderRadius: '10px',
               border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)',
