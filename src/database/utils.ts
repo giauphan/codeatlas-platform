@@ -40,7 +40,8 @@ export function buildInClause(ids: string[], baseBinds: Record<string, unknown> 
 function isValidPositiveInt(value: number, variableName?: string): boolean {
   const isValid = value > 0 && Number.isSafeInteger(value) && Number.isFinite(value);
   if (!isValid) {
-    logger.debug(`[Config] Validation failed for positive integer${variableName ? ` (${variableName})` : ''}: ${value}`);
+    const reason = value <= 0 ? 'value must be greater than zero' : 'value must be a safe, finite integer';
+    logger.debug(`[Config] Validation failed for positive integer${variableName ? ` (${variableName})` : ''}: ${value} - ${reason}`);
   }
   return isValid;
 }
@@ -241,5 +242,6 @@ export async function batchExecuteMany<T extends Record<string, unknown>>(
   // PERFORMANCE LOGGING
   // ==========================================
   const elapsed = Math.round(performance.now() - startTime);
-  logger.debug(`[BatchExecute][${traceId}] Successfully executed ${rows.length} rows in ${Math.ceil(rows.length / size)} batches (chunk size: ${size}) in ${elapsed}ms.`);
+  const totalChunks = Math.ceil(rows.length / size);
+  logger.debug(`[BatchExecute][${traceId}] Successfully executed ${rows.length} rows across ${totalChunks} chunks in ${elapsed}ms cumulative time (chunk size: ${size}).`);
 }

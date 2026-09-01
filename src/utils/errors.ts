@@ -28,4 +28,21 @@ export class BatchExecutionError extends Error {
       this.stack = `${this.stack}\nCaused by: Unknown Error Type`;
     }
   }
+
+  /**
+   * Safely serializes the error context for external logging sinks.
+   * Redacts the failed data chunk by default to prevent PII leaks.
+   */
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      failedChunkIndex: this.failedChunkIndex,
+      originalError: this.originalError instanceof Error
+        ? { name: this.originalError.name, message: this.originalError.message }
+        : String(this.originalError),
+      hasDataChunk: !!this.failedDataChunk,
+      stack: this.stack
+    };
+  }
 }
