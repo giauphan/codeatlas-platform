@@ -14,6 +14,10 @@ export function activeDialect(): Dialect {
 /**
  * Filters out malformed array items and optionally logs a warning with diagnostic counts.
  * Prevents throwing errors for individual mismatched fields to improve resilience.
+ *
+ * @example
+ * const items = [{id: 1}, {id: null}];
+ * const validItems = filterValidItems(items, (item) => item.id !== null, (skipped) => logger.warn(`Skipped ${skipped} items`));
  */
 function filterValidItems<T>(
   items: T[],

@@ -27,11 +27,11 @@ export const FatalErrorTypes = {
 } as const;
 
 
-export function buildInClause<T extends Record<string, unknown>>(
+export function buildInClause<T extends Record<string, string | number>>(
   ids: string[],
   baseBinds: T = {} as T
 ): { clause: string; binds: T & Record<string, string> } {
-  const binds: Record<string, unknown> = { ...baseBinds };
+  const binds: Record<string, string | number> = { ...baseBinds };
   if (ids.length === 0) {
     return { clause: "NULL", binds: binds as T & Record<string, string> };
   }
