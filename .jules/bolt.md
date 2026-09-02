@@ -45,3 +45,7 @@
 ## 2026-08-25 - Avoid chained .filter().length
 **Learning:** To optimize performance during AST traversal or file indexing, chaining `.filter().length` creates intermediate array allocations that must then be scanned and garbage collected. This hurts performance significantly in hot paths like text classification checks.
 **Action:** Replace `.filter(condition).length` with a direct `for` loop that iterates over the original array and counts the occurrences that match the condition. This avoids allocating a new array and reduces garbage collection pressure.
+
+## 2026-09-02 - O(N^2) Array Deduplication with indexOf
+**Learning:** Using `arr.filter((v, i, arr) => arr.indexOf(v) === i)` to deduplicate arrays results in $O(N^2)$ time complexity, leading to severe performance bottlenecks for large arrays.
+**Action:** Always replace `.indexOf()` based array deduplication with `Array.from(new Set(arr))` to guarantee $O(N)$ time complexity and eliminate the redundant sequential array scans.
