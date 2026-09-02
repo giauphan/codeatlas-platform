@@ -107,7 +107,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           {[
             { id: 'token', label: 'TOKEN', icon: Key },
             { id: 'signin', label: 'SIGN IN', icon: LogIn },
-          ].map((tab) => (
+          ].map((tab, _index, tabArray) => (
             <button
               key={tab.id}
               role="tab"
@@ -116,21 +116,23 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               id={`tab-${tab.id}`}
               tabIndex={mode === tab.id ? 0 : -1}
               onKeyDown={(e) => {
+                const tabs = tabArray.map(t => t.id);
                 if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                  const tabs = ['token', 'signin'];
                   const currentIndex = tabs.indexOf(mode);
                   const nextIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % tabs.length : (currentIndex - 1 + tabs.length) % tabs.length;
                   setMode(tabs[nextIndex] as 'token' | 'signin');
                   setError(null);
                   document.getElementById(`tab-${tabs[nextIndex]}`)?.focus();
                 } else if (e.key === 'Home') {
-                  setMode('token');
+                  const firstTab = tabs[0];
+                  setMode(firstTab as 'token' | 'signin');
                   setError(null);
-                  document.getElementById('tab-token')?.focus();
+                  document.getElementById(`tab-${firstTab}`)?.focus();
                 } else if (e.key === 'End') {
-                  setMode('signin');
+                  const lastTab = tabs[tabs.length - 1];
+                  setMode(lastTab as 'token' | 'signin');
                   setError(null);
-                  document.getElementById('tab-signin')?.focus();
+                  document.getElementById(`tab-${lastTab}`)?.focus();
                 }
               }}
               disabled={loading}
