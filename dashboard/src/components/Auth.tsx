@@ -6,7 +6,7 @@
  *
  * No Firebase Web SDK needed — sign-in is proxied through backend.
  */
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Key, Mail, Lock, LogIn, Loader2
@@ -24,6 +24,11 @@ function getApiBase(): string {
     ? 'http://localhost:8080'
     : window.location.origin;
 }
+
+const TABS = [
+  { id: 'token', label: 'TOKEN', icon: Key },
+  { id: 'signin', label: 'SIGN IN', icon: LogIn },
+];
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [mode, setMode] = useState<'token' | 'signin'>('token');
@@ -44,6 +49,36 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       setError((err as Error).message || 'Invalid API Key or Token');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const tabIds = TABS.map(t => t.id);
+    let nextTabId: 'token' | 'signin' | null = null;
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const currentIndex = tabIds.indexOf(mode);
+      const nextIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % tabIds.length : (currentIndex - 1 + tabIds.length) % tabIds.length;
+      nextTabId = tabIds[nextIndex] as 'token' | 'signin';
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextTabId = tabIds[0] as 'token' | 'signin';
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextTabId = tabIds[tabIds.length - 1] as 'token' | 'signin';
+    }
+
+    if (nextTabId) {
+      setMode(nextTabId);
+      setError(null);
+
+      // Use setTimeout to ensure focus happens after React state updates the tabIndex
+      setTimeout(() => {
+        tabRefs.current.get(nextTabId!)?.focus();
+      }, 0);
     }
   };
 
@@ -104,37 +139,22 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         {/* Tab Switcher */}
         <div role="tablist" style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-          {[
-            { id: 'token', label: 'TOKEN', icon: Key },
-            { id: 'signin', label: 'SIGN IN', icon: LogIn },
-          ].map((tab, _index, tabArray) => (
+          {TABS.map((tab) => (
             <button
               key={tab.id}
+              ref={(el) => {
+                if (el) {
+                  tabRefs.current.set(tab.id, el);
+                } else {
+                  tabRefs.current.delete(tab.id);
+                }
+              }}
               role="tab"
               aria-selected={mode === tab.id}
               aria-controls={`panel-${tab.id}`}
               id={`tab-${tab.id}`}
               tabIndex={mode === tab.id ? 0 : -1}
-              onKeyDown={(e) => {
-                const tabs = tabArray.map(t => t.id);
-                if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                  const currentIndex = tabs.indexOf(mode);
-                  const nextIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % tabs.length : (currentIndex - 1 + tabs.length) % tabs.length;
-                  setMode(tabs[nextIndex] as 'token' | 'signin');
-                  setError(null);
-                  document.getElementById(`tab-${tabs[nextIndex]}`)?.focus();
-                } else if (e.key === 'Home') {
-                  const firstTab = tabs[0];
-                  setMode(firstTab as 'token' | 'signin');
-                  setError(null);
-                  document.getElementById(`tab-${firstTab}`)?.focus();
-                } else if (e.key === 'End') {
-                  const lastTab = tabs[tabs.length - 1];
-                  setMode(lastTab as 'token' | 'signin');
-                  setError(null);
-                  document.getElementById(`tab-${lastTab}`)?.focus();
-                }
-              }}
+              onKeyDown={handleKeyDown}
               disabled={loading}
               onClick={() => { setMode(tab.id as 'token' | 'signin'); setError(null); }}
               className={FOCUS_RING_CLASS}
