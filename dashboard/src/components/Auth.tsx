@@ -52,18 +52,17 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
-  const tabRefs = useRef<Map<string, HTMLButtonElement> | null>(null);
-  const getTabRefs = () => {
-    if (!tabRefs.current) {
-      tabRefs.current = new Map();
-    }
-    return tabRefs.current;
-  };
+  const tokenTabRef = useRef<HTMLButtonElement | null>(null);
+  const signinTabRef = useRef<HTMLButtonElement | null>(null);
   const [focusTarget, setFocusTarget] = useState<'token' | 'signin' | null>(null);
 
   useEffect(() => {
+    if (focusTarget === 'token') {
+      tokenTabRef.current?.focus();
+    } else if (focusTarget === 'signin') {
+      signinTabRef.current?.focus();
+    }
     if (focusTarget) {
-      getTabRefs().get(focusTarget)?.focus();
       setFocusTarget(null);
     }
   }, [focusTarget]);
@@ -152,13 +151,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              ref={(el) => {
-                if (el) {
-                  getTabRefs().set(tab.id, el);
-                } else {
-                  getTabRefs().delete(tab.id);
-                }
-              }}
+              ref={tab.id === 'token' ? tokenTabRef : signinTabRef}
               role="tab"
               aria-selected={mode === tab.id}
               aria-controls={`panel-${tab.id}`}
