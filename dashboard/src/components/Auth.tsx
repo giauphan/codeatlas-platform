@@ -52,15 +52,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
-  const tabRefs = useRef<Map<string, HTMLButtonElement> | null>(null);
-  if (!tabRefs.current) {
-    tabRefs.current = new Map();
-  }
+  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [focusTarget, setFocusTarget] = useState<'token' | 'signin' | null>(null);
 
   useEffect(() => {
     if (focusTarget) {
-      tabRefs.current?.get(focusTarget)?.focus();
+      tabRefs.current.get(focusTarget)?.focus();
       setFocusTarget(null);
     }
   }, [focusTarget]);
@@ -151,9 +148,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               key={tab.id}
               ref={(el) => {
                 if (el) {
-                  tabRefs.current?.set(tab.id, el);
+                  tabRefs.current.set(tab.id, el);
                 } else {
-                  tabRefs.current?.delete(tab.id);
+                  tabRefs.current.delete(tab.id);
                 }
               }}
               role="tab"
