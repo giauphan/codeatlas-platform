@@ -103,13 +103,15 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </header>
 
         {/* Tab Switcher */}
-        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <div role="tablist" style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
           {[
             { id: 'token', label: 'TOKEN', icon: Key },
             { id: 'signin', label: 'SIGN IN', icon: LogIn },
           ].map((tab) => (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={mode === tab.id}
               disabled={loading}
               onClick={() => { setMode(tab.id as 'token' | 'signin'); setError(null); }}
               className={FOCUS_RING_CLASS}
