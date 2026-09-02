@@ -112,6 +112,27 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               key={tab.id}
               role="tab"
               aria-selected={mode === tab.id}
+              aria-controls={`panel-${tab.id}`}
+              id={`tab-${tab.id}`}
+              tabIndex={mode === tab.id ? 0 : -1}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                  const tabs = ['token', 'signin'];
+                  const currentIndex = tabs.indexOf(mode);
+                  const nextIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % tabs.length : (currentIndex - 1 + tabs.length) % tabs.length;
+                  setMode(tabs[nextIndex] as 'token' | 'signin');
+                  setError(null);
+                  document.getElementById(`tab-${tabs[nextIndex]}`)?.focus();
+                } else if (e.key === 'Home') {
+                  setMode('token');
+                  setError(null);
+                  document.getElementById('tab-token')?.focus();
+                } else if (e.key === 'End') {
+                  setMode('signin');
+                  setError(null);
+                  document.getElementById('tab-signin')?.focus();
+                }
+              }}
               disabled={loading}
               onClick={() => { setMode(tab.id as 'token' | 'signin'); setError(null); }}
               className={FOCUS_RING_CLASS}
@@ -129,7 +150,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         <AnimatePresence mode="wait">
           {mode === 'token' ? (
-            <motion.form key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleTokenSubmit}>
+            <motion.form role="tabpanel" id="panel-token" aria-labelledby="tab-token" key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleTokenSubmit}>
               <div style={{ marginBottom: '1.5rem' }}>
                 <label htmlFor="api-key" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
@@ -143,7 +164,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               </button>
             </motion.form>
           ) : (
-            <motion.form key="signin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleEmailSubmit}>
+            <motion.form role="tabpanel" id="panel-signin" aria-labelledby="tab-signin" key="signin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleEmailSubmit}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
                 <div>
                   <label htmlFor="email" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
