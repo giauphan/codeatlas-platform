@@ -145,7 +145,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </header>
 
         {/* Tab Switcher */}
-        <div role="tablist" style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <div role="tablist" aria-label="Authentication method" style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
           {TABS.map((tab) => (
             <button
               key={tab.id}
