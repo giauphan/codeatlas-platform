@@ -46,8 +46,14 @@
     "db-init": "tsx scripts/db-init.ts",
     "db-seed": "tsx scripts/db-seed.ts"
   },
+  "pnpm": {
+    "overrides": {
+      "fast-uri": "^3.1.6"
+    }
+  },
   "overrides": {
-    "uuid": "11.1.1"
+    "uuid": "11.1.1",
+    "fast-uri": "^3.1.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
