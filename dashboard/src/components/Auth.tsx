@@ -28,7 +28,7 @@ function getApiBase(): string {
 const TABS = [
   { id: 'token', label: 'TOKEN', icon: Key },
   { id: 'signin', label: 'SIGN IN', icon: LogIn },
-];
+] as const;
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [mode, setMode] = useState<'token' | 'signin'>('token');
@@ -52,31 +52,37 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
-  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const tabRefs = useRef<Map<string, HTMLButtonElement> | null>(null);
+  const getTabRefs = () => {
+    if (!tabRefs.current) {
+      tabRefs.current = new Map();
+    }
+    return tabRefs.current;
+  };
   const [focusTarget, setFocusTarget] = useState<'token' | 'signin' | null>(null);
 
   useEffect(() => {
     if (focusTarget) {
-      tabRefs.current.get(focusTarget)?.focus();
+      getTabRefs().get(focusTarget)?.focus();
       setFocusTarget(null);
     }
   }, [focusTarget]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const tabIds = TABS.map(t => t.id);
-    let nextTabId: 'token' | 'signin' | null = null;
+    let nextTabId: typeof mode | null = null;
 
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
       const currentIndex = tabIds.indexOf(mode);
       const nextIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % tabIds.length : (currentIndex - 1 + tabIds.length) % tabIds.length;
-      nextTabId = tabIds[nextIndex] as 'token' | 'signin';
+      nextTabId = tabIds[nextIndex];
     } else if (e.key === 'Home') {
       e.preventDefault();
-      nextTabId = tabIds[0] as 'token' | 'signin';
+      nextTabId = tabIds[0];
     } else if (e.key === 'End') {
       e.preventDefault();
-      nextTabId = tabIds[tabIds.length - 1] as 'token' | 'signin';
+      nextTabId = tabIds[tabIds.length - 1];
     }
 
     if (nextTabId) {
@@ -142,15 +148,15 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </header>
 
         {/* Tab Switcher */}
-        <div role="tablist" aria-label="Authentication method" style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <div role="tablist" aria-label="Authentication method" onKeyDown={handleKeyDown} style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
           {TABS.map((tab) => (
             <button
               key={tab.id}
               ref={(el) => {
                 if (el) {
-                  tabRefs.current.set(tab.id, el);
+                  getTabRefs().set(tab.id, el);
                 } else {
-                  tabRefs.current.delete(tab.id);
+                  getTabRefs().delete(tab.id);
                 }
               }}
               role="tab"
@@ -158,9 +164,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               aria-controls={`panel-${tab.id}`}
               id={`tab-${tab.id}`}
               tabIndex={mode === tab.id ? 0 : -1}
-              onKeyDown={handleKeyDown}
               disabled={loading}
-              onClick={() => { setMode(tab.id as 'token' | 'signin'); setError(null); }}
+              onClick={() => { setMode(tab.id); setError(null); }}
               className={FOCUS_RING_CLASS}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', outline: 'none', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
