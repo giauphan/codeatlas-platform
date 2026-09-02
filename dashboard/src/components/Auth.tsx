@@ -6,7 +6,7 @@
  *
  * No Firebase Web SDK needed — sign-in is proxied through backend.
  */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Key, Mail, Lock, LogIn, Loader2
@@ -52,7 +52,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
-  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const tabRefs = useRef<Map<string, HTMLButtonElement> | null>(null);
+  if (!tabRefs.current) {
+    tabRefs.current = new Map();
+  }
+  const [focusTarget, setFocusTarget] = useState<'token' | 'signin' | null>(null);
+
+  useEffect(() => {
+    if (focusTarget) {
+      tabRefs.current?.get(focusTarget)?.focus();
+      setFocusTarget(null);
+    }
+  }, [focusTarget]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     const tabIds = TABS.map(t => t.id);
@@ -74,11 +85,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     if (nextTabId) {
       setMode(nextTabId);
       setError(null);
-
-      // Use setTimeout to ensure focus happens after React state updates the tabIndex
-      setTimeout(() => {
-        tabRefs.current.get(nextTabId!)?.focus();
-      }, 0);
+      setFocusTarget(nextTabId);
     }
   };
 
@@ -144,9 +151,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               key={tab.id}
               ref={(el) => {
                 if (el) {
-                  tabRefs.current.set(tab.id, el);
+                  tabRefs.current?.set(tab.id, el);
                 } else {
-                  tabRefs.current.delete(tab.id);
+                  tabRefs.current?.delete(tab.id);
                 }
               }}
               role="tab"
