@@ -67,7 +67,7 @@
     "@modelcontextprotocol/sdk": "^1.0.1",
     "@types/compression": "^1.8.1",
     "@typescript-eslint/typescript-estree": "^8.0.0",
-    "chokidar": "^3.6.0",
+    "chokidar": "^5.0.0",
     "compression": "^1.8.1",
     "cors": "2.8.5",
     "dotenv": "^17.4.2",
