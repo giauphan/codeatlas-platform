@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Settings, 
@@ -19,6 +19,16 @@ type TabType = 'mcp' | 'architecture' | 'graph';
 export const DocumentationView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<TabType>('mcp');
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  const tabRefs = useRef(new Map<TabType, HTMLButtonElement>());
+  const [focusTarget, setFocusTarget] = useState<TabType | null>(null);
+
+  useEffect(() => {
+    if (focusTarget) {
+      tabRefs.current.get(focusTarget)?.focus();
+      setFocusTarget(null);
+    }
+  }, [focusTarget]);
 
   const backendUrl = window.location.origin.includes('localhost:5173')
     ? 'http://localhost:8080'
@@ -161,15 +171,16 @@ export const DocumentationView: React.FC = () => {
 
             if (nextIndex !== -1) {
               e.preventDefault();
-              setActiveSubTab(array[nextIndex].id as TabType);
-              const nextTab = document.getElementById(`tab-${array[nextIndex].id}`);
-              if (nextTab) nextTab.focus();
+              const nextId = array[nextIndex].id as TabType;
+              setActiveSubTab(nextId);
+              setFocusTarget(nextId);
             }
           };
 
           return (
             <button
               key={tab.id}
+              ref={(el) => { if (el) tabRefs.current.set(tab.id as TabType, el); }}
               role="tab"
               aria-selected={isActive}
               aria-controls={`panel-${tab.id}`}
