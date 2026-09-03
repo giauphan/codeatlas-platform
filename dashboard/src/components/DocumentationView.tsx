@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Settings, 
@@ -22,6 +22,14 @@ export const DocumentationView: React.FC = () => {
 
   const tabRefs = useRef(new Map<TabType, HTMLButtonElement>());
   const [focusTarget, setFocusTarget] = useState<TabType | null>(null);
+
+  const setTabRef = useCallback((id: TabType) => (el: HTMLButtonElement | null) => {
+    if (el) {
+      tabRefs.current.set(id, el);
+    } else {
+      tabRefs.current.delete(id);
+    }
+  }, []);
 
   useEffect(() => {
     if (focusTarget) {
@@ -180,7 +188,7 @@ export const DocumentationView: React.FC = () => {
           return (
             <button
               key={tab.id}
-              ref={(el) => { if (el) tabRefs.current.set(tab.id as TabType, el); }}
+              ref={setTabRef(tab.id as TabType)}
               role="tab"
               aria-selected={isActive}
               aria-controls={`panel-${tab.id}`}
