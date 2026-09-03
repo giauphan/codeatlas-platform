@@ -6,7 +6,7 @@
  *
  * No Firebase Web SDK needed — sign-in is proxied through backend.
  */
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Key, Mail, Lock, LogIn, Loader2
@@ -24,6 +24,11 @@ function getApiBase(): string {
     ? 'http://localhost:8080'
     : window.location.origin;
 }
+
+const TABS = [
+  { id: 'token', label: 'TOKEN', icon: Key },
+  { id: 'signin', label: 'SIGN IN', icon: LogIn },
+] as const;
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [mode, setMode] = useState<'token' | 'signin'>('token');
@@ -44,6 +49,45 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       setError((err as Error).message || 'Invalid API Key or Token');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const tokenTabRef = useRef<HTMLButtonElement | null>(null);
+  const signinTabRef = useRef<HTMLButtonElement | null>(null);
+  const [focusTarget, setFocusTarget] = useState<'token' | 'signin' | null>(null);
+
+  useEffect(() => {
+    if (focusTarget === 'token') {
+      tokenTabRef.current?.focus();
+    } else if (focusTarget === 'signin') {
+      signinTabRef.current?.focus();
+    }
+    if (focusTarget) {
+      setFocusTarget(null);
+    }
+  }, [focusTarget]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const tabIds = TABS.map(t => t.id);
+    let nextTabId: typeof mode | null = null;
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const currentIndex = tabIds.indexOf(mode);
+      const nextIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % tabIds.length : (currentIndex - 1 + tabIds.length) % tabIds.length;
+      nextTabId = tabIds[nextIndex];
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextTabId = tabIds[0];
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextTabId = tabIds[tabIds.length - 1];
+    }
+
+    if (nextTabId) {
+      setMode(nextTabId);
+      setError(null);
+      setFocusTarget(nextTabId);
     }
   };
 
@@ -103,15 +147,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </header>
 
         {/* Tab Switcher */}
-        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-          {[
-            { id: 'token', label: 'TOKEN', icon: Key },
-            { id: 'signin', label: 'SIGN IN', icon: LogIn },
-          ].map((tab) => (
+        <div role="tablist" aria-label="Authentication method" onKeyDown={handleKeyDown} style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '0.4rem', borderRadius: '16px', marginBottom: '2.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+          {TABS.map((tab) => (
             <button
               key={tab.id}
+              ref={tab.id === 'token' ? tokenTabRef : signinTabRef}
+              role="tab"
+              aria-selected={mode === tab.id}
+              aria-controls={`panel-${tab.id}`}
+              id={`tab-${tab.id}`}
+              tabIndex={mode === tab.id ? 0 : -1}
               disabled={loading}
-              onClick={() => { setMode(tab.id as 'token' | 'signin'); setError(null); }}
+              onClick={() => { setMode(tab.id); setError(null); }}
               className={FOCUS_RING_CLASS}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', outline: 'none', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', fontWeight: 800, transition: 'all 0.3s',
@@ -127,7 +174,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         <AnimatePresence mode="wait">
           {mode === 'token' ? (
-            <motion.form key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleTokenSubmit}>
+            <motion.form role="tabpanel" id="panel-token" aria-labelledby="tab-token" key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleTokenSubmit}>
               <div style={{ marginBottom: '1.5rem' }}>
                 <label htmlFor="api-key" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
@@ -141,7 +188,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               </button>
             </motion.form>
           ) : (
-            <motion.form key="signin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleEmailSubmit}>
+            <motion.form role="tabpanel" id="panel-signin" aria-labelledby="tab-signin" key="signin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleEmailSubmit}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
                 <div>
                   <label htmlFor="email" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
