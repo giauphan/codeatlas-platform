@@ -409,10 +409,12 @@ export class DreamingService {
         if (rows.length > 0) {
           try {
             const ids = rows.map(r => r['id'] as string).filter(Boolean);
-            for (const rid of ids) {
-              await db.execute(
+            if (ids.length > 0) {
+              const baseBind = { tenantId };
+              const binds = ids.map(id => ({ id, ...baseBind }));
+              await db.executeMany(
                 `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-                { id: rid, tenantId }
+                binds
               );
             }
           } catch (bumpErr) {
