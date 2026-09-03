@@ -45,3 +45,7 @@
 ## 2026-08-25 - Avoid chained .filter().length
 **Learning:** To optimize performance during AST traversal or file indexing, chaining `.filter().length` creates intermediate array allocations that must then be scanned and garbage collected. This hurts performance significantly in hot paths like text classification checks.
 **Action:** Replace `.filter(condition).length` with a direct `for` loop that iterates over the original array and counts the occurrences that match the condition. This avoids allocating a new array and reduces garbage collection pressure.
+
+## 2024-05-18 - Batch Database Updates
+**Learning:** Database updates performed inside an iteration loop (e.g. `await db.execute(...)` for each concept scoring) result in severe N+1 latency issues on scale.
+**Action:** Always refactor iterative database operations to accumulate bind parameters in an array and dispatch a single grouped query with `await db.executeMany(...)`. Remember to adapt unit test assertions as well (`mockDbAdapter.executeMany.mock.calls`).
