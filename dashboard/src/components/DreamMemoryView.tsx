@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
+import { SearchInputWithHint } from './ui/SearchInputWithHint';
 import {
   DREAM_CONFIG_LOADING_BUTTON_STYLE,
   DREAM_CONFIG_RUN_BUTTON_STYLE,
@@ -180,8 +181,13 @@ export function DreamMemoryView() {
     if (firebaseReady) fetchMemories(searchQuery, 0, dreamConfig);
   }, [firebaseReady, dreamConfig]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  /**
+   * Handles the search submission.
+   * Accepts an optional FormEvent to support both programmatic invocation
+   * (e.g. via 'Enter' key inside SearchInputWithHint) and native form submission.
+   */
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setPage(0);
     fetchMemories(searchQuery, 0, dreamConfig);
   };
@@ -236,25 +242,17 @@ export function DreamMemoryView() {
         </div>
       </header>
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <form onSubmit={handleSearch} style={{ flex: '1 1 250px', position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', left: '1.25rem', top: '1.1rem', color: 'var(--text-muted)' }} />
-          <input
-            type="text" className="glass-input" placeholder="Search memories semantically..."
-            aria-label="Search memories semantically"
-            style={{ paddingLeft: '3.25rem', paddingRight: searchQuery ? '2.5rem' : '1rem', width: '100%' }}
-            value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+      <div className="search-controls-container">
+        <form onSubmit={handleSearch} className="search-form">
+          <SearchInputWithHint
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onSearch={() => handleSearch()}
+            onClear={clearSearch}
+            placeholder="Search memories semantically..."
+            ariaLabel="Search memories semantically"
+            hasClearButton={true}
           />
-          {searchQuery && (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={clearSearch}
-              className={`clear-search-btn ${FOCUS_RING_CLASS}`}
-            >
-              <X size={16} />
-            </button>
-          )}
         </form>
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.25rem 0.75rem', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>

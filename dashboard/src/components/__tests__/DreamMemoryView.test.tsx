@@ -178,7 +178,7 @@ describe('DreamMemoryView', () => {
 
     // Click "KNOWLEDGE" chip to toggle it OFF (will re-fetch)
     // Default: all 4 types selected. Toggling KNOWLEDGE off means query with 3 types
-    const knowledgeChip = screen.getByText('KNOWLEDGE');
+    const knowledgeChip = screen.getByRole('button', { name: 'KNOWLEDGE' });
     fireEvent.click(knowledgeChip);
 
     // Should re-fetch with memory_type filter

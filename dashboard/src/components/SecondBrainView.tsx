@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
+import { SearchInputWithHint } from './ui/SearchInputWithHint';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 
 interface Concept {
@@ -122,20 +123,15 @@ export function SecondBrainView() {
       )}
 
       {/* Search & filters */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-muted)' }} />
-          <input
+      <div className="search-controls-container">
+        <div className="search-form">
+          <SearchInputWithHint
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onSearch={handleSearch}
             placeholder="Search concepts…"
-            aria-label="Search concepts"
-            style={{
-              width: '100%', padding: '0.7rem 1rem 0.7rem 2.5rem', borderRadius: '10px',
-              border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)',
-              color: '#fff', fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box'
-            }}
+            ariaLabel="Search concepts"
+            hasClearButton={false}
           />
         </div>
         <div role="group" aria-label="Filter concepts by category" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
