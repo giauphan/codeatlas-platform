@@ -23,11 +23,11 @@ export const DocumentationView: React.FC = () => {
   const tabRefs = useRef(new Map<TabType, HTMLButtonElement>());
   const [focusTarget, setFocusTarget] = useState<TabType | null>(null);
 
-  const setTabRef = useCallback((id: TabType) => (el: HTMLButtonElement | null) => {
+  const setTabRef = useCallback((el: HTMLButtonElement | null) => {
     if (el) {
+      // In this specific mapping, we rely on the id attribute to correctly key the button.
+      const id = el.id.replace('tab-', '') as TabType;
       tabRefs.current.set(id, el);
-    } else {
-      tabRefs.current.delete(id);
     }
   }, []);
 
@@ -188,7 +188,7 @@ export const DocumentationView: React.FC = () => {
           return (
             <button
               key={tab.id}
-              ref={setTabRef(tab.id as TabType)}
+              ref={setTabRef}
               role="tab"
               aria-selected={isActive}
               aria-controls={`panel-${tab.id}`}
