@@ -321,7 +321,19 @@ export class ConsolidationEngine {
         clusters.get(key)!.push(row);
       }
 
-      const pendingConcepts: any[] = [];
+      interface PendingConcept {
+        id: string;
+        label: string;
+        description: string;
+        category: string;
+        project: string;
+        confidence: number;
+        sourceIds: string;
+        evidenceCount: number;
+        tenantId: string;
+        embedding?: Uint8Array;
+      }
+      const pendingConcepts: PendingConcept[] = [];
       const embeddingInputs: string[] = [];
 
       for (const [key, dreamCluster] of clusters) {
