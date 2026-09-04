@@ -331,7 +331,6 @@ export class ConsolidationEngine {
         sourceIds: string;
         evidenceCount: number;
         tenantId: string;
-        embedding?: Uint8Array;
       }
       const pendingConcepts: PendingConcept[] = [];
       const embeddingInputs: string[] = [];

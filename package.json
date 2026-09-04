@@ -74,6 +74,7 @@
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
     "express-rate-limit": "^8.6.0",
+    "fast-uri": "^3.1.7",
     "firebase-admin": "^14.3.0",
     "glob": "^10.3.10",
     "google-auth-library": "^11.0.1",
