@@ -1000,6 +1000,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       if (seedNodes.size === 0) {
+        // Bolt Optimization: Replace O(N^2) Array.filter(indexOf) with O(N) Array.from(new Set(...))
+        const suggestions = Array.from(new Set(
+          nodes
+            .filter((n) => n.type === "function" || n.type === "class")
+            .map((n) => n.label)
+        )).slice(0, 15);
+
         return {
           content: [{
             type: "text" as const,
@@ -1007,11 +1014,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
               keyword,
               matchCount: 0,
               message: `No entities found matching '${keyword}'. Try a broader keyword.`,
-              suggestions: nodes
-                .filter((n) => n.type === "function" || n.type === "class")
-                .map((n) => n.label)
-                .filter((l, i, arr) => arr.indexOf(l) === i)
-                .slice(0, 15),
+              suggestions,
             }, null, 2),
           }],
         };
@@ -1250,10 +1253,12 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         })),
         mermaidDiagram: mermaid,
         executionOrder,
-        readingOrder: executionOrder
-          .filter((e) => e.file)
-          .map((e) => e.file!)
-          .filter((f, i, arr) => arr.indexOf(f) === i),
+        // Bolt Optimization: Replace O(N^2) Array.filter(indexOf) with O(N) Array.from(new Set(...))
+        readingOrder: Array.from(new Set(
+          executionOrder
+            .filter((e) => e.file)
+            .map((e) => e.file!)
+        )),
         message: `Generated ${dType} diagram for '${keyword}': ${traceNodes.length} nodes, ${dedupLinks.length} call relationships. Entry points: ${entryPoints.map((n) => n.label).join(", ")}`,
       };
 
