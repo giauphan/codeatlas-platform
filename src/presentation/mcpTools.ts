@@ -1000,7 +1000,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       if (seedNodes.size === 0) {
-        // Bolt Optimization: Replace O(N^2) Array.filter(indexOf) with O(N) Array.from(new Set(...))
+
         const suggestions = Array.from(new Set(
           nodes
             .filter((n) => n.type === "function" || n.type === "class")
@@ -1253,7 +1253,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         })),
         mermaidDiagram: mermaid,
         executionOrder,
-        // Bolt Optimization: Replace O(N^2) Array.filter(indexOf) with O(N) Array.from(new Set(...))
+
         readingOrder: Array.from(new Set(
           executionOrder
             .filter((e) => e.file)
