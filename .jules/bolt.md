@@ -49,3 +49,7 @@
 ## 2024-05-18 - Batch Database Updates
 **Learning:** Database updates performed inside an iteration loop (e.g. `await db.execute(...)` for each concept scoring) result in severe N+1 latency issues on scale.
 **Action:** Always refactor iterative database operations to accumulate bind parameters in an array and dispatch a single grouped query with `await db.executeMany(...)`. Remember to adapt unit test assertions as well (`mockDbAdapter.executeMany.mock.calls`).
+
+## 2026-09-03 - N+1 bottleneck during embeddings API/DB batched inserts
+**Learning:** Calling remote APIs (`generateEmbeddingsBatch`) or database insertion methods (`db.execute`) inside an iterative loop sequentially creates a massive N+1 bottleneck, slowing down dataset processing severely in areas like `extractConcepts`.
+**Action:** Always collect properties into arrays first, batch API queries in a single multi-input call outside the loop, build an array of insert objects, and use `db.executeMany(...)` to perform a batched database operation.

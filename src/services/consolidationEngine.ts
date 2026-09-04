@@ -321,7 +321,9 @@ export class ConsolidationEngine {
         clusters.get(key)!.push(row);
       }
 
-      let created = 0;
+      const pendingConcepts: any[] = [];
+      const embeddingInputs: string[] = [];
+
       for (const [key, dreamCluster] of clusters) {
         if (dreamCluster.length < 2) continue; // need at least 2 to form a concept
 
@@ -333,13 +335,39 @@ export class ConsolidationEngine {
         const conceptDesc = contents.slice(0, 5).join(' | '); // concatenate sample evidence
         const sourceIds = JSON.stringify(dreamCluster.map(r => String(this.getVal(r, R_IDX.ID, 'ID'))));
 
-        // Generate embedding for the concept
-        const embeddings = await generateEmbeddingsBatch([conceptLabel + ': ' + conceptDesc], 'passage');
-        const embedding = embeddings && embeddings[0] ? embeddings[0] : null;
+        embeddingInputs.push(conceptLabel + ': ' + conceptDesc);
+        pendingConcepts.push({
+          id: randomUUID(),
+          label: conceptLabel.slice(0, 255),
+          description: conceptDesc,
+          category: mtype,
+          project: proj,
+          confidence: 0.70,
+          sourceIds,
+          evidenceCount: dreamCluster.length,
+          tenantId,
+        });
+      }
 
-        const conceptId = randomUUID();
+      let created = 0;
+      if (embeddingInputs.length > 0) {
+        // Generate embeddings for all concepts in a single batch request
+        const embeddings = await generateEmbeddingsBatch(embeddingInputs, 'passage');
+        const batchBinds: Record<string, unknown>[] = [];
 
-        if (embedding && embedding.length > 0) {
+        for (let i = 0; i < pendingConcepts.length; i++) {
+          const embedding = embeddings && embeddings[i] ? embeddings[i] : null;
+          if (embedding && embedding.length > 0) {
+            batchBinds.push({
+              ...pendingConcepts[i],
+              embedding: new Uint8Array(new Float32Array(embedding).buffer),
+            });
+          }
+        }
+
+        if (batchBinds.length > 0) {
+          // Bolt Optimization: Batch insert concepts using executeMany instead of
+          // executing individual INSERT queries in a loop to prevent N+1 bottleneck.
           const insertSql = `
             INSERT INTO codeatlas_concepts (
               id, label, description, category, embedding,
@@ -349,19 +377,8 @@ export class ConsolidationEngine {
               :project, :confidence, :sourceIds, :evidenceCount, :tenantId
             )
           `;
-          await db.execute(insertSql, {
-            id: conceptId,
-            label: conceptLabel.slice(0, 255),
-            description: conceptDesc,
-            category: mtype,
-            embedding: new Uint8Array(new Float32Array(embedding).buffer),
-            project: proj,
-            confidence: 0.70,
-            sourceIds,
-            evidenceCount: dreamCluster.length,
-            tenantId,
-          });
-          created++;
+          await db.executeMany(insertSql, batchBinds);
+          created = batchBinds.length;
         }
       }
 
