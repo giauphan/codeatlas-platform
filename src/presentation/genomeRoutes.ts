@@ -100,8 +100,8 @@ export function mountGenomeRoutes(app: express.Application): void {
         const limit = Math.max(0, Math.min(Number(req.query.limit) || 50, 100));
         const offset = Math.max(0, Number(req.query.offset) || 0);
 
-        const pFilter = project ? " AND project = :project" : "";
-        const catFilter = category ? " AND category = :category" : "";
+        const pClause = project ? " AND project = :project" : "";
+        const catClause = category ? " AND category = :category" : "";
         const binds: Record<string, any> = { limit, offset, tenantId };
         if (project) binds.project = project;
         if (category) binds.category = category;
@@ -111,7 +111,7 @@ export function mountGenomeRoutes(app: express.Application): void {
                   category, project, confidence, version, evolution_score,
                   usage_count, success_rate, status, source_type, created_at, updated_at
            FROM codeatlas_genome
-           WHERE tenant_id = :tenantId${pFilter}${catFilter}
+           WHERE tenant_id = :tenantId${pClause}${catClause}
            ORDER BY evolution_score DESC
            LIMIT :limit OFFSET :offset`,
           binds
