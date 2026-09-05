@@ -181,7 +181,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <label htmlFor="api-key" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
                   <Key size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                  <input id="api-key" type={showToken ? "text" : "password"} autoComplete="off" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required autoFocus />
+                  <input id="api-key" type={showToken ? "text" : "password"} autoComplete="off" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required />
                   <button
                     type="button"
                     onClick={() => setShowToken(!showToken)}
