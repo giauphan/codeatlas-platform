@@ -112,7 +112,7 @@ export function mountGenomeRoutes(app: express.Application): void {
                   usage_count, success_rate, status, source_type, created_at, updated_at
            FROM codeatlas_genome
            WHERE tenant_id = :tenantId${pClause}${catClause}
-           ORDER BY evolution_score DESC
+           ORDER BY evolution_score DESC, id ASC
            LIMIT :limit OFFSET :offset`,
           binds
         );
