@@ -181,13 +181,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <label htmlFor="api-key" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
                   <Key size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                  <input id="api-key" type={showToken ? "text" : "password"} style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required autoFocus />
+                  <input id="api-key" type={showToken ? "text" : "password"} autoComplete="off" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required autoFocus />
                   <button
                     type="button"
                     onClick={() => setShowToken(!showToken)}
-                    className={FOCUS_RING_CLASS}
+                    className={`password-toggle-btn ${FOCUS_RING_CLASS}`}
                     aria-label={showToken ? "Hide access key" : "Show access key"}
-                    style={{ position: 'absolute', right: '0.5rem', top: '0.5rem', padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', borderRadius: '8px' }}
                   >
                     {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -216,9 +215,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className={FOCUS_RING_CLASS}
+                      className={`password-toggle-btn ${FOCUS_RING_CLASS}`}
                       aria-label={showPassword ? "Hide password" : "Show password"}
-                      style={{ position: 'absolute', right: '0.5rem', top: '0.5rem', padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', borderRadius: '8px' }}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -235,6 +233,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       </div>
 
       <style>{`
+        .password-toggle-btn { position: absolute; right: 0.5rem; top: 0.5rem; padding: 0.5rem; background: transparent; border: none; color: var(--text-muted); cursor: pointer; border-radius: 8px; }
         .glass-panel { background: rgba(13, 17, 23, 0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         .glass-input { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.875rem 1rem; border-radius: 14px; width: 100%; transition: all 0.3s; font-size: 0.95rem; }
         .glass-input:focus { outline: none; border-color: var(--primary-neon); box-shadow: 0 0 20px rgba(0, 240, 255, 0.15); }
