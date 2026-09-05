@@ -9,7 +9,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Shield, Key, Mail, Lock, LogIn, Loader2
+  Shield, Key, Mail, Lock, LogIn, Loader2, Eye, EyeOff
 } from 'lucide-react';
 import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
 import { storeAuthTokens } from '../lib/auth';
@@ -37,6 +37,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showToken, setShowToken] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleTokenSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,7 +181,16 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <label htmlFor="api-key" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
                   <Key size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                  <input id="api-key" type="password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required autoFocus />
+                  <input id="api-key" type={showToken ? "text" : "password"} style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required autoFocus />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken(!showToken)}
+                    className={FOCUS_RING_CLASS}
+                    aria-label={showToken ? "Hide access key" : "Show access key"}
+                    style={{ position: 'absolute', right: '0.5rem', top: '0.5rem', padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', borderRadius: '8px' }}
+                  >
+                    {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
               {error && <div style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
@@ -201,7 +212,16 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   <label htmlFor="password" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>PASSWORD</label>
                   <div style={{ position: 'relative' }}>
                     <Lock size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                    <input id="password" type="password" autoComplete="current-password" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className={FOCUS_RING_CLASS}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      style={{ position: 'absolute', right: '0.5rem', top: '0.5rem', padding: '0.5rem', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', borderRadius: '8px' }}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
                 </div>
               </div>
