@@ -86,15 +86,23 @@ export function mountGenomeRoutes(app: express.Application): void {
   app.get("/api/genome/list", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { initAdapter, setSessionContext } = await import("../database/connection.js");
+      const { authStorage } = await import("../utils/context.js");
+
+      const tenantId = authStorage.getStore()?.uid;
+      if (!tenantId) {
+        res.status(401).json({ error: "Unauthorized: Missing tenant context" });
+        return;
+      }
+
       const adapter = await initAdapter();
         const project = req.query.project as string | undefined;
         const category = req.query.category as string | undefined;
         const limit = Math.min(Number(req.query.limit) || 50, 100);
         const offset = Number(req.query.offset) || 0;
 
-        const pFilter = project ? "WHERE project = :project" : "";
-        const catFilter = category ? (pFilter ? "AND category = :category" : "WHERE category = :category") : "";
-        const binds: Record<string, any> = { limit, offset };
+        const pFilter = project ? "AND project = :project" : "";
+        const catFilter = category ? "AND category = :category" : "";
+        const binds: Record<string, any> = { limit, offset, tenantId };
         if (project) binds.project = project;
         if (category) binds.category = category;
 
@@ -102,7 +110,8 @@ export function mountGenomeRoutes(app: express.Application): void {
           `SELECT id, name, description, problem, solution, architecture,
                   category, project, confidence, version, evolution_score,
                   usage_count, success_rate, status, source_type, created_at, updated_at
-           FROM codeatlas_genome ${pFilter} ${catFilter}
+           FROM codeatlas_genome
+           WHERE tenant_id = :tenantId ${pFilter} ${catFilter}
            ORDER BY evolution_score DESC
            LIMIT :limit OFFSET :offset`,
           binds
