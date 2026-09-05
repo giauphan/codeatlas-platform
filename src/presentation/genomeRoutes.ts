@@ -97,8 +97,8 @@ export function mountGenomeRoutes(app: express.Application): void {
       const adapter = await initAdapter();
         const project = req.query.project as string | undefined;
         const category = req.query.category as string | undefined;
-        const limit = Math.min(Number(req.query.limit) || 50, 100);
-        const offset = Number(req.query.offset) || 0;
+        const limit = Math.max(0, Math.min(Number(req.query.limit) || 50, 100));
+        const offset = Math.max(0, Number(req.query.offset) || 0);
 
         const pFilter = project ? "AND project = :project" : "";
         const catFilter = category ? "AND category = :category" : "";
