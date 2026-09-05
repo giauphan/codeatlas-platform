@@ -90,7 +90,7 @@ export function mountGenomeRoutes(app: express.Application): void {
 
       const tenantId = authStorage.getStore()?.uid;
       if (!tenantId) {
-        res.status(401).json({ error: "Unauthorized: Missing tenant context" });
+        res.status(403).json({ error: "Forbidden: Missing tenant context" });
         return;
       }
 
