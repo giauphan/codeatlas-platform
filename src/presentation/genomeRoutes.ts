@@ -100,18 +100,25 @@ export function mountGenomeRoutes(app: express.Application): void {
         const limit = Math.max(0, Math.min(Number(req.query.limit) || 50, 100));
         const offset = Math.max(0, Number(req.query.offset) || 0);
 
-        const pClause = project ? " AND project = :project" : "";
-        const catClause = category ? " AND category = :category" : "";
         const binds: Record<string, any> = { limit, offset, tenantId };
-        if (project) binds.project = project;
-        if (category) binds.category = category;
+
+        const whereParts = ["tenant_id = :tenantId"];
+        if (project) {
+          whereParts.push("project = :project");
+          binds.project = project;
+        }
+        if (category) {
+          whereParts.push("category = :category");
+          binds.category = category;
+        }
+        const whereSql = `WHERE ${whereParts.join(" AND ")}`;
 
         const result = await adapter.query<any>(
           `SELECT id, name, description, problem, solution, architecture,
                   category, project, confidence, version, evolution_score,
                   usage_count, success_rate, status, source_type, created_at, updated_at
            FROM codeatlas_genome
-           WHERE tenant_id = :tenantId${pClause}${catClause}
+           ${whereSql}
            ORDER BY evolution_score DESC, id ASC
            LIMIT :limit OFFSET :offset`,
           binds
