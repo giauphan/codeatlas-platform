@@ -1007,10 +1007,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
               keyword,
               matchCount: 0,
               message: `No entities found matching '${keyword}'. Try a broader keyword.`,
-              suggestions: nodes
+              // ⚡ Bolt Optimization: Use O(N) Set for array deduplication instead of O(N^2) indexOf
+              suggestions: [...new Set(nodes
                 .filter((n) => n.type === "function" || n.type === "class")
-                .map((n) => n.label)
-                .filter((l, i, arr) => arr.indexOf(l) === i)
+                .map((n) => n.label))]
                 .slice(0, 15),
             }, null, 2),
           }],
@@ -1250,10 +1250,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         })),
         mermaidDiagram: mermaid,
         executionOrder,
-        readingOrder: executionOrder
+        // ⚡ Bolt Optimization: Use O(N) Set for array deduplication instead of O(N^2) indexOf
+        readingOrder: [...new Set(executionOrder
           .filter((e) => e.file)
-          .map((e) => e.file!)
-          .filter((f, i, arr) => arr.indexOf(f) === i),
+          .map((e) => e.file!))],
         message: `Generated ${dType} diagram for '${keyword}': ${traceNodes.length} nodes, ${dedupLinks.length} call relationships. Entry points: ${entryPoints.map((n) => n.label).join(", ")}`,
       };
 
