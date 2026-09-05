@@ -17,8 +17,6 @@ overrides:
   '@babel/core': ^7.29.6
   body-parser: ^1.20.6
 
-pnpmfileChecksum: sha256-STWwg+yt0DXZ/osmBE0qhvtMUXLLt90eOGEKywbakFI=
-
 importers:
 
   .:
