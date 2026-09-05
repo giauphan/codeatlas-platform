@@ -1009,8 +1009,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
               message: `No entities found matching '${keyword}'. Try a broader keyword.`,
               // Using Set for O(n) deduplication
               suggestions: Array.from(new Set(nodes
-                .filter((n) => n.type === "function" || n.type === "class")
-                .map((n) => n.label)))
+                .filter((node) => node.type === "function" || node.type === "class")
+                .map((node) => node.label)))
                 .slice(0, 15),
             }, null, 2),
           }],
@@ -1252,8 +1252,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         executionOrder,
         // Using Set for O(n) deduplication
         readingOrder: Array.from(new Set(executionOrder
-          .filter((e) => e.file)
-          .map((e) => e.file!))),
+          .filter((event) => event.file)
+          .map((event) => event.file!))),
         message: `Generated ${dType} diagram for '${keyword}': ${traceNodes.length} nodes, ${dedupLinks.length} call relationships. Entry points: ${entryPoints.map((n) => n.label).join(", ")}`,
       };
 
