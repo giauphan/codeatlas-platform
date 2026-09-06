@@ -41,7 +41,7 @@
 **Vulnerability:** The SecurityScanner was crashing with a ReferenceError (`labelLower is not defined`) because it attempted to use a variable that was not initialized in the scope when checking for SQL injection keywords.
 **Learning:** Adding new heuristic string matches to security tools without running unit tests covering the specific condition can introduce critical availability bugs, crashing the security pipeline itself.
 **Prevention:** Always verify that referenced variables are defined in the current scope, and ensure that new logic paths within security scanners are covered by specific unit tests before merging.
-## 2024-09-06 - Missing Tenant Isolation in Genome API
+## 2026-09-06 - Missing Tenant Isolation in Genome API
 **Vulnerability:** A `GET /api/genome/list` endpoint queried the `codeatlas_genome` table without applying a `tenant_id` filter, allowing cross-tenant data exposure (Insecure Direct Object Reference / Broken Access Control).
 **Learning:** Even if data seems public or shared (like "genomes"), if the application uses a multi-tenant architecture, all database queries must explicitly scope results using the authenticated user's `tenant_id` unless intentionally designed otherwise.
 **Prevention:** Always verify that a `WHERE tenant_id = :tenantId` clause (or equivalent ORM scoping) is present on all database queries returning lists of resources in multi-tenant environments.
