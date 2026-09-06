@@ -359,7 +359,7 @@ export class ConsolidationEngine {
           const concept = newConcepts[i];
           const embedding = embeddings && embeddings[i] ? embeddings[i] : null;
 
-          if (embedding && embedding.length > 0) {
+          if (embeddings && embeddings.length === embedTexts.length && embedding && embedding.length > 0) {
             insertBinds.push({
               id: concept.id,
               label: concept.label,
@@ -372,6 +372,8 @@ export class ConsolidationEngine {
               evidenceCount: concept.evidenceCount,
               tenantId: concept.tenantId,
             });
+          } else {
+             logger.warn(`[Consolidation] Missing or invalid embedding for concept ${concept.id}. Skipping.`);
           }
         }
 
@@ -385,7 +387,7 @@ export class ConsolidationEngine {
               :project, :confidence, :sourceIds, :evidenceCount, :tenantId
             )
           `;
-          // Bolt Optimization: Batch update concepts using executeMany instead of
+          // Consolidation Engine Optimization: Batch update concepts using executeMany instead of
           // executing individual INSERT queries in a loop to prevent N+1 bottleneck.
           await db.executeMany(insertSql, insertBinds);
           created += insertBinds.length;
