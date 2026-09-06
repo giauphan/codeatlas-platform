@@ -27,7 +27,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, geneId });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -42,7 +42,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.json(gene);
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -62,7 +62,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.json({ genes });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -78,7 +78,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, geneId });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -216,7 +216,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -236,7 +236,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, geneId, absorbed: geneIds.length });
     } catch (err) {
       logger.error(`[Genome merge] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -252,7 +252,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, childIds });
     } catch (err) {
       logger.error(`[Genome split] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -268,7 +268,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(200).json({ success: true, geneId });
     } catch (err) {
       logger.error(`[Genome mutate] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -284,7 +284,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(200).json({ success: true, retired: count });
     } catch (err) {
       logger.error(`[Genome retire] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -310,7 +310,7 @@ export function mountGenomeRoutes(app: express.Application): void {
         } catch { failed++; }
       }
       res.json({ success: true, synced, failed });
-    } catch (err) { res.status(500).json({ error: String(err) }); }
+    } catch (err) { res.status(500).json({ error: "Internal Server Error" }); }
   });
 
   // Phase 5: Immune System
@@ -328,7 +328,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.json({ genes });
     } catch (err) {
       logger.error(`[Genome immune] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -344,7 +344,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, geneId });
     } catch (err) {
       logger.error(`[Genome immune] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -362,7 +362,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.json({ context, immuneCount: context ? (context.match(/# Application/g) || []).length : 0 });
     } catch (err) {
       logger.error(`[Genome immune] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 }
