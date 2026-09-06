@@ -126,7 +126,11 @@ export function mountGenomeRoutes(app: express.Application): void {
       }
 
       // We explicitly defend against Infinity limits, but NaN is inherently rejected above
-      const normalizedLimit = Number.isFinite(rawLimit ?? 50) ? rawLimit : undefined;
+      const normalizedLimit = rawLimit ?? 50;
+      if (!Number.isFinite(normalizedLimit)) {
+        res.status(400).json({ error: "Bad Request: limit must be a finite number" });
+        return;
+      }
 
       if (rawOffset !== undefined && rawOffset < 0) {
         res.status(400).json({ error: "Bad Request: offset cannot be negative" });
