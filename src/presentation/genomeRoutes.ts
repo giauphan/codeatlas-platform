@@ -111,18 +111,22 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
+      if (rawLimit !== undefined && rawLimit < 1) {
+        res.status(400).json({ error: "Bad Request: limit must be at least 1" });
+        return;
+      }
+
       const adapter = await initAdapter();
       const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
       const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
 
       const limit = Math.min(rawLimit ?? 50, 100);
-      const requestedOffset = rawOffset ?? 0;
+      const offset = rawOffset ?? 0;
 
-      if (requestedOffset > 10000) {
+      if (offset > 10000) {
         res.status(400).json({ error: "Bad Request: offset cannot exceed 10000" });
         return;
       }
-      const offset = requestedOffset;
 
       const binds: Record<string, any> = { limit, offset, tenantId };
       const whereParts = ["tenant_id = :tenantId"];
