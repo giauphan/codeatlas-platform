@@ -151,6 +151,11 @@ export function mountGenomeRoutes(app: express.Application): void {
       const limit = Math.min(normalizedLimit, 100);
       const offset = rawOffset ?? 0;
 
+      if (offset < 0) {
+        res.status(400).json({ error: "Bad Request: offset cannot be negative" });
+        return;
+      }
+
       if (offset > 10000) {
         res.status(400).json({ error: "Bad Request: offset cannot exceed 10000" });
         return;
@@ -177,7 +182,7 @@ export function mountGenomeRoutes(app: express.Application): void {
                 usage_count, success_rate, status, source_type, created_at, updated_at
          FROM codeatlas_genome
          ${whereSql}
-         ORDER BY evolution_score DESC, id ASC
+         ORDER BY evolution_score DESC, updated_at DESC, id ASC
          LIMIT :limit OFFSET :offset`,
         binds
       );
@@ -194,9 +199,9 @@ export function mountGenomeRoutes(app: express.Application): void {
         id: String(r.id), name: String(r.name), description: String(r.description || ""),
         problem: String(r.problem || ""), solution: String(r.solution || ""),
         architecture: String(r.architecture || ""), category: String(r.category || ""),
-        project: String(r.project || ""), confidence: Number(r.confidence),
-        version: Number(r.version), evolutionScore: Number(r.evolution_score),
-        usageCount: Number(r.usage_count), successRate: Number(r.success_rate),
+        project: String(r.project || ""), confidence: r.confidence != null ? Number(r.confidence) : 0,
+        version: r.version != null ? Number(r.version) : 0, evolutionScore: r.evolution_score != null ? Number(r.evolution_score) : 0,
+        usageCount: r.usage_count != null ? Number(r.usage_count) : 0, successRate: r.success_rate != null ? Number(r.success_rate) : 0,
         status: String(r.status || ""), sourceType: String(r.source_type || ""),
         createdAt: String(r.created_at || ""), updatedAt: String(r.updated_at || ""),
       }));
