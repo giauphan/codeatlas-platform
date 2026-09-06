@@ -1007,7 +1007,6 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
               keyword,
               matchCount: 0,
               message: `No entities found matching '${keyword}'. Try a broader keyword.`,
-              // Using Set for O(n) deduplication
               suggestions: Array.from(new Set(nodes
                 .filter((node) => node.type === "function" || node.type === "class")
                 .map((node) => node.label)))
@@ -1250,7 +1249,6 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         })),
         mermaidDiagram: mermaid,
         executionOrder,
-        // Using Set for O(n) deduplication
         readingOrder: Array.from(new Set(executionOrder
           .filter((event) => event.file)
           .map((event) => event.file!))),
