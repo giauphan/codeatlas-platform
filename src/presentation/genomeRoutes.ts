@@ -144,13 +144,13 @@ export function mountGenomeRoutes(app: express.Application): void {
       );
 
       const genes = (result || []).map((r: any) => ({
-        id: String(r.id), name: String(r.name), description: String(r.description || ""),
-        problem: String(r.problem || ""), solution: String(r.solution || ""),
-        architecture: String(r.architecture || ""), category: String(r.category),
-        project: String(r.project || ""), confidence: Number(r.confidence),
+        id: String(r.id), name: String(r.name), description: String(r.description ?? ""),
+        problem: String(r.problem ?? ""), solution: String(r.solution ?? ""),
+        architecture: String(r.architecture ?? ""), category: String(r.category),
+        project: String(r.project ?? ""), confidence: Number(r.confidence),
         version: Number(r.version), evolutionScore: Number(r.evolution_score),
         usageCount: Number(r.usage_count), successRate: Number(r.success_rate),
-        status: String(r.status), sourceType: String(r.source_type || ""),
+        status: String(r.status), sourceType: String(r.source_type ?? ""),
         createdAt: String(r.created_at), updatedAt: String(r.updated_at),
       }));
 
