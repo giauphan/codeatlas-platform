@@ -32,16 +32,15 @@ function embeddingDim(): number {
 //   - mistral/codestral-embed        → 1536 native, 1024 via `output_dimension` (code-tuned)
 //   - mistral/mistral-embed          → natively 1024, rejects `output_dimension`
 //   - nvidia/llama-nemotron-embed-vl-1b-v2 → 2048 native, 1024 via `dimensions`
-//   - nvidia/nemotron-3-embed-1b     → fixed 2048 (only usable when EMBEDDING_DIM=2048)
 // Codestral leads because CodeAtlas embeds source code. The retired NVIDIA ids
 // (`nv-embed-v1`, `nv-embedqa-*`, `arctic-embed-l`, `bge-m3`) now 410/404.
 // Prefix each id with `mistral/` or `nvidia/` (bare ids default to nvidia).
 // Override via EMBEDDING_MODELS (comma-separated, first = primary).
+// Note: nemotron-3-embed-1b removed as it's fixed 2048-dim and doesn't support dimensions parameter
 const DEFAULT_MODELS = [
   "mistral/codestral-embed",
-  "mistral/mistral-embed",
+  "mistral/mistral-embed", 
   "nvidia/llama-nemotron-embed-vl-1b-v2",
-  "nvidia/nemotron-3-embed-1b",
 ];
 
 // Mistral rejects `output_dimension` on the mistral-embed family (400 code 3051)
@@ -51,6 +50,39 @@ const MISTRAL_SUPPORTS_OUTPUT_DIMENSION = /^codestral-embed/;
 // Statuses where the key — not the model — is the problem, so retrying the same
 // model with the next key is worthwhile.
 const KEY_ROTATION_STATUSES = new Set([401, 403, 429]);
+
+// Retry delay configuration for rate limited requests (429)
+const RETRY_DELAYS = [1000, 2000, 5000, 10000]; // 1s, 2s, 5s, 10s delays in ms
+const MAX_RETRY_ATTEMPTS = RETRY_DELAYS.length;
+
+// Provider cooldown tracking (shared across requests to prevent immediate retry storm)
+const providerCooldownUntil: Record<Provider, number> = {
+  nvidia: 0,
+  mistral: 0,
+};
+
+function parseRetryAfter(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds) && seconds >= 0) {
+    return seconds * 1000;
+  }
+  const dateMs = Date.parse(header);
+  if (!Number.isNaN(dateMs)) {
+    const diff = dateMs - Date.now();
+    return diff > 0 ? diff : 0;
+  }
+  return null;
+}
+
+function getBackoffWithJitter(attempt: number, retryAfterMs?: number | null): number {
+  if (typeof retryAfterMs === "number" && retryAfterMs >= 0) {
+    return retryAfterMs;
+  }
+  const base = RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)];
+  const jitterFactor = 0.5 + Math.random();
+  return Math.round(base * jitterFactor);
+}
 
 interface ModelSpec {
   provider: Provider;
@@ -78,7 +110,32 @@ function getModels(): ModelSpec[] {
     ? raw.split(",").map((m) => m.trim()).filter(Boolean)
     : DEFAULT_MODELS;
   const list = source.length ? source : DEFAULT_MODELS;
-  return list.map(parseModel);
+  
+  // Filter out incompatible models that are known to cause issues
+  const filteredList = list.filter(modelId => {
+    // Remove nvidia/nemotron-3-embed-1b as it's fixed 2048-dim and doesn't support dimensions parameter
+    const incompatibleModels = [
+      "nvidia/nemotron-3-embed-1b",
+      "nemotron-3-embed-1b",
+      "nvidia/nemotron-3",
+      "nemotron-3"
+    ];
+    
+    const normalizedModelId = modelId.toLowerCase();
+    const isIncompatible = incompatibleModels.some(incompatible => 
+      normalizedModelId.includes(incompatible.toLowerCase())
+    );
+    
+    if (isIncompatible) {
+      logger.warn(`[Embeddings] Filtering out incompatible model: ${modelId} (fixed 2048-dim, doesn't support dimensions parameter)`);
+    }
+    
+    return !isIncompatible;
+  });
+  
+  // If filtering removed all models, fall back to defaults
+  const finalList = filteredList.length > 0 ? filteredList : DEFAULT_MODELS;
+  return finalList.map(parseModel);
 }
 
 /** API keys may be a comma-separated pool; each is tried on auth/rate-limit errors. */
@@ -109,14 +166,40 @@ function buildBody(
     }
     return body;
   }
-  return {
+  
+  // For NVIDIA models, only include dimensions parameter for models that support it
+  // llama-nemotron-embed-vl-1b-v2 supports dimensions parameter, but others may not
+  const nvidiaBody: Record<string, unknown> = {
     model: spec.model,
     input,
     input_type: inputType,
     encoding_format: "float",
     truncate: "END",
-    dimensions: dim,
   };
+  
+  // Define which NVIDIA models support the dimensions parameter
+  const modelsSupportingDimensions = [
+    "llama-nemotron-embed-vl-1b-v2",
+    "llama-nemotron-embed",
+    "nv-embed",
+    "nv-model",
+    "arctic-embed"
+  ];
+  
+  // Only add dimensions for NVIDIA models that support it
+  const modelName = spec.model.toLowerCase();
+  const supportsDimensions = modelsSupportingDimensions.some(supported => 
+    modelName.includes(supported.toLowerCase())
+  );
+  
+  if (supportsDimensions) {
+    nvidiaBody.dimensions = dim;
+    logger.debug(`[Embeddings] Adding dimensions=${dim} to model ${spec.model}`);
+  } else {
+    logger.debug(`[Embeddings] Skipping dimensions parameter for model ${spec.model} (not supported)`);
+  }
+  
+  return nvidiaBody;
 }
 
 // Round-robin cursors: persist across calls so healthy models/keys stay primary.
@@ -161,47 +244,78 @@ async function requestFromModel(
   const body = JSON.stringify(buildBody(spec, input, inputType, dim));
   const startCursor = keyCursors[spec.provider];
 
+  if (providerCooldownUntil[spec.provider] > Date.now()) {
+    const remaining = providerCooldownUntil[spec.provider] - Date.now();
+    logger.info(`[Embeddings] Skipping ${spec.provider} for ${remaining}ms after a rate limit response.`);
+    return null;
+  }
+
   for (let keyAttempt = 0; keyAttempt < keys.length; keyAttempt++) {
     const keyIndex = (startCursor + keyAttempt) % keys.length;
     const keyRef = keys.length > 1 ? ` (key #${keyIndex})` : "";
 
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${keys[keyIndex]}`
-        },
-        body
-      });
+    // For rate limit errors (429), try with exponential backoff
+    for (let retryAttempt = 0; retryAttempt <= MAX_RETRY_ATTEMPTS; retryAttempt++) {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${keys[keyIndex]}`
+          },
+          body
+        });
 
-      if (!response.ok) {
-        logger.error(`[Embeddings] Model ${label}${keyRef} returned error ${response.status} for ${response.url}: ${response.statusText}`);
-        // Bad/throttled key: try the next key on the same model. Anything else
-        // is a model-level problem, so move on to the next model.
-        if (KEY_ROTATION_STATUSES.has(response.status)) continue;
-        return null;
+        if (!response.ok) {
+          logger.error(`[Embeddings] Model ${label}${keyRef} returned error ${response.status} for ${response.url}: ${response.statusText}`);
+            
+          // If it's a rate limit error (429) and we have retries left, wait and continue
+          if (response.status === 429 && retryAttempt < MAX_RETRY_ATTEMPTS) {
+            const retryAfterMs = parseRetryAfter(response.headers?.get?.("retry-after") ?? null);
+            const delay = getBackoffWithJitter(retryAttempt, retryAfterMs);
+            providerCooldownUntil[spec.provider] = Date.now() + delay;
+            logger.info(`[Embeddings] Model ${label}${keyRef} rate limited (429). Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+
+          // For key rotation errors (401, 403, 429), try next key
+          if (KEY_ROTATION_STATUSES.has(response.status)) {
+            if (response.status === 429) {
+              const retryAfterMs = parseRetryAfter(response.headers?.get?.("retry-after") ?? null);
+              const delay = getBackoffWithJitter(retryAttempt, retryAfterMs);
+              providerCooldownUntil[spec.provider] = Date.now() + delay;
+            }
+            break; // Break retry loop, try next key
+          }
+            
+          // For other errors, try next key (don't retry same key)
+          break;
+        }
+
+        const data: EmbeddingResponse = await response.json();
+        const embeddings = data?.data?.length ? data.data.map((item) => item.embedding) : null;
+        if (!embeddings) {
+          logger.error(`[Embeddings] Model ${label} returned empty data payload.`);
+          return null;
+        }
+
+        // Guard the vector store: reject dims that don't match the schema.
+        if (embeddings.some((e) => e.length !== dim)) {
+          const actualDim = embeddings[0]?.length || 'unknown';
+          logger.error(`[Embeddings] Model ${label} returned dim ${actualDim}, expected ${dim}. Model might not support dimensions parameter.`);
+          return null;
+        }
+
+        // Pin the key that just worked as primary for this provider.
+        keyCursors[spec.provider] = keyIndex;
+        return embeddings;
+          
+      } catch (error) {
+        logger.error(`[Embeddings] Connection error to embeddings API (model ${label}${keyRef}):`, error);
+        // For connection errors, try next key immediately  
+        break;
       }
-
-      const data: EmbeddingResponse = await response.json();
-      const embeddings = data?.data?.length ? data.data.map((item) => item.embedding) : null;
-      if (!embeddings) {
-        logger.error(`[Embeddings] Model ${label} returned empty data payload.`);
-        return null;
-      }
-
-      // Guard the vector store: reject dims that don't match the schema.
-      if (embeddings.some((e) => e.length !== dim)) {
-        logger.error(`[Embeddings] Model ${label} returned dim ${embeddings[0]?.length}, expected ${dim}. Rotating.`);
-        return null;
-      }
-
-      // Pin the key that just worked as primary for this provider.
-      keyCursors[spec.provider] = keyIndex;
-      return embeddings;
-    } catch (error) {
-      logger.error(`[Embeddings] Connection error to embeddings API (model ${label}${keyRef}):`, error);
-      return null;
     }
   }
 
@@ -266,3 +380,33 @@ export async function generateEmbeddingsBatch(texts: string[], inputType: 'passa
 
   return results;
 }
+
+// Validate configuration on module load to catch issues early
+function validateEmbeddingConfiguration() {
+  const mistralKeys = providerKeys("mistral");
+  const nvidiaKeys = providerKeys("nvidia");
+  
+  if (mistralKeys.length === 0) {
+    logger.warn("[Embeddings] MISTRAL_API_KEY is not configured. Mistral embedding models will be skipped.");
+  }
+  if (nvidiaKeys.length === 0) {
+    logger.warn("[Embeddings] NVIDIA_API_KEY is not configured. NVIDIA embedding models will be skipped.");
+  }
+  
+  const models = getModels();
+  const availableProviders = new Set(models.map(m => m.provider));
+  
+  if (availableProviders.has("mistral") && mistralKeys.length === 0) {
+    logger.error("[Embeddings] Configuration error: Mistral models configured but MISTRAL_API_KEY is missing.");
+  }
+  if (availableProviders.has("nvidia") && nvidiaKeys.length === 0) {
+    logger.error("[Embeddings] Configuration error: NVIDIA models configured but NVIDIA_API_KEY is missing.");
+  }
+  
+  logger.info(`[Embeddings] Configuration: ${models.length} models, Mistral keys: ${mistralKeys.length}, NVIDIA keys: ${nvidiaKeys.length}`);
+}
+
+// Validate configuration after a short delay to allow env vars to be set
+setTimeout(validateEmbeddingConfiguration, 100);
+export function _validateEmbeddingConfigurationForTesting() { validateEmbeddingConfiguration(); }
+export function _resetCooldownsForTesting() { providerCooldownUntil.mistral = 0; providerCooldownUntil.nvidia = 0; }
