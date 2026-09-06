@@ -130,30 +130,19 @@ export function mountGenomeRoutes(app: express.Application): void {
       }
 
       const adapter = await initAdapter();
+      // Filter params explicitly allow empty strings to skip WHERE clauses cleanly as a UI affordance
       const projectRaw = req.query.project;
-      const project = typeof projectRaw === 'string' ? projectRaw.trim() : undefined;
-      if (project !== undefined) {
-        if (project === '') {
-          res.status(400).json({ error: "Bad Request: project parameter cannot be empty" });
-          return;
-        }
-        if (project.length > 255) {
-          res.status(400).json({ error: "Bad Request: project parameter too long" });
-          return;
-        }
+      const project = typeof projectRaw === 'string' ? (projectRaw.trim() === '' ? undefined : projectRaw.trim()) : undefined;
+      if (project !== undefined && project.length > 255) {
+        res.status(400).json({ error: "Bad Request: project parameter too long" });
+        return;
       }
 
       const categoryRaw = req.query.category;
-      const category = typeof categoryRaw === 'string' ? categoryRaw.trim() : undefined;
-      if (category !== undefined) {
-        if (category === '') {
-          res.status(400).json({ error: "Bad Request: category parameter cannot be empty" });
-          return;
-        }
-        if (category.length > 255) {
-          res.status(400).json({ error: "Bad Request: category parameter too long" });
-          return;
-        }
+      const category = typeof categoryRaw === 'string' ? (categoryRaw.trim() === '' ? undefined : categoryRaw.trim()) : undefined;
+      if (category !== undefined && category.length > 255) {
+        res.status(400).json({ error: "Bad Request: category parameter too long" });
+        return;
       }
 
       const limit = Math.min(normalizedLimit, 100);
