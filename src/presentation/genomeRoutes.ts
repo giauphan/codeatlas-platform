@@ -99,7 +99,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       }
 
       const tenantId = store.uid;
-      if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId.length > 128) {
+      if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId.length > 255) {
         res.status(403).json({ error: "Forbidden: Missing or invalid tenant context" });
         return;
       }
