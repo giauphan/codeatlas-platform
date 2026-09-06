@@ -317,7 +317,10 @@ export function mountGenomeRoutes(app: express.Application): void {
         } catch { failed++; }
       }
       res.json({ success: true, synced, failed });
-    } catch (err) { res.status(500).json({ error: "Internal Server Error" }); }
+    } catch (err) {
+      logger.error(`[Genome sync] ${err}`);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
   });
 
   // Phase 5: Immune System
