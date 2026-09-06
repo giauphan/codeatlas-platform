@@ -86,7 +86,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   app.get("/api/genome/list", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       // Import modules at the top of the request boundary
-      const [{ initAdapter }, { authStorage }] = await Promise.all([
+      const [, { authStorage }] = await Promise.all([
         import("../database/connection.js"),
         import("../utils/context.js")
       ]);
@@ -120,11 +120,6 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      if (Array.isArray(req.query.project) || Array.isArray(req.query.category)) {
-        res.status(400).json({ error: "Bad Request: array parameters not supported" });
-        return;
-      }
-
       // We explicitly defend against Infinity limits, but NaN is inherently rejected above
       const normalizedLimit = rawLimit ?? 50;
       if (!Number.isFinite(normalizedLimit)) {
@@ -142,6 +137,7 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
+      const { initAdapter } = await import("../database/connection.js");
       const adapter = await initAdapter();
       const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
       if (project !== undefined && project.length > 255) {
@@ -200,9 +196,9 @@ export function mountGenomeRoutes(app: express.Application): void {
         id: String(r.id), name: String(r.name), description: String(r.description || ""),
         problem: String(r.problem || ""), solution: String(r.solution || ""),
         architecture: String(r.architecture || ""), category: String(r.category || ""),
-        project: String(r.project || ""), confidence: Number(r.confidence ?? 0),
-        version: Number(r.version ?? 0), evolutionScore: Number(r.evolution_score ?? 0),
-        usageCount: Number(r.usage_count ?? 0), successRate: Number(r.success_rate ?? 0),
+        project: String(r.project || ""), confidence: Number(r.confidence),
+        version: Number(r.version), evolutionScore: Number(r.evolution_score),
+        usageCount: Number(r.usage_count), successRate: Number(r.success_rate),
         status: String(r.status || ""), sourceType: String(r.source_type || ""),
         createdAt: String(r.created_at || ""), updatedAt: String(r.updated_at || ""),
       }));
