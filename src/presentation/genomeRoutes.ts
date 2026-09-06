@@ -161,9 +161,9 @@ export function mountGenomeRoutes(app: express.Application): void {
         id: String(r.id), name: String(r.name), description: String(r.description || ""),
         problem: String(r.problem || ""), solution: String(r.solution || ""),
         architecture: String(r.architecture || ""), category: String(r.category || ""),
-        project: String(r.project || ""), confidence: Number(r.confidence),
-        version: Number(r.version), evolutionScore: Number(r.evolution_score),
-        usageCount: Number(r.usage_count), successRate: Number(r.success_rate),
+        project: String(r.project || ""), confidence: Number(r.confidence ?? 0),
+        version: Number(r.version ?? 0), evolutionScore: Number(r.evolution_score ?? 0),
+        usageCount: Number(r.usage_count ?? 0), successRate: Number(r.success_rate ?? 0),
         status: String(r.status || ""), sourceType: String(r.source_type || ""),
         createdAt: String(r.created_at), updatedAt: String(r.updated_at),
       }));
