@@ -99,8 +99,9 @@ export function mountGenomeRoutes(app: express.Application): void {
       const rawLimit = Number(req.query.limit);
       const rawOffset = Number(req.query.offset);
 
-      if ((req.query.limit !== undefined && isNaN(rawLimit)) ||
-          (req.query.offset !== undefined && isNaN(rawOffset))) {
+      // Validate that if provided, they parse to valid numbers (rejecting empty strings that cast to 0 but are not valid inputs)
+      if ((req.query.limit !== undefined && (isNaN(rawLimit) || String(req.query.limit).trim() === '')) ||
+          (req.query.offset !== undefined && (isNaN(rawOffset) || String(req.query.offset).trim() === ''))) {
         res.status(400).json({ error: "Bad Request: limit and offset must be valid numbers" });
         return;
       }
@@ -109,7 +110,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
       const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
       const limit = Math.max(0, Math.min(req.query.limit !== undefined ? rawLimit : 50, 100)); // Defaults to 50, respects limit=0
-      const offset = Math.max(0, req.query.offset !== undefined ? rawOffset : 0);
+      const offset = Math.max(0, Math.min(req.query.offset !== undefined ? rawOffset : 0, 10000)); // Cap offset to prevent deep pagination abuse
 
       const binds: Record<string, any> = { limit, offset, tenantId };
       const whereParts = ["tenant_id = :tenantId"];
