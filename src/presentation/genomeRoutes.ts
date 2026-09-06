@@ -124,7 +124,16 @@ export function mountGenomeRoutes(app: express.Application): void {
 
       const adapter = await initAdapter();
       const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
+      if (project !== undefined && project.length > 255) {
+        res.status(400).json({ error: "Bad Request: project parameter too long" });
+        return;
+      }
+
       const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
+      if (category !== undefined && category.length > 255) {
+        res.status(400).json({ error: "Bad Request: category parameter too long" });
+        return;
+      }
 
       const limit = Math.min(rawLimit ?? 50, 100);
       const offset = rawOffset ?? 0;
