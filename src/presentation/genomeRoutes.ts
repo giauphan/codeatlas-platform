@@ -204,7 +204,7 @@ export function mountGenomeRoutes(app: express.Application): void {
         version: Number(r.version ?? 0), evolutionScore: Number(r.evolution_score ?? 0),
         usageCount: Number(r.usage_count ?? 0), successRate: Number(r.success_rate ?? 0),
         status: String(r.status || ""), sourceType: String(r.source_type || ""),
-        createdAt: String(r.created_at), updatedAt: String(r.updated_at),
+        createdAt: String(r.created_at || ""), updatedAt: String(r.updated_at || ""),
       }));
 
       res.json({ genes, offset, limit, totalCount: Number(countResult?.[0]?.total || 0) });
