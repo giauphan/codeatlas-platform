@@ -95,23 +95,25 @@ export function mountGenomeRoutes(app: express.Application): void {
       }
 
       const adapter = await initAdapter();
-        const project = req.query.project as string | undefined;
-        const category = req.query.category as string | undefined;
+        const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
+        const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
         const limit = Math.max(0, Math.min(Number(req.query.limit) || 50, 100));
         const offset = Math.max(0, Number(req.query.offset) || 0);
 
         const binds: Record<string, any> = { limit, offset, tenantId };
 
-        const whereParts = ["tenant_id = :tenantId"];
-        if (project) {
-          whereParts.push("project = :project");
-          binds.project = project;
-        }
-        if (category) {
-          whereParts.push("category = :category");
-          binds.category = category;
-        }
-        const whereSql = `WHERE ${whereParts.join(" AND ")}`;
+        const buildWhereClause = (baseParts: string[], baseBinds: Record<string, any>, filters: Record<string, string | undefined>) => {
+          const parts = [...baseParts];
+          for (const [key, value] of Object.entries(filters)) {
+            if (value) {
+              parts.push(`${key} = :${key}`);
+              baseBinds[key] = value;
+            }
+          }
+          return `WHERE ${parts.join(" AND ")}`;
+        };
+
+        const whereSql = buildWhereClause(["tenant_id = :tenantId"], binds, { project, category });
 
         const result = await adapter.query<any>(
           `SELECT id, name, description, problem, solution, architecture,
