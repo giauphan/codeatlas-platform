@@ -260,6 +260,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         updated_at TEXT DEFAULT (datetime('now')),
         tenant_id TEXT NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS idx_genome_tenant_id ON codeatlas_genome(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_genome_tenant_project ON codeatlas_genome(tenant_id, project);
       CREATE INDEX IF NOT EXISTS idx_genome_tenant_category ON codeatlas_genome(tenant_id, category);
       CREATE INDEX IF NOT EXISTS idx_genome_tenant_proj_cat ON codeatlas_genome(tenant_id, project, category);
