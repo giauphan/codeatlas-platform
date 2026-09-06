@@ -88,56 +88,67 @@ export function mountGenomeRoutes(app: express.Application): void {
       const { initAdapter } = await import("../database/connection.js");
       const { authStorage } = await import("../utils/context.js");
 
+      // Note: In this system, `uid` on the AuthContext object represents the tenant identifier
+      // for enterprise/multi-tenant requests, not a single user ID.
       const tenantId = authStorage.getStore()?.uid;
       if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '') {
         res.status(401).json({ error: "Unauthorized: Missing or invalid tenant context" });
         return;
       }
 
+      const rawLimit = Number(req.query.limit);
+      const rawOffset = Number(req.query.offset);
+
+      if ((req.query.limit !== undefined && isNaN(rawLimit)) ||
+          (req.query.offset !== undefined && isNaN(rawOffset))) {
+        res.status(400).json({ error: "Bad Request: limit and offset must be valid numbers" });
+        return;
+      }
+
       const adapter = await initAdapter();
-        const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
-        const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
-        const limit = Math.max(0, Math.min(Number(req.query.limit) ?? 50, 100));
-        const offset = Math.max(0, Number(req.query.offset) || 0);
+      const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
+      const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
+      const limit = Math.max(0, Math.min(rawLimit || 50, 100)); // Still defaults to 50 if 0 or undefined, clamped to 100
+      const offset = Math.max(0, rawOffset || 0);
 
-        const binds: Record<string, any> = { limit, offset, tenantId };
+      const binds: Record<string, any> = { limit, offset, tenantId };
 
-        const buildWhereClause = (baseParts: string[], baseBinds: Record<string, any>, filters: Record<string, string | undefined>) => {
-          const parts = [...baseParts];
-          for (const [key, value] of Object.entries(filters)) {
-            if (value) {
-              parts.push(`${key} = :${key}`);
-              baseBinds[key] = value;
-            }
+      const buildWhereClause = (baseParts: string[], baseBinds: Record<string, any>, filters: Record<string, string | undefined>) => {
+        const parts = [...baseParts];
+        for (const [key, value] of Object.entries(filters)) {
+          if (value) {
+            parts.push(`${key} = :${key}`);
+            baseBinds[key] = value;
           }
-          return `WHERE ${parts.join(" AND ")}`;
-        };
+        }
+        return `WHERE ${parts.join(" AND ")}`;
+      };
 
-        const whereSql = buildWhereClause(["tenant_id = :tenantId"], binds, { project, category });
+      const whereSql = buildWhereClause(["tenant_id = :tenantId"], binds, { project, category });
 
-        const result = await adapter.query<any>(
-          `SELECT id, name, description, problem, solution, architecture,
-                  category, project, confidence, version, evolution_score,
-                  usage_count, success_rate, status, source_type, created_at, updated_at
-           FROM codeatlas_genome
-           ${whereSql}
-           ORDER BY evolution_score DESC, id ASC
-           LIMIT :limit OFFSET :offset`,
-          binds
-        );
+      const result = await adapter.query<any>(
+        `SELECT id, name, description, problem, solution, architecture,
+                category, project, confidence, version, evolution_score,
+                usage_count, success_rate, status, source_type, created_at, updated_at
+         FROM codeatlas_genome
+         ${whereSql}
+         ORDER BY evolution_score DESC, id ASC
+         LIMIT :limit OFFSET :offset`,
+        binds
+      );
 
-        const genes = (result || []).map((r: any) => ({
-          id: String(r.id), name: String(r.name), description: String(r.description || ""),
-          problem: String(r.problem || ""), solution: String(r.solution || ""),
-          architecture: String(r.architecture || ""), category: String(r.category),
-          project: String(r.project || ""), confidence: Number(r.confidence),
-          version: Number(r.version), evolutionScore: Number(r.evolution_score),
-          usageCount: Number(r.usage_count), successRate: Number(r.success_rate),
-          status: String(r.status), sourceType: String(r.source_type || ""),
-          createdAt: String(r.created_at), updatedAt: String(r.updated_at),
-        }));
+      const genes = (result || []).map((r: any) => ({
+        id: String(r.id), name: String(r.name), description: String(r.description || ""),
+        problem: String(r.problem || ""), solution: String(r.solution || ""),
+        architecture: String(r.architecture || ""), category: String(r.category),
+        project: String(r.project || ""), confidence: Number(r.confidence),
+        version: Number(r.version), evolutionScore: Number(r.evolution_score),
+        usageCount: Number(r.usage_count), successRate: Number(r.success_rate),
+        status: String(r.status), sourceType: String(r.source_type || ""),
+        createdAt: String(r.created_at), updatedAt: String(r.updated_at),
+      }));
 
-        res.json({ genes, offset, limit });
+      res.json({ genes, offset, limit });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
       res.status(500).json({ error: String(err) });
