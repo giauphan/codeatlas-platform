@@ -302,6 +302,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       );
       CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_genome_tenant_project ON codeatlas_genome(tenant_id, project);
       CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_genome_tenant_category ON codeatlas_genome(tenant_id, category);
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_genome_tenant_proj_cat ON codeatlas_genome(tenant_id, project, category);
       CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_genome_embedding ON codeatlas_genome USING ivfflat (embedding vector_cosine_ops);
     `);
     await this.pool!.query(`
