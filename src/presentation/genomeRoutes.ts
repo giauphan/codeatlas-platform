@@ -112,12 +112,15 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
+      // We explicitly defend against Infinity limits, but NaN is inherently rejected above
+      const normalizedLimit = Number.isFinite(rawLimit ?? 50) ? rawLimit : undefined;
+
       if (rawOffset !== undefined && rawOffset < 0) {
         res.status(400).json({ error: "Bad Request: offset cannot be negative" });
         return;
       }
 
-      if (rawLimit !== undefined && rawLimit < 1) {
+      if (normalizedLimit !== undefined && normalizedLimit < 1) {
         res.status(400).json({ error: "Bad Request: limit must be at least 1" });
         return;
       }
@@ -135,7 +138,7 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      const limit = Math.min(rawLimit ?? 50, 100);
+      const limit = Math.min(normalizedLimit ?? 50, 100);
       const offset = rawOffset ?? 0;
 
       if (offset > 10000) {
