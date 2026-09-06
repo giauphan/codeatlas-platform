@@ -153,11 +153,6 @@ export function mountGenomeRoutes(app: express.Application): void {
       const limit = Math.min(normalizedLimit, 100);
       const offset = rawOffset ?? 0;
 
-      if (offset < 0) {
-        res.status(400).json({ error: "Bad Request: offset cannot be negative" });
-        return;
-      }
-
       if (offset > 10000) {
         res.status(400).json({ error: "Bad Request: offset cannot exceed 10000" });
         return;
