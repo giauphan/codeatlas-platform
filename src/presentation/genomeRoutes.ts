@@ -148,7 +148,7 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      const limit = Math.min(normalizedLimit ?? 50, 100);
+      const limit = Math.min(normalizedLimit, 100);
       const offset = rawOffset ?? 0;
 
       if (offset > 10000) {
@@ -203,8 +203,15 @@ export function mountGenomeRoutes(app: express.Application): void {
 
       // Extract total count safely regardless of driver wrapping (adapter.query types as T[])
       const totalCountRaw = (countResult as any)?.[0]?.total;
+      const totalCount = Number(totalCountRaw || 0);
 
-      res.json({ genes, offset, limit, totalCount: Number(totalCountRaw || 0) });
+      res.json({
+        genes,
+        offset,
+        limit,
+        totalCount,
+        hasMore: offset + limit < totalCount
+      });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
       res.status(500).json({ error: String(err) });
