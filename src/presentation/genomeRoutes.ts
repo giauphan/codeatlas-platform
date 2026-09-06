@@ -85,8 +85,11 @@ export function mountGenomeRoutes(app: express.Application): void {
   // GET /api/genome/list — List genes (paginated, no vector search)
   app.get("/api/genome/list", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
-      // Import modules at the top of the request boundary
-      const { authStorage } = await import("../utils/context.js");
+      // Lazy load dependencies to optimize cold starts for non-DB endpoints
+      const [{ initAdapter }, { authStorage }] = await Promise.all([
+        import("../database/connection.js"),
+        import("../utils/context.js")
+      ]);
 
       // Note: In this system, `uid` on the AuthContext object represents the tenant identifier
       const store = authStorage.getStore();
@@ -134,7 +137,6 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      const { initAdapter } = await import("../database/connection.js");
       const adapter = await initAdapter();
       const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
       if (project !== undefined && project.length > 255) {
