@@ -112,19 +112,19 @@ export function mountGenomeRoutes(app: express.Application): void {
       const offset = Math.max(0, rawOffset || 0);
 
       const binds: Record<string, any> = { limit, offset, tenantId };
+      const whereParts = ["tenant_id = :tenantId"];
 
-      const buildWhereClause = (baseParts: string[], baseBinds: Record<string, any>, filters: Record<string, string | undefined>) => {
-        const parts = [...baseParts];
-        for (const [key, value] of Object.entries(filters)) {
-          if (value) {
-            parts.push(`${key} = :${key}`);
-            baseBinds[key] = value;
-          }
-        }
-        return `WHERE ${parts.join(" AND ")}`;
-      };
+      if (project) {
+        whereParts.push("project = :project");
+        binds.project = project;
+      }
 
-      const whereSql = buildWhereClause(["tenant_id = :tenantId"], binds, { project, category });
+      if (category) {
+        whereParts.push("category = :category");
+        binds.category = category;
+      }
+
+      const whereSql = `WHERE ${whereParts.join(" AND ")}`;
 
       const result = await adapter.query<any>(
         `SELECT id, name, description, problem, solution, architecture,
