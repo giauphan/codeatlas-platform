@@ -114,9 +114,9 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      // Treat empty string explicitly as 0 to avoid convoluted fallback masking, then validate
-      const rawLimit = rawLimitParam !== undefined ? (rawLimitParam === '' ? 0 : Number(rawLimitParam)) : undefined;
-      const rawOffset = rawOffsetParam !== undefined ? (rawOffsetParam === '' ? 0 : Number(rawOffsetParam)) : undefined;
+      // Treat empty string explicitly as undefined to trigger defaults, avoid 0 coercion
+      const rawLimit = rawLimitParam !== undefined && rawLimitParam !== '' ? Number(rawLimitParam) : undefined;
+      const rawOffset = rawOffsetParam !== undefined && rawOffsetParam !== '' ? Number(rawOffsetParam) : undefined;
 
       if ((rawLimit !== undefined && Number.isNaN(rawLimit)) || (rawOffset !== undefined && Number.isNaN(rawOffset))) {
         res.status(400).json({ error: "Bad Request: limit and offset must be valid numbers" });
@@ -124,13 +124,8 @@ export function mountGenomeRoutes(app: express.Application): void {
       }
 
       const normalizedLimit = rawLimit ?? 50;
-      if (!Number.isFinite(normalizedLimit)) {
-        res.status(400).json({ error: "Bad Request: limit must be a finite number" });
-        return;
-      }
-
-      if (normalizedLimit < 1) {
-        res.status(400).json({ error: "Bad Request: limit must be at least 1" });
+      if (normalizedLimit < 1 || !Number.isFinite(normalizedLimit)) {
+        res.status(400).json({ error: "Bad Request: limit must be at least 1 and finite" });
         return;
       }
 
