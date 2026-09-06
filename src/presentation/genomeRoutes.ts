@@ -95,17 +95,18 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      const rawLimit = Number(req.query.limit);
-      const rawOffset = Number(req.query.offset);
+      // Ensure we only parse defined query parameters to prevent casting undefined to NaN
+      const rawLimit = req.query.limit !== undefined ? Number(req.query.limit) : undefined;
+      const rawOffset = req.query.offset !== undefined ? Number(req.query.offset) : undefined;
 
       // Validate that if provided, they parse to valid numbers (rejecting empty strings that cast to 0 but are not valid inputs)
-      if ((req.query.limit !== undefined && (isNaN(rawLimit) || (typeof req.query.limit === 'string' && req.query.limit.trim() === ''))) ||
-          (req.query.offset !== undefined && (isNaN(rawOffset) || (typeof req.query.offset === 'string' && req.query.offset.trim() === '')))) {
+      if ((req.query.limit !== undefined && (Number.isNaN(rawLimit) || (typeof req.query.limit === 'string' && req.query.limit.trim() === ''))) ||
+          (req.query.offset !== undefined && (Number.isNaN(rawOffset) || (typeof req.query.offset === 'string' && req.query.offset.trim() === '')))) {
         res.status(400).json({ error: "Bad Request: limit and offset must be valid numbers" });
         return;
       }
 
-      if (rawLimit < 0 || rawOffset < 0) {
+      if ((rawLimit !== undefined && rawLimit < 0) || (rawOffset !== undefined && rawOffset < 0)) {
         res.status(400).json({ error: "Bad Request: limit and offset cannot be negative" });
         return;
       }
@@ -113,8 +114,15 @@ export function mountGenomeRoutes(app: express.Application): void {
       const adapter = await initAdapter();
       const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
       const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
-      const limit = Math.min(req.query.limit !== undefined ? rawLimit : 50, 100); // Defaults to 50, capped at 100, allows 0
-      const offset = Math.min(req.query.offset !== undefined ? rawOffset : 0, 10000); // Cap offset to prevent deep pagination abuse
+
+      const limit = Math.min(rawLimit ?? 50, 100);
+      const requestedOffset = rawOffset ?? 0;
+
+      if (requestedOffset > 10000) {
+        res.status(400).json({ error: "Bad Request: offset cannot exceed 10000" });
+        return;
+      }
+      const offset = requestedOffset;
 
       const binds: Record<string, any> = { limit, offset, tenantId };
       const whereParts = ["tenant_id = :tenantId"];
@@ -142,10 +150,17 @@ export function mountGenomeRoutes(app: express.Application): void {
         binds
       );
 
+      const countResult = await adapter.query<{ total: number }>(
+        `SELECT COUNT(*) as total
+         FROM codeatlas_genome
+         ${whereSql}`,
+        binds
+      );
+
       const genes = (result || []).map((r: any) => ({
         id: String(r.id), name: String(r.name), description: String(r.description ?? ""),
         problem: String(r.problem ?? ""), solution: String(r.solution ?? ""),
-        architecture: String(r.architecture ?? ""), category: String(r.category),
+        architecture: String(r.architecture ?? ""), category: String(r.category ?? ""),
         project: String(r.project ?? ""), confidence: Number(r.confidence),
         version: Number(r.version), evolutionScore: Number(r.evolution_score),
         usageCount: Number(r.usage_count), successRate: Number(r.success_rate),
@@ -153,7 +168,7 @@ export function mountGenomeRoutes(app: express.Application): void {
         createdAt: String(r.created_at), updatedAt: String(r.updated_at),
       }));
 
-      res.json({ genes, offset, limit });
+      res.json({ genes, offset, limit, totalCount: Number(countResult?.[0]?.total || 0) });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
       res.status(500).json({ error: String(err) });

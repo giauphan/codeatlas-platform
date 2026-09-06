@@ -4,7 +4,7 @@ export interface AuthContext {
   tier: string;
   /**
    * The unique identifier for the user or tenant.
-   * Note: In this system, `uid` often represents the tenant identifier.
+   * Note: In this system, `uid` definitively represents the tenant identifier.
    */
   uid: string;
   keyId: string;
