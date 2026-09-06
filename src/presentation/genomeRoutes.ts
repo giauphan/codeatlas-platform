@@ -92,7 +92,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       // for enterprise/multi-tenant requests, not a single user ID.
       const tenantId = authStorage.getStore()?.uid;
       if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '') {
-        res.status(401).json({ error: "Unauthorized: Missing or invalid tenant context" });
+        res.status(403).json({ error: "Forbidden: Missing or invalid tenant context" });
         return;
       }
 
