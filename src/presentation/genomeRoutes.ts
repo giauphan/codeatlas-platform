@@ -86,10 +86,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   app.get("/api/genome/list", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       // Import modules at the top of the request boundary
-      const [, { authStorage }] = await Promise.all([
-        import("../database/connection.js"),
-        import("../utils/context.js")
-      ]);
+      const { authStorage } = await import("../utils/context.js");
 
       // Note: In this system, `uid` on the AuthContext object represents the tenant identifier
       const store = authStorage.getStore();
@@ -185,7 +182,8 @@ export function mountGenomeRoutes(app: express.Application): void {
         binds
       );
 
-      const countResult = await adapter.query<{ total: number }>(
+      // Explicitly type as an array of objects since adapter.query returns T[]
+      const countResult = await adapter.query<{ total: number }[]>(
         `SELECT COUNT(*) as total
          FROM codeatlas_genome
          ${whereSql}`,
@@ -203,7 +201,10 @@ export function mountGenomeRoutes(app: express.Application): void {
         createdAt: String(r.created_at || ""), updatedAt: String(r.updated_at || ""),
       }));
 
-      res.json({ genes, offset, limit, totalCount: Number(countResult?.[0]?.total || 0) });
+      // Extract total count safely regardless of driver wrapping (adapter.query types as T[])
+      const totalCountRaw = (countResult as any)?.[0]?.total;
+
+      res.json({ genes, offset, limit, totalCount: Number(totalCountRaw || 0) });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
       res.status(500).json({ error: String(err) });
