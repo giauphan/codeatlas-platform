@@ -89,7 +89,6 @@ export function mountGenomeRoutes(app: express.Application): void {
       const { authStorage } = await import("../utils/context.js");
 
       // Note: In this system, `uid` on the AuthContext object represents the tenant identifier
-      // for enterprise/multi-tenant requests, not a single user ID.
       const tenantId = authStorage.getStore()?.uid;
       if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId.length > 128) {
         res.status(403).json({ error: "Forbidden: Missing or invalid tenant context" });
@@ -100,8 +99,8 @@ export function mountGenomeRoutes(app: express.Application): void {
       const rawOffset = Number(req.query.offset);
 
       // Validate that if provided, they parse to valid numbers (rejecting empty strings that cast to 0 but are not valid inputs)
-      if ((req.query.limit !== undefined && (isNaN(rawLimit) || String(req.query.limit).trim() === '')) ||
-          (req.query.offset !== undefined && (isNaN(rawOffset) || String(req.query.offset).trim() === ''))) {
+      if ((req.query.limit !== undefined && (isNaN(rawLimit) || (typeof req.query.limit === 'string' && req.query.limit.trim() === ''))) ||
+          (req.query.offset !== undefined && (isNaN(rawOffset) || (typeof req.query.offset === 'string' && req.query.offset.trim() === '')))) {
         res.status(400).json({ error: "Bad Request: limit and offset must be valid numbers" });
         return;
       }
