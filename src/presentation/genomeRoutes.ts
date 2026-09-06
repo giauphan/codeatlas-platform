@@ -115,6 +115,16 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
+      if (Array.isArray(req.query.project) || Array.isArray(req.query.category)) {
+        res.status(400).json({ error: "Bad Request: array parameters not supported" });
+        return;
+      }
+
+      if (Array.isArray(req.query.project) || Array.isArray(req.query.category)) {
+        res.status(400).json({ error: "Bad Request: array parameters not supported" });
+        return;
+      }
+
       // We explicitly defend against Infinity limits, but NaN is inherently rejected above
       const normalizedLimit = Number.isFinite(rawLimit ?? 50) ? rawLimit : undefined;
 
