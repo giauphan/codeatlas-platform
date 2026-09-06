@@ -91,7 +91,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       // Note: In this system, `uid` on the AuthContext object represents the tenant identifier
       // for enterprise/multi-tenant requests, not a single user ID.
       const tenantId = authStorage.getStore()?.uid;
-      if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '') {
+      if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId.length > 128) {
         res.status(403).json({ error: "Forbidden: Missing or invalid tenant context" });
         return;
       }
@@ -106,11 +106,16 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
+      if (rawLimit < 0 || rawOffset < 0) {
+        res.status(400).json({ error: "Bad Request: limit and offset cannot be negative" });
+        return;
+      }
+
       const adapter = await initAdapter();
       const project = typeof req.query.project === 'string' ? req.query.project.trim() : undefined;
       const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
-      const limit = Math.max(0, Math.min(req.query.limit !== undefined ? rawLimit : 50, 100)); // Defaults to 50, respects limit=0
-      const offset = Math.max(0, Math.min(req.query.offset !== undefined ? rawOffset : 0, 10000)); // Cap offset to prevent deep pagination abuse
+      const limit = Math.max(0, Math.min(req.query.limit !== undefined ? (rawLimit as number) : 50, 100)); // Defaults to 50, respects limit=0
+      const offset = Math.max(0, Math.min(req.query.offset !== undefined ? (rawOffset as number) : 0, 10000)); // Cap offset to prevent deep pagination abuse
 
       const binds: Record<string, any> = { limit, offset, tenantId };
       const whereParts = ["tenant_id = :tenantId"];

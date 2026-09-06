@@ -262,6 +262,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       );
       CREATE INDEX IF NOT EXISTS idx_genome_tenant_category ON codeatlas_genome(tenant_id, category);
       CREATE INDEX IF NOT EXISTS idx_genome_tenant_proj_cat ON codeatlas_genome(tenant_id, project, category);
+      CREATE INDEX IF NOT EXISTS idx_genome_tenant_project ON codeatlas_genome(tenant_id, project);
 
       CREATE TABLE IF NOT EXISTS gene_mutations (
         id TEXT PRIMARY KEY,
