@@ -104,35 +104,32 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      // Ensure we only parse defined query parameters to prevent casting undefined to NaN
-      const rawLimit = req.query.limit !== undefined ? Number(req.query.limit) : undefined;
-      const rawOffset = req.query.offset !== undefined ? Number(req.query.offset) : undefined;
+      // Clean query parameter parsing, rejecting arrays and converting to strict numbers
+      const rawLimitParam = req.query.limit;
+      const rawOffsetParam = req.query.offset;
 
-      // Validate that if provided, they parse to valid numbers (rejecting empty strings that cast to 0 but are not valid inputs)
-      if ((req.query.limit !== undefined && (Number.isNaN(rawLimit) || (typeof req.query.limit === 'string' && req.query.limit.trim() === ''))) ||
-          (req.query.offset !== undefined && (Number.isNaN(rawOffset) || (typeof req.query.offset === 'string' && req.query.offset.trim() === '')))) {
-        res.status(400).json({ error: "Bad Request: limit and offset must be valid numbers" });
-        return;
-      }
-
-      if (Array.isArray(req.query.project) || Array.isArray(req.query.category)) {
+      if (Array.isArray(req.query.project) || Array.isArray(req.query.category) ||
+          Array.isArray(rawLimitParam) || Array.isArray(rawOffsetParam)) {
         res.status(400).json({ error: "Bad Request: array parameters not supported" });
         return;
       }
 
-      // We explicitly defend against Infinity limits, but NaN is inherently rejected above
+      // Treat empty string explicitly as 0 to avoid convoluted fallback masking, then validate
+      const rawLimit = rawLimitParam !== undefined ? (rawLimitParam === '' ? 0 : Number(rawLimitParam)) : undefined;
+      const rawOffset = rawOffsetParam !== undefined ? (rawOffsetParam === '' ? 0 : Number(rawOffsetParam)) : undefined;
+
+      if ((rawLimit !== undefined && Number.isNaN(rawLimit)) || (rawOffset !== undefined && Number.isNaN(rawOffset))) {
+        res.status(400).json({ error: "Bad Request: limit and offset must be valid numbers" });
+        return;
+      }
+
       const normalizedLimit = rawLimit ?? 50;
       if (!Number.isFinite(normalizedLimit)) {
         res.status(400).json({ error: "Bad Request: limit must be a finite number" });
         return;
       }
 
-      if (rawOffset !== undefined && rawOffset < 0) {
-        res.status(400).json({ error: "Bad Request: offset cannot be negative" });
-        return;
-      }
-
-      if (normalizedLimit !== undefined && normalizedLimit < 1) {
+      if (normalizedLimit < 1) {
         res.status(400).json({ error: "Bad Request: limit must be at least 1" });
         return;
       }
@@ -204,8 +201,9 @@ export function mountGenomeRoutes(app: express.Application): void {
       }));
 
       // Extract total count safely regardless of driver wrapping (adapter.query types as T[])
-      const totalCountRaw = (countResult as any)?.[0]?.total;
-      const totalCount = Number(totalCountRaw || 0);
+      const countResAny = countResult as any;
+      const rawTotal = Array.isArray(countResAny) ? countResAny[0]?.total : countResAny?.total;
+      const totalCount = Number(rawTotal || 0);
 
       res.json({
         genes,
