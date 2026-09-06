@@ -49,3 +49,7 @@
 ## 2024-05-18 - Batch Database Updates
 **Learning:** Database updates performed inside an iteration loop (e.g. `await db.execute(...)` for each concept scoring) result in severe N+1 latency issues on scale.
 **Action:** Always refactor iterative database operations to accumulate bind parameters in an array and dispatch a single grouped query with `await db.executeMany(...)`. Remember to adapt unit test assertions as well (`mockDbAdapter.executeMany.mock.calls`).
+
+## 2026-09-05 - Array deduplication
+**Learning:** `Array.from(new Set(arr))` is significantly faster than `arr.filter((v, i, arr) => arr.indexOf(v) === i)` because `indexOf` results in an $O(N^2)$ time complexity for large arrays.
+**Action:** When deduplicating arrays, avoid $O(N^2)$ time complexity bottlenecks by using an $O(N)$ Set-based approach.
