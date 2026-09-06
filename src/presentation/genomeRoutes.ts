@@ -89,7 +89,13 @@ export function mountGenomeRoutes(app: express.Application): void {
       const { authStorage } = await import("../utils/context.js");
 
       // Note: In this system, `uid` on the AuthContext object represents the tenant identifier
-      const tenantId = authStorage.getStore()?.uid;
+      const store = authStorage.getStore();
+      if (!store) {
+        res.status(500).json({ error: "Internal Server Error: Missing auth context store" });
+        return;
+      }
+
+      const tenantId = store.uid;
       if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId.length > 128) {
         res.status(403).json({ error: "Forbidden: Missing or invalid tenant context" });
         return;
@@ -106,8 +112,8 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      if ((rawLimit !== undefined && rawLimit < 0) || (rawOffset !== undefined && rawOffset < 0)) {
-        res.status(400).json({ error: "Bad Request: limit and offset cannot be negative" });
+      if (rawOffset !== undefined && rawOffset < 0) {
+        res.status(400).json({ error: "Bad Request: offset cannot be negative" });
         return;
       }
 
