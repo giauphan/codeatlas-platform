@@ -170,6 +170,62 @@ describe('Embedding Service Fixes & Reliability', () => {
     });
   });
 
+  describe('Debug Traces', () => {
+    test('should suppress debug traces when disabled', async () => {
+      const loggerModule = await import('../../src/utils/logger.js');
+      const loggerInfoSpy = mock.method(loggerModule.logger, 'info', () => {});
+      global.fetch = mock.fn(async () => mockSuccessfulFetch([testEmbedding]));
+      process.env.MISTRAL_API_KEY = 'secret-key';
+      process.env.EMBEDDING_MODELS = 'mistral/codestral-embed';
+      process.env.EMBEDDING_DEBUG = 'false';
+
+      await generateEmbedding('private source text', 'passage');
+
+      const traces = loggerInfoSpy.mock.calls.filter(call =>
+        String(call.arguments[0]).startsWith('[Embeddings] Trace:')
+      );
+      assert.strictEqual(traces.length, 0);
+    });
+
+    test('should emit sanitized request and rate-limit metadata when enabled', async () => {
+      const loggerModule = await import('../../src/utils/logger.js');
+      const loggerInfoSpy = mock.method(loggerModule.logger, 'info', () => {});
+      let callCount = 0;
+      global.fetch = mock.fn(async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            ok: false,
+            status: 429,
+            statusText: 'Too Many Requests',
+            headers: new Headers({ 'retry-after': '0' }),
+            json: async () => ({ error: 'Rate limit exceeded' })
+          };
+        }
+        return mockSuccessfulFetch([testEmbedding]);
+      });
+      process.env.MISTRAL_API_KEY = 'secret-key';
+      process.env.EMBEDDING_MODELS = 'mistral/codestral-embed';
+      process.env.EMBEDDING_DEBUG = 'true';
+
+      const result = await generateEmbedding('private source text', 'query');
+      assert.ok(result !== null);
+
+      const traceCalls = loggerInfoSpy.mock.calls.filter(call =>
+        String(call.arguments[0]).startsWith('[Embeddings] Trace:')
+      );
+      assert.ok(traceCalls.length >= 3);
+      const serialized = JSON.stringify(traceCalls);
+      assert.match(serialized, /rate_limited\(429\)/);
+      assert.match(serialized, /"provider":"mistral"/);
+      assert.match(serialized, /"batchSize":1/);
+      assert.match(serialized, /"status":429/);
+      assert.match(serialized, /"delayMs":0/);
+      assert.doesNotMatch(serialized, /secret-key/);
+      assert.doesNotMatch(serialized, /private source text/);
+    });
+  });
+
   describe('Batching and Failover', () => {
     test('should split input into chunks of 50 and aggregate results', async () => {
       let batchSizes: number[] = [];

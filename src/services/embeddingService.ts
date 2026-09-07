@@ -1,5 +1,9 @@
 import { logger } from "../utils/logger.js";
 
+function isEmbeddingDebug(): boolean {
+  return process.env.EMBEDDING_DEBUG === "true";
+}
+
 // ── Type Definitions ─────────────────────────────────────────────────────────
 // Both NVIDIA NIM and Mistral expose an OpenAI-compatible embeddings response.
 interface EmbeddingData {
@@ -257,6 +261,7 @@ async function requestFromModel(
     // For rate limit errors (429), try with exponential backoff
     for (let retryAttempt = 0; retryAttempt <= MAX_RETRY_ATTEMPTS; retryAttempt++) {
       try {
+        const startTime = Date.now();
         const response = await fetch(url, {
           method: "POST",
           headers: {
@@ -265,6 +270,22 @@ async function requestFromModel(
           },
           body
         });
+        const durationMs = Date.now() - startTime;
+
+        if (isEmbeddingDebug()) {
+          logger.info(`[Embeddings] Trace: Request complete`, {
+            model: spec.model,
+            provider: spec.provider,
+            url,
+            inputType,
+            batchSize: input.length,
+            dim,
+            durationMs,
+            status: response.status,
+            attempt: keyAttempt,
+            retryAttempt
+          });
+        }
 
         if (!response.ok) {
           logger.error(`[Embeddings] Model ${label}${keyRef} returned error ${response.status} for ${response.url}: ${response.statusText}`);
@@ -274,8 +295,27 @@ async function requestFromModel(
             const retryAfterMs = parseRetryAfter(response.headers?.get?.("retry-after") ?? null);
             const delay = getBackoffWithJitter(retryAttempt, retryAfterMs);
             providerCooldownUntil[spec.provider] = Date.now() + delay;
+
+            if (isEmbeddingDebug()) {
+              logger.info(`[Embeddings] Trace: rate_limited(429)`, {
+                model: spec.model,
+                provider: spec.provider,
+                url,
+                inputType,
+                batchSize: input.length,
+                dim,
+                status: response.status,
+                attempt: keyAttempt,
+                retryAttempt,
+                retryAfterMs,
+                delayMs: delay,
+                cooldownRemainingMs: providerCooldownUntil[spec.provider] - Date.now(),
+              });
+            }
+
             logger.info(`[Embeddings] Model ${label}${keyRef} rate limited (429). Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
             continue;
           }
 
