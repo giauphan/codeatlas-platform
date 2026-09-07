@@ -263,9 +263,9 @@ export class ConsolidationEngine {
         // Batch delete duplicate concepts using executeMany for N+1 avoidance.
         if (toRemove.size > 0) {
           try {
-            const binds = Array.from(toRemove).map((id) => ({ id }));
+            const binds = Array.from(toRemove).map((id) => ({ id, tenantId }));
             await db.executeMany(
-              `DELETE FROM ai_dreaming_memory WHERE id = :id`,
+              `DELETE FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
               binds as any
             );
             merged += toRemove.size;
