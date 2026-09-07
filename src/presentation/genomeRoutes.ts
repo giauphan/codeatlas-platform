@@ -27,7 +27,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, geneId });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -42,7 +42,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.json(gene);
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -62,7 +62,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.json({ genes });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -78,51 +78,141 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, geneId });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
   // GET /api/genome/list — List genes (paginated, no vector search)
   app.get("/api/genome/list", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
-      const { initAdapter, setSessionContext } = await import("../database/connection.js");
+      // Lazy load dependencies to optimize cold starts for non-DB endpoints
+      const [{ initAdapter }, { authStorage }] = await Promise.all([
+        import("../database/connection.js"),
+        import("../utils/context.js")
+      ]);
+
+      // Note: In this system, `uid` on the AuthContext object represents the tenant identifier
+      const store = authStorage.getStore();
+      if (!store) {
+        res.status(500).json({ error: "Internal Server Error: Missing auth context store" });
+        return;
+      }
+
+      const tenantId = store.uid;
+      if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId.length > 255) {
+        res.status(403).json({ error: "Forbidden: Missing or invalid tenant context" });
+        return;
+      }
+
+      // Clean query parameter parsing, rejecting arrays and converting to strict numbers
+      const rawLimitParam = req.query.limit;
+      const rawOffsetParam = req.query.offset;
+
+      if (Array.isArray(req.query.project) || Array.isArray(req.query.category) ||
+          Array.isArray(rawLimitParam) || Array.isArray(rawOffsetParam)) {
+        res.status(400).json({ error: "Bad Request: array parameters not supported" });
+        return;
+      }
+
+      // Treat empty string explicitly as undefined to trigger defaults, avoid 0 coercion
+      const rawLimit = rawLimitParam !== undefined && rawLimitParam !== '' ? Number(rawLimitParam) : undefined;
+      const rawOffset = rawOffsetParam !== undefined && rawOffsetParam !== '' ? Number(rawOffsetParam) : undefined;
+
+      if ((rawLimit !== undefined && Number.isNaN(rawLimit)) || (rawOffset !== undefined && Number.isNaN(rawOffset))) {
+        res.status(400).json({ error: "Bad Request: limit and offset must be valid numbers" });
+        return;
+      }
+
+      const normalizedLimit = rawLimit ?? 50;
+      if (normalizedLimit < 1 || !Number.isFinite(normalizedLimit)) {
+        res.status(400).json({ error: "Bad Request: limit must be at least 1 and finite" });
+        return;
+      }
+
       const adapter = await initAdapter();
-        const project = req.query.project as string | undefined;
-        const category = req.query.category as string | undefined;
-        const limit = Math.min(Number(req.query.limit) || 50, 100);
-        const offset = Number(req.query.offset) || 0;
+      // Filter params explicitly allow empty strings to skip WHERE clauses cleanly as a UI affordance
+      const projectRaw = req.query.project;
+      const project = typeof projectRaw === 'string' ? (projectRaw.trim() === '' ? undefined : projectRaw.trim()) : undefined;
+      if (project !== undefined && project.length > 255) {
+        res.status(400).json({ error: "Bad Request: project parameter too long" });
+        return;
+      }
 
-        const pFilter = project ? "WHERE project = :project" : "";
-        const catFilter = category ? (pFilter ? "AND category = :category" : "WHERE category = :category") : "";
-        const binds: Record<string, any> = { limit, offset };
-        if (project) binds.project = project;
-        if (category) binds.category = category;
+      const categoryRaw = req.query.category;
+      const category = typeof categoryRaw === 'string' ? (categoryRaw.trim() === '' ? undefined : categoryRaw.trim()) : undefined;
+      if (category !== undefined && category.length > 255) {
+        res.status(400).json({ error: "Bad Request: category parameter too long" });
+        return;
+      }
 
-        const result = await adapter.query<any>(
-          `SELECT id, name, description, problem, solution, architecture,
-                  category, project, confidence, version, evolution_score,
-                  usage_count, success_rate, status, source_type, created_at, updated_at
-           FROM codeatlas_genome ${pFilter} ${catFilter}
-           ORDER BY evolution_score DESC
-           LIMIT :limit OFFSET :offset`,
-          binds
-        );
+      const limit = Math.min(normalizedLimit, 100);
+      const offset = Math.max(0, rawOffset ?? 0);
 
-        const genes = (result || []).map((r: any) => ({
-          id: String(r.id), name: String(r.name), description: String(r.description || ""),
-          problem: String(r.problem || ""), solution: String(r.solution || ""),
-          architecture: String(r.architecture || ""), category: String(r.category),
-          project: String(r.project || ""), confidence: Number(r.confidence),
-          version: Number(r.version), evolutionScore: Number(r.evolution_score),
-          usageCount: Number(r.usage_count), successRate: Number(r.success_rate),
-          status: String(r.status), sourceType: String(r.source_type || ""),
-          createdAt: String(r.created_at), updatedAt: String(r.updated_at),
-        }));
+      if (offset > 10000) {
+        res.status(400).json({ error: "Bad Request: offset cannot exceed 10000" });
+        return;
+      }
 
-        res.json({ genes, offset, limit });
+      const binds: Record<string, any> = { limit, offset, tenantId };
+      const whereParts = ["tenant_id = :tenantId"];
+
+      if (project) {
+        whereParts.push("project = :project");
+        binds.project = project;
+      }
+
+      if (category) {
+        whereParts.push("category = :category");
+        binds.category = category;
+      }
+
+      const whereSql = `WHERE ${whereParts.join(" AND ")}`;
+
+      const result = await adapter.query<any>(
+        `SELECT id, name, description, problem, solution, architecture,
+                category, project, confidence, version, evolution_score,
+                usage_count, success_rate, status, source_type, created_at, updated_at
+         FROM codeatlas_genome
+         ${whereSql}
+         ORDER BY evolution_score DESC, updated_at DESC, id ASC
+         LIMIT :limit OFFSET :offset`,
+        binds
+      );
+
+      // Explicitly type as an array of objects since adapter.query returns T[]
+      const countResult = await adapter.query<{ total: number }[]>(
+        `SELECT COUNT(*) as total
+         FROM codeatlas_genome
+         ${whereSql}`,
+        binds
+      );
+
+      const genes = (result || []).map((r: any) => ({
+        id: String(r.id), name: String(r.name), description: String(r.description || ""),
+        problem: String(r.problem || ""), solution: String(r.solution || ""),
+        architecture: String(r.architecture || ""), category: String(r.category || ""),
+        project: String(r.project || ""), confidence: r.confidence != null ? Number(r.confidence) : 0,
+        version: r.version != null ? Number(r.version) : 0, evolutionScore: r.evolution_score != null ? Number(r.evolution_score) : 0,
+        usageCount: r.usage_count != null ? Number(r.usage_count) : 0, successRate: r.success_rate != null ? Number(r.success_rate) : 0,
+        status: String(r.status || ""), sourceType: String(r.source_type || ""),
+        createdAt: String(r.created_at || ""), updatedAt: String(r.updated_at || ""),
+      }));
+
+      // Extract total count safely regardless of driver wrapping (adapter.query types as T[])
+      const countResAny = countResult as any;
+      const rawTotal = Array.isArray(countResAny) ? countResAny[0]?.total : countResAny?.total;
+      const totalCount = Number(rawTotal || 0);
+
+      res.json({
+        genes,
+        offset,
+        limit,
+        totalCount,
+        hasMore: offset + limit < totalCount
+      });
     } catch (err) {
       logger.error(`[Genome] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -142,7 +232,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, geneId, absorbed: geneIds.length });
     } catch (err) {
       logger.error(`[Genome merge] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -158,7 +248,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, childIds });
     } catch (err) {
       logger.error(`[Genome split] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -174,7 +264,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(200).json({ success: true, geneId });
     } catch (err) {
       logger.error(`[Genome mutate] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -190,7 +280,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(200).json({ success: true, retired: count });
     } catch (err) {
       logger.error(`[Genome retire] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -216,7 +306,10 @@ export function mountGenomeRoutes(app: express.Application): void {
         } catch { failed++; }
       }
       res.json({ success: true, synced, failed });
-    } catch (err) { res.status(500).json({ error: String(err) }); }
+    } catch (err) {
+      logger.error(`[Genome sync] ${err}`);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
   });
 
   // Phase 5: Immune System
@@ -234,7 +327,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.json({ genes });
     } catch (err) {
       logger.error(`[Genome immune] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -250,7 +343,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.status(201).json({ success: true, geneId });
     } catch (err) {
       logger.error(`[Genome immune] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -268,7 +361,7 @@ export function mountGenomeRoutes(app: express.Application): void {
       res.json({ context, immuneCount: context ? (context.match(/# Application/g) || []).length : 0 });
     } catch (err) {
       logger.error(`[Genome immune] ${err}`);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 }
