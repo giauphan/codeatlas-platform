@@ -12,6 +12,23 @@ import { logger } from "../utils/logger.js";
 import { DreamingService } from "./dreamingService.js";
 import { MemoryService } from "./memoryService.js";
 import { loadAnalysisAsync } from "./projectService.js";
+import { authStorage } from "../utils/context.js";
+import type { AuthContext } from "../utils/context.js";
+
+// Startup and background jobs run outside request middleware, so tenant-scoped
+// writes need an explicit system identity to pass tenantId() checks.
+const SYSTEM_AUTH_CONTEXT: AuthContext = {
+  tier: "admin",
+  uid: "_system",
+  keyId: "_system",
+  role: "system"
+};
+
+function withSystemAuth<T>(fn: () => Promise<T>): Promise<T> {
+  return authStorage.getStore()?.uid
+    ? fn()
+    : authStorage.run(SYSTEM_AUTH_CONTEXT, fn);
+}
 
 // Memory system state
 export interface MemorySystemStatus {
@@ -83,25 +100,27 @@ export class MemoryController {
     
     try {
       // Episodic Memory (business rules, change logs)
-      await MemoryService.saveEpisodicMemory("_system", "BUSINESS_RULE", {
+      await withSystemAuth(() => MemoryService.saveEpisodicMemory("_system", "BUSINESS_RULE", {
         rule: "Memory system auto-loaded on startup",
         timestamp: new Date().toISOString(),
         type: "system_initialization"
-      });
+      }));
       memoryState.episodicMemory = true;
       logger.info("[MemoryController] ✅ Episodic Memory initialized");
-      
+
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.warn("[MemoryController] ⚠️  Episodic Memory initialization failed:", errorMsg);
       memoryState.error = errorMsg;
       memoryState.episodicMemory = false;
     }
-    
+
     // Final status check
-    const allInitialized = memoryState.dreamMemory && 
-                          (memoryState.semanticMemory || !memoryState.autoLoadEnabled);
-    
+    const allInitialized = memoryState.dreamMemory &&
+                          memoryState.semanticMemory &&
+                          memoryState.episodicMemory &&
+                          !memoryState.error;
+
     if (allInitialized) {
       logger.info("[MemoryController] 🎉 All memory systems auto-initialized successfully");
     } else {
@@ -155,19 +174,19 @@ export class MemoryController {
     
     try {
         if (businessRule) {
-          await MemoryService.saveEpisodicMemory(project, "BUSINESS_RULE", {
+          await withSystemAuth(() => MemoryService.saveEpisodicMemory(project, "BUSINESS_RULE", {
             rule: businessRule,
             timestamp: new Date().toISOString(),
             type: "manual_sync"
-          });
+          }));
         }
 
         if (changeDescription) {
-          await MemoryService.saveEpisodicMemory(project, "CHANGE_LOG", {
+          await withSystemAuth(() => MemoryService.saveEpisodicMemory(project, "CHANGE_LOG", {
             description: changeDescription,
             timestamp: new Date().toISOString(),
             type: "manual_sync"
-          });
+          }));
         }
 
       // Update state
@@ -234,8 +253,9 @@ export class MemoryController {
    * Check if memory system is healthy
    */
   static isHealthy(): boolean {
-    return memoryState.dreamMemory && 
+    return memoryState.dreamMemory &&
            memoryState.semanticMemory &&
+           memoryState.episodicMemory &&
            !memoryState.error;
   }
 }

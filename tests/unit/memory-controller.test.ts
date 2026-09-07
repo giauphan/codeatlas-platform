@@ -84,6 +84,21 @@ describe('MemoryController Unit Tests', () => {
       assert.strictEqual(dreamCalled, false);
       assert.strictEqual(getMemoryStatus().autoLoadEnabled, false);
     });
+
+    test('runs episodic save with system auth context when no request auth exists', async () => {
+      let capturedTenant: string | null = null;
+      mock.method(DreamingService, 'initialize', async () => {});
+      mock.method(MemoryService, 'saveEpisodicMemory', async () => {
+        const { authStorage } = await import('../../src/utils/context.js');
+        capturedTenant = authStorage.getStore()?.uid ?? null;
+      });
+
+      await MemoryController.autoInitialize();
+
+      assert.strictEqual(capturedTenant, '_system');
+      assert.strictEqual(getMemoryStatus().episodicMemory, true);
+      assert.strictEqual(MemoryController.isHealthy(), true);
+    });
   });
 
   describe('manualInitialize() and reload()', () => {
