@@ -113,8 +113,9 @@ export class MemoryService {
     }));
 
     try {
-      for (const row of rows) {
-        await db.execute(sql, row);
+      // ⚡ Bolt: Batch execution to avoid N+1 query performance bottleneck
+      if (rows.length > 0) {
+        await db.executeMany(sql, rows);
       }
     } catch (err) {
       logger.error("Error saving semantic memory:", err instanceof Error ? err.message : String(err));
@@ -135,14 +136,16 @@ export class MemoryService {
     `;
 
     try {
-      for (const l of links) {
-        await db.execute(sql, {
+      // ⚡ Bolt: Batch execution to avoid N+1 query performance bottleneck
+      if (links.length > 0) {
+        const binds = links.map(l => ({
           src: `${project}_${l.source}`,
           tgt: `${project}_${l.target}`,
           project,
           type: l.type,
           tenantId: tid,
-        });
+        }));
+        await db.executeMany(sql, binds);
       }
     } catch (err) {
       logger.error("Error saving relational memory:", err instanceof Error ? err.message : String(err));
