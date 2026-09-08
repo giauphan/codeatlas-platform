@@ -21,22 +21,22 @@ export const DocumentationView: React.FC = () => {
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   const tabRefs = useRef(new Map<TabType, HTMLButtonElement>());
-  const [focusTarget, setFocusTarget] = useState<TabType | null>(null);
+  const focusTargetRef = useRef<TabType | null>(null);
 
-  const setTabRef = useCallback((el: HTMLButtonElement | null) => {
+  const setTabRef = useCallback((id: TabType) => (el: HTMLButtonElement | null) => {
     if (el) {
-      // In this specific mapping, we rely on the id attribute to correctly key the button.
-      const id = el.id.replace('tab-', '') as TabType;
       tabRefs.current.set(id, el);
+    } else {
+      tabRefs.current.delete(id);
     }
   }, []);
 
   useEffect(() => {
-    if (focusTarget) {
-      tabRefs.current.get(focusTarget)?.focus();
-      setFocusTarget(null);
+    if (focusTargetRef.current) {
+      tabRefs.current.get(focusTargetRef.current)?.focus();
+      focusTargetRef.current = null;
     }
-  }, [focusTarget]);
+  });
 
   const backendUrl = window.location.origin.includes('localhost:5173')
     ? 'http://localhost:8080'
@@ -181,14 +181,14 @@ export const DocumentationView: React.FC = () => {
               e.preventDefault();
               const nextId = array[nextIndex].id as TabType;
               setActiveSubTab(nextId);
-              setFocusTarget(nextId);
+              focusTargetRef.current = nextId;
             }
           };
 
           return (
             <button
               key={tab.id}
-              ref={setTabRef}
+              ref={setTabRef(tab.id as TabType)}
               role="tab"
               aria-selected={isActive}
               aria-controls={`panel-${tab.id}`}
