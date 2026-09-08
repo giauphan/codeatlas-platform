@@ -13,8 +13,6 @@ vi.mock('lucide-react', () => {
     GitBranch: Icon,
     Loader2: Icon,
     RefreshCw: Icon,
-    Eye: Icon,
-    EyeOff: Icon,
   };
 });
 

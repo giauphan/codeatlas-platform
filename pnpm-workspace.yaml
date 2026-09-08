@@ -18,3 +18,6 @@ overrides:
   qs: "^6.15.2"
   "@babel/core": "^7.29.6"
   body-parser: "^1.20.6"
+  # Override fast-uri to ^3.1.6 to resolve high-severity SSRF/Host confusion
+  # vulnerability in @modelcontextprotocol/sdk -> ajv subdependency (CVE-2025-27758)
+  fast-uri: "^3.1.6"

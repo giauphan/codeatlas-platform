@@ -227,9 +227,8 @@ export function MemoryTreeView() {
             <option value="">All projects</option>
             {projects.map(project => <option key={project} value={project}>{project}</option>)}
           </select>
-          <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.9rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: 'rgba(0,240,255,0.08)', color: 'var(--primary-neon)', cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
-            {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-            {loading ? 'Refreshing...' : 'Refresh'}
+          <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.9rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: 'rgba(0,240,255,0.08)', color: 'var(--primary-neon)', cursor: 'pointer' }}>
+            <RefreshCw size={16} /> Refresh
           </button>
         </div>
       </header>

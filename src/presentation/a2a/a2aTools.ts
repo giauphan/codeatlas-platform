@@ -66,7 +66,7 @@ export function registerA2ATools(server: McpServer, sessionAuth?: { tier: string
     {
       agent_url: z.string().describe("The remote A2A agent's base URL (e.g. 'http://agent-host:3000')"),
       tool_name: z.string().describe("Name of the skill/tool to invoke on the remote agent"),
-      params: z.record(z.string(), z.any()).optional().describe("Parameters to pass to the remote tool (default: {})"),
+      params: z.record(z.any()).optional().describe("Parameters to pass to the remote tool (default: {})"),
     },
     async ({ agent_url, tool_name, params }: { agent_url: string; tool_name: string; params?: Record<string, any> }) => {
       const auth = await checkAuth();
