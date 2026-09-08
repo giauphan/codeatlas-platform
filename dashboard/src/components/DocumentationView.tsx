@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Settings, 
@@ -20,23 +20,10 @@ export const DocumentationView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<TabType>('mcp');
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
-  const tabRefs = useRef(new Map<TabType, HTMLButtonElement>());
-  const focusTargetRef = useRef<TabType | null>(null);
-
-  const setTabRef = useCallback((id: TabType) => (el: HTMLButtonElement | null) => {
-    if (el) {
-      tabRefs.current.set(id, el);
-    } else {
-      tabRefs.current.delete(id);
-    }
-  }, []);
-
   useEffect(() => {
-    if (focusTargetRef.current) {
-      tabRefs.current.get(focusTargetRef.current)?.focus();
-      focusTargetRef.current = null;
-    }
-  });
+    // Focus the active tab whenever it changes
+    document.getElementById(`tab-${activeSubTab}`)?.focus();
+  }, [activeSubTab]);
 
   const backendUrl = window.location.origin.includes('localhost:5173')
     ? 'http://localhost:8080'
@@ -181,14 +168,12 @@ export const DocumentationView: React.FC = () => {
               e.preventDefault();
               const nextId = array[nextIndex].id as TabType;
               setActiveSubTab(nextId);
-              focusTargetRef.current = nextId;
             }
           };
 
           return (
             <button
               key={tab.id}
-              ref={setTabRef(tab.id as TabType)}
               role="tab"
               aria-selected={isActive}
               aria-controls={`panel-${tab.id}`}
