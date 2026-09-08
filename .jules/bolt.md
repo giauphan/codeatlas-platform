@@ -49,3 +49,7 @@
 ## 2024-05-18 - Batch Database Updates
 **Learning:** Database updates performed inside an iteration loop (e.g. `await db.execute(...)` for each concept scoring) result in severe N+1 latency issues on scale.
 **Action:** Always refactor iterative database operations to accumulate bind parameters in an array and dispatch a single grouped query with `await db.executeMany(...)`. Remember to adapt unit test assertions as well (`mockDbAdapter.executeMany.mock.calls`).
+
+## 2026-09-05 - External API Generation Batching
+**Learning:** Calling external API endpoints sequentially inside a loop (like `generateEmbeddings`) causes severe N+1 latency issues and significantly slows down operations over large datasets.
+**Action:** Accumulate inputs in memory inside the loop and replace the multiple API calls with a single batch execution command (like `generateEmbeddingsBatch`).
