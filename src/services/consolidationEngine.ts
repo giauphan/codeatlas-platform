@@ -39,6 +39,10 @@ export interface ConsolidationJob {
 export interface ConsolidationReport {
   id: string;
   jobType: string;
+  status: "running" | "completed" | "failed";
+  startedAt: string;
+  completedAt?: string;
+  durationMs?: number;
   dreamsProcessed: number;
   dreamsMerged: number;
   conceptsCreated: number;
@@ -141,9 +145,13 @@ export class ConsolidationEngine {
    * Main entry point to run a consolidation job.
    */
   async runJob(job: ConsolidationJob): Promise<ConsolidationReport> {
+    const startTime = Date.now();
+    const startedAt = new Date(startTime).toISOString();
     const report: ConsolidationReport = {
       id: randomUUID(),
       jobType: job.operations.join("+"),
+      status: "running",
+      startedAt,
       dreamsProcessed: 0,
       dreamsMerged: 0,
       conceptsCreated: 0,
@@ -153,9 +161,10 @@ export class ConsolidationEngine {
       errors: [],
     };
 
-    logger.info(`[Consolidation] Starting job ${report.id} (ops: ${report.jobType})`);
+    logger.info(`[Consolidation Pipeline] [${startedAt}] Job ${report.id} RUNNING (ops: ${report.jobType}, project: ${job.project || "all"}, provider: ${job.provider || "all"})`);
 
     for (const op of job.operations) {
+      const stepStart = Date.now();
       try {
         switch (op) {
           case "dedup":
@@ -171,14 +180,20 @@ export class ConsolidationEngine {
             await this.scoreDreams(job.project, job.provider, report);
             break;
         }
+        logger.info(`[Consolidation Pipeline] Step '${op}' completed in ${Date.now() - stepStart}ms (processed: ${report.dreamsProcessed}, merged: ${report.dreamsMerged}, concepts: ${report.conceptsCreated})`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         report.errors.push(`${op}: ${msg}`);
-        logger.error(`[Consolidation] Step '${op}' failed: ${msg}`);
+        logger.error(`[Consolidation Pipeline] Step '${op}' failed after ${Date.now() - stepStart}ms: ${msg}`);
       }
     }
 
-    logger.info(`[Consolidation] Job ${report.id} completed. Merged: ${report.dreamsMerged}, Concepts: ${report.conceptsCreated}`);
+    const endTime = Date.now();
+    report.completedAt = new Date(endTime).toISOString();
+    report.durationMs = endTime - startTime;
+    report.status = report.errors.length > 0 ? "failed" : "completed";
+
+    logger.info(`[Consolidation Pipeline] [${report.completedAt}] Job ${report.id} ${report.status.toUpperCase()} in ${report.durationMs}ms. Merged: ${report.dreamsMerged}, Concepts: ${report.conceptsCreated}, Errors: ${report.errors.length}`);
     return report;
   }
 

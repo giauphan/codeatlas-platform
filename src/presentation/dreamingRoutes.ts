@@ -5,7 +5,7 @@ import { loadAnalysisAsync } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { summarizeConversationForDreams } from "../services/llmService.js";
+import { DreamPipelineService } from "../services/dreamPipelineService.js";
 
 const VALID_MEMORY_TYPES = ["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN", "SESSION_SUMMARY"] as const;
 
@@ -99,10 +99,13 @@ export function registerDreamingRoutes(app: express.Application): void {
       const projectName = await resolveProjectName(project || "global");
 
       await logActivity(auth, "save_dream_memory", { memory_type, content, importance: importanceVal, session_id, project: projectName, provider, scope, tags, related_ids });
+      const startTime = Date.now();
       const memId = await authStorage.run(auth, () =>
         DreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, importanceVal, provider, scope, tags, related_ids)
       );
-      res.json({ success: true, id: memId, memory_type });
+      const durationMs = Date.now() - startTime;
+      logger.info(`[Dreaming Pipeline] Saved dream memory [${memory_type}] (${memId}) in ${durationMs}ms for project="${projectName}"`);
+      res.json({ success: true, id: memId, memory_type, durationMs });
     } catch (err) {
       handleError(res, err, "Save");
     }
@@ -190,6 +193,16 @@ export function registerDreamingRoutes(app: express.Application): void {
     }
   });
 
+  // GET /api/dreams/pipeline/status — inspect running pipeline metrics
+  app.get("/api/dreams/pipeline/status", authMiddleware, async (_req, res) => {
+    try {
+      const status = DreamPipelineService.getPipelineStatus();
+      res.json({ success: true, ...status });
+    } catch (err) {
+      handleError(res, err, "PipelineStatus");
+    }
+  });
+
   // POST /api/dreams/ingest-session — process conversation transcript, extract dreams, save
   app.post("/api/dreams/ingest-session", authMiddleware, async (req, res) => {
     try {
@@ -210,30 +223,14 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       await logActivity(auth, "ingest_session", { session_id: sessId, project: projectName, provider: prov });
 
-      const dreams = await summarizeConversationForDreams(content, prov, projectName, sessId);
-      if (!dreams || dreams.length === 0) {
-        // No dreams extracted, but still success (no learnings to save)
-        return res.json({ success: true, session_id: sessId, project: projectName, provider: prov, dreamsExtracted: 0 });
-      }
+      const result = await DreamPipelineService.runSessionIngestion({
+        content,
+        sessionId: sessId,
+        project: projectName,
+        provider: prov,
+      });
 
-      // Save each extracted dream — skip noise-blocked entries
-      const savedDreams: Array<{ id: string; memory_type: string; content: string }> = [];
-      const skipped: string[] = [];
-      for (const dream of dreams) {
-        const memId = await authStorage.run(auth, () =>
-          DreamingService.saveDreamMemory(
-            projectName, sessId, dream.memoryType as DreamMemoryType, dream.content, dream.importance, prov
-          )
-        );
-        if (memId === '__noise_blocked__') {
-          skipped.push(dream.content.slice(0, 60));
-        } else {
-          savedDreams.push({ id: memId, memory_type: dream.memoryType, content: dream.content });
-        }
-      }
-
-      logger.info(`[Dreaming] Ingested session ${sessId}: extracted ${savedDreams.length} dreams, ${skipped.length} blocked by noise gate for provider ${prov}`);
-      res.json({ success: true, session_id: sessId, project: projectName, provider: prov, dreamsExtracted: savedDreams.length, noiseBlocked: skipped.length, dreams: savedDreams });
+      res.json(result);
     } catch (err) {
       handleError(res, err, "IngestSession");
     }
@@ -247,30 +244,13 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       await logActivity(auth, "generate_daily_dreams", { project, provider });
 
-      // Query recent unprocessed dreams (any from last 24h — used as a base for consolidation)
       const projectName = await resolveProjectName(project || "");
-
-      // Run consolidation if enabled
-      let consolidationResult = null;
-      try {
-        const { ConsolidationEngine } = await import("../services/consolidationEngine.js");
-        const engine = new ConsolidationEngine();
-        consolidationResult = await engine.run({
-          project: projectName || undefined,
-          operations: ["dedup", "extract_concepts", "score", "score_dreams"],
-          provider: provider || undefined,
-        });
-        logger.info(`[Dreaming] Daily consolidation done for project="${projectName}" provider="${provider}"`);
-      } catch (consolidationErr) {
-        logger.error("[Dreaming] Daily consolidation failed:", consolidationErr);
-      }
-
-      res.json({
-        success: true,
-        project: projectName || "all",
-        provider: provider || "all",
-        consolidation: consolidationResult,
+      const result = await DreamPipelineService.runDailyPipeline({
+        project: projectName || undefined,
+        provider: provider || undefined,
       });
+
+      res.json(result);
     } catch (err) {
       handleError(res, err, "GenerateDailyDreams");
     }
