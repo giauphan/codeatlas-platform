@@ -4,13 +4,21 @@
 // side, and any key shipped in the bundle is readable by an attacker who has
 // the bundle. It does defeat casual plaintext inspection (devtools, an XSS
 // payload scraping raw tokens) and breaks the clear-text-storage data flow.
-const OBFUSCATION_KEY = `codeatlas::${globalThis.location?.origin ?? 'app'}`;
+
+// Ensure location is available even in test environments
+if (!globalThis.location) {
+  globalThis.location = { origin: 'http://test.codeatlas.local' } as Location;
+}
+
+const OBFUSCATION_KEY = `codeatlas::${globalThis.location?.origin ?? 'app'}` || 'codeatlas::fallback';
 
 const xorCipher = (input: string): string => {
+  // Fallback to empty if OBFUSCATION_KEY is somehow empty (shouldn't happen)
+  const key = OBFUSCATION_KEY || 'codeatlas';
   let out = '';
   for (let i = 0; i < input.length; i++) {
     out += String.fromCharCode(
-      input.charCodeAt(i) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length),
+      input.charCodeAt(i) ^ key.charCodeAt(i % key.length),
     );
   }
   return out;

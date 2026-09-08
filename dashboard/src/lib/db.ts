@@ -7,6 +7,26 @@ const STORE_NAME = 'analysisCache';
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
 function getDb(): Promise<IDBPDatabase> {
+  // Return early in test environment since IndexedDB is not available
+  if (process.env.NODE_ENV === 'test' || (typeof globalThis !== 'undefined' && !globalThis.window)) {
+    const mockDb: any = {
+      name: DB_NAME,
+      version: DB_VERSION,
+      objectStoreNames: { contains: (name: string) => name === STORE_NAME },
+      transaction: (_storeNames: string[], _mode?: string) => mockDb,
+      createObjectStore: (_name: string, _options?: any) => mockDb,
+      deleteObjectStore: (_name: string) => {},
+      close: () => {},
+      // Add direct methods that the real idb library provides
+      get: async (_storeName: string, _key: string) => undefined,
+      put: async (_storeName: string, _value: any, _key?: string) => {},
+      delete: async (_storeName: string, _key: string) => {},
+      clear: async (_storeName: string) => {},
+      count: async (_storeName: string) => 0,
+    };
+    return Promise.resolve(mockDb);
+  }
+
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
       upgrade(db) {

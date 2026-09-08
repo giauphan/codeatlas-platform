@@ -148,9 +148,6 @@ export const DocumentationView: React.FC = () => {
           const isActive = activeSubTab === tab.id;
 
           const handleKeyDown = (e: React.KeyboardEvent) => {
-            // Note: Focus management is handled here instead of a separate useEffect
-            // to ensure focus updates synchronously with the keyboard event while
-            // avoiding complex ref tracking and potential ID collisions.
             let nextIndex = -1;
             if (e.key === 'ArrowRight') {
               nextIndex = (index + 1) % array.length;
@@ -164,9 +161,9 @@ export const DocumentationView: React.FC = () => {
 
             if (nextIndex !== -1) {
               e.preventDefault();
-              const nextId = array[nextIndex].id as TabType;
-              setActiveSubTab(nextId);
-              document.getElementById(`tab-${nextId}`)?.focus();
+              setActiveSubTab(array[nextIndex].id as TabType);
+              const nextTab = document.getElementById(`tab-${array[nextIndex].id}`);
+              if (nextTab) nextTab.focus();
             }
           };
 
