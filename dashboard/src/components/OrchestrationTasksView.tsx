@@ -117,7 +117,8 @@ export function OrchestrationTasksView() {
             onSearch={handleSearch}
             placeholder="Search tasks by ID, description, or agent…"
             ariaLabel="Search orchestration tasks"
-            hasClearButton={false}
+            hasClearButton={true}
+            onClear={() => setSearchQuery('')}
           />
         </div>
         <div role="group" aria-label="Filter tasks by state" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
