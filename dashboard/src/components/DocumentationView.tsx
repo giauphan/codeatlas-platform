@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Settings, 
@@ -148,6 +148,9 @@ export const DocumentationView: React.FC = () => {
           const isActive = activeSubTab === tab.id;
 
           const handleKeyDown = (e: React.KeyboardEvent) => {
+            // Note: Focus management is handled here instead of a separate useEffect
+            // to ensure focus updates synchronously with the keyboard event while
+            // avoiding complex ref tracking and potential ID collisions.
             let nextIndex = -1;
             if (e.key === 'ArrowRight') {
               nextIndex = (index + 1) % array.length;
