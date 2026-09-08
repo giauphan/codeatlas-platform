@@ -20,11 +20,6 @@ export const DocumentationView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<TabType>('mcp');
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Focus the active tab whenever it changes
-    document.getElementById(`tab-${activeSubTab}`)?.focus();
-  }, [activeSubTab]);
-
   const backendUrl = window.location.origin.includes('localhost:5173')
     ? 'http://localhost:8080'
     : window.location.origin;
@@ -168,6 +163,7 @@ export const DocumentationView: React.FC = () => {
               e.preventDefault();
               const nextId = array[nextIndex].id as TabType;
               setActiveSubTab(nextId);
+              document.getElementById(`tab-${nextId}`)?.focus();
             }
           };
 
