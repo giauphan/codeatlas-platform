@@ -15,7 +15,7 @@
     "clsx": "^2.1.1",
     "firebase": "^12.18.0",
     "force-graph": "^1.51.4",
-    "framer-motion": "^13.1.0",
+    "framer-motion": "^13.2.0",
     "idb": "^8.0.3",
     "lucide-react": "^1.38.0",
     "react": "^18.2.0",
