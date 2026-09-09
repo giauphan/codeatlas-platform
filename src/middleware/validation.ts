@@ -6,14 +6,16 @@ import { logger } from "../utils/logger.js";
  * @param paramNames - List of query parameter keys to validate.
  */
 export function rejectArrayParams(...paramNames: string[]) {
-  return (req: express.Request, res: express.Response, next: express.NextFunction): void => {
-    if (paramNames.length === 0) {
-      logger.warn("[rejectArrayParams] Middleware applied with empty paramNames array. Skipping.");
-      return next();
-    }
+  if (paramNames.length === 0) {
+    logger.warn("[rejectArrayParams] Middleware created with empty paramNames array.");
+  }
 
-    if (paramNames.some(p => typeof req.query[p] !== 'undefined' && typeof req.query[p] !== 'string')) {
-      res.status(400).json({ error: "Bad Request: invalid parameter type, string expected" });
+  return (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+    if (paramNames.length === 0) return next();
+
+    const offending = paramNames.filter(p => typeof req.query[p] !== 'undefined' && typeof req.query[p] !== 'string');
+    if (offending.length > 0) {
+      res.status(400).json({ error: `Bad Request: invalid parameter type for [${offending.join(', ')}], string expected` });
       return;
     }
     next();
