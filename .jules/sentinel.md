@@ -52,3 +52,8 @@
 **Vulnerability:** A `GET /api/genome/list` endpoint queried the `codeatlas_genome` table without applying a `tenant_id` filter, allowing cross-tenant data exposure (Insecure Direct Object Reference / Broken Access Control).
 **Learning:** Even if data seems public or shared (like "genomes"), if the application uses a multi-tenant architecture, all database queries must explicitly scope results using the authenticated user's `tenant_id` unless intentionally designed otherwise.
 **Prevention:** Always verify that a `WHERE tenant_id = :tenantId` clause (or equivalent ORM scoping) is present on all database queries returning lists of resources in multi-tenant environments.
+
+## 2026-09-07 - [Missing Tenant Isolation on Data Deletion]
+**Vulnerability:** A deduplication process executed a `DELETE FROM ai_dreaming_memory WHERE id = :id` without a `tenant_id` scope, potentially allowing cross-tenant data deletion if IDs could be manipulated or guessed.
+**Learning:** Destructive operations like `DELETE` and `UPDATE` require explicit tenant isolation in their `WHERE` clauses just as much as `SELECT` queries, even when the IDs are fetched from a previously scoped query, as a defense-in-depth measure to prevent IDOR attacks.
+**Prevention:** Always append `AND tenant_id = :tenantId` to all bulk or targeted data modification statements (`DELETE`, `UPDATE`) in a multi-tenant environment.
