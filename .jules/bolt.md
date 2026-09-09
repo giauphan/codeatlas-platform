@@ -53,3 +53,7 @@
 ## 2026-09-05 - External API Generation Batching
 **Learning:** Calling external API endpoints sequentially inside a loop (like `generateEmbeddings`) causes severe N+1 latency issues and significantly slows down operations over large datasets.
 **Action:** Accumulate inputs in memory inside the loop and replace the multiple API calls with a single batch execution command (like `generateEmbeddingsBatch`).
+
+## 2026-09-09 - Batch Database Updates in Graph Building
+**Learning:** Sequential `db.execute(...)` calls within `for...of` loops when persisting batch data (like `saveSemanticMemory` and `saveRelationalMemory`) causes a massive N+1 bottleneck during project indexing, severely limiting ingestion throughput.
+**Action:** Replace `for...of` sequential inserts with array mappings and a single batched `await db.executeMany(...)` call, ensuring bindings map exactly to the underlying schema.
