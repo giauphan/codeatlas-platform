@@ -1,7 +1,8 @@
 import express from "express";
 
 /**
- * Middleware to reject array query parameters to prevent HTTP Parameter Pollution (HPP).
+ * Middleware to reject non-string query parameters (arrays, objects) to prevent HTTP Parameter Pollution (HPP).
+ * Note: Only validates parameters that are present in the request. `undefined` parameters pass through untouched.
  * @param paramNames - List of query parameter keys to validate.
  */
 export function rejectArrayParams(...paramNames: string[]) {
@@ -15,7 +16,7 @@ export function rejectArrayParams(...paramNames: string[]) {
       return val !== undefined && typeof val !== 'string';
     });
     if (offending.length > 0) {
-      res.status(400).json({ error: "Bad Request: malformed query parameters" });
+      res.status(400).json({ error: `Bad Request: malformed query parameters: ${offending.join(", ")}` });
       return;
     }
     next();
