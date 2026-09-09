@@ -1,4 +1,5 @@
 import express from "express";
+import { logger } from "../utils/logger.js";
 
 /**
  * Middleware to reject array query parameters to prevent HTTP Parameter Pollution (HPP).
@@ -6,6 +7,11 @@ import express from "express";
  */
 export function rejectArrayParams(...paramNames: string[]) {
   return (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+    if (paramNames.length === 0) {
+      logger.warn("[rejectArrayParams] Middleware applied with empty paramNames array. Skipping.");
+      return next();
+    }
+
     if (paramNames.some(p => typeof req.query[p] !== 'undefined' && typeof req.query[p] !== 'string')) {
       res.status(400).json({ error: "Bad Request: invalid parameter type, string expected" });
       return;
