@@ -276,7 +276,8 @@ async function cleanUpEmptyTenantProjectFolder(
 app.delete("/api/projects", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     if (Array.isArray(req.query.projectDir) || Array.isArray(req.query.force)) {
-      return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      return;
     }
 
     const auth = authStorage.getStore();
@@ -450,7 +451,8 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, async (req, res) =
 app.get("/api/projects/memory", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     if (Array.isArray(req.query.projectName) || Array.isArray(req.query.eventType)) {
-      return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      return;
     }
 
     const auth = authStorage.getStore();
@@ -493,7 +495,8 @@ app.get("/api/projects/memory", authMiddleware, localRateLimiter, async (req, re
 app.get("/api/projects/settings", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     if (Array.isArray(req.query.projectDir) || Array.isArray(req.query.projectName)) {
-      return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      return;
     }
 
     const auth = authStorage.getStore();
@@ -734,7 +737,8 @@ app.delete("/api/keys/:id", authMiddleware, localRateLimiter, async (req, res) =
 app.get("/api/analysis", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     if (Array.isArray(req.query.projectDir) || Array.isArray(req.query.project)) {
-      return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      return;
     }
 
     const projectDir = (req.query.projectDir as string) || (req.query.project as string);
@@ -1109,7 +1113,7 @@ app.get("/sse", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
   if (Array.isArray(req.query.sessionId)) {
-    res.status(400).send("Bad Request: array parameters not supported");
+    res.status(400).json({ error: "Bad Request: array parameters not supported" });
     return;
   }
 
