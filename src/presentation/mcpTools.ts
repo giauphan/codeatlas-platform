@@ -26,16 +26,6 @@ import { authStorage } from "../utils/context.js";
 import { randomUUID } from "node:crypto";
 import { isToolEnabled } from "../config/env.js";
 import { GraphNode } from "../types/index.js";
-import {
-  loadMemoryManually,
-  getMemoryStatus,
-  syncMemory,
-  disableMemoryAutoLoad,
-  enableMemoryAutoLoad,
-  resetMemory,
-  reloadMemory,
-  MemorySystemStatus
-} from "../services/memoryController.js";
 
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
@@ -1017,11 +1007,11 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
               keyword,
               matchCount: 0,
               message: `No entities found matching '${keyword}'. Try a broader keyword.`,
-              suggestions: Array.from(new Set(
-                nodes
-                  .filter((n) => n.type === "function" || n.type === "class")
-                  .map((n) => n.label)
-              )).slice(0, 15),
+              suggestions: nodes
+                .filter((n) => n.type === "function" || n.type === "class")
+                .map((n) => n.label)
+                .filter((l, i, arr) => arr.indexOf(l) === i)
+                .slice(0, 15),
             }, null, 2),
           }],
         };
@@ -1260,11 +1250,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         })),
         mermaidDiagram: mermaid,
         executionOrder,
-        readingOrder: Array.from(new Set(
-          executionOrder
-            .filter((e) => e.file)
-            .map((e) => e.file!)
-        )),
+        readingOrder: executionOrder
+          .filter((e) => e.file)
+          .map((e) => e.file!)
+          .filter((f, i, arr) => arr.indexOf(f) === i),
         message: `Generated ${dType} diagram for '${keyword}': ${traceNodes.length} nodes, ${dedupLinks.length} call relationships. Entry points: ${entryPoints.map((n) => n.label).join(", ")}`,
       };
 
@@ -1778,198 +1767,6 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         }
       } catch (err) {
         return { content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true as const };
-      }
-    }
-  );
-
-  // Memory Controller Tools (Auto/Manual Memory Management)
-  server.tool(
-    "load_memory_manually",
-    "Manually load memory systems. Use this when you want explicit control over memory initialization. Auto-load can be disabled with MEMORY_AUTO_LOAD=false.",
-    {
-      project: z.string().optional().describe("Optional: specific project to load memory for"),
-      force: z.boolean().optional().default(false).describe("Force reload even if already loaded")
-    },
-    async ({ project, force }: { project?: string; force?: boolean }) => {
-      const auth = await checkAuth();
-      await logActivity(auth, "load_memory_manually", { project, force });
-      
-      try {
-        if (force) {
-          resetMemory();
-        }
-        
-        const result = await loadMemoryManually(project);
-        const status = getMemoryStatus();
-        
-        return { content: [{
-          type: "text" as const, 
-          text: JSON.stringify({
-            success: true,
-            message: project ? `Memory loaded for project: ${project}` : "Memory systems manually loaded",
-            status,
-            timestamp: status.lastSync?.toISOString()
-          }, null, 2)
-        }] };
-      } catch (err: unknown) {
-        return { 
-          content: [{ 
-            type: "text" as const, 
-            text: `Memory manual load failed: ${err instanceof Error ? err.message : String(err)}` 
-          }], 
-          isError: true as const 
-        };
-      }
-    }
-  );
-
-  server.tool(
-    "get_memory_status",
-    "Get current memory system status including auto-load status, last sync time, and sync count.",
-    {},
-    async () => {
-      const auth = await checkAuth();
-      await logActivity(auth, "get_memory_status", {});
-      
-      try {
-        const status = getMemoryStatus();
-        return { content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            success: true,
-            status,
-            healthy: status.dreamMemory && status.semanticMemory && !status.error
-          }, null, 2)
-        }] };
-      } catch (err: unknown) {
-        return { 
-          content: [{ 
-            type: "text" as const, 
-            text: `Failed to get memory status: ${err instanceof Error ? err.message : String(err)}` 
-          }], 
-          isError: true as const 
-        };
-      }
-    }
-  );
-
-  server.tool(
-    "enable_memory_auto_load",
-    "Enable automatic memory loading on startup. This is the default behavior.",
-    {},
-    async () => {
-      const auth = await checkAuth();
-      await logActivity(auth, "enable_memory_auto_load", {});
-      
-      try {
-        enableMemoryAutoLoad();
-        return { content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            success: true,
-            message: "Memory auto-load enabled. Will auto-load on next startup.",
-            autoLoadEnabled: true
-          }, null, 2)
-        }] };
-      } catch (err: unknown) {
-        return { 
-          content: [{ 
-            type: "text" as const, 
-            text: `Failed to enable auto-load: ${err instanceof Error ? err.message : String(err)}` 
-          }], 
-          isError: true as const 
-        };
-      }
-    }
-  );
-
-  server.tool(
-    "disable_memory_auto_load",
-    "Disable automatic memory loading on startup. Use manual load_memory_manually when needed.",
-    {},
-    async () => {
-      const auth = await checkAuth();
-      await logActivity(auth, "disable_memory_auto_load", {});
-      
-      try {
-        disableMemoryAutoLoad();
-        return { content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            success: true,
-            message: "Memory auto-load disabled. Use load_memory_manually for manual loading.",
-            autoLoadEnabled: false
-          }, null, 2)
-        }] };
-      } catch (err: unknown) {
-        return { 
-          content: [{ 
-            type: "text" as const, 
-            text: `Failed to disable auto-load: ${err instanceof Error ? err.message : String(err)}` 
-          }], 
-          isError: true as const 
-        };
-      }
-    }
-  );
-
-  server.tool(
-    "reload_memory",
-    "Force reload all memory systems. Resets error state and reloads all memory data.",
-    {},
-    async () => {
-      const auth = await checkAuth();
-      await logActivity(auth, "reload_memory", {});
-      
-      try {
-        const status = await reloadMemory();
-        return { content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            success: true,
-            message: "Memory systems reloaded successfully",
-            status,
-            timestamp: status.lastSync?.toISOString()
-          }, null, 2)
-        }] };
-      } catch (err: unknown) {
-        return { 
-          content: [{ 
-            type: "text" as const, 
-            text: `Memory reload failed: ${err instanceof Error ? err.message : String(err)}` 
-          }], 
-          isError: true as const 
-        };
-      }
-    }
-  );
-
-  server.tool(
-    "reset_memory",
-    "Reset memory system state. Clears errors, resets counters. Useful for troubleshooting.",
-    {},
-    async () => {
-      const auth = await checkAuth();
-      await logActivity(auth, "reset_memory", {});
-      
-      try {
-        resetMemory();
-        return { content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            success: true,
-            message: "Memory system state reset successfully",
-            status: getMemoryStatus()
-          }, null, 2)
-        }] };
-      } catch (err: unknown) {
-        return { 
-          content: [{ 
-            type: "text" as const, 
-            text: `Memory reset failed: ${err instanceof Error ? err.message : String(err)}` 
-          }], 
-          isError: true as const 
-        };
       }
     }
   );

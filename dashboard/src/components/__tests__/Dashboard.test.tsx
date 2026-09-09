@@ -63,8 +63,6 @@ vi.mock('lucide-react', () => {
     RefreshCw: MockIcon,
     Clock: MockIcon,
     Save: MockIcon,
-    Eye: MockIcon,
-    EyeOff: MockIcon,
   };
 });
 

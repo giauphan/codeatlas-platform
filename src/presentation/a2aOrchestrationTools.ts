@@ -76,7 +76,7 @@ export function registerA2AOrchestrationTools(server: McpServer): void {
     description: z.string().describe("A brief description of the task."),
     developer_agent_id: z.string().optional().describe("Optional ID of the developer agent to assign the task to immediately."),
     tool_name: z.string().optional().describe("Optional name of the tool the developer agent should execute."),
-    tool_params: z.record(z.string(), z.any()).optional().describe("Optional parameters for the tool."),
+    tool_params: z.record(z.any()).optional().describe("Optional parameters for the tool."),
   }, createHandler);
   server.tool("a2a_assign_orchestration_task", "Assigns an A2A orchestration task to a developer agent, moving it from 'created' to 'assigned'.", {
     orchestration_task_id: z.string().describe("The ID of the orchestration task."),
