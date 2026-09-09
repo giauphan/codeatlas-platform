@@ -48,7 +48,8 @@ export function registerDreamingRoutes(app: express.Application): void {
       const auth = await checkAuth(apiKey, bearerToken);
 
       if (Array.isArray(req.query.id)) {
-        return res.status(400).json({ error: "Bad Request: array parameters not supported for id" });
+        res.status(400).json({ error: "Bad Request: array parameters not supported for id" });
+        return;
       }
 
       const id = req.query.id as string | undefined;
@@ -121,8 +122,9 @@ export function registerDreamingRoutes(app: express.Application): void {
     try {
       const auth = authStorage.getStore()!;
 
-      if (Array.isArray(req.query.query) || Array.isArray(req.query.project)) {
-        return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      if (Array.isArray(req.query.query) || Array.isArray(req.query.project) || Array.isArray(req.query.limit)) {
+        res.status(400).json({ error: "Bad Request: array parameters not supported" });
+        return;
       }
 
       const queryText = (req.query.query as string)?.trim() || "";
