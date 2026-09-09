@@ -39,6 +39,10 @@ export interface ConsolidationJob {
 export interface ConsolidationReport {
   id: string;
   jobType: string;
+  status: "running" | "completed" | "failed";
+  startedAt: string;
+  completedAt?: string;
+  durationMs?: number;
   dreamsProcessed: number;
   dreamsMerged: number;
   conceptsCreated: number;
@@ -141,9 +145,13 @@ export class ConsolidationEngine {
    * Main entry point to run a consolidation job.
    */
   async runJob(job: ConsolidationJob): Promise<ConsolidationReport> {
+    const startTime = Date.now();
+    const startedAt = new Date(startTime).toISOString();
     const report: ConsolidationReport = {
       id: randomUUID(),
       jobType: job.operations.join("+"),
+      status: "running",
+      startedAt,
       dreamsProcessed: 0,
       dreamsMerged: 0,
       conceptsCreated: 0,
@@ -153,9 +161,10 @@ export class ConsolidationEngine {
       errors: [],
     };
 
-    logger.info(`[Consolidation] Starting job ${report.id} (ops: ${report.jobType})`);
+    logger.info(`[Consolidation Pipeline] [${startedAt}] Job ${report.id} RUNNING (ops: ${report.jobType}, project: ${job.project || "all"}, provider: ${job.provider || "all"})`);
 
     for (const op of job.operations) {
+      const stepStart = Date.now();
       try {
         switch (op) {
           case "dedup":
@@ -171,14 +180,20 @@ export class ConsolidationEngine {
             await this.scoreDreams(job.project, job.provider, report);
             break;
         }
+        logger.info(`[Consolidation Pipeline] Step '${op}' completed in ${Date.now() - stepStart}ms (processed: ${report.dreamsProcessed}, merged: ${report.dreamsMerged}, concepts: ${report.conceptsCreated})`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         report.errors.push(`${op}: ${msg}`);
-        logger.error(`[Consolidation] Step '${op}' failed: ${msg}`);
+        logger.error(`[Consolidation Pipeline] Step '${op}' failed after ${Date.now() - stepStart}ms: ${msg}`);
       }
     }
 
-    logger.info(`[Consolidation] Job ${report.id} completed. Merged: ${report.dreamsMerged}, Concepts: ${report.conceptsCreated}`);
+    const endTime = Date.now();
+    report.completedAt = new Date(endTime).toISOString();
+    report.durationMs = endTime - startTime;
+    report.status = report.errors.length > 0 ? "failed" : "completed";
+
+    logger.info(`[Consolidation Pipeline] [${report.completedAt}] Job ${report.id} ${report.status.toUpperCase()} in ${report.durationMs}ms. Merged: ${report.dreamsMerged}, Concepts: ${report.conceptsCreated}, Errors: ${report.errors.length}`);
     return report;
   }
 
@@ -322,6 +337,8 @@ export class ConsolidationEngine {
       }
 
       let created = 0;
+      const newConcepts: { id: string; label: string; description: string; category: string; project: string; sourceIds: string; evidenceCount: number; tenantId: string; embedText: string }[] = [];
+
       for (const [key, dreamCluster] of clusters) {
         if (dreamCluster.length < 2) continue; // need at least 2 to form a concept
 
@@ -333,13 +350,49 @@ export class ConsolidationEngine {
         const conceptDesc = contents.slice(0, 5).join(' | '); // concatenate sample evidence
         const sourceIds = JSON.stringify(dreamCluster.map(r => String(this.getVal(r, R_IDX.ID, 'ID'))));
 
-        // Generate embedding for the concept
-        const embeddings = await generateEmbeddingsBatch([conceptLabel + ': ' + conceptDesc], 'passage');
-        const embedding = embeddings && embeddings[0] ? embeddings[0] : null;
-
         const conceptId = randomUUID();
+        newConcepts.push({
+          id: conceptId,
+          label: conceptLabel.slice(0, 255),
+          description: conceptDesc,
+          category: mtype,
+          project: proj,
+          sourceIds,
+          evidenceCount: dreamCluster.length,
+          tenantId,
+          embedText: conceptLabel + ': ' + conceptDesc
+        });
+      }
 
-        if (embedding && embedding.length > 0) {
+      if (newConcepts.length > 0) {
+        // Generate embeddings in batch for all new concepts
+        const embedTexts = newConcepts.map(c => c.embedText);
+        const embeddings = await generateEmbeddingsBatch(embedTexts, 'passage');
+
+        const insertBinds = [];
+        for (let i = 0; i < newConcepts.length; i++) {
+          const concept = newConcepts[i];
+          const embedding = embeddings && embeddings[i] ? embeddings[i] : null;
+
+          if (embeddings && embeddings.length === embedTexts.length && embedding && embedding.length > 0) {
+            insertBinds.push({
+              id: concept.id,
+              label: concept.label,
+              description: concept.description,
+              category: concept.category,
+              embedding: new Uint8Array(new Float32Array(embedding).buffer),
+              project: concept.project,
+              confidence: 0.70,
+              sourceIds: concept.sourceIds,
+              evidenceCount: concept.evidenceCount,
+              tenantId: concept.tenantId,
+            });
+          } else {
+             logger.warn(`[Consolidation] Missing or invalid embedding for concept ${concept.id}. Skipping.`);
+          }
+        }
+
+        if (insertBinds.length > 0) {
           const insertSql = `
             INSERT INTO codeatlas_concepts (
               id, label, description, category, embedding,
@@ -349,19 +402,10 @@ export class ConsolidationEngine {
               :project, :confidence, :sourceIds, :evidenceCount, :tenantId
             )
           `;
-          await db.execute(insertSql, {
-            id: conceptId,
-            label: conceptLabel.slice(0, 255),
-            description: conceptDesc,
-            category: mtype,
-            embedding: new Uint8Array(new Float32Array(embedding).buffer),
-            project: proj,
-            confidence: 0.70,
-            sourceIds,
-            evidenceCount: dreamCluster.length,
-            tenantId,
-          });
-          created++;
+          // Consolidation Engine Optimization: Batch update concepts using executeMany instead of
+          // executing individual INSERT queries in a loop to prevent N+1 bottleneck.
+          await db.executeMany(insertSql, insertBinds);
+          created += insertBinds.length;
         }
       }
 

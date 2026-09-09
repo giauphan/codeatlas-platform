@@ -300,6 +300,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         tenant_id VARCHAR(255) NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS idx_genome_tenant_category ON codeatlas_genome(tenant_id, category);
+      CREATE INDEX IF NOT EXISTS idx_genome_tenant_proj_cat ON codeatlas_genome(tenant_id, project, category);
       CREATE INDEX IF NOT EXISTS idx_genome_embedding ON codeatlas_genome USING ivfflat (embedding vector_cosine_ops);
     `);
     await this.pool!.query(`

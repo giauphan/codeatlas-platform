@@ -227,8 +227,9 @@ export function MemoryTreeView() {
             <option value="">All projects</option>
             {projects.map(project => <option key={project} value={project}>{project}</option>)}
           </select>
-          <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.9rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: 'rgba(0,240,255,0.08)', color: 'var(--primary-neon)', cursor: 'pointer' }}>
-            <RefreshCw size={16} /> Refresh
+          <button type="button" onClick={fetchMemories} className={FOCUS_RING_CLASS} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 0.9rem', borderRadius: 8, border: '1px solid rgba(0,240,255,0.3)', background: 'rgba(0,240,255,0.08)', color: 'var(--primary-neon)', cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
+            {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+            {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </header>
@@ -254,7 +255,7 @@ export function MemoryTreeView() {
         </div>
 
         <div style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: 16, background: 'rgba(5,8,15,0.65)' }}>
-          {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: 'var(--primary-neon)' }}><Loader2 className="spin" size={24} /></div> : Array.from(tree.entries()).map(([project, types]) => {
+          {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: 'var(--primary-neon)' }}><Loader2 className="animate-spin" aria-label="Loading memory tree" size={24} /></div> : Array.from(tree.entries()).map(([project, types]) => {
             const projectKey = `project:${project}`;
             const projectOpen = expanded.has(projectKey);
             return <div key={project} style={{ marginBottom: '0.8rem' }}>

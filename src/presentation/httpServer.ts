@@ -50,14 +50,14 @@ export const firebaseClient = {
 
 // Custom local rate limiter without external dependencies
 const rateLimits = new Map<string, { timestamps: number[]; lastAccess: number }>();
-const limitRequests = 60; // Max 60 requests
+const limitRequests = 120; // Max 120 requests
 const limitWindowMs = 60000; // Per 1 minute
 const RATE_LIMITER_TTL_MS = 5 * 60 * 1000; // Evict idle entries after 5 minutes
 
 export const localRateLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const auth = authStorage.getStore();
   const tenantId = auth ? auth.uid : (req.ip || "anonymous");
-  
+
   const now = Date.now();
   const entry = rateLimits.get(tenantId);
   let timestamps: number[];
@@ -68,18 +68,18 @@ export const localRateLimiter = (req: express.Request, res: express.Response, ne
     timestamps = [];
     rateLimits.set(tenantId, { timestamps, lastAccess: now });
   }
-  
+
   // Filter out timestamps outside the window
   const activeTimestamps = timestamps.filter(t => now - t < limitWindowMs);
-  
+
   if (activeTimestamps.length >= limitRequests) {
     logger.warn(`[Rate Limiter] Limit exceeded for tenant/IP: ${tenantId}`);
     return res.status(429).json({ error: "Too many requests. Please try again in a minute." });
   }
-  
+
   activeTimestamps.push(now);
   rateLimits.set(tenantId, { timestamps: activeTimestamps, lastAccess: now });
-  
+
   // Periodic TTL-based eviction (run ~1% of requests)
   if (Math.random() < 0.01) {
     const cutoff = now - RATE_LIMITER_TTL_MS;
@@ -98,7 +98,7 @@ class TaskQueue {
   private queue: (() => Promise<any>)[] = [];
   private activeCount = 0;
   private maxConcurrency = 1; // Process at most 1 heavy sync task concurrently to prevent connection pool exhaustion
-  private static readonly MAX_QUEUED = 10;
+  private static readonly MAX_QUEUED = 50;
   private static readonly TASK_TIMEOUT_MS = 5 * 60 * 1000;
 
   constructor(maxConcurrency: number = 1) {
@@ -229,7 +229,7 @@ app.use(authProxyRouter);
 registerDreamingRoutes(app);
 
 // REST API: Get all discovered projects
-app.get("/api/projects", localRateLimiter, authMiddleware, async (req, res) => {
+app.get("/api/projects", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -273,7 +273,7 @@ async function cleanUpEmptyTenantProjectFolder(
 }
 
 // REST API: Remove project and its associated data
-app.delete("/api/projects", localRateLimiter, authMiddleware, async (req, res) => {
+app.delete("/api/projects", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -443,7 +443,7 @@ app.delete("/api/projects", localRateLimiter, authMiddleware, async (req, res) =
 });
 
 // REST API: Get episodic memory (business rules / change logs) for a project
-app.get("/api/projects/memory", localRateLimiter, authMiddleware, async (req, res) => {
+app.get("/api/projects/memory", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     if (!auth) {
@@ -482,7 +482,7 @@ app.get("/api/projects/memory", localRateLimiter, authMiddleware, async (req, re
 });
 
 // REST API: Get indexing settings for a project
-app.get("/api/projects/settings", localRateLimiter, authMiddleware, async (req, res) => {
+app.get("/api/projects/settings", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -565,7 +565,7 @@ app.get("/api/projects/settings", localRateLimiter, authMiddleware, async (req, 
 });
 
 // REST API: Update indexing settings for a project
-app.post("/api/projects/settings", localRateLimiter, authMiddleware, async (req, res) => {
+app.post("/api/projects/settings", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -650,7 +650,7 @@ app.get("/api/version", localRateLimiter, async (_req, res) => {
 });
 
 // REST API: Manage API Keys (backend-proxied)
-app.get("/api/keys", localRateLimiter, authMiddleware, async (req, res) => {
+app.get("/api/keys", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
@@ -670,7 +670,7 @@ app.get("/api/keys", localRateLimiter, authMiddleware, async (req, res) => {
   }
 });
 
-app.post("/api/keys", localRateLimiter, authMiddleware, async (req, res) => {
+app.post("/api/keys", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
@@ -697,7 +697,7 @@ app.post("/api/keys", localRateLimiter, authMiddleware, async (req, res) => {
   }
 });
 
-app.delete("/api/keys/:id", localRateLimiter, authMiddleware, async (req, res) => {
+app.delete("/api/keys/:id", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
@@ -719,12 +719,12 @@ app.delete("/api/keys/:id", localRateLimiter, authMiddleware, async (req, res) =
 });
 
 // REST API: Get analysis data
-app.get("/api/analysis", localRateLimiter, authMiddleware, async (req, res) => {
+app.get("/api/analysis", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const projectDir = (req.query.projectDir as string) || (req.query.project as string);
     const loaded = await loadAnalysisAsync(projectDir);
     if (!loaded) return res.status(404).json({ error: "No analysis found" });
-    
+
     // Support legacy thin client format (which only expects the inner analysis object)
     if (req.query.project && !req.query.projectDir) {
       res.json(loaded.analysis);
@@ -740,14 +740,14 @@ app.get("/api/analysis", localRateLimiter, authMiddleware, async (req, res) => {
 });
 
 // REST API: Trigger re-index
-app.post("/api/reindex", localRateLimiter, authMiddleware, async (req, res) => {
+app.post("/api/reindex", authMiddleware, localRateLimiter, async (req, res) => {
   res.status(400).json({
     error: "Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-ai client to synchronize AST data."
   });
 });
 
 // REST API: List A2A orchestration tasks (tenant-scoped)
-app.get("/api/orchestration/tasks", localRateLimiter, authMiddleware, async (req, res) => {
+app.get("/api/orchestration/tasks", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const tasks = await a2aOrchestrationService.listTasks();
     res.json({ success: true, tasks });
@@ -757,7 +757,7 @@ app.get("/api/orchestration/tasks", localRateLimiter, authMiddleware, async (req
 });
 
 // REST API: Securely sync local AST analysis from Local-First gateway and sync telemetry
-app.post("/api/projects/sync", localRateLimiter, authMiddleware, async (req, res) => {
+app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -1113,7 +1113,7 @@ app.post("/messages", async (req, res) => {
 });
 
 // Secure endpoint to serve markdown documentation
-app.get("/api/docs/quick-setup", localRateLimiter, authMiddleware, (req, res) => {
+app.get("/api/docs/quick-setup", authMiddleware, localRateLimiter, (req, res) => {
   try {
     const docPath = path.join(process.cwd(), "docs", "QUICK_SETUP.md");
     if (!fs.existsSync(docPath)) {
@@ -1127,7 +1127,7 @@ app.get("/api/docs/quick-setup", localRateLimiter, authMiddleware, (req, res) =>
   }
 });
 
-app.get("/api/docs/memory-setup", localRateLimiter, authMiddleware, (req, res) => {
+app.get("/api/docs/memory-setup", authMiddleware, localRateLimiter, (req, res) => {
   try {
     const docPath = path.join(process.cwd(), "docs", "AI-MEMORY-SETUP.md");
     if (!fs.existsSync(docPath)) {
@@ -1155,6 +1155,7 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
 
   // --- Daily Dream Generation Scheduler ---
   let lastDreamRunDate: string | null = null;
+  let isDreamPipelineRunning = false;
   const CRON_CHECK_INTERVAL_MS = 60 * 1000;
 
   setInterval(async () => {
@@ -1167,7 +1168,14 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
         return;
       }
 
-      logger.info(`[DreamCron] Triggering daily dream generation for provider: ${settings.dreams_provider || 'all'}`);
+      if (isDreamPipelineRunning) {
+        logger.warn(`[DreamCron] [${now.toISOString()}] Pipeline already RUNNING, skipping overlapping run for date ${today}.`);
+        return;
+      }
+
+      isDreamPipelineRunning = true;
+      const cronStartTime = Date.now();
+      logger.info(`[DreamCron] [${now.toISOString()}] Pipeline RUNNING: Triggering daily dream generation for provider="${settings.dreams_provider || 'all'}" on date ${today}`);
       try {
         const internalApiKey = process.env.CODEATLAS_API_KEY;
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -1180,14 +1188,19 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           body: JSON.stringify({ provider: settings.dreams_provider }),
         });
 
+        const elapsedMs = Date.now() - cronStartTime;
         if (response.ok) {
-          logger.info(`[DreamCron] Daily dream generation successful for ${today}.`);
+          const body: any = await response.json().catch(() => ({}));
+          logger.info(`[DreamCron] [${new Date().toISOString()}] Pipeline COMPLETED in ${elapsedMs}ms (server reported duration: ${body.durationMs ?? elapsedMs}ms) for date ${today}.`);
           lastDreamRunDate = today;
         } else {
-          logger.error(`[DreamCron] Daily dream generation failed for ${response.url}: ${response.status} - ${response.statusText}`);
+          logger.error(`[DreamCron] [${new Date().toISOString()}] Pipeline FAILED after ${elapsedMs}ms for ${response.url}: ${response.status} - ${response.statusText}`);
         }
       } catch (err) {
-        logger.error("[DreamCron] Error during daily dream generation:", err);
+        const elapsedMs = Date.now() - cronStartTime;
+        logger.error(`[DreamCron] [${new Date().toISOString()}] Pipeline error after ${elapsedMs}ms:`, err);
+      } finally {
+        isDreamPipelineRunning = false;
       }
     }
   }, CRON_CHECK_INTERVAL_MS);
