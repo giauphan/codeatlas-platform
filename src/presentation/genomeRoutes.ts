@@ -49,6 +49,12 @@ export function mountGenomeRoutes(app: express.Application): void {
   // GET /api/genome/search — Semantic search genes
   app.get("/api/genome/search", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
+      if (Array.isArray(req.query.query) || Array.isArray(req.query.project) ||
+          Array.isArray(req.query.category) || Array.isArray(req.query.limit)) {
+        res.status(400).json({ error: "Bad Request: array parameters not supported" });
+        return;
+      }
+
       const query = String(req.query.query || "");
       if (!query) {
         res.status(400).json({ error: "query parameter is required" });

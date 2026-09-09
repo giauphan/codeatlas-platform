@@ -34,6 +34,11 @@ export function mountConsolidationRoutes(app: express.Application): void {
   // GET /api/concepts/search — Search concepts by text
   app.get("/api/concepts/search", consolidationRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
+      if (Array.isArray(req.query.query) || Array.isArray(req.query.project) || Array.isArray(req.query.limit)) {
+        res.status(400).json({ error: "Bad Request: array parameters not supported" });
+        return;
+      }
+
       const query = String(req.query.query || "");
       const project = req.query.project as string | undefined;
       const limit = Math.min(Number(req.query.limit) || 10, 50);
