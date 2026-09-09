@@ -10,9 +10,12 @@ export function rejectArrayParams(...paramNames: string[]) {
   }
 
   return (req: express.Request, res: express.Response, next: express.NextFunction): void => {
-    const offending = paramNames.filter(p => Array.isArray(req.query[p]));
+    const offending = paramNames.filter(p => {
+      const val = req.query[p];
+      return val !== undefined && typeof val !== 'string';
+    });
     if (offending.length > 0) {
-      res.status(400).json({ error: `Bad Request: array parameters not supported for [${offending.join(', ')}]` });
+      res.status(400).json({ error: "Bad Request: malformed query parameters" });
       return;
     }
     next();
