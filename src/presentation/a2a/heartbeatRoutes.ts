@@ -18,6 +18,11 @@ export function mountHeartbeatRoutes(app: express.Express): void {
 
   // Register an agent
   app.get("/a2a/register", a2aRateLimiter, authMiddleware, (req, res) => {
+    if (Array.isArray(req.query.agent_url) || Array.isArray(req.query.agent_name) || Array.isArray(req.query.capabilities)) {
+      res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      return;
+    }
+
     const agentUrl = req.query.agent_url as string;
     const agentName = req.query.agent_name as string || "Unknown Agent";
     const capabilities = (req.query.capabilities as string || "").split(",").filter(Boolean);

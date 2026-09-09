@@ -46,6 +46,11 @@ export function registerDreamingRoutes(app: express.Application): void {
     try {
       const { apiKey, bearerToken } = extractAuth(req);
       const auth = await checkAuth(apiKey, bearerToken);
+
+      if (Array.isArray(req.query.id)) {
+        return res.status(400).json({ error: "Bad Request: array parameters not supported for id" });
+      }
+
       const id = req.query.id as string | undefined;
       if (!id?.trim()) return res.status(400).json({ error: "Missing or invalid id parameter" });
 
@@ -115,6 +120,11 @@ export function registerDreamingRoutes(app: express.Application): void {
   app.get("/api/dreams/query", authMiddleware, async (req, res) => {
     try {
       const auth = authStorage.getStore()!;
+
+      if (Array.isArray(req.query.query) || Array.isArray(req.query.project)) {
+        return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+      }
+
       const queryText = (req.query.query as string)?.trim() || "";
       const project = req.query.project as string | undefined;
       const limitRaw = req.query.limit as string | undefined;

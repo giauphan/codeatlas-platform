@@ -275,6 +275,10 @@ async function cleanUpEmptyTenantProjectFolder(
 // REST API: Remove project and its associated data
 app.delete("/api/projects", authMiddleware, localRateLimiter, async (req, res) => {
   try {
+    if (Array.isArray(req.query.projectDir) || Array.isArray(req.query.force)) {
+      return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+    }
+
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
     
@@ -445,6 +449,10 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, async (req, res) =
 // REST API: Get episodic memory (business rules / change logs) for a project
 app.get("/api/projects/memory", authMiddleware, localRateLimiter, async (req, res) => {
   try {
+    if (Array.isArray(req.query.projectName) || Array.isArray(req.query.eventType)) {
+      return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+    }
+
     const auth = authStorage.getStore();
     if (!auth) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -484,6 +492,10 @@ app.get("/api/projects/memory", authMiddleware, localRateLimiter, async (req, re
 // REST API: Get indexing settings for a project
 app.get("/api/projects/settings", authMiddleware, localRateLimiter, async (req, res) => {
   try {
+    if (Array.isArray(req.query.projectDir) || Array.isArray(req.query.projectName)) {
+      return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+    }
+
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
     
@@ -721,6 +733,10 @@ app.delete("/api/keys/:id", authMiddleware, localRateLimiter, async (req, res) =
 // REST API: Get analysis data
 app.get("/api/analysis", authMiddleware, localRateLimiter, async (req, res) => {
   try {
+    if (Array.isArray(req.query.projectDir) || Array.isArray(req.query.project)) {
+      return res.status(400).json({ error: "Bad Request: array parameters not supported" });
+    }
+
     const projectDir = (req.query.projectDir as string) || (req.query.project as string);
     const loaded = await loadAnalysisAsync(projectDir);
     if (!loaded) return res.status(404).json({ error: "No analysis found" });
@@ -1092,6 +1108,11 @@ app.get("/sse", async (req, res) => {
 });
 
 app.post("/messages", async (req, res) => {
+  if (Array.isArray(req.query.sessionId)) {
+    res.status(400).send("Bad Request: array parameters not supported");
+    return;
+  }
+
   let sessionId = req.query.sessionId as string;
   let transport = sessionId ? transports.get(sessionId) : undefined;
 
