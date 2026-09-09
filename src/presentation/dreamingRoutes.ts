@@ -5,6 +5,7 @@ import { loadAnalysisAsync } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { rejectArrayParams } from "../middleware/validation.js";
 import { DreamPipelineService } from "../services/dreamPipelineService.js";
 
 const VALID_MEMORY_TYPES = ["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN", "SESSION_SUMMARY"] as const;
@@ -42,15 +43,10 @@ function handleError(res: express.Response, err: unknown, context: string) {
 
 export function registerDreamingRoutes(app: express.Application): void {
 
-  app.delete("/api/dreams/delete", async (req, res) => {
+  app.delete("/api/dreams/delete", rejectArrayParams("id"), async (req, res) => {
     try {
       const { apiKey, bearerToken } = extractAuth(req);
       const auth = await checkAuth(apiKey, bearerToken);
-
-      if (Array.isArray(req.query.id)) {
-        res.status(400).json({ error: "Bad Request: array parameters not supported for id" });
-        return;
-      }
 
       const id = req.query.id as string | undefined;
       if (!id?.trim()) return res.status(400).json({ error: "Missing or invalid id parameter" });
@@ -118,14 +114,9 @@ export function registerDreamingRoutes(app: express.Application): void {
   });
 
   // GET /api/dreams/query — authenticated, tenant-isolated
-  app.get("/api/dreams/query", authMiddleware, async (req, res) => {
+  app.get("/api/dreams/query", authMiddleware, rejectArrayParams("query", "project", "limit"), async (req, res) => {
     try {
       const auth = authStorage.getStore()!;
-
-      if (Array.isArray(req.query.query) || Array.isArray(req.query.project) || Array.isArray(req.query.limit)) {
-        res.status(400).json({ error: "Bad Request: array parameters not supported" });
-        return;
-      }
 
       const queryText = (req.query.query as string)?.trim() || "";
       const project = req.query.project as string | undefined;

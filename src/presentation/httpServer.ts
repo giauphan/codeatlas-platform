@@ -22,6 +22,7 @@ import {
   unregisterProjectAsync
 } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
+import { rejectArrayParams } from "../middleware/validation.js";
 import { registerTools } from "./mcpTools.js";
 import { registerA2ATools } from "./a2a/a2aTools.js";
 import { registerA2AOrchestrationTools } from "./a2aOrchestrationTools.js";
@@ -273,13 +274,8 @@ async function cleanUpEmptyTenantProjectFolder(
 }
 
 // REST API: Remove project and its associated data
-app.delete("/api/projects", authMiddleware, localRateLimiter, async (req, res) => {
+app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "force"), async (req, res) => {
   try {
-    if (Array.isArray(req.query.projectDir) || Array.isArray(req.query.force)) {
-      res.status(400).json({ error: "Bad Request: array parameters not supported" });
-      return;
-    }
-
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
     
@@ -448,13 +444,8 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, async (req, res) =
 });
 
 // REST API: Get episodic memory (business rules / change logs) for a project
-app.get("/api/projects/memory", authMiddleware, localRateLimiter, async (req, res) => {
+app.get("/api/projects/memory", authMiddleware, localRateLimiter, rejectArrayParams("projectName", "eventType"), async (req, res) => {
   try {
-    if (Array.isArray(req.query.projectName) || Array.isArray(req.query.eventType)) {
-      res.status(400).json({ error: "Bad Request: array parameters not supported" });
-      return;
-    }
-
     const auth = authStorage.getStore();
     if (!auth) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -492,13 +483,8 @@ app.get("/api/projects/memory", authMiddleware, localRateLimiter, async (req, re
 });
 
 // REST API: Get indexing settings for a project
-app.get("/api/projects/settings", authMiddleware, localRateLimiter, async (req, res) => {
+app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "projectName"), async (req, res) => {
   try {
-    if (Array.isArray(req.query.projectDir) || Array.isArray(req.query.projectName)) {
-      res.status(400).json({ error: "Bad Request: array parameters not supported" });
-      return;
-    }
-
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
     
@@ -734,13 +720,8 @@ app.delete("/api/keys/:id", authMiddleware, localRateLimiter, async (req, res) =
 });
 
 // REST API: Get analysis data
-app.get("/api/analysis", authMiddleware, localRateLimiter, async (req, res) => {
+app.get("/api/analysis", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "project"), async (req, res) => {
   try {
-    if (Array.isArray(req.query.projectDir) || Array.isArray(req.query.project)) {
-      res.status(400).json({ error: "Bad Request: array parameters not supported" });
-      return;
-    }
-
     const projectDir = (req.query.projectDir as string) || (req.query.project as string);
     const loaded = await loadAnalysisAsync(projectDir);
     if (!loaded) return res.status(404).json({ error: "No analysis found" });
@@ -1111,12 +1092,7 @@ app.get("/sse", async (req, res) => {
   }
 });
 
-app.post("/messages", async (req, res) => {
-  if (Array.isArray(req.query.sessionId)) {
-    res.status(400).json({ error: "Bad Request: array parameters not supported" });
-    return;
-  }
-
+app.post("/messages", rejectArrayParams("sessionId"), async (req, res) => {
   let sessionId = req.query.sessionId as string;
   let transport = sessionId ? transports.get(sessionId) : undefined;
 

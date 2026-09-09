@@ -11,18 +11,14 @@ import express from "express";
 import { a2aRegistry } from "../../services/a2aRegistry.js";
 import { logger } from "../../utils/logger.js";
 import { authMiddleware } from "../../middleware/auth.js";
+import { rejectArrayParams } from "../../middleware/validation.js";
 import { countMatching } from "../../utils/array.js";
 import { a2aRateLimiter } from "./a2aRoutes.js";
 
 export function mountHeartbeatRoutes(app: express.Express): void {
 
   // Register an agent
-  app.get("/a2a/register", a2aRateLimiter, authMiddleware, (req, res) => {
-    if (Array.isArray(req.query.agent_url) || Array.isArray(req.query.agent_name) || Array.isArray(req.query.capabilities)) {
-      res.status(400).json({ error: "Bad Request: array parameters not supported" });
-      return;
-    }
-
+  app.get("/a2a/register", a2aRateLimiter, authMiddleware, rejectArrayParams("agent_url", "agent_name", "capabilities"), (req, res) => {
     const agentUrl = req.query.agent_url as string;
     const agentName = req.query.agent_name as string || "Unknown Agent";
     const capabilities = (req.query.capabilities as string || "").split(",").filter(Boolean);
