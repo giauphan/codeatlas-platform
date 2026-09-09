@@ -453,7 +453,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       // Truncate if too many nodes
       if (nodes.length > max) {
-        // ⚡ Bolt Optimization: Replace O(N) array indexOf with O(1) Map lookup in sort
+        // Use Map for O(1) priority lookup
         nodes.sort((a, b) => {
           const ia = NODE_PRIORITY_ORDER.get(a.type) ?? 99;
           const ib = NODE_PRIORITY_ORDER.get(b.type) ?? 99;
