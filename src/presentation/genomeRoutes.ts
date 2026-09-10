@@ -4,6 +4,7 @@
 import express from "express";
 import { GenomeService } from "../services/genomeService.js";
 import { authMiddleware } from "../services/authService.js";
+import { rejectArrayParams } from "../middleware/validation.js";
 import { logger } from "../utils/logger.js";
 import rateLimit from "express-rate-limit";
 
@@ -47,7 +48,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // GET /api/genome/search — Semantic search genes
-  app.get("/api/genome/search", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/genome/search", genomeRateLimiter, authMiddleware, rejectArrayParams("query", "project", "category", "limit"), async (req: express.Request, res: express.Response) => {
     try {
       const query = String(req.query.query || "");
       if (!query) {

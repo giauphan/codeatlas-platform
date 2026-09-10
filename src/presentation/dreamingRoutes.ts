@@ -5,6 +5,7 @@ import { loadAnalysisAsync } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { rejectArrayParams } from "../middleware/validation.js";
 import { DreamPipelineService } from "../services/dreamPipelineService.js";
 
 const VALID_MEMORY_TYPES = ["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN", "SESSION_SUMMARY"] as const;
@@ -42,7 +43,7 @@ function handleError(res: express.Response, err: unknown, context: string) {
 
 export function registerDreamingRoutes(app: express.Application): void {
 
-  app.delete("/api/dreams/delete", async (req, res) => {
+  app.delete("/api/dreams/delete", rejectArrayParams("id"), async (req, res) => {
     try {
       const { apiKey, bearerToken } = extractAuth(req);
       const auth = await checkAuth(apiKey, bearerToken);
@@ -112,7 +113,7 @@ export function registerDreamingRoutes(app: express.Application): void {
   });
 
   // GET /api/dreams/query — authenticated, tenant-isolated
-  app.get("/api/dreams/query", authMiddleware, async (req, res) => {
+  app.get("/api/dreams/query", authMiddleware, rejectArrayParams("query", "project", "limit"), async (req, res) => {
     try {
       const auth = authStorage.getStore()!;
       const queryText = (req.query.query as string)?.trim() || "";

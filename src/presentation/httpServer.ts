@@ -22,6 +22,7 @@ import {
   unregisterProjectAsync
 } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
+import { rejectArrayParams } from "../middleware/validation.js";
 import { registerTools } from "./mcpTools.js";
 import { registerA2ATools } from "./a2a/a2aTools.js";
 import { registerA2AOrchestrationTools } from "./a2aOrchestrationTools.js";
@@ -273,7 +274,7 @@ async function cleanUpEmptyTenantProjectFolder(
 }
 
 // REST API: Remove project and its associated data
-app.delete("/api/projects", authMiddleware, localRateLimiter, async (req, res) => {
+app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "force"), async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -443,7 +444,7 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, async (req, res) =
 });
 
 // REST API: Get episodic memory (business rules / change logs) for a project
-app.get("/api/projects/memory", authMiddleware, localRateLimiter, async (req, res) => {
+app.get("/api/projects/memory", authMiddleware, localRateLimiter, rejectArrayParams("projectName", "eventType"), async (req, res) => {
   try {
     const auth = authStorage.getStore();
     if (!auth) {
@@ -482,7 +483,7 @@ app.get("/api/projects/memory", authMiddleware, localRateLimiter, async (req, re
 });
 
 // REST API: Get indexing settings for a project
-app.get("/api/projects/settings", authMiddleware, localRateLimiter, async (req, res) => {
+app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "projectName"), async (req, res) => {
   try {
     const auth = authStorage.getStore();
     const tenantId = auth ? auth.uid : undefined;
@@ -719,7 +720,7 @@ app.delete("/api/keys/:id", authMiddleware, localRateLimiter, async (req, res) =
 });
 
 // REST API: Get analysis data
-app.get("/api/analysis", authMiddleware, localRateLimiter, async (req, res) => {
+app.get("/api/analysis", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "project"), async (req, res) => {
   try {
     const projectDir = (req.query.projectDir as string) || (req.query.project as string);
     const loaded = await loadAnalysisAsync(projectDir);
@@ -1091,7 +1092,7 @@ app.get("/sse", async (req, res) => {
   }
 });
 
-app.post("/messages", async (req, res) => {
+app.post("/messages", rejectArrayParams("sessionId"), async (req, res) => {
   let sessionId = req.query.sessionId as string;
   let transport = sessionId ? transports.get(sessionId) : undefined;
 
