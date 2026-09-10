@@ -540,7 +540,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
   return discovered;
 }
 
-export function discoverProjects(tenantId?: string): { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] {
+export async function discoverProjects(tenantId?: string): Promise<{ name: string; dir: string; analysisPath: string; modifiedAt: Date }[]> {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
   const searchDirs: string[] = [];
   // Multi-Tenant Isolation
@@ -554,11 +554,11 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
     if (tenantId) {
       const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
       const userDir = path.join(tenantRoot, tenantId);
-      if (fs.existsSync(userDir)) {
+      if (await fileExists(userDir)) {
         try {
           // ⚡ Bolt: Using { withFileTypes: true } to get fs.Dirent objects directly from readdir,
           // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
-          const userProjects = fs.readdirSync(userDir, { withFileTypes: true });
+          const userProjects = await fs.promises.readdir(userDir, { withFileTypes: true });
           for (const p of userProjects) {
             if (isValidDirectory(p)) {
               searchDirs.push(path.join(userDir, p.name));
@@ -578,22 +578,25 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
       }
 
       const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
-      if (fs.existsSync(tenantRoot)) {
+      if (await fileExists(tenantRoot)) {
         try {
-          const tenants = fs.readdirSync(tenantRoot, { withFileTypes: true });
-          for (const t of tenants) {
-            if (t.name === tenantId) continue;
-            const tDir = path.join(tenantRoot, t.name);
-            if (isValidDirectory(t)) {
-              try {
-                const tProjects = fs.readdirSync(tDir, { withFileTypes: true });
-                for (const p of tProjects) {
-                  if (isValidDirectory(p)) {
-                    searchDirs.push(path.join(tDir, p.name));
+          const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
+          for (let i = 0; i < tenants.length; i += FILE_EXISTS_CONCURRENCY) {
+            const chunk = tenants.slice(i, i + FILE_EXISTS_CONCURRENCY);
+            await Promise.all(chunk.map(async (t) => {
+              if (t.name === tenantId) return;
+              const tDir = path.join(tenantRoot, t.name);
+              if (isValidDirectory(t)) {
+                try {
+                  const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
+                  for (const p of tProjects) {
+                    if (isValidDirectory(p)) {
+                      searchDirs.push(path.join(tDir, p.name));
+                    }
                   }
-                }
-              } catch { /* Skip non-accessible directories */ }
-            }
+                } catch { /* Skip non-accessible directories */ }
+              }
+            }));
           }
         } catch { /* skip */ }
       }
@@ -608,7 +611,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
     }
     
     // Dynamically search process.cwd() for any projects configured with .codeatlas
-    const localProjects = scanForCodeatlasProjects(process.cwd());
+    const localProjects = await scanForCodeatlasProjectsAsync(process.cwd());
     searchDirs.push(...localProjects);
     
     // Fallback to process.cwd() if no subprojects were found with .codeatlas configuration
@@ -617,9 +620,9 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
     }
 
     const projectsDir = path.join(process.cwd(), "projects");
-    if (fs.existsSync(projectsDir)) {
+    if (await fileExists(projectsDir)) {
       try {
-        const subDirs = fs.readdirSync(projectsDir, { withFileTypes: true });
+        const subDirs = await fs.promises.readdir(projectsDir, { withFileTypes: true });
         for (const p of subDirs) {
           if (isValidDirectory(p)) {
             searchDirs.push(path.join(projectsDir, p.name));
@@ -635,7 +638,7 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
 
       let registered: any = [];
       try {
-        const data = fs.readFileSync(regPath, "utf-8");
+        const data = await fs.promises.readFile(regPath, "utf-8");
         registered = JSON.parse(data);
       } catch (err: any) {
         if (err.code !== 'ENOENT') {
@@ -655,10 +658,10 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
             return true;
           });
           if (updated) {
-            fs.writeFileSync(regPath, JSON.stringify(filtered, null, 2));
+            await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
           }
           for (const dir of filtered) {
-            if (fs.existsSync(dir)) {
+            if (await fileExists(dir)) {
               searchDirs.push(dir);
             }
           }
@@ -673,16 +676,16 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
     seen.add(dir);
     if (isSystemIdeDirectory(dir)) continue;
 
-    if (isProjectDirectory(dir)) {
+    if (await isProjectDirectoryAsync(dir)) {
       try {
         const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
         let modifiedAt: Date;
         // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before statSync
         try {
-          modifiedAt = fs.statSync(analysisPath).mtime;
+          modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
         } catch (err: any) {
           if (err.code === 'ENOENT') {
-            modifiedAt = fs.statSync(dir).mtime;
+            modifiedAt = (await fs.promises.stat(dir)).mtime;
           } else {
             throw err;
           }
@@ -701,11 +704,11 @@ export function discoverProjects(tenantId?: string): { name: string; dir: string
   return projects;
 }
 
-export function loadAnalysis(projectDir?: string, force = false): { analysis: AnalysisResult; projectName: string; projectDir: string } | null {
+export async function loadAnalysis(projectDir?: string, force = false): Promise<{ analysis: AnalysisResult; projectName: string; projectDir: string } | null> {
   const auth = authStorage.getStore();
   const tenantId = auth ? auth.uid : undefined;
   
-  const projects = discoverProjects(tenantId);
+  const projects = await discoverProjects(tenantId);
   if (projects.length === 0) return null;
 
   let target: { name: string; dir: string; analysisPath: string; modifiedAt: Date } | undefined = projects[0];
@@ -723,10 +726,10 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
     );
     if (match) {
       target = match;
-      registerProjectAsync(target.dir).catch(() => {});
-    } else if (fs.existsSync(absPath) && isProjectDirectory(absPath)) {
-      registerProjectAsync(absPath).catch(() => {});
-      const reDiscovered = discoverProjects(tenantId);
+      await registerProjectAsync(target.dir);
+    } else if (await fileExists(absPath) && await isProjectDirectoryAsync(absPath)) {
+      await registerProjectAsync(absPath);
+      const reDiscovered = await discoverProjects(tenantId);
       match = reDiscovered.find((p) => p.dir === absPath);
       if (match) {
         target = match;
@@ -737,7 +740,7 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
       return null;
     }
   } else if (target) {
-    registerProjectAsync(target.dir).catch(() => {});
+    await registerProjectAsync(target.dir);
   }
 
   try {
@@ -747,7 +750,7 @@ export function loadAnalysis(projectDir?: string, force = false): { analysis: An
     let data: string;
     // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before readFileSync
     try {
-      data = fs.readFileSync(target.analysisPath, "utf-8");
+      data = await fs.promises.readFile(target.analysisPath, "utf-8");
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         logger.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
