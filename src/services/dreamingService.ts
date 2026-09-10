@@ -3,6 +3,7 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { createDatabaseAdapter } from "../database/factory.js";
+import { buildInClause } from "../database/utils.js";
 import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 import { countMatching } from "../utils/array.js";
 
@@ -443,12 +444,19 @@ export class DreamingService {
         if (rows.length > 0) {
           const ids = rows.map(r => r['id'] as string).filter(Boolean);
           if (ids.length > 0) {
-            const baseBind = { tenantId };
-            const updateBinds = ids.map(id => ({ id, ...baseBind }));
-            const updatePromise = db.executeMany(
-              `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-              updateBinds
-            );
+            const { clause, binds: inBinds } = buildInClause(ids, { tenantId });
+            const updatePromise = db.execute(
+              `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id IN (${clause}) AND tenant_id = :tenantId`,
+              inBinds
+            ).then(result => {
+              const count = result && typeof (result as any).rowsAffected === 'number' ? (result as any).rowsAffected :
+                            result && typeof (result as any).affectedRows === 'number' ? (result as any).affectedRows :
+                            result && typeof (result as any).rowCount === 'number' ? (result as any).rowCount :
+                            result && typeof (result as any).changes === 'number' ? (result as any).changes : undefined;
+              if (count !== undefined) {
+                logger.debug(`[Dreaming] Bumped access_count for ${count} memories`);
+              }
+            });
             const updateTask = updatePromise.catch(bumpErr => {
               logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
             });
