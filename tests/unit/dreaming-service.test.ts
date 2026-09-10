@@ -640,7 +640,7 @@ describe('DreamingService', () => {
       await DreamingService.queryDreamMemories('test-project', 'bump ok', 10);
 
       assert.ok(mockDbAdapter.execute.mock.calls.length >= 1);
-      const sql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
+      const sql = mockDbAdapter.execute.mock.calls[mockDbAdapter.execute.mock.calls.length - 1].arguments[0] as string;
       assert.ok(sql.includes('access_count = access_count + 1'));
       assert.ok(sql.includes('last_accessed_at = CURRENT_TIMESTAMP'));
     });
