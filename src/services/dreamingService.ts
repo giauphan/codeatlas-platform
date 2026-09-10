@@ -3,6 +3,7 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { createDatabaseAdapter } from "../database/factory.js";
+import { buildInClause } from "../database/utils.js";
 import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 import { countMatching } from "../utils/array.js";
 
@@ -410,11 +411,10 @@ export class DreamingService {
           try {
             const ids = rows.map(r => r['id'] as string).filter(Boolean);
             if (ids.length > 0) {
-              const baseBind = { tenantId };
-              const binds = ids.map(id => ({ id, ...baseBind }));
-              await db.executeMany(
-                `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-                binds
+              const { clause, binds: inBinds } = buildInClause(ids, { tenantId });
+              await db.execute(
+                `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id IN (${clause}) AND tenant_id = :tenantId`,
+                inBinds
               );
             }
           } catch (bumpErr) {
