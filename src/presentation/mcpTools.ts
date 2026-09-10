@@ -79,6 +79,8 @@ function a2aReal(name: string, description: string, params: string[], handler: (
 
 import { injectAuthContext } from '../utils/authContext.js';
 
+const NODE_PRIORITY_ORDER = new Map([["module", 0], ["class", 1], ["function", 2], ["variable", 3]]);
+
 export function registerTools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }) {
   injectAuthContext(server, sessionAuth);
 
@@ -451,11 +453,11 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       // Truncate if too many nodes
       if (nodes.length > max) {
-        const priorityOrder = ["module", "class", "function", "variable"];
+        // Use Map for O(1) priority lookup
         nodes.sort((a, b) => {
-          const ia = priorityOrder.indexOf(a.type);
-          const ib = priorityOrder.indexOf(b.type);
-          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+          const ia = NODE_PRIORITY_ORDER.get(a.type) ?? 99;
+          const ib = NODE_PRIORITY_ORDER.get(b.type) ?? 99;
+          return ia - ib;
         });
         nodes = nodes.slice(0, max);
       }
