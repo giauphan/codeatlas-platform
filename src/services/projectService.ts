@@ -726,9 +726,13 @@ export async function loadAnalysis(projectDir?: string, force = false): Promise<
     );
     if (match) {
       target = match;
-      await registerProjectAsync(target.dir);
+      await registerProjectAsync(target.dir).catch(err => {
+        logger.error(`[Auto-Scan] ❌ Failed to register targeted project ${target?.dir}: ${err}`);
+      });
     } else if (await fileExists(absPath) && await isProjectDirectoryAsync(absPath)) {
-      await registerProjectAsync(absPath);
+      await registerProjectAsync(absPath).catch(err => {
+        logger.error(`[Auto-Scan] ❌ Failed to register explicitly accessed project ${absPath}: ${err}`);
+      });
       const reDiscovered = await discoverProjects(tenantId);
       match = reDiscovered.find((p) => p.dir === absPath);
       if (match) {
@@ -740,7 +744,9 @@ export async function loadAnalysis(projectDir?: string, force = false): Promise<
       return null;
     }
   } else if (target) {
-    await registerProjectAsync(target.dir);
+    await registerProjectAsync(target.dir).catch(err => {
+      logger.error(`[Auto-Scan] ❌ Failed to register default fallback project ${target?.dir}: ${err}`);
+    });
   }
 
   try {
@@ -750,17 +756,19 @@ export async function loadAnalysis(projectDir?: string, force = false): Promise<
     let data: string;
     // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before readFileSync
     try {
+      logger.debug(`[Auto-Scan] Attempting to read analysis data for ${target.name} at ${target.analysisPath}`);
       data = await fs.promises.readFile(target.analysisPath, "utf-8");
     } catch (err: any) {
       if (err.code === 'ENOENT') {
-        logger.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Please push analysis from MCP client: ${target.dir}`);
+        logger.error(`[Auto-Scan] ❌ Dynamic sync scanning is not supported on the server repo. Analysis file missing. Please push analysis from MCP client: ${target.dir}`);
         return null;
       }
+      logger.error(`[Auto-Scan] ❌ Unexpected system error while reading analysis file for ${target.dir}: ${err.message || err}`);
       throw err;
     }
     return { analysis: JSON.parse(data), projectName: target.name, projectDir: target.dir };
-  } catch (err) {
-    logger.error(`[Auto-Scan] ❌ Loading analysis failed: ${err}`);
+  } catch (err: any) {
+    logger.error(`[Auto-Scan] ❌ Loading analysis failed for ${target?.dir || 'unknown'}: ${err.message || err}`);
     return null;
   }
 }
