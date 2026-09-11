@@ -170,6 +170,11 @@ app.use(rateLimit({
   max: 120, // limit each IP to 120 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for local intra-service calls (watcher, dev tools, mcp clients)
+    const ip = req.ip || req.connection.remoteAddress;
+    return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  }
 }));
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)

@@ -661,7 +661,9 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       try {
         const loaded = project ? await loadAnalysisAsync(project) : null;
         const projectName = loaded ? loaded.projectName : (project || "global");
-        const memId = await DreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, Math.min(9, Math.max(1, importance ?? 5)), provider);
+        const memId = await authStorage.run(auth, () =>
+          DreamingService.saveDreamMemory(projectName, session_id || "unknown", memory_type, content, Math.min(9, Math.max(1, importance ?? 5)), provider)
+        );
         return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, id: memId, memory_type }, null, 2) }] };
       } catch (err: unknown) {
         return { content: [{ type: "text" as const, text: `Failed to save dream memory: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
@@ -685,7 +687,9 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       try {
         const loaded = project ? await loadAnalysisAsync(project) : null;
         const projectName = loaded ? loaded.projectName : (project || "global");
-        const rows = await DreamingService.queryDreamMemories(projectName, query, limit ?? 10, 0, undefined, provider);
+        const rows = await authStorage.run(auth, () =>
+          DreamingService.queryDreamMemories(projectName, query, limit ?? 10, 0, undefined, provider)
+        );
         const rawMemories = (rows ?? []) as unknown as Array<Record<string, unknown>>;
         const memories = rawMemories.map((r: Record<string, unknown>) => {
           const get = (upper: string, lower: string) => r[upper] ?? r[lower];

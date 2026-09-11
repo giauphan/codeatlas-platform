@@ -376,7 +376,7 @@ export class DreamingService {
           const types = memoryType.split(',').map(t => t.trim().toUpperCase()).filter(t => t);
           if (types.length > 0) {
             const typeBinds = types.map((_, i) => `:type${i}`).join(', ');
-            typeFilter = `AND memory_type IN (${typeBinds})`;
+            typeFilter += ` AND memory_type IN (${typeBinds})`;
             types.forEach((type, i) => { binds[`type${i}`] = type; });
           }
         }
