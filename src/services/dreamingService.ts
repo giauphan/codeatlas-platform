@@ -412,10 +412,14 @@ export class DreamingService {
             if (ids.length > 0) {
               const baseBind = { tenantId };
               const binds = ids.map(id => ({ id, ...baseBind }));
-              await db.executeMany(
+              // ⚡ Bolt Optimization: Fire-and-forget the access_count bump to prevent blocking read queries.
+              // We intentionally do not await this database write so the query returns instantly.
+              db.executeMany(
                 `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
                 binds
-              );
+              ).catch(bumpErr => {
+                logger.warn('[Dreaming] Failed to bump access_count (async):', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
+              });
             }
           } catch (bumpErr) {
             logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
