@@ -140,8 +140,11 @@ export class FirestoreActivityLogger implements IActivityLogger {
 export class AuthenticateUserUseCase {
   private authCache = new Map<string, AuthData>();
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private adminFallbackTtl: number;
 
-  constructor(private authRepo: IAuthRepository) {}
+  constructor(private authRepo: IAuthRepository, adminFallbackTtlMs: number = 5 * 60 * 1000) {
+    this.adminFallbackTtl = adminFallbackTtlMs;
+  }
 
   async execute(apiKey: string, superAdminKey?: string): Promise<AuthData> {
     if (!apiKey) {
@@ -150,6 +153,10 @@ export class AuthenticateUserUseCase {
 
     // 1. Super Admin — try Firestore first so the key resolves to the user's real uid
     if (superAdminKey && apiKey === superAdminKey) {
+      const cached = this.authCache.get(apiKey);
+      if (cached && cached.expires > Date.now()) {
+        return cached;
+      }
       try {
         const firestoreData = await this.authRepo.verifyKey(apiKey);
         if (firestoreData) {
@@ -160,7 +167,15 @@ export class AuthenticateUserUseCase {
       } catch (err) {
         // Fallback gracefully if Firestore is unconfigured or unavailable
       }
-      return { tier: 'enterprise', uid: 'admin', keyId: 'admin', expires: Infinity };
+      // Cache the fallback briefly so a degraded store is not hit on every request
+      const fallback: AuthData = {
+        tier: 'enterprise',
+        uid: 'admin',
+        keyId: 'admin',
+        expires: Date.now() + this.adminFallbackTtl,
+      };
+      this.authCache.set(apiKey, fallback);
+      return fallback;
     }
 
     // 2. Check Local RAM Cache
