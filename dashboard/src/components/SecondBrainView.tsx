@@ -48,8 +48,8 @@ export function SecondBrainView() {
       const data = await resp.json();
       const list: Concept[] = data.concepts || [];
       setConcepts(list);
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+    } catch (err: unknown) {
+      if (signal.aborted || (err instanceof Error && err.name === 'AbortError')) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       if (abortControllerRef.current?.signal === signal) {
@@ -57,6 +57,12 @@ export function SecondBrainView() {
       }
     }
   }, [API_BASE]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     fetchConcepts();
