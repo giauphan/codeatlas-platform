@@ -49,7 +49,7 @@ export function SecondBrainView() {
       const list: Concept[] = data.concepts || [];
       setConcepts(list);
     } catch (err: unknown) {
-      if (signal.aborted || (err instanceof Error && err.name === 'AbortError')) return;
+      if (signal.aborted) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       if (abortControllerRef.current?.signal === signal) {
@@ -61,6 +61,7 @@ export function SecondBrainView() {
   useEffect(() => {
     return () => {
       abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
     };
   }, []);
 
