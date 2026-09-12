@@ -129,9 +129,13 @@ export function SecondBrainView() {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             onSearch={handleSearch}
+            onClear={() => {
+              setSearchQuery('');
+              fetchConcepts('');
+            }}
             placeholder="Search concepts…"
             ariaLabel="Search concepts"
-            hasClearButton={false}
+            hasClearButton={true}
           />
         </div>
         <div role="group" aria-label="Filter concepts by category" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
