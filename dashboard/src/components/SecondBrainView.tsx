@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
@@ -30,24 +30,40 @@ export function SecondBrainView() {
 
 
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const fetchConcepts = useCallback(async (query?: string) => {
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
+
     setLoading(true);
     setError(null);
     try {
       const headers = await getAuthHeaders();
       const params = new URLSearchParams({ limit: '50' });
       if (query?.trim()) params.set('query', query.trim());
-      const resp = await fetch(`${API_BASE}/api/concepts/search?${params}`, { headers });
+      const resp = await fetch(`${API_BASE}/api/concepts/search?${params}`, { headers, signal });
       if (!resp.ok) throw new Error(await resp.text());
       const data = await resp.json();
       const list: Concept[] = data.concepts || [];
       setConcepts(list);
-    } catch (err) {
+    } catch (err: unknown) {
+      if (signal.aborted) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (abortControllerRef.current?.signal === signal) {
+        setLoading(false);
+      }
     }
   }, [API_BASE]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     fetchConcepts();
@@ -129,9 +145,13 @@ export function SecondBrainView() {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             onSearch={handleSearch}
+            onClear={() => {
+              setSearchQuery('');
+              fetchConcepts('');
+            }}
             placeholder="Search concepts…"
             ariaLabel="Search concepts"
-            hasClearButton={false}
+            hasClearButton={true}
           />
         </div>
         <div role="group" aria-label="Filter concepts by category" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
