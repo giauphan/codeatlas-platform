@@ -1,5 +1,6 @@
 import { logger } from "../utils/logger.js";
 import { DreamingService } from "./dreamingService.js";
+import { GenomeService } from "./genomeService.js";
 import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 import { countMatching } from "../utils/array.js";
 
@@ -130,14 +131,33 @@ export async function loadContextAtSessionStart(
       10
     );
 
-    if (!dreams || dreams.length === 0) {
+    // Strict genome auto-load: relevance-gated genes + immune context for the
+    // explicit task only. Never fires without a non-empty task.
+    const strictTask = String(task || "").trim();
+    let genes: Awaited<ReturnType<typeof GenomeService.searchGenes>> = [];
+    let immuneContext = "";
+    if (strictTask.length > 0) {
+      try {
+        genes = await GenomeService.searchGenes(strictTask, { project, limit: 5 });
+        genes = genes.filter((g) => g.confidence >= 0.5 && g.score >= 0.3);
+      } catch (err) {
+        logger.error(`[Memory Loading] Genome auto-load failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      try {
+        immuneContext = (await GenomeService.buildImmuneContext(strictTask, project)) || "";
+      } catch (err) {
+        logger.error(`[Memory Loading] Immune context failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    if ((!dreams || dreams.length === 0) && genes.length === 0 && !immuneContext) {
       return "";
     }
 
     const cleanDreams: Array<{ memoryType: string; content: string; importance: number }> = [];
-    const dreamsLen = dreams.length;
+    const dreamsLen = dreams?.length ?? 0;
     for (let i = 0; i < dreamsLen; i++) {
-      const dream = dreams[i];
+      const dream = dreams![i];
       const row = dream as Record<string, unknown>;
       const content = String(row.content ?? row.CONTENT ?? "");
       if (!checkNoiseBlocklist(content).isNoise) {
@@ -149,7 +169,7 @@ export async function loadContextAtSessionStart(
     if (blockedCount > 0) {
       logger.info(`[Memory Loading] Inject-gate filtered ${blockedCount} noisy dream(s)`);
     }
-    if (cleanDreams.length === 0) {
+    if (cleanDreams.length === 0 && genes.length === 0 && !immuneContext) {
       return "";
     }
 
@@ -164,11 +184,27 @@ export async function loadContextAtSessionStart(
       parts.push("");
     }
 
+    if (genes.length > 0) {
+      parts.push("\n# 🧬 Verified Genome Patterns\n");
+      for (const gene of genes) {
+        parts.push(`### ${gene.name} (category: ${gene.category}, confidence: ${gene.confidence.toFixed(2)})`);
+        if (gene.problem) {
+          parts.push(`Problem: ${gene.problem}`);
+        }
+        parts.push(`Solution: ${gene.solution}`);
+        parts.push("");
+      }
+    }
+
+    if (immuneContext) {
+      parts.push(immuneContext);
+    }
+
     const context = parts.join("\n");
 
     // Log context loading event
     const fs = await import('node:fs');
-    const logEntry = `[${new Date().toISOString()}] LOADED: session=${sessionId}, project=${project}, dreams=${dreams.length}\n`;
+    const logEntry = `[${new Date().toISOString()}] LOADED: session=${sessionId}, project=${project}, dreams=${dreams?.length ?? 0}, genes=${genes.length}, immune=${immuneContext ? 1 : 0}\n`;
     try {
       await fs.promises.appendFile('/tmp/memory_loading.log', logEntry);
     } catch (err) {

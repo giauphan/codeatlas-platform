@@ -72,6 +72,9 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
 const mockQueryDreamMemories = mock.fn();
 const mockSaveDreamMemory = mock.fn();
 const mockCheckNoiseBlocklist = mock.fn();
+const mockSearchGenes = mock.fn();
+const mockBuildImmuneContext = mock.fn();
+
 const mockLogger = {
   info: mock.fn(),
   warn: mock.fn(),
@@ -83,6 +86,13 @@ safeMockModule(path.join(srcDir, 'services/dreamingService.js'), {
   DreamingService: {
     queryDreamMemories: mockQueryDreamMemories,
     saveDreamMemory: mockSaveDreamMemory,
+  },
+});
+
+safeMockModule(path.join(srcDir, 'services/genomeService.js'), {
+  GenomeService: {
+    searchGenes: mockSearchGenes,
+    buildImmuneContext: mockBuildImmuneContext,
   },
 });
 
@@ -112,11 +122,15 @@ describe('llmService Unit Tests', () => {
     mockQueryDreamMemories.mock.resetCalls();
     mockSaveDreamMemory.mock.resetCalls();
     mockCheckNoiseBlocklist.mock.resetCalls();
+    mockSearchGenes.mock.resetCalls();
+    mockBuildImmuneContext.mock.resetCalls();
     mockLogger.info.mock.resetCalls();
     mockLogger.warn.mock.resetCalls();
     mockLogger.error.mock.resetCalls();
     mockLogger.debug.mock.resetCalls();
     mockCheckNoiseBlocklist.mock.mockImplementation(() => ({ isNoise: false }));
+    mockSearchGenes.mock.mockImplementation(async () => []);
+    mockBuildImmuneContext.mock.mockImplementation(async () => '');
   });
 
   describe('summarizeConversationForDreams', () => {
@@ -239,6 +253,93 @@ describe('llmService Unit Tests', () => {
 
       const context = await loadContextAtSessionStart('sess-11', 'my-app', 'task-err');
       assert.strictEqual(context, '');
+    });
+
+    test('includes high-confidence genes and immune context for non-empty task', async () => {
+      mockQueryDreamMemories.mock.mockImplementation(async () => []);
+      mockSearchGenes.mock.mockImplementation(async () => [
+        {
+          id: 'gene-1',
+          name: 'integration-db-gene',
+          category: 'immune',
+          problem: 'mocked database tests mask production migration failures',
+          solution: 'integration tests must hit a real database',
+          confidence: 0.8,
+          score: 0.6,
+        },
+        {
+          id: 'gene-2',
+          name: 'weak-gene',
+          category: 'pattern',
+          problem: 'weak problem',
+          solution: 'weak solution',
+          confidence: 0.4,
+          score: 0.6,
+        },
+        {
+          id: 'gene-3',
+          name: 'low-score-gene',
+          category: 'lesson',
+          problem: 'low score problem',
+          solution: 'low score solution',
+          confidence: 0.9,
+          score: 0.1,
+        },
+      ]);
+      mockBuildImmuneContext.mock.mockImplementation(async () => '# ⚠️ Immune System\n- Prevent recurrence of failure gene-1');
+
+      const context = await loadContextAtSessionStart('sess-12', 'my-app', 'database migration failure');
+
+      assert.strictEqual(mockSearchGenes.mock.calls.length, 1);
+      assert.strictEqual(mockSearchGenes.mock.calls[0].arguments[0], 'database migration failure');
+      assert.strictEqual(mockBuildImmuneContext.mock.calls.length, 1);
+      assert.strictEqual(mockBuildImmuneContext.mock.calls[0].arguments[0], 'database migration failure');
+
+      assert.ok(context.includes('# 🧬 Verified Genome Patterns'));
+      assert.ok(context.includes('integration-db-gene'));
+      assert.ok(context.includes('integration tests must hit a real database'));
+      assert.ok(!context.includes('weak-gene'));
+      assert.ok(!context.includes('low-score-gene'));
+      assert.ok(context.includes('# ⚠️ Immune System'));
+    });
+
+    test('does not call genome services when task is empty', async () => {
+      mockQueryDreamMemories.mock.mockImplementation(async () => []);
+
+      const empty1 = await loadContextAtSessionStart('sess-13', 'my-app', '');
+      const empty2 = await loadContextAtSessionStart('sess-14', 'my-app', '   ');
+      const empty3 = await loadContextAtSessionStart('sess-15', 'my-app', undefined as unknown as string);
+
+      assert.strictEqual(mockSearchGenes.mock.calls.length, 0);
+      assert.strictEqual(mockBuildImmuneContext.mock.calls.length, 0);
+      assert.strictEqual(empty1, '');
+      assert.strictEqual(empty2, '');
+      assert.strictEqual(empty3, '');
+    });
+
+    test('genome failure does not break dream-only context', async () => {
+      mockQueryDreamMemories.mock.mockImplementation(async () => [
+        {
+          id: 'mem-3',
+          memory_type: 'PREFERENCE',
+          content: 'Keep dream context loading intact',
+          importance: 7,
+        },
+      ]);
+      mockSearchGenes.mock.mockImplementation(async () => {
+        throw new Error('Vector index unavailable');
+      });
+      mockBuildImmuneContext.mock.mockImplementation(async () => {
+        throw new Error('Immune scan unavailable');
+      });
+
+      const context = await loadContextAtSessionStart('sess-16', 'my-app', 'auth fix');
+
+      assert.ok(context.includes('PREFERENCE'));
+      assert.ok(context.includes('Keep dream context loading intact'));
+      assert.ok(!context.includes('# 🧬 Verified Genome Patterns'));
+      assert.ok(!context.includes('Immune System'));
+      assert.strictEqual(mockLogger.error.mock.calls.length, 2);
     });
   });
 
