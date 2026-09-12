@@ -303,6 +303,27 @@ describe('llmService Unit Tests', () => {
       assert.ok(context.includes('# ⚠️ Immune System'));
     });
 
+    test('does not emit empty dream header when only genes or immune context are present', async () => {
+      mockQueryDreamMemories.mock.mockImplementation(async () => []);
+      mockSearchGenes.mock.mockImplementation(async () => [
+        {
+          id: 'gene-1',
+          name: 'isolated-gene',
+          category: 'pattern',
+          problem: 'isolated problem',
+          solution: 'isolated solution',
+          confidence: 0.8,
+          score: 0.6,
+        },
+      ]);
+      mockBuildImmuneContext.mock.mockImplementation(async () => '');
+
+      const context = await loadContextAtSessionStart('sess-no-dreams', 'my-app', 'some task');
+
+      assert.ok(context.includes('# 🧬 Verified Genome Patterns'));
+      assert.ok(!context.includes('# 🧠 Context from Previous Sessions'), 'Must not emit empty dream section header when dreams are empty');
+    });
+
     test('does not call genome services when task is empty', async () => {
       mockQueryDreamMemories.mock.mockImplementation(async () => []);
 

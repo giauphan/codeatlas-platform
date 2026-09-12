@@ -173,7 +173,10 @@ export async function loadContextAtSessionStart(
       return "";
     }
 
-    const parts: string[] = ["\n# 🧠 Context from Previous Sessions\n"];
+    const parts: string[] = [];
+    if (cleanDreams.length > 0) {
+      parts.push("\n# 🧠 Context from Previous Sessions\n");
+    }
     for (const dream of cleanDreams) {
       const d = dream as Record<string, unknown>;
       const memoryType = String(d.memoryType ?? d.memory_type ?? d.MEMORY_TYPE ?? "DREAM");

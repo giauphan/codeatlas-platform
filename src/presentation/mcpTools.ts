@@ -1522,6 +1522,65 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   a2a("get_gene", "Get a specific gene by ID from the Genome.", ["geneId"]);
   a2a("scan_immune_genes", "CRISPR immune scan: check problem against known failures.", ["problem", "project"]);
   a2a("save_immune_gene", "Record a failure as an immune gene.", ["problem", "failure", "prevention", "project"]);
+  // ── Strict solution search with verified system-design codebase flow ──
+  server.tool(
+    "verified_solution_search",
+    "Strict solution search: find genome genes for a problem, trace the codebase feature flow that implements them, and verify the flow exists. Returns verified: true only when both a gene match and a real code flow are found.",
+    {
+      query: z.string().min(1).max(2000).describe("Problem or task description to search solutions for"),
+      project: z.string().optional().describe("Project name or path"),
+      keyword: z.string().optional().describe("Feature keyword used to trace the codebase flow (defaults to query)"),
+      limit: z.number().int().min(1).max(20).optional().describe("Max genes to return (default 5)"),
+    },
+    mcpHandler(async ({ query, project, keyword, limit }) => {
+      const auth = await checkAuth();
+      return authStorage.run(auth, async () => {
+        await logActivity(auth, "verified_solution_search", { query, project, keyword });
+        const loaded = project ? await loadAnalysisAsync(project) : null;
+        const projectName = loaded ? loaded.projectName : (project || "global");
+
+        const traceKeyword = keyword || query;
+        const minGenes = limit ?? 5;
+
+        // Strict gate 1: genome relevance.
+        const genes = await GenomeService.searchGenes(query, { project: projectName, limit: minGenes });
+        const relevantGenes = genes.filter((g) => g.confidence >= 0.5 && g.score >= 0.3);
+
+        // Strict gate 2: real codebase flow from the analysis graph.
+        const kw = traceKeyword.toLowerCase();
+        const flowNodes = loaded
+          ? loaded.analysis.graph.nodes.filter((n) =>
+              n.label.toLowerCase().includes(kw) ||
+              String(n.filePath || "").toLowerCase().includes(kw)
+            )
+          : [];
+        const flowNodeIds = new Set(flowNodes.map((n) => n.id));
+        const flowLinks = loaded
+          ? loaded.analysis.graph.links.filter((l) => flowNodeIds.has(l.source) && flowNodeIds.has(l.target))
+          : [];
+
+        const verified = relevantGenes.length > 0 && flowNodes.length > 0;
+        const result = {
+          project: projectName,
+          query,
+          keyword: traceKeyword,
+          verified,
+          verification: verified
+            ? "VERIFIED: genome solution matched and codebase flow traced"
+            : "UNVERIFIED: no confident gene match or no codebase flow nodes found",
+          genes: relevantGenes.map((g) => ({ id: g.id, name: g.name, category: g.category, score: g.score, confidence: g.confidence, solution: g.solution })),
+          codebaseFlow: {
+            entryPoints: flowNodes.slice(0, 10).map((n) => ({ id: n.id, label: n.label, type: n.type, filePath: n.filePath, line: n.line })),
+            internalLinks: flowLinks.slice(0, 20).map((l) => ({ source: l.source, target: l.target, type: l.type })),
+            nodeCount: flowNodes.length,
+            linkCount: flowLinks.length,
+          },
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      });
+    })
+  );
+  a2a("verified_solution_search", "Strict verified solution search over Genome and codebase flow.", ["query", "project", "keyword", "limit"]);
   // ── Auto-Sync Tool ─────────────────────────────────────────
   server.tool("sync_skills", "Auto-sync Hermes AI skills into CodeAtlas Genome.", {}, async () => {
     const auth = await checkAuth();
