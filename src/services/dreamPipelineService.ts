@@ -10,6 +10,7 @@ import { authStorage } from "../utils/context.js";
 import { DreamingService, type DreamMemoryType } from "./dreamingService.js";
 import { summarizeConversationForDreams } from "./llmService.js";
 import { ConsolidationEngine, type ConsolidationReport } from "./consolidationEngine.js";
+import { GenomeService } from "./genomeService.js";
 
 export interface DailyPipelineOptions {
   project?: string;
@@ -42,6 +43,7 @@ export interface SessionIngestionResult {
   provider: string;
   dreamsExtracted: number;
   noiseBlocked: number;
+  genesSaved: number;
   dreams: Array<{ id: string; memory_type: string; content: string }>;
   startedAt: string;
   completedAt: string;
@@ -180,6 +182,7 @@ export class DreamPipelineService {
         provider,
         dreamsExtracted: 0,
         noiseBlocked: 0,
+        genesSaved: 0,
         dreams: [],
         startedAt,
         completedAt,
@@ -208,9 +211,26 @@ export class DreamPipelineService {
       }
     }
 
+    let genesSaved = 0;
+    for (const savedDream of savedDreams) {
+      try {
+        await authStorage.run(auth, () =>
+          GenomeService.extractGene({
+            sourceType: "dream",
+            sourceId: savedDream.id,
+            project,
+            autoExtract: true
+          })
+        );
+        genesSaved++;
+      } catch (err) {
+        logger.error(`[Dreaming Pipeline] Strict genome auto-save failed for dream ${savedDream.id}:`, err instanceof Error ? err.message : String(err));
+      }
+    }
+
     const totalMs = Date.now() - ingestStartTime;
     const completedAt = new Date().toISOString();
-    logger.info(`[Dreaming Pipeline] [${completedAt}] Session="${sessId}" ingestion COMPLETED in ${totalMs}ms: saved=${savedDreams.length}, noise_blocked=${skipped.length} for project="${project}" provider="${provider}"`);
+    logger.info(`[Dreaming Pipeline] [${completedAt}] Session="${sessId}" ingestion COMPLETED in ${totalMs}ms: saved=${savedDreams.length}, noise_blocked=${skipped.length}, genes_saved=${genesSaved} for project="${project}" provider="${provider}"`);
 
     return {
       success: true,
@@ -220,6 +240,7 @@ export class DreamPipelineService {
       provider,
       dreamsExtracted: savedDreams.length,
       noiseBlocked: skipped.length,
+      genesSaved,
       dreams: savedDreams,
       startedAt,
       completedAt,
