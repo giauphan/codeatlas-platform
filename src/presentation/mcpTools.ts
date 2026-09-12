@@ -1180,12 +1180,27 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         calledBy: string[];
       }> = [];
 
+      // ⚡ Bolt Optimization: Pre-calculate relationship arrays to avoid O(V*E) nested loops
+      // Replaces O(N^2) array filtering inside the topological sort with O(1) map lookups.
       const inDegree = new Map<string, number>();
+      const callsToMap = new Map<string, string[]>();
+      const calledByMap = new Map<string, string[]>();
+
       for (const node of traceNodes) {
         inDegree.set(node.id, 0);
       }
+
       for (const link of dedupLinks) {
         inDegree.set(link.target, (inDegree.get(link.target) || 0) + 1);
+
+        const sourceName = nodeNameMap.get(link.source) || link.source;
+        const targetName = nodeNameMap.get(link.target) || link.target;
+
+        if (!callsToMap.has(link.source)) callsToMap.set(link.source, []);
+        callsToMap.get(link.source)!.push(targetName);
+
+        if (!calledByMap.has(link.target)) calledByMap.set(link.target, []);
+        calledByMap.get(link.target)!.push(sourceName);
       }
 
       const queue: string[] = [];
@@ -1202,12 +1217,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
         const node = nodeMap.get(current);
         if (node) {
-          const callsTo = dedupLinks
-            .filter((l) => l.source === current)
-            .map((l) => nodeNameMap.get(l.target) || l.target);
-          const calledBy = dedupLinks
-            .filter((l) => l.target === current)
-            .map((l) => nodeNameMap.get(l.source) || l.source);
+          const callsTo = callsToMap.get(current) || [];
+          const calledBy = calledByMap.get(current) || [];
 
           executionOrder.push({
             step: step++,
@@ -1233,12 +1244,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       for (const node of traceNodes) {
         if (!ordered.has(node.id)) {
-          const callsTo = dedupLinks
-            .filter((l) => l.source === node.id)
-            .map((l) => nodeNameMap.get(l.target) || l.target);
-          const calledBy = dedupLinks
-            .filter((l) => l.target === node.id)
-            .map((l) => nodeNameMap.get(l.source) || l.source);
+          const callsTo = callsToMap.get(node.id) || [];
+          const calledBy = calledByMap.get(node.id) || [];
 
           executionOrder.push({
             step: step++,
