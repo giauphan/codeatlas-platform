@@ -56,6 +56,59 @@ describe('Clean Architecture Repositories & Use Cases', () => {
     assert.strictEqual(mockRepo.callsToVerifyKey, 1, 'Should query repository first to try resolving real uid');
   });
 
+  test('should cache super admin identity instead of re-querying the auth store every request', async () => {
+    const mockRepo = new MockAuthRepository();
+    mockRepo.keysMap.set('super_admin_secret_token', { uid: 'real_admin_uid', keyId: 'real_key_id' });
+
+    const useCase = new AuthenticateUserUseCase(mockRepo);
+    const adminKey = 'super_admin_secret_token';
+
+    const auth1 = await useCase.execute(adminKey, adminKey);
+    const auth2 = await useCase.execute(adminKey, adminKey);
+
+    assert.strictEqual(auth1.uid, 'real_admin_uid');
+    assert.strictEqual(auth2.uid, 'real_admin_uid');
+    assert.strictEqual(mockRepo.callsToVerifyKey, 1, 'Should reuse the cached super admin identity');
+  });
+
+  test('should cache super admin fallback when the auth store is unavailable', async () => {
+    const mockRepo = new MockAuthRepository();
+    mockRepo.verifyKey = async () => {
+      mockRepo.callsToVerifyKey++;
+      throw new Error('8 RESOURCE_EXHAUSTED: Quota exceeded.');
+    };
+
+    const useCase = new AuthenticateUserUseCase(mockRepo);
+    const adminKey = 'super_admin_secret_token';
+
+    const auth1 = await useCase.execute(adminKey, adminKey);
+    const auth2 = await useCase.execute(adminKey, adminKey);
+
+    assert.strictEqual(auth1.uid, 'admin');
+    assert.strictEqual(auth2.uid, 'admin');
+    assert.strictEqual(mockRepo.callsToVerifyKey, 1, 'Should not hammer a quota-exhausted auth store on every request');
+  });
+
+  test('should retry the auth store after the super admin fallback cache expires', async () => {
+    const mockRepo = new MockAuthRepository();
+    mockRepo.verifyKey = async () => {
+      mockRepo.callsToVerifyKey++;
+      if (mockRepo.callsToVerifyKey === 1) throw new Error('8 RESOURCE_EXHAUSTED: Quota exceeded.');
+      return { tier: 'enterprise', uid: 'real_admin_uid', keyId: 'real_key_id', expires: 0 };
+    };
+
+    const useCase = new AuthenticateUserUseCase(mockRepo, 5);
+    const adminKey = 'super_admin_secret_token';
+
+    const degraded = await useCase.execute(adminKey, adminKey);
+    assert.strictEqual(degraded.uid, 'admin');
+
+    await new Promise(r => setTimeout(r, 15));
+
+    const recovered = await useCase.execute(adminKey, adminKey);
+    assert.strictEqual(recovered.uid, 'real_admin_uid', 'Should re-resolve the real uid once the store recovers');
+  });
+
   test('should authenticate standard tenant key and update usage stats', async () => {
     const mockRepo = new MockAuthRepository();
     mockRepo.keysMap.set('client_api_key_123', { uid: 'tenant_abc', keyId: 'key_xyz' });

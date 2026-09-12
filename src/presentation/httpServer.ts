@@ -559,8 +559,8 @@ app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayP
           }
         }
       } catch (e: unknown) {
-        logger.error("[Settings API] Error reading Firestore fallback:", e);
-        return res.status(500).json({ error: `Failed to fetch settings: ${e instanceof Error ? e.message : String(e)}` });
+        // Firestore is only a fallback mirror of the local file; degrade gracefully instead of failing the request
+        logger.warn("[Settings API] Firestore fallback unavailable:", e instanceof Error ? e.message : String(e));
       }
     }
     
@@ -630,8 +630,8 @@ app.post("/api/projects/settings", authMiddleware, localRateLimiter, async (req,
         await docRef.set({ indexingEnabled }, { merge: true });
       }
     } catch (e: unknown) {
-      logger.error("[Settings API] Error updating Firestore settings:", e);
-      throw new Error(`Firestore update failed: ${e instanceof Error ? e.message : String(e)}`);
+      // Local settings were already persisted above; Firestore is only a backup mirror
+      logger.warn("[Settings API] Firestore settings backup unavailable:", e instanceof Error ? e.message : String(e));
     }
     
     res.json({ success: true, indexingEnabled });
