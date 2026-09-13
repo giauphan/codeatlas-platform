@@ -23,9 +23,23 @@ type SqliteParams = Record<string, unknown> | unknown[];
 
 const NAMED_PLACEHOLDER = /[:@$][a-zA-Z_][a-zA-Z0-9_]*/;
 
+function sanitizeParam(val: unknown): unknown {
+  if (typeof val === 'boolean') {
+    return val ? 1 : 0;
+  }
+  return val;
+}
+
 function bindArgs(sql: string, params: SqliteParams): unknown[] {
-  if (Array.isArray(params)) return params;
-  return NAMED_PLACEHOLDER.test(sql) ? [params] : Object.values(params);
+  if (Array.isArray(params)) return params.map(sanitizeParam);
+  if (NAMED_PLACEHOLDER.test(sql)) {
+    const obj: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(params as Record<string, unknown>)) {
+      obj[k] = sanitizeParam(v);
+    }
+    return [obj];
+  }
+  return Object.values(params).map(sanitizeParam);
 }
 
 let DatabaseClass: DatabaseConstructor | undefined;
@@ -216,8 +230,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         tenant_id TEXT NOT NULL REFERENCES tenants(id),
         user_id TEXT REFERENCES users(id),
         name TEXT,
-        key TEXT NOT NULL UNIQUE,
-        key_hash TEXT,
+        key_hash TEXT NOT NULL UNIQUE,
         tier TEXT DEFAULT 'free',
         expires_at TEXT,
         created_at TEXT DEFAULT (datetime('now')),
@@ -350,6 +363,36 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       }
     };
 
+    const keyColumns = this.db!.pragma("table_info(keys)") as Array<{ name: string }>;
+    if (keyColumns.some((entry) => entry.name === "key")) {
+      try {
+        this.db!.exec("ALTER TABLE keys DROP COLUMN key");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("cannot drop") || msg.includes("UNIQUE")) {
+          this.db!.exec(`
+            CREATE TABLE IF NOT EXISTS keys_new (
+              id TEXT PRIMARY KEY,
+              tenant_id TEXT NOT NULL REFERENCES tenants(id),
+              user_id TEXT REFERENCES users(id),
+              name TEXT,
+              key_hash TEXT NOT NULL UNIQUE,
+              tier TEXT DEFAULT 'free',
+              expires_at TEXT,
+              created_at TEXT DEFAULT (datetime('now')),
+              updated_at TEXT DEFAULT (datetime('now'))
+            );
+          `);
+          const cols = keyColumns.filter((c) => c.name !== "key").map((c) => c.name).join(", ");
+          this.db!.exec(`INSERT OR IGNORE INTO keys_new (${cols}) SELECT ${cols} FROM keys`);
+          this.db!.exec("DROP TABLE keys");
+          this.db!.exec("ALTER TABLE keys_new RENAME TO keys");
+          this.db!.exec("CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id)");
+        } else {
+          throw err;
+        }
+      }
+    }
     addColumnIfMissing("ai_episodic_memory", "project_name", "TEXT");
     addColumnIfMissing("ai_dreaming_memory", "evidence_count", "INTEGER DEFAULT 0");
     addColumnIfMissing("ai_dreaming_memory", "version", "INTEGER DEFAULT 1");

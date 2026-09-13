@@ -70,14 +70,13 @@ async function seedTenantUserKey(options: {
     [options.userId, options.tenantId, `${options.userId}@example.test`, 'user']
   );
   await memoryAdapter.execute(
-    `INSERT OR REPLACE INTO keys (id, tenant_id, user_id, name, key, key_hash, tier, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO keys (id, tenant_id, user_id, name, key_hash, tier, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       options.keyId,
       options.tenantId,
       options.userId,
       'Test key',
-      options.apiKey,
       hashKey(options.apiKey),
       options.tier ?? 'free',
       options.expiresAt ?? null,
@@ -116,23 +115,22 @@ describe('SqliteAuthRepository / SqliteActivityLogger (local, Firestore-free)', 
     assert.strictEqual(auth.uid, 'user-a');
     assert.strictEqual(auth.keyId, 'key-a');
     assert.strictEqual(auth.tier, 'premium');
+    assert.strictEqual(auth.expires, Infinity);
   });
 
-  test('verifyKey falls back to the plaintext key column for legacy rows', async () => {
+  test('verifyKey never authenticates against a plaintext key column', async () => {
     await seedTenantUserKey({
-      tenantId: 'tenant-legacy',
-      userId: 'user-legacy',
-      keyId: 'key-legacy',
-      apiKey: 'test-token-legacy',
+      tenantId: 'tenant-hash-only',
+      userId: 'user-hash-only',
+      keyId: 'key-hash-only',
+      apiKey: 'test-token-hash-only',
     });
-    // Simulate a legacy row that only ever stored the plaintext key
-    await memoryAdapter.execute(`UPDATE keys SET key_hash = NULL WHERE id = ?`, ['key-legacy']);
 
-    const auth = await repo.verifyKey('test-token-legacy');
-
-    assert.ok(auth);
-    assert.strictEqual(auth.uid, 'user-legacy');
-    assert.strictEqual(auth.tier, 'free');
+    await assert.rejects(
+      memoryAdapter.execute(`SELECT key FROM keys WHERE id = ?`, ['key-hash-only']),
+      /no such column: key/
+    );
+    assert.strictEqual(await repo.verifyKey('wrong-token'), null);
   });
 
   test('verifyKey returns null for an unknown key', async () => {

@@ -4,6 +4,22 @@ import { logger } from "./utils/logger.js";
 import { createDatabaseAdapter } from "./database/factory.js";
 import { authStorage } from "./utils/context.js";
 
+export const DEFAULT_API_KEY_PEPPER = 'codeatlas-api-key-pepper-v1';
+
+export function getApiKeyPepper(): string {
+  return process.env.API_KEY_PEPPER || DEFAULT_API_KEY_PEPPER;
+}
+
+export async function hashApiKey(apiKey: string): Promise<string> {
+  const pepper = getApiKeyPepper();
+  return new Promise<string>((resolve, reject) => {
+    crypto.pbkdf2(apiKey, Buffer.from(pepper, 'utf8'), 100000, 64, 'sha256', (err, derivedKey) => {
+      if (err) reject(err);
+      else resolve(derivedKey.toString('hex'));
+    });
+  });
+}
+
 /**
  * Domain Interface for User Authentication details
  */
@@ -45,9 +61,7 @@ export class FirestoreAuthRepository implements IAuthRepository {
       const db = this.getDb();
 
       // Hash the API key using PBKDF2-SHA256 with a pepper to query Firestore safely
-      const API_KEY_PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
-      const salt = Buffer.from(API_KEY_PEPPER, 'utf8');
-      const keyHash = crypto.pbkdf2Sync(apiKey, salt, 100000, 64, 'sha256').toString('hex');
+      const keyHash = await hashApiKey(apiKey);
 
       // Look up by PBKDF2 keyHash
       let keysSnapshot = await db.collectionGroup('keys')
@@ -140,14 +154,13 @@ export class SqliteAuthRepository implements IAuthRepository {
   async verifyKey(apiKey: string): Promise<AuthData | null> {
     try {
       const db = createDatabaseAdapter();
-      const pepper = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
-      const keyHash = crypto.pbkdf2Sync(apiKey, Buffer.from(pepper, 'utf8'), 100000, 64, 'sha256').toString('hex');
+      const keyHash = await hashApiKey(apiKey);
       const rows = await db.query<{ tier: string; uid: string | null; keyId: string; expiresAt: string | null }>(
         `SELECT id AS keyId, user_id AS uid, tier, expires_at AS expiresAt
          FROM keys
-         WHERE key_hash = :keyHash OR key = :apiKey
+         WHERE key_hash = :keyHash
          LIMIT 1`,
-        { keyHash, apiKey }
+        { keyHash }
       );
       if (rows.length === 0) return null;
 
@@ -159,7 +172,7 @@ export class SqliteAuthRepository implements IAuthRepository {
         tier: row.tier || 'free',
         uid: row.uid || 'unknown',
         keyId: row.keyId,
-        expires: 0
+        expires
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -202,7 +215,7 @@ export class SqliteActivityLogger implements IActivityLogger {
           keyId,
           tool,
           params: JSON.stringify(params),
-          success: success ? 1 : 0
+          success
         }
       );
     } catch (err: unknown) {

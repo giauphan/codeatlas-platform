@@ -11,6 +11,7 @@ const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codeatlas-test-'));
 const tempDbPath = path.join(tempDir, 'test.db');
 process.env.CODEATLAS_SQLITE_PATH = tempDbPath;
 process.env.CODEATLAS_USE_FIRESTORE = 'false';
+process.env.API_KEY_PEPPER = 'test-pepper';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 const { SQLiteAdapter } = await import(path.join(srcDir, 'database/adapters/sqliteAdapter.js'));
@@ -35,9 +36,9 @@ describe('HTTP Server Local-First (Firestore-Free Mode)', () => {
     await memoryAdapter.execute(`INSERT OR REPLACE INTO tenants (id, name) VALUES ('tenant-local', 'Local Tenant')`);
     await memoryAdapter.execute(`INSERT OR REPLACE INTO users (id, tenant_id, email, role, tier) VALUES ('user-local', 'tenant-local', 'user@local.test', 'admin', 'pro')`);
     await memoryAdapter.execute(
-      `INSERT OR REPLACE INTO keys (id, tenant_id, user_id, name, key, key_hash, tier)
-       VALUES ('key-local', 'tenant-local', 'user-local', 'Local Test Key', :apiKey, :keyHash, 'pro')`,
-      { apiKey, keyHash }
+      `INSERT OR REPLACE INTO keys (id, tenant_id, user_id, name, key_hash, tier)
+       VALUES ('key-local', 'tenant-local', 'user-local', 'Local Test Key', :keyHash, 'pro')`,
+      { keyHash }
     );
 
     await new Promise<void>((resolve) => {

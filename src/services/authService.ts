@@ -10,7 +10,16 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { getAuth } from "firebase-admin/auth";
 
-const useFirestore = process.env.CODEATLAS_USE_FIRESTORE === 'true';
+export function shouldUseFirestore(): boolean {
+  if (process.env.CODEATLAS_USE_FIRESTORE === 'true') return true;
+  if (process.env.CODEATLAS_USE_FIRESTORE !== 'false' && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    logger.warn("CODEATLAS_USE_FIRESTORE is unset, but GOOGLE_APPLICATION_CREDENTIALS is present. Authenticating against Firestore for backward compatibility. Set CODEATLAS_USE_FIRESTORE=false to strictly use local SQLite.");
+    return true;
+  }
+  return false;
+}
+
+const useFirestore = shouldUseFirestore();
 const authRepo = useFirestore ? new FirestoreAuthRepository() : new SqliteAuthRepository();
 const activityLogger = useFirestore ? new FirestoreActivityLogger() : new SqliteActivityLogger();
 export const authenticateUseCase = new AuthenticateUserUseCase(authRepo);

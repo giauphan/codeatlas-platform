@@ -23,6 +23,7 @@ import {
 } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { createDatabaseAdapter } from "../database/factory.js";
+import { hashApiKey } from "../repositories.js";
 import { rejectArrayParams } from "../middleware/validation.js";
 import { registerTools } from "./mcpTools.js";
 import { registerA2ATools } from "./a2a/a2aTools.js";
@@ -375,6 +376,27 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
       }
     }
 
+    // 1b. Remove project entry from local database
+    try {
+      const db = createDatabaseAdapter();
+      let effectiveTenantId = ownerTenantId || 'default';
+      if (ownerTenantId) {
+        const users = await db.query<{ tenantId: string }>(
+          `SELECT tenant_id AS tenantId FROM users WHERE id = :uid LIMIT 1`,
+          { uid: ownerTenantId }
+        );
+        if (users[0]?.tenantId) effectiveTenantId = users[0].tenantId;
+      }
+      const docId = `${effectiveTenantId}_${cleanProjectName}`;
+      await db.execute(
+        `DELETE FROM projects WHERE id = :id OR (name = :name AND tenant_id = :tenantId)`,
+        { id: docId, name: cleanProjectName, tenantId: effectiveTenantId }
+      );
+      logger.info(`[Delete Project] Cleaned up local database project row: ${docId}`);
+    } catch (localDbErr: unknown) {
+      logger.error(`[Delete Project] Failed to delete from local database: ${localDbErr}`);
+    }
+
     // 2. Remove semantic/relational/episodic memory from the database
     try {
       const { MemoryService } = await import("../services/memoryService.js");
@@ -687,9 +709,7 @@ app.post("/api/keys", authMiddleware, localRateLimiter, async (req, res) => {
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
 
     const newKey = `ca_${crypto.randomBytes(16).toString('hex')}`;
-    const API_KEY_PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
-    const salt = Buffer.from(API_KEY_PEPPER, 'utf8');
-    const newKeyHash = crypto.pbkdf2Sync(newKey, salt, 100000, 64, 'sha256').toString('hex');
+    const newKeyHash = await hashApiKey(newKey);
 
     const db = createDatabaseAdapter();
     const keyId = crypto.randomUUID();
@@ -699,14 +719,13 @@ app.post("/api/keys", authMiddleware, localRateLimiter, async (req, res) => {
     );
     const tenantId = userNameRows[0]?.tenantId || auth.uid;
     await db.execute(
-      `INSERT INTO keys (id, tenant_id, user_id, name, key, key_hash, tier)
-       VALUES (:id, :tenantId, :userId, :name, :key, :keyHash, :tier)`,
+      `INSERT INTO keys (id, tenant_id, user_id, name, key_hash, tier)
+       VALUES (:id, :tenantId, :userId, :name, :keyHash, :tier)`,
       {
         id: keyId,
         tenantId,
         userId: auth.uid,
         name: `API Key ${new Date().toISOString()}`,
-        key: newKey,
         keyHash: newKeyHash,
         tier: auth.tier
       }
@@ -882,7 +901,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
                 effectiveTenantId = users[0].tenantId;
               }
             }
-            const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+            const docId = `${effectiveTenantId}_${cleanProjectName}`;
             await db.execute(
               `INSERT INTO projects (id, tenant_id, name, updated_at)
                VALUES (:id, :tenantId, :name, CURRENT_TIMESTAMP)
