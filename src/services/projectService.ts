@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
 import * as os from "os";
+import { getApps } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";

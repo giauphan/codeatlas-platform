@@ -70,43 +70,6 @@ export interface DreamMemory {
  * as "dreams" that guide future suggestions.
  */
 export class DreamingService {
-  /** Track pending fire-and-forget database writes for graceful shutdown */
-  static readonly activeBackgroundTasks = new Set<Promise<unknown>>();
-
-  /**
-   * Waits for pending background tasks to settle, up to a specified timeout.
-   * Logs a warning if any tasks are still pending after the timeout.
-   */
-  static async waitForBackgroundTasks(timeoutMs: number = 5000): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-
-    while (DreamingService.activeBackgroundTasks.size > 0) {
-      const remainingMs = deadline - Date.now();
-      if (remainingMs <= 0) break; // Timeout triggered
-
-      logger.info(`Waiting for ${DreamingService.activeBackgroundTasks.size} pending database writes to complete...`);
-
-      let settled = false;
-      const settlePromise = Promise.allSettled(Array.from(DreamingService.activeBackgroundTasks)).then(() => { settled = true; });
-
-      let timeoutId: NodeJS.Timeout;
-      const timeoutPromise = new Promise(resolve => {
-        timeoutId = setTimeout(resolve, remainingMs);
-      });
-
-      await Promise.race([settlePromise, timeoutPromise]);
-      clearTimeout(timeoutId!); // Ensure event loop isn't held open if settle wins
-
-      if (!settled) {
-        break; // Timeout triggered
-      }
-      // If we finished successfully but new tasks were added, the while loop will re-check
-    }
-
-    if (DreamingService.activeBackgroundTasks.size > 0) {
-      logger.warn(`${DreamingService.activeBackgroundTasks.size} background database writes were dropped during graceful shutdown due to timeout.`);
-    }
-  }
 
 
   /** Cache of detected columns so we only check once per process lifetime */
@@ -117,10 +80,14 @@ export class DreamingService {
   static async initialize(): Promise<void> {
     const db = createDatabaseAdapter();
     await db.connect();
-    await db.initializeSchema();
-    DreamingService._hasContentHashColumn = await db.checkColumnExists("ai_dreaming_memory", "content_hash");
-    DreamingService._hasLifecycleColumns = await db.checkColumnExists("ai_dreaming_memory", "status");
-    logger.info("[Dreaming] SQLite schema initialized");
+    try {
+      await db.initializeSchema();
+      DreamingService._hasContentHashColumn = await db.checkColumnExists("ai_dreaming_memory", "content_hash");
+      DreamingService._hasLifecycleColumns = await db.checkColumnExists("ai_dreaming_memory", "status");
+      logger.info("[Dreaming] SQLite schema initialized");
+    } finally {
+      await db.disconnect();
+    }
   }
 
   /**
@@ -438,24 +405,20 @@ export class DreamingService {
 
         const rows = await db.query<Record<string, unknown>>(sql, binds);
 
-        // ⚡ Bolt Optimization: Fire and forget DB update to prevent "Write on Read" N+1 blocking
-        // Bump access_count non-critically without blocking the query return path.
+        // Bump access_count non-critically
         if (rows.length > 0) {
-          const ids = rows.map(r => r['id'] as string).filter(Boolean);
-          if (ids.length > 0) {
-            const baseBind = { tenantId };
-            const updateBinds = ids.map(id => ({ id, ...baseBind }));
-            const updatePromise = db.executeMany(
-              `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-              updateBinds
-            );
-            const updateTask = updatePromise.catch(bumpErr => {
-              logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
-            });
-            DreamingService.activeBackgroundTasks.add(updateTask);
-            updateTask.finally(() => {
-              DreamingService.activeBackgroundTasks.delete(updateTask);
-            });
+          try {
+            const ids = rows.map(r => r['id'] as string).filter(Boolean);
+            if (ids.length > 0) {
+              const baseBind = { tenantId };
+              const binds = ids.map(id => ({ id, ...baseBind }));
+              await db.executeMany(
+                `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
+                binds
+              );
+            }
+          } catch (bumpErr) {
+            logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
           }
         }
 

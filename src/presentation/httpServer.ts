@@ -9,8 +9,8 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import * as fs from "fs";
 import * as path from "path";
 import { getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { checkAuth, logActivity, shouldUseFirestore } from "../services/authService.js";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { checkAuth, logActivity } from "../services/authService.js";
 import { authMiddleware } from "../middleware/auth.js";
 import {
   discoverProjectsAsync,
@@ -22,8 +22,6 @@ import {
   unregisterProjectAsync
 } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
-import { createDatabaseAdapter } from "../database/factory.js";
-import { hashApiKey } from "../repositories.js";
 import { rejectArrayParams } from "../middleware/validation.js";
 import { registerTools } from "./mcpTools.js";
 import { registerA2ATools } from "./a2a/a2aTools.js";
@@ -346,55 +344,32 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
     const errors: string[] = [];
 
     // 1. Remove telemetry data from Firestore (if Firebase is configured)
-    if (shouldUseFirestore()) {
-      try {
-        const apps = firebaseClient.getApps();
-        if (apps.length) {
-          const db = firebaseClient.getFirestore();
-          const docId = ownerTenantId ? `${ownerTenantId}_${cleanProjectName}` : cleanProjectName;
-          await db.collection('projects').doc(docId).delete();
-          logger.info(`[Delete Project] Deleted Firestore document: ${docId}`);
+    try {
+      const apps = firebaseClient.getApps();
+      if (apps.length) {
+        const db = firebaseClient.getFirestore();
+        const docId = ownerTenantId ? `${ownerTenantId}_${cleanProjectName}` : cleanProjectName;
+        await db.collection('projects').doc(docId).delete();
+        logger.info(`[Delete Project] Deleted Firestore document: ${docId}`);
 
-          // Securely handle legacy unscoped document cleanup if it exists
-          if (ownerTenantId) {
-            const legacyDocId = cleanProjectName;
-            const legacyRef = db.collection('projects').doc(legacyDocId);
-            const legacyDoc = await legacyRef.get();
-            if (legacyDoc.exists) {
-              const legacyData = legacyDoc.data();
-              const legacyTenantId = legacyData?.tenantId;
-              if (!legacyTenantId || legacyTenantId === ownerTenantId) {
-                await legacyRef.delete();
-                logger.info(`[Delete Project] Cleaned up legacy Firestore document: ${legacyDocId}`);
-              }
+        // Securely handle legacy unscoped document cleanup if it exists
+        if (ownerTenantId) {
+          const legacyDocId = cleanProjectName;
+          const legacyRef = db.collection('projects').doc(legacyDocId);
+          const legacyDoc = await legacyRef.get();
+          if (legacyDoc.exists) {
+            const legacyData = legacyDoc.data();
+            const legacyTenantId = legacyData?.tenantId;
+            if (!legacyTenantId || legacyTenantId === ownerTenantId) {
+              await legacyRef.delete();
+              logger.info(`[Delete Project] Cleaned up legacy Firestore document: ${legacyDocId}`);
             }
           }
         }
-      } catch (firebaseErr: unknown) {
-        logger.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
-        errors.push(`Firestore cleanup failed: ${firebaseErr instanceof Error ? firebaseErr.message : String(firebaseErr)}`);
       }
-    }
-
-    // 1b. Remove project entry from local database
-    try {
-      const db = createDatabaseAdapter();
-      let effectiveTenantId = ownerTenantId || 'default';
-      if (ownerTenantId) {
-        const users = await db.query<{ tenantId: string }>(
-          `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
-          { uid: ownerTenantId }
-        );
-        if (users[0]?.tenantId) effectiveTenantId = users[0].tenantId;
-      }
-      const docId = `${effectiveTenantId}_${cleanProjectName}`;
-      await db.execute(
-        `DELETE FROM projects WHERE id = :id OR (name = :name AND tenant_id = :tenantId)`,
-        { id: docId, name: cleanProjectName, tenantId: effectiveTenantId }
-      );
-      logger.info(`[Delete Project] Cleaned up local database project row: ${docId}`);
-    } catch (localDbErr: unknown) {
-      logger.error(`[Delete Project] Failed to delete from local database: ${localDbErr}`);
+    } catch (firebaseErr: unknown) {
+      logger.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
+      errors.push(`Firestore cleanup failed: ${firebaseErr instanceof Error ? firebaseErr.message : String(firebaseErr)}`);
     }
 
     // 2. Remove semantic/relational/episodic memory from the database
@@ -570,7 +545,7 @@ app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayP
       }
     }
     
-    if (!checkedLocal && shouldUseFirestore()) {
+    if (!checkedLocal) {
       // Fallback: check Firestore
       try {
         const apps = firebaseClient.getApps();
@@ -646,19 +621,17 @@ app.post("/api/projects/settings", authMiddleware, localRateLimiter, async (req,
     await fs.promises.writeFile(settingsPath, JSON.stringify({ indexingEnabled }, null, 2));
     
     // Save to Firestore
-    if (shouldUseFirestore()) {
-      try {
-        const apps = firebaseClient.getApps();
-        if (apps.length) {
-          const db = firebaseClient.getFirestore();
-          const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
-          const docRef = db.collection('projects').doc(docId);
-          await docRef.set({ indexingEnabled }, { merge: true });
-        }
-      } catch (e: unknown) {
-        logger.error("[Settings API] Error updating Firestore settings:", e);
-        throw new Error(`Firestore update failed: ${e instanceof Error ? e.message : String(e)}`);
+    try {
+      const apps = firebaseClient.getApps();
+      if (apps.length) {
+        const db = firebaseClient.getFirestore();
+        const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+        const docRef = db.collection('projects').doc(docId);
+        await docRef.set({ indexingEnabled }, { merge: true });
       }
+    } catch (e: unknown) {
+      logger.error("[Settings API] Error updating Firestore settings:", e);
+      throw new Error(`Firestore update failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     
     res.json({ success: true, indexingEnabled });
@@ -688,14 +661,14 @@ app.get("/api/keys", authMiddleware, localRateLimiter, async (req, res) => {
     const auth = authStorage.getStore();
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
 
-    const db = createDatabaseAdapter();
-    const keys = await db.query<{ id: string; name: string; tier: string; createdAt: string }>(
-      `SELECT id, name, tier, created_at AS "createdAt"
-       FROM keys
-       WHERE user_id = :uid
-       ORDER BY created_at DESC`,
-      { uid: auth.uid }
-    );
+    const db = firebaseClient.getFirestore();
+    const keysSnapshot = await db.collection('users').doc(auth.uid).collection('keys').get();
+    const keys = keysSnapshot.docs.map(doc => {
+      const data = doc.data();
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { keyHash, ...safeData } = data; // Omit keyHash
+      return { id: doc.id, ...safeData };
+    });
     res.json(keys);
   } catch (err: unknown) {
     logger.error("[API Keys] Failed to fetch keys:", err);
@@ -709,29 +682,21 @@ app.post("/api/keys", authMiddleware, localRateLimiter, async (req, res) => {
     if (!auth) return res.status(401).json({ error: "Unauthorized" });
 
     const newKey = `ca_${crypto.randomBytes(16).toString('hex')}`;
-    const newKeyHash = await hashApiKey(newKey);
+    const API_KEY_PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
+    const salt = Buffer.from(API_KEY_PEPPER, 'utf8');
+    const newKeyHash = crypto.pbkdf2Sync(newKey, salt, 100000, 64, 'sha256').toString('hex');
 
-    const db = createDatabaseAdapter();
-    const keyId = crypto.randomUUID();
-    const userNameRows = await db.query<{ tenantId: string }>(
-      `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
-      { uid: auth.uid }
-    );
-    const tenantId = userNameRows[0]?.tenantId || auth.uid;
-    await db.execute(
-      `INSERT INTO keys (id, tenant_id, user_id, name, key_hash, tier)
-       VALUES (:id, :tenantId, :userId, :name, :keyHash, :tier)`,
-      {
-        id: keyId,
-        tenantId,
-        userId: auth.uid,
-        name: `API Key ${new Date().toISOString()}`,
-        keyHash: newKeyHash,
-        tier: auth.tier
-      }
-    );
+    const db = firebaseClient.getFirestore();
+    const keyRef = db.collection('users').doc(auth.uid).collection('keys').doc();
+    await keyRef.set({
+      keyHash: newKeyHash,
+      createdAt: FieldValue.serverTimestamp(),
+      tier: auth.tier,
+      uid: auth.uid,
+      name: `API Key ${new Date().toISOString()}`,
+    });
 
-    res.json({ success: true, key: newKey, id: keyId });
+    res.json({ success: true, key: newKey, id: keyRef.id });
   } catch (err: unknown) {
     logger.error("[API Keys] Failed to create key:", err);
     res.status(500).json({ error: "Failed to create API key" });
@@ -748,14 +713,9 @@ app.delete("/api/keys/:id", authMiddleware, localRateLimiter, async (req, res) =
         return res.status(400).json({ error: "Invalid API Key ID" });
     }
 
-    const db = createDatabaseAdapter();
-    const result = await db.execute(
-      `DELETE FROM keys WHERE id = :id AND user_id = :uid`,
-      { id: keyId, uid: auth.uid }
-    );
-    if (result.rowsAffected === 0) {
-      return res.status(404).json({ error: "API key not found" });
-    }
+    const db = firebaseClient.getFirestore();
+    const keyRef = db.collection('users').doc(auth.uid).collection('keys').doc(keyId);
+    await keyRef.delete();
 
     res.json({ success: true, id: keyId });
   } catch (err: unknown) {
@@ -841,81 +801,50 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
         await fs.promises.writeFile(analysisPath, JSON.stringify(analysis, null, 2));
         
         // Securely sync telemetry / database stats on server-side
-        if (shouldUseFirestore()) {
-          try {
-            const apps = firebaseClient.getApps();
-            if (apps.length) {
-              const db = firebaseClient.getFirestore();
-              const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
-              const docRef = db.collection('projects').doc(docId);
+        try {
+          const apps = firebaseClient.getApps();
+          if (apps.length) {
+            const db = firebaseClient.getFirestore();
+            const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+            const docRef = db.collection('projects').doc(docId);
 
-              // Runtime migration fallback: if docId is different from cleanProjectName, check if a legacy doc exists to migrate historical telemetry
-              if (tenantId) {
-                const legacyDocId = cleanProjectName;
-                const legacyRef = db.collection('projects').doc(legacyDocId);
-                try {
-                  const [newDoc, legacyDoc] = await Promise.all([
-                    docRef.get(),
-                    legacyRef.get()
-                  ]);
-                  if (legacyDoc.exists && !newDoc.exists) {
-                    const legacyData = legacyDoc.data() || {};
-                    await docRef.set({
-                      ...legacyData,
-                      tenantId: tenantId
-                    }, { merge: true });
-                    await legacyRef.delete();
-                    logger.info(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
-                  }
-                } catch (migrateErr) {
-                  logger.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
-                }
-              }
-
-              await docRef.set({
-                name: cleanProjectName,
-                path: projectDir,
-                stats: (analysis as { stats?: unknown; entityCounts?: unknown }).stats || analysis.entityCounts || {},
-                lastIndexed: new Date().toISOString(),
-                nodesCount: analysis.graph?.nodes?.length || 0,
-                linksCount: analysis.graph?.links?.length || 0,
-                status: 'synced',
-                tenantId: tenantId
-              }, { merge: true });
-              logger.info(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
-            }
-          } catch (e) {
-            logger.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
-          }
-        } else {
-          // Local Mode: Upsert to local SQLite db
-          try {
-            const db = createDatabaseAdapter();
-            let effectiveTenantId = tenantId || 'default';
+            // Runtime migration fallback: if docId is different from cleanProjectName, check if a legacy doc exists to migrate historical telemetry
             if (tenantId) {
-              const users = await db.query<{ tenantId: string }>(
-                `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
-                { uid: tenantId }
-              );
-              if (users.length > 0 && users[0].tenantId) {
-                effectiveTenantId = users[0].tenantId;
+              const legacyDocId = cleanProjectName;
+              const legacyRef = db.collection('projects').doc(legacyDocId);
+              try {
+                const [newDoc, legacyDoc] = await Promise.all([
+                  docRef.get(),
+                  legacyRef.get()
+                ]);
+                if (legacyDoc.exists && !newDoc.exists) {
+                  const legacyData = legacyDoc.data() || {};
+                  await docRef.set({
+                    ...legacyData,
+                    tenantId: tenantId
+                  }, { merge: true });
+                  await legacyRef.delete();
+                  logger.info(`[Sync API] Successfully migrated legacy project doc '${legacyDocId}' to tenant-isolated '${docId}'`);
+                }
+              } catch (migrateErr) {
+                logger.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
               }
             }
-            const docId = `${effectiveTenantId}_${cleanProjectName}`;
-            await db.execute(
-              `INSERT INTO projects (id, tenant_id, name, updated_at)
-               VALUES (:id, :tenantId, :name, CURRENT_TIMESTAMP)
-               ON CONFLICT(id) DO UPDATE SET
-                  updated_at = CURRENT_TIMESTAMP`,
-              {
-                id: docId,
-                tenantId: effectiveTenantId,
-                name: cleanProjectName
-              }
-            );
-          } catch (localDbErr: unknown) {
-             logger.error(`[Sync API] Local SQLite sync failed: ${localDbErr}`);
+
+            await docRef.set({
+              name: cleanProjectName,
+              path: projectDir,
+              stats: (analysis as { stats?: unknown; entityCounts?: unknown }).stats || analysis.entityCounts || {},
+              lastIndexed: new Date().toISOString(),
+              nodesCount: analysis.graph?.nodes?.length || 0,
+              linksCount: analysis.graph?.links?.length || 0,
+              status: 'synced',
+              tenantId: tenantId
+            }, { merge: true });
+            logger.info(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
           }
+        } catch (e) {
+          logger.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
         }
 
         let businessRuleSaved = false;
@@ -1298,40 +1227,12 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           }
 
           // Define shutdown handler
-          let isShuttingDown = false;
           const shutdown = (signal: string, server: Server) => {
-            if (isShuttingDown) return;
-            isShuttingDown = true;
             logger.info(`${signal} received: Closing HTTP server...`);
-
-            type ModernServer = Server & { closeIdleConnections?: () => void, closeAllConnections?: () => void };
-            const mServer = server as ModernServer;
-
-            // Kill idle keep-alive connections first (Node >= 18.2)
-            if (typeof mServer.closeIdleConnections === 'function') {
-              mServer.closeIdleConnections();
-            }
-
-            server.close(async () => {
+            server.close(() => {
               logger.info('HTTP server closed');
-              try {
-                const { DreamingService } = await import('../services/dreamingService.js');
-                await DreamingService.waitForBackgroundTasks(5000);
-              } catch (err) {
-                logger.error('Error during graceful shutdown:', err instanceof Error ? err.message : String(err));
-              } finally {
-                process.exit(0);
-              }
+              process.exit(0);
             });
-
-            // Hard exit fallback if `server.close` hangs (e.g. active connections not resolving)
-            setTimeout(() => {
-              if (typeof mServer.closeAllConnections === 'function') {
-                mServer.closeAllConnections();
-              }
-              logger.error('Graceful shutdown timed out after 10s, forcing exit.');
-              process.exit(1);
-            }, 10000).unref();
           };
 
           // Register handlers once

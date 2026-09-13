@@ -1,11 +1,6 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import * as crypto from "crypto";
 import { logger } from "./utils/logger.js";
-import { createDatabaseAdapter } from "./database/factory.js";
-import { authStorage } from "./utils/context.js";
-import { hashApiKey } from "./utils/apiKey.js";
-
-export { DEFAULT_API_KEY_PEPPER, getApiKeyPepper, hashApiKey } from "./utils/apiKey.js";
 
 /**
  * Domain Interface for User Authentication details
@@ -28,18 +23,6 @@ export interface IAuthRepository {
 /** Activity log parameters (JSON-serializable key-value pairs) */
 export type ActivityParams = Record<string, unknown>;
 
-function sanitizeActivityParams(params: ActivityParams): string {
-  try {
-    const serialized = JSON.stringify(params);
-    if (serialized.length > 2000) {
-      return serialized.slice(0, 2000) + '... [truncated]';
-    }
-    return serialized;
-  } catch (e) {
-    return '{"error": "Failed to serialize params"}';
-  }
-}
-
 /**
  * Activity Logging Repository interface
  */
@@ -60,7 +43,9 @@ export class FirestoreAuthRepository implements IAuthRepository {
       const db = this.getDb();
 
       // Hash the API key using PBKDF2-SHA256 with a pepper to query Firestore safely
-      const keyHash = await hashApiKey(apiKey);
+      const API_KEY_PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
+      const salt = Buffer.from(API_KEY_PEPPER, 'utf8');
+      const keyHash = crypto.pbkdf2Sync(apiKey, salt, 100000, 64, 'sha256').toString('hex');
 
       // Look up by PBKDF2 keyHash
       let keysSnapshot = await db.collectionGroup('keys')
@@ -129,7 +114,7 @@ export class FirestoreActivityLogger implements IActivityLogger {
       await db.collection('users').doc(uid).collection('activity').add({
         keyId,
         tool,
-        params: sanitizeActivityParams(params),
+        params: JSON.stringify(params),
         success,
         timestamp: FieldValue.serverTimestamp()
       });
@@ -149,81 +134,6 @@ export class FirestoreActivityLogger implements IActivityLogger {
   }
 }
 
-export class SqliteAuthRepository implements IAuthRepository {
-  async verifyKey(apiKey: string): Promise<AuthData | null> {
-    try {
-      const db = createDatabaseAdapter();
-      const keyHash = await hashApiKey(apiKey);
-      const rows = await db.query<{ tier: string; uid: string | null; keyId: string; expiresAt: string | null }>(
-        `SELECT id AS "keyId", user_id AS "uid", tier, expires_at AS "expiresAt"
-         FROM keys
-         WHERE key_hash = :keyHash
-         LIMIT 1`,
-        { keyHash }
-      );
-      if (rows.length === 0) return null;
-
-      const row = rows[0];
-      const expires = row.expiresAt ? new Date(row.expiresAt).getTime() : Infinity;
-      if (Number.isNaN(expires) || expires < Date.now()) return null;
-
-      return {
-        tier: row.tier || 'free',
-        uid: row.uid || 'unknown',
-        keyId: row.keyId,
-        expires
-      };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[SqliteAuthRepository] Verification error: ${msg}`);
-      throw new Error(`Authentication store connection failed: ${msg}`);
-    }
-  }
-
-  async updateLastUsed(_uid: string, keyId: string): Promise<void> {
-    try {
-      const db = createDatabaseAdapter();
-      await db.execute(
-        `UPDATE keys SET updated_at = CURRENT_TIMESTAMP WHERE id = :keyId`,
-        { keyId }
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[SqliteAuthRepository] Update last used error: ${msg}`);
-    }
-  }
-}
-
-export class SqliteActivityLogger implements IActivityLogger {
-  async logActivity(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void> {
-    if (uid === 'admin') return;
-
-    try {
-      const db = createDatabaseAdapter();
-      const users = await db.query<{ tenantId: string }>(
-        `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
-        { uid }
-      );
-      const tenantId = users[0]?.tenantId || authStorage.getStore()?.uid || uid;
-      await db.execute(
-        `INSERT INTO activity_log (id, tenant_id, key_id, tool, params, success)
-         VALUES (:id, :tenantId, :keyId, :tool, :params, :success)`,
-        {
-          id: crypto.randomUUID(),
-          tenantId,
-          keyId,
-          tool,
-          params: sanitizeActivityParams(params),
-          success
-        }
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[SqliteActivityLogger] Failed to log activity: ${msg}`);
-    }
-  }
-}
-
 /**
  * Use case: Validating client API keys
  */
@@ -238,17 +148,17 @@ export class AuthenticateUserUseCase {
       throw new Error("Unauthorized: API Key is required. Set CODEATLAS_API_KEY env var or provide x-api-key header.");
     }
 
-    // 1. Super Admin — try the repository first so the key resolves to the user's real uid
+    // 1. Super Admin — try Firestore first so the key resolves to the user's real uid
     if (superAdminKey && apiKey === superAdminKey) {
       try {
-        const repoData = await this.authRepo.verifyKey(apiKey);
-        if (repoData) {
-          repoData.expires = Infinity;
-          this.authCache.set(apiKey, repoData);
-          return repoData;
+        const firestoreData = await this.authRepo.verifyKey(apiKey);
+        if (firestoreData) {
+          firestoreData.expires = Infinity;
+          this.authCache.set(apiKey, firestoreData);
+          return firestoreData;
         }
       } catch (err) {
-        // Fallback gracefully if the store is unconfigured or unavailable
+        // Fallback gracefully if Firestore is unconfigured or unavailable
       }
       return { tier: 'enterprise', uid: 'admin', keyId: 'admin', expires: Infinity };
     }

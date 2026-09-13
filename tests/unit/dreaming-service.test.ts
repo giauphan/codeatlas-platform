@@ -361,13 +361,13 @@ describe('DreamingService', () => {
         ['ai_dreaming_memory', 'content_hash'],
         ['ai_dreaming_memory', 'status'],
       ]);
-      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 0);
+      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 1);
     });
 
-    test('keeps adapter connected when schema initialization fails', async () => {
+    test('disconnects when schema initialization fails', async () => {
       mockDbAdapter.initializeSchema.mock.mockImplementation(async () => { throw new Error('schema failure'); });
       await assert.rejects(() => DreamingService.initialize(), /schema failure/);
-      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 0);
+      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 1);
     });
   });
 
@@ -624,9 +624,6 @@ describe('DreamingService', () => {
       });
 
       const rows = await DreamingService.queryDreamMemories('test-project', 'bump fails', 10);
-
-      // Wait for background tasks to settle to ensure warning is logged
-      await DreamingService.waitForBackgroundTasks(1000);
 
       assert.strictEqual(rows.length, 2, 'results must still be returned');
       assert.ok(

@@ -1,7 +1,6 @@
 // src/database/adapters/sqliteAdapter.ts
 import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
 import { authStorage } from "../../utils/context.js";
-import { hashApiKey } from "../../utils/apiKey.js";
 import { logger } from "../../utils/logger.js";
 
 interface SqliteStatement {
@@ -24,23 +23,9 @@ type SqliteParams = Record<string, unknown> | unknown[];
 
 const NAMED_PLACEHOLDER = /[:@$][a-zA-Z_][a-zA-Z0-9_]*/;
 
-function sanitizeParam(val: unknown): unknown {
-  if (typeof val === 'boolean') {
-    return val ? 1 : 0;
-  }
-  return val;
-}
-
 function bindArgs(sql: string, params: SqliteParams): unknown[] {
-  if (Array.isArray(params)) return params.map(sanitizeParam);
-  if (NAMED_PLACEHOLDER.test(sql)) {
-    const obj: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(params as Record<string, unknown>)) {
-      obj[k] = sanitizeParam(v);
-    }
-    return [obj];
-  }
-  return Object.values(params).map(sanitizeParam);
+  if (Array.isArray(params)) return params;
+  return NAMED_PLACEHOLDER.test(sql) ? [params] : Object.values(params);
 }
 
 let DatabaseClass: DatabaseConstructor | undefined;
@@ -231,7 +216,8 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         tenant_id TEXT NOT NULL REFERENCES tenants(id),
         user_id TEXT REFERENCES users(id),
         name TEXT,
-        key_hash TEXT NOT NULL UNIQUE,
+        key TEXT NOT NULL UNIQUE,
+        key_hash TEXT,
         tier TEXT DEFAULT 'free',
         expires_at TEXT,
         created_at TEXT DEFAULT (datetime('now')),
@@ -247,20 +233,9 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         updated_at TEXT DEFAULT (datetime('now'))
       );
 
-      CREATE TABLE IF NOT EXISTS activity_log (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        key_id TEXT,
-        tool TEXT NOT NULL,
-        params TEXT,
-        success INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT DEFAULT (datetime('now'))
-      );
-
       CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_projects_tenant ON projects(tenant_id);
-      CREATE INDEX IF NOT EXISTS idx_activity_log_tenant ON activity_log(tenant_id, created_at);
 
       CREATE TABLE IF NOT EXISTS codeatlas_genome (
         id TEXT PRIMARY KEY,
@@ -364,41 +339,6 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       }
     };
 
-    let keyColumns = this.db!.pragma("table_info(keys)") as Array<{ name: string }>;
-    if (keyColumns.some((entry) => entry.name === "key")) {
-      if (!keyColumns.some((entry) => entry.name === "key_hash")) {
-        addColumnIfMissing("keys", "key_hash", "TEXT");
-        const legacyKeys = this.db!.prepare("SELECT id, key FROM keys WHERE key_hash IS NULL").all() as Array<{ id: string; key: string }>;
-        const updateKeyHash = this.db!.prepare("UPDATE keys SET key_hash = ? WHERE id = ?");
-        for (const legacyKey of legacyKeys) {
-          updateKeyHash.run(await hashApiKey(legacyKey.key), legacyKey.id);
-        }
-        keyColumns = this.db!.pragma("table_info(keys)") as Array<{ name: string }>;
-      }
-
-      const rebuildKeys = this.db!.transaction(() => {
-        this.db!.exec("DROP TABLE IF EXISTS keys_new");
-        this.db!.exec(`
-          CREATE TABLE keys_new (
-            id TEXT PRIMARY KEY,
-            tenant_id TEXT NOT NULL REFERENCES tenants(id),
-            user_id TEXT REFERENCES users(id),
-            name TEXT,
-            key_hash TEXT NOT NULL UNIQUE,
-            tier TEXT DEFAULT 'free',
-            expires_at TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
-          );
-        `);
-        const cols = keyColumns.filter((c) => c.name !== "key").map((c) => c.name).join(", ");
-        this.db!.exec(`INSERT INTO keys_new (${cols}) SELECT ${cols} FROM keys`);
-        this.db!.exec("DROP TABLE keys");
-        this.db!.exec("ALTER TABLE keys_new RENAME TO keys");
-        this.db!.exec("CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id)");
-      });
-      rebuildKeys();
-    }
     addColumnIfMissing("ai_episodic_memory", "project_name", "TEXT");
     addColumnIfMissing("ai_dreaming_memory", "evidence_count", "INTEGER DEFAULT 0");
     addColumnIfMissing("ai_dreaming_memory", "version", "INTEGER DEFAULT 1");
