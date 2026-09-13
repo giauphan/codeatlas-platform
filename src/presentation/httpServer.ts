@@ -1227,12 +1227,40 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           }
 
           // Define shutdown handler
+          let isShuttingDown = false;
           const shutdown = (signal: string, server: Server) => {
+            if (isShuttingDown) return;
+            isShuttingDown = true;
             logger.info(`${signal} received: Closing HTTP server...`);
-            server.close(() => {
+
+            type ModernServer = Server & { closeIdleConnections?: () => void, closeAllConnections?: () => void };
+            const mServer = server as ModernServer;
+
+            // Kill idle keep-alive connections first (Node >= 18.2)
+            if (typeof mServer.closeIdleConnections === 'function') {
+              mServer.closeIdleConnections();
+            }
+
+            server.close(async () => {
               logger.info('HTTP server closed');
-              process.exit(0);
+              try {
+                const { DreamingService } = await import('../services/dreamingService.js');
+                await DreamingService.waitForBackgroundTasks(5000);
+              } catch (err) {
+                logger.error('Error during graceful shutdown:', err instanceof Error ? err.message : String(err));
+              } finally {
+                process.exit(0);
+              }
             });
+
+            // Hard exit fallback if `server.close` hangs (e.g. active connections not resolving)
+            setTimeout(() => {
+              if (typeof mServer.closeAllConnections === 'function') {
+                mServer.closeAllConnections();
+              }
+              logger.error('Graceful shutdown timed out after 10s, forcing exit.');
+              process.exit(1);
+            }, 10000).unref();
           };
 
           // Register handlers once
