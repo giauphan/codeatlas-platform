@@ -165,11 +165,15 @@ export function DreamMemoryView() {
       const resp = await fetch(`/api/dreams/query?${params}`, { headers });
       if (!resp.ok) throw new Error(resp.status === 403 ? 'API key required' : await resp.text());
       const data = await resp.json();
-      // Sort by created_at descending (newest first) — server orders by relevance by default
-      const sorted = (data.memories || []).sort((a: DreamMemory, b: DreamMemory) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-      setMemories(sorted);
+      let result = data.memories || [];
+      // If NO search query provided, ensure chronological sorting (newest first).
+      // If there IS a query, keep the server-side semantic relevance ranking order!
+      if (!query || !query.trim()) {
+        result = [...result].sort((a: DreamMemory, b: DreamMemory) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      }
+      setMemories(result);
     } catch (err: any) {
       setError(err.message);
     } finally {

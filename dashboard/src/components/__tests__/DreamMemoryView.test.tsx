@@ -472,4 +472,65 @@ describe('DreamMemoryView', () => {
 
     consoleError.mockRestore();
   });
+
+  it('preserves semantic search ordering from server instead of overriding with date sorting', async () => {
+    // Return memories where older memory has higher relevance (appears first)
+    const RELEVANCE_ORDERED_DREAMS = {
+      memories: [
+        {
+          id: 'test_older_high_relevance',
+          session_id: 'session1',
+          project: 'codeatlas-platform',
+          provider: 'Claude',
+          memory_type: 'KNOWLEDGE',
+          content: 'Older memory but highly relevant match',
+          importance: 9,
+          created_at: '2026-07-01T10:00:00.000Z',
+        },
+        {
+          id: 'test_newer_low_relevance',
+          session_id: 'session1',
+          project: 'codeatlas-platform',
+          provider: 'Claude',
+          memory_type: 'KNOWLEDGE',
+          content: 'Newer memory with lower relevance match',
+          importance: 3,
+          created_at: '2026-07-25T10:00:00.000Z',
+        },
+      ],
+    };
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/settings/cron')) {
+        return { ok: true, json: () => Promise.resolve(DREAM_CONFIG) };
+      }
+      if (typeof url === 'string' && url.includes('/api/dreams/query')) {
+        if (url.includes('query=relevance')) {
+          return { ok: true, json: () => Promise.resolve(RELEVANCE_ORDERED_DREAMS) };
+        }
+        return { ok: true, json: () => Promise.resolve(MOCK_DREAMS) };
+      }
+      return { ok: true, json: () => Promise.resolve({}) };
+    });
+
+    render(<DreamMemoryView />);
+    await waitFor(() => {
+      expect(screen.getByText('The fix is to use strict equality operator instead of loose comparison')).toBeTruthy();
+    });
+
+    // Execute semantic query
+    const searchInput = screen.getByPlaceholderText('Search memories semantically...');
+    fireEvent.change(searchInput, { target: { value: 'relevance' } });
+    fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.getByText('Older memory but highly relevant match')).toBeTruthy();
+      expect(screen.getByText('Newer memory with lower relevance match')).toBeTruthy();
+    });
+
+    // Verify first item rendered in list is the older, more relevant item
+    const memoryCards = screen.getAllByText(/match/);
+    expect(memoryCards[0]).toHaveTextContent('Older memory but highly relevant match');
+    expect(memoryCards[1]).toHaveTextContent('Newer memory with lower relevance match');
+  });
 });
