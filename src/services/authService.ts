@@ -1,15 +1,18 @@
-import { 
-  FirestoreAuthRepository, 
-  FirestoreActivityLogger, 
-  AuthenticateUserUseCase, 
-  LogTelemetryUseCase 
+import {
+  SqliteAuthRepository,
+  SqliteActivityLogger,
+  FirestoreAuthRepository,
+  FirestoreActivityLogger,
+  AuthenticateUserUseCase,
+  LogTelemetryUseCase
 } from "../repositories.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { getAuth } from "firebase-admin/auth";
 
-const authRepo = new FirestoreAuthRepository();
-const activityLogger = new FirestoreActivityLogger();
+const useFirestore = process.env.CODEATLAS_USE_FIRESTORE === 'true';
+const authRepo = useFirestore ? new FirestoreAuthRepository() : new SqliteAuthRepository();
+const activityLogger = useFirestore ? new FirestoreActivityLogger() : new SqliteActivityLogger();
 export const authenticateUseCase = new AuthenticateUserUseCase(authRepo);
 export const logTelemetryUseCase = new LogTelemetryUseCase(activityLogger);
 

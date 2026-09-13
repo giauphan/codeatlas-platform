@@ -233,9 +233,20 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         updated_at TEXT DEFAULT (datetime('now'))
       );
 
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        key_id TEXT,
+        tool TEXT NOT NULL,
+        params TEXT,
+        success INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_projects_tenant ON projects(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_activity_log_tenant ON activity_log(tenant_id, created_at);
 
       CREATE TABLE IF NOT EXISTS codeatlas_genome (
         id TEXT PRIMARY KEY,

@@ -272,9 +272,20 @@ export class PostgresAdapter implements IDatabaseAdapter {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id VARCHAR(255) PRIMARY KEY,
+        tenant_id VARCHAR(255) NOT NULL,
+        key_id VARCHAR(255),
+        tool VARCHAR(255) NOT NULL,
+        params TEXT,
+        success BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_projects_tenant ON projects(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_activity_log_tenant ON activity_log(tenant_id, created_at);
     `);
     await this.pool!.query(`
       CREATE TABLE IF NOT EXISTS codeatlas_genome (

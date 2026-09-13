@@ -1,6 +1,8 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import * as crypto from "crypto";
 import { logger } from "./utils/logger.js";
+import { createDatabaseAdapter } from "./database/factory.js";
+import { authStorage } from "./utils/context.js";
 
 /**
  * Domain Interface for User Authentication details
@@ -134,6 +136,82 @@ export class FirestoreActivityLogger implements IActivityLogger {
   }
 }
 
+export class SqliteAuthRepository implements IAuthRepository {
+  async verifyKey(apiKey: string): Promise<AuthData | null> {
+    try {
+      const db = createDatabaseAdapter();
+      const pepper = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
+      const keyHash = crypto.pbkdf2Sync(apiKey, Buffer.from(pepper, 'utf8'), 100000, 64, 'sha256').toString('hex');
+      const rows = await db.query<{ tier: string; uid: string | null; keyId: string; expiresAt: string | null }>(
+        `SELECT id AS keyId, user_id AS uid, tier, expires_at AS expiresAt
+         FROM keys
+         WHERE key_hash = :keyHash OR key = :apiKey
+         LIMIT 1`,
+        { keyHash, apiKey }
+      );
+      if (rows.length === 0) return null;
+
+      const row = rows[0];
+      const expires = row.expiresAt ? new Date(row.expiresAt).getTime() : Infinity;
+      if (expires < Date.now()) return null;
+
+      return {
+        tier: row.tier || 'free',
+        uid: row.uid || 'unknown',
+        keyId: row.keyId,
+        expires: 0
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[SqliteAuthRepository] Verification error: ${msg}`);
+      throw new Error(`Authentication store connection failed: ${msg}`);
+    }
+  }
+
+  async updateLastUsed(_uid: string, keyId: string): Promise<void> {
+    try {
+      const db = createDatabaseAdapter();
+      await db.execute(
+        `UPDATE keys SET updated_at = CURRENT_TIMESTAMP WHERE id = :keyId`,
+        { keyId }
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[SqliteAuthRepository] Update last used error: ${msg}`);
+    }
+  }
+}
+
+export class SqliteActivityLogger implements IActivityLogger {
+  async logActivity(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void> {
+    if (uid === 'admin') return;
+
+    try {
+      const db = createDatabaseAdapter();
+      const users = await db.query<{ tenantId: string }>(
+        `SELECT tenant_id AS tenantId FROM users WHERE id = :uid LIMIT 1`,
+        { uid }
+      );
+      const tenantId = users[0]?.tenantId || authStorage.getStore()?.uid || uid;
+      await db.execute(
+        `INSERT INTO activity_log (id, tenant_id, key_id, tool, params, success)
+         VALUES (:id, :tenantId, :keyId, :tool, :params, :success)`,
+        {
+          id: crypto.randomUUID(),
+          tenantId,
+          keyId,
+          tool,
+          params: JSON.stringify(params),
+          success: success ? 1 : 0
+        }
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`[SqliteActivityLogger] Failed to log activity: ${msg}`);
+    }
+  }
+}
+
 /**
  * Use case: Validating client API keys
  */
@@ -148,17 +226,17 @@ export class AuthenticateUserUseCase {
       throw new Error("Unauthorized: API Key is required. Set CODEATLAS_API_KEY env var or provide x-api-key header.");
     }
 
-    // 1. Super Admin — try Firestore first so the key resolves to the user's real uid
+    // 1. Super Admin — try the repository first so the key resolves to the user's real uid
     if (superAdminKey && apiKey === superAdminKey) {
       try {
-        const firestoreData = await this.authRepo.verifyKey(apiKey);
-        if (firestoreData) {
-          firestoreData.expires = Infinity;
-          this.authCache.set(apiKey, firestoreData);
-          return firestoreData;
+        const repoData = await this.authRepo.verifyKey(apiKey);
+        if (repoData) {
+          repoData.expires = Infinity;
+          this.authCache.set(apiKey, repoData);
+          return repoData;
         }
       } catch (err) {
-        // Fallback gracefully if Firestore is unconfigured or unavailable
+        // Fallback gracefully if the store is unconfigured or unavailable
       }
       return { tier: 'enterprise', uid: 'admin', keyId: 'admin', expires: Infinity };
     }

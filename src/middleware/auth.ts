@@ -1,7 +1,7 @@
 import express from "express";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
 import { checkAuth } from "../services/authService.js";
+import { createDatabaseAdapter } from "../database/factory.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 
@@ -19,12 +19,16 @@ export const authMiddleware = async (req: express.Request, res: express.Response
       let role = (decodedToken.role as string) || "user";
       if (role !== "admin") {
         try {
-          const userDoc = await getFirestore().collection("users").doc(decodedToken.uid).get();
-          if (userDoc.exists) {
-            role = userDoc.data()?.role || userDoc.data()?.tier || "user";
+          const db = createDatabaseAdapter();
+          const rows = await db.query<{ role: string | null; tier: string | null }>(
+            `SELECT role, tier FROM users WHERE id = :uid LIMIT 1`,
+            { uid: decodedToken.uid }
+          );
+          if (rows.length > 0) {
+            role = rows[0].role || rows[0].tier || "user";
           }
         } catch (e) {
-          logger.error("Failed to fetch user role from Firestore:", e);
+          logger.error("Failed to fetch user role from local database:", e);
         }
       }
 

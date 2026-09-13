@@ -2,8 +2,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
-import { getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
 import { checkAuth, logActivity } from "../services/authService.js";
 import {
   discoverProjectsAsync,
