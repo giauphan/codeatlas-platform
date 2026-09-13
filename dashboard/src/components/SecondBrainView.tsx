@@ -47,6 +47,7 @@ export function SecondBrainView() {
       if (!resp.ok) throw new Error(await resp.text());
       const data = await resp.json();
       const list: Concept[] = data.concepts || [];
+      if (signal.aborted) return;
       setConcepts(list);
     } catch (err: unknown) {
       if (signal.aborted) return;
