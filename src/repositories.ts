@@ -6,7 +6,13 @@ import { authStorage } from "./utils/context.js";
 
 export const DEFAULT_API_KEY_PEPPER = 'codeatlas-api-key-pepper-v1';
 
+let warnedDefaultPepper = false;
+
 export function getApiKeyPepper(): string {
+  if (!process.env.API_KEY_PEPPER && !warnedDefaultPepper) {
+    warnedDefaultPepper = true;
+    logger.warn("API_KEY_PEPPER is unset. Using compatibility fallback; configure a secret pepper for production.");
+  }
   return process.env.API_KEY_PEPPER || DEFAULT_API_KEY_PEPPER;
 }
 

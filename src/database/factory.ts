@@ -20,6 +20,13 @@ export function createDatabaseAdapter(): IDatabaseAdapter {
 /**
  * Reset the active adapter instance in tests.
  */
-export function setDatabaseAdapter(adapter: IDatabaseAdapter): void {
+export function setDatabaseAdapter(adapter: IDatabaseAdapter | null): void {
   activeAdapter = adapter;
+}
+
+/**
+ * Resets the active adapter loop, useful for tests.
+ */
+export function resetDatabaseAdapter(): void {
+  activeAdapter = null;
 }

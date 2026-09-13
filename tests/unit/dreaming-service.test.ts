@@ -361,13 +361,13 @@ describe('DreamingService', () => {
         ['ai_dreaming_memory', 'content_hash'],
         ['ai_dreaming_memory', 'status'],
       ]);
-      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 1);
+      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 0);
     });
 
-    test('disconnects when schema initialization fails', async () => {
+    test('keeps adapter connected when schema initialization fails', async () => {
       mockDbAdapter.initializeSchema.mock.mockImplementation(async () => { throw new Error('schema failure'); });
       await assert.rejects(() => DreamingService.initialize(), /schema failure/);
-      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 1);
+      assert.strictEqual(mockDbAdapter.disconnect.mock.calls.length, 0);
     });
   });
 

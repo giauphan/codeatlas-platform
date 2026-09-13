@@ -1,14 +1,20 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { SQLiteAdapter } from '../../src/database/adapters/sqliteAdapter.js';
-import { createDatabaseAdapter, setDatabaseAdapter } from '../../src/database/factory.js';
+import { createDatabaseAdapter, setDatabaseAdapter, resetDatabaseAdapter } from '../../src/database/factory.js';
 import { PostgresAdapter } from '../../src/database/adapters/postgresAdapter.js';
 
 describe('Database Factory and Schema Migrations', () => {
   const origType = process.env.CODEATLAS_DB_TYPE;
 
+  beforeEach(() => {
+    // Ensure singleton state doesn't leak across tests
+    resetDatabaseAdapter();
+  });
+
   afterEach(() => {
     process.env.CODEATLAS_DB_TYPE = origType;
+    resetDatabaseAdapter();
   });
 
   test('createDatabaseAdapter memoizes adapter and setDatabaseAdapter overrides', async () => {
@@ -20,6 +26,9 @@ describe('Database Factory and Schema Migrations', () => {
     const customAdapter = new SQLiteAdapter();
     setDatabaseAdapter(customAdapter);
     assert.strictEqual(createDatabaseAdapter(), customAdapter, 'setDatabaseAdapter should override active instance');
+
+    resetDatabaseAdapter();
+    assert.notStrictEqual(createDatabaseAdapter(), customAdapter, 'resetDatabaseAdapter should create a fresh instance');
   });
 
   test('initializeSchema drops legacy plaintext "key" column from keys table', async () => {

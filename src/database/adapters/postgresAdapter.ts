@@ -286,6 +286,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
       CREATE INDEX IF NOT EXISTS idx_projects_tenant ON projects(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_activity_log_tenant ON activity_log(tenant_id, created_at);
     `);
+
+    // Schema migration: drop legacy plaintext 'key' column from 'keys' table if present
+    const hasKeyCol = await this.checkColumnExists("keys", "key");
+    if (hasKeyCol) {
+      await this.pool!.query(`ALTER TABLE keys DROP COLUMN IF EXISTS key;`);
+    }
+
     await this.pool!.query(`
       CREATE TABLE IF NOT EXISTS codeatlas_genome (
         id VARCHAR(255) PRIMARY KEY,

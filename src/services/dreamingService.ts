@@ -80,14 +80,10 @@ export class DreamingService {
   static async initialize(): Promise<void> {
     const db = createDatabaseAdapter();
     await db.connect();
-    try {
-      await db.initializeSchema();
-      DreamingService._hasContentHashColumn = await db.checkColumnExists("ai_dreaming_memory", "content_hash");
-      DreamingService._hasLifecycleColumns = await db.checkColumnExists("ai_dreaming_memory", "status");
-      logger.info("[Dreaming] SQLite schema initialized");
-    } finally {
-      await db.disconnect();
-    }
+    await db.initializeSchema();
+    DreamingService._hasContentHashColumn = await db.checkColumnExists("ai_dreaming_memory", "content_hash");
+    DreamingService._hasLifecycleColumns = await db.checkColumnExists("ai_dreaming_memory", "status");
+    logger.info("[Dreaming] SQLite schema initialized");
   }
 
   /**

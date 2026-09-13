@@ -10,7 +10,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { checkAuth, logActivity } from "../services/authService.js";
+import { checkAuth, logActivity, shouldUseFirestore } from "../services/authService.js";
 import { authMiddleware } from "../middleware/auth.js";
 import {
   discoverProjectsAsync,
@@ -346,7 +346,7 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
     const errors: string[] = [];
 
     // 1. Remove telemetry data from Firestore (if Firebase is configured)
-    if (process.env.CODEATLAS_USE_FIRESTORE === 'true') {
+    if (shouldUseFirestore()) {
       try {
         const apps = firebaseClient.getApps();
         if (apps.length) {
@@ -570,7 +570,7 @@ app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayP
       }
     }
     
-    if (!checkedLocal && process.env.CODEATLAS_USE_FIRESTORE === 'true') {
+    if (!checkedLocal && shouldUseFirestore()) {
       // Fallback: check Firestore
       try {
         const apps = firebaseClient.getApps();
@@ -646,7 +646,7 @@ app.post("/api/projects/settings", authMiddleware, localRateLimiter, async (req,
     await fs.promises.writeFile(settingsPath, JSON.stringify({ indexingEnabled }, null, 2));
     
     // Save to Firestore
-    if (process.env.CODEATLAS_USE_FIRESTORE === 'true') {
+    if (shouldUseFirestore()) {
       try {
         const apps = firebaseClient.getApps();
         if (apps.length) {
@@ -841,7 +841,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
         await fs.promises.writeFile(analysisPath, JSON.stringify(analysis, null, 2));
         
         // Securely sync telemetry / database stats on server-side
-        if (process.env.CODEATLAS_USE_FIRESTORE === 'true') {
+        if (shouldUseFirestore()) {
           try {
             const apps = firebaseClient.getApps();
             if (apps.length) {
