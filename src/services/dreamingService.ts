@@ -88,6 +88,7 @@ export class DreamingService {
 
     await Promise.race([settlePromise, timeoutPromise]);
 
+    // Re-check size in case tasks resolved/added right as timeout triggered
     if (!settled && DreamingService.activeBackgroundTasks.size > 0) {
       logger.warn(`${DreamingService.activeBackgroundTasks.size} background database writes were dropped during graceful shutdown due to timeout.`);
     }
@@ -434,16 +435,12 @@ export class DreamingService {
           if (ids.length > 0) {
             const baseBind = { tenantId };
             const updateBinds = ids.map(id => ({ id, ...baseBind }));
-            let updatePromise: Promise<any>;
-            try {
-              updatePromise = db.executeMany(
+            const updatePromise = Promise.resolve().then(() =>
+              db.executeMany(
                 `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
                 updateBinds
-              );
-            } catch (syncErr) {
-              // Catch synchronous throws from db drivers before they return a Promise
-              updatePromise = Promise.reject(syncErr);
-            }
+              )
+            );
             const updateTask = updatePromise.catch(bumpErr => {
               logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
             });

@@ -1230,8 +1230,11 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           const shutdown = (signal: string, server: Server) => {
             logger.info(`${signal} received: Closing HTTP server...`);
 
-            // Wait a grace period for active requests to finish, or force close
-            server.closeAllConnections(); // For Node >= 18.2 to close keep-alive
+            // Kill idle keep-alive connections first (Node >= 18.2)
+            if (typeof (server as any).closeIdleConnections === 'function') {
+              (server as any).closeIdleConnections();
+            }
+
             server.close(async () => {
               logger.info('HTTP server closed');
               try {
@@ -1244,11 +1247,14 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
               }
             });
 
-            // Hard exit fallback if `server.close` hangs (e.g. idle connections missing `closeAllConnections` on older node)
+            // Hard exit fallback if `server.close` hangs (e.g. active connections not resolving)
             setTimeout(() => {
-              logger.error('Graceful shutdown timed out, forcing exit.');
+              if (typeof (server as any).closeAllConnections === 'function') {
+                (server as any).closeAllConnections();
+              }
+              logger.error('Graceful shutdown timed out after 10s, forcing exit.');
               process.exit(1);
-            }, 6000).unref();
+            }, 10000).unref();
           };
 
           // Register handlers once
