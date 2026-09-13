@@ -224,11 +224,16 @@ export class SqliteActivityLogger implements IActivityLogger {
   }
 }
 
+interface CachedAuthEntry {
+  data: AuthData;
+  cachedUntil: number;
+}
+
 /**
  * Use case: Validating client API keys
  */
 export class AuthenticateUserUseCase {
-  private authCache = new Map<string, AuthData>();
+  private authCache = new Map<string, CachedAuthEntry>();
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   private adminFallbackTtl: number;
 
@@ -244,34 +249,37 @@ export class AuthenticateUserUseCase {
     // 1. Super Admin — try the repository first so the key resolves to the user's real uid
     if (superAdminKey && apiKey === superAdminKey) {
       const cached = this.authCache.get(apiKey);
-      if (cached && cached.expires > Date.now()) {
-        return cached;
+      if (cached && cached.cachedUntil > Date.now()) {
+        return cached.data;
       }
       try {
-        const repoData = await this.authRepo.verifyKey(apiKey);
-        if (repoData) {
-          repoData.expires = Infinity;
-          this.authCache.set(apiKey, repoData);
-          return repoData;
+        const firestoreData = await this.authRepo.verifyKey(apiKey);
+        if (firestoreData) {
+          firestoreData.expires = Infinity;
+          this.authCache.set(apiKey, { data: firestoreData, cachedUntil: Infinity });
+          return firestoreData;
         }
-      } catch (err) {
-        // Fallback gracefully if the store is unconfigured or unavailable
+      } catch (err: unknown) {
+        // Fallback gracefully if Firestore is unconfigured or unavailable
+        logger.debug(`[AuthenticateUserUseCase] Super admin lookup failed, using fallback: ${err instanceof Error ? err.message : String(err)}`);
+      }
       }
       // Cache the fallback briefly so a degraded store is not hit on every request
+      // We don't overwrite `expires` semantics of the original payload so downstream systems don't treat it differently.
       const fallback: AuthData = {
         tier: 'enterprise',
         uid: 'admin',
         keyId: 'admin',
-        expires: Date.now() + this.adminFallbackTtl,
+        expires: Infinity,
       };
-      this.authCache.set(apiKey, fallback);
+      this.authCache.set(apiKey, { data: fallback, cachedUntil: Date.now() + this.adminFallbackTtl });
       return fallback;
     }
 
     // 2. Check Local RAM Cache
     const cached = this.authCache.get(apiKey);
-    if (cached && cached.expires > Date.now()) {
-      return cached;
+    if (cached && cached.cachedUntil > Date.now()) {
+      return cached.data;
     }
 
     // 3. Query Repository
@@ -280,9 +288,7 @@ export class AuthenticateUserUseCase {
       throw new Error("Unauthorized: Invalid API Key.");
     }
 
-    // Assign cache expiry timestamp
-    authData.expires = Date.now() + this.CACHE_TTL;
-    this.authCache.set(apiKey, authData);
+    this.authCache.set(apiKey, { data: authData, cachedUntil: Date.now() + this.CACHE_TTL });
 
     // Dynamic updates of usage statistics (non-blocking)
     this.authRepo.updateLastUsed(authData.uid, authData.keyId).catch(() => {});

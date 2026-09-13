@@ -585,7 +585,9 @@ app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayP
         }
       } catch (e: unknown) {
         // Firestore is only a fallback mirror of the local file; degrade gracefully instead of failing the request
-        logger.warn("[Settings API] Firestore fallback unavailable:", e instanceof Error ? e.message : String(e));
+        const isAvailabilityError = e instanceof Error &&
+          (e.message.includes('UNAVAILABLE') || e.message.includes('NOT_FOUND'));
+        logger[isAvailabilityError ? 'warn' : 'error']("[Settings API] Firestore fallback unavailable:", e instanceof Error ? e.message : String(e));
       }
     }
     
