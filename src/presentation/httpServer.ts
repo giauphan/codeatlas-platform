@@ -1229,14 +1229,22 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           // Define shutdown handler
           const shutdown = async (signal: string, server: Server) => {
             logger.info(`${signal} received: Closing HTTP server...`);
-            const { DreamingService } = await import('../services/dreamingService.js');
-            if (DreamingService.activeBackgroundTasks.size > 0) {
-              logger.info(`Waiting for ${DreamingService.activeBackgroundTasks.size} pending database writes to complete...`);
-              await Promise.allSettled(Array.from(DreamingService.activeBackgroundTasks));
-            }
-            server.close(() => {
+            server.close(async () => {
               logger.info('HTTP server closed');
-              process.exit(0);
+              try {
+                const { DreamingService } = await import('../services/dreamingService.js');
+                if (DreamingService.activeBackgroundTasks.size > 0) {
+                  logger.info(`Waiting for ${DreamingService.activeBackgroundTasks.size} pending database writes to complete...`);
+                  await Promise.race([
+                    Promise.allSettled(Array.from(DreamingService.activeBackgroundTasks)),
+                    new Promise(r => setTimeout(r, 5000))
+                  ]);
+                }
+              } catch (err) {
+                logger.error('Error during graceful shutdown:', err instanceof Error ? err.message : String(err));
+              } finally {
+                process.exit(0);
+              }
             });
           };
 
