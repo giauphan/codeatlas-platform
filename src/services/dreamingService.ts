@@ -70,6 +70,8 @@ export interface DreamMemory {
  * as "dreams" that guide future suggestions.
  */
 export class DreamingService {
+  /** Track pending fire-and-forget database writes for graceful shutdown */
+  static activeBackgroundTasks = new Set<Promise<any>>();
 
 
   /** Cache of detected columns so we only check once per process lifetime */
@@ -411,13 +413,16 @@ export class DreamingService {
           const ids = rows.map(r => r['id'] as string).filter(Boolean);
           if (ids.length > 0) {
             const baseBind = { tenantId };
-            const binds = ids.map(id => ({ id, ...baseBind }));
-            db.executeMany(
+            const updateBinds = ids.map(id => ({ id, ...baseBind }));
+            const updateTask = db.executeMany(
               `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-              binds
+              updateBinds
             ).catch(bumpErr => {
               logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
+            }).finally(() => {
+              DreamingService.activeBackgroundTasks.delete(updateTask);
             });
+            DreamingService.activeBackgroundTasks.add(updateTask);
           }
         }
 

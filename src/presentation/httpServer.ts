@@ -1227,8 +1227,13 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           }
 
           // Define shutdown handler
-          const shutdown = (signal: string, server: Server) => {
+          const shutdown = async (signal: string, server: Server) => {
             logger.info(`${signal} received: Closing HTTP server...`);
+            const { DreamingService } = await import('../services/dreamingService.js');
+            if (DreamingService.activeBackgroundTasks.size > 0) {
+              logger.info(`Waiting for ${DreamingService.activeBackgroundTasks.size} pending database writes to complete...`);
+              await Promise.allSettled(Array.from(DreamingService.activeBackgroundTasks));
+            }
             server.close(() => {
               logger.info('HTTP server closed');
               process.exit(0);
