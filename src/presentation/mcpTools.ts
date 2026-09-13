@@ -1196,11 +1196,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         const sourceName = nodeNameMap.get(link.source) || link.source;
         const targetName = nodeNameMap.get(link.target) || link.target;
 
-        if (!callsToMap.has(link.source)) callsToMap.set(link.source, []);
-        callsToMap.get(link.source)!.push(targetName);
+        const toArr = callsToMap.get(link.source) ?? [];
+        toArr.push(targetName);
+        callsToMap.set(link.source, toArr);
 
-        if (!calledByMap.has(link.target)) calledByMap.set(link.target, []);
-        calledByMap.get(link.target)!.push(sourceName);
+        const byArr = calledByMap.get(link.target) ?? [];
+        byArr.push(sourceName);
+        calledByMap.set(link.target, byArr);
       }
 
       const queue: string[] = [];
