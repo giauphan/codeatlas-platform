@@ -138,8 +138,8 @@ export async function loadContextAtSessionStart(
     let immuneContext = "";
     if (strictTask.length > 0) {
       try {
-        genes = await GenomeService.searchGenes(strictTask, { project, limit: 5 });
-        genes = genes.filter((g) => g.confidence >= 0.5 && g.score >= 0.3);
+        const allGenes = await GenomeService.searchGenes(strictTask, { project, limit: 5 });
+        genes = allGenes.filter((g) => g.confidence >= 0.5 && g.score >= 0.3);
       } catch (err) {
         logger.error(`[Memory Loading] Genome auto-load failed: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -155,9 +155,10 @@ export async function loadContextAtSessionStart(
     }
 
     const cleanDreams: Array<{ memoryType: string; content: string; importance: number }> = [];
-    const dreamsLen = dreams?.length ?? 0;
+    const safeDreams = dreams ?? [];
+    const dreamsLen = safeDreams.length;
     for (let i = 0; i < dreamsLen; i++) {
-      const dream = dreams![i];
+      const dream = safeDreams[i];
       const row = dream as Record<string, unknown>;
       const content = String(row.content ?? row.CONTENT ?? "");
       if (!checkNoiseBlocklist(content).isNoise) {

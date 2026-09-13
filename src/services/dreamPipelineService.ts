@@ -211,22 +211,19 @@ export class DreamPipelineService {
       }
     }
 
-    let genesSaved = 0;
-    for (const savedDream of savedDreams) {
-      try {
-        await authStorage.run(auth, () =>
+    const geneResults = await Promise.allSettled(
+      savedDreams.map((savedDream) =>
+        authStorage.run(auth, () =>
           GenomeService.extractGene({
             sourceType: "dream",
             sourceId: savedDream.id,
             project,
-            autoExtract: true
+            autoExtract: true,
           })
-        );
-        genesSaved++;
-      } catch (err) {
-        logger.error(`[Dreaming Pipeline] Strict genome auto-save failed for dream ${savedDream.id}:`, err instanceof Error ? err.message : String(err));
-      }
-    }
+        )
+      )
+    );
+    const genesSaved = geneResults.filter((r) => r.status === "fulfilled").length;
 
     const totalMs = Date.now() - ingestStartTime;
     const completedAt = new Date().toISOString();

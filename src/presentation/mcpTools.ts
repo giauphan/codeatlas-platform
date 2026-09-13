@@ -81,6 +81,9 @@ import { injectAuthContext } from '../utils/authContext.js';
 
 const NODE_PRIORITY_ORDER = new Map([["module", 0], ["class", 1], ["function", 2], ["variable", 3]]);
 
+const MIN_GENE_CONFIDENCE = 0.5;
+const MIN_GENE_SCORE = 0.3;
+
 export function registerTools(server: McpServer, sessionAuth?: { tier: string; uid: string; keyId: string }) {
   injectAuthContext(server, sessionAuth);
 
@@ -1544,7 +1547,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
         // Strict gate 1: genome relevance.
         const genes = await GenomeService.searchGenes(query, { project: projectName, limit: minGenes });
-        const relevantGenes = genes.filter((g) => g.confidence >= 0.5 && g.score >= 0.3);
+        const relevantGenes = genes.filter((g) => g.confidence >= MIN_GENE_CONFIDENCE && g.score >= MIN_GENE_SCORE);
 
         // Strict gate 2: real codebase flow from the analysis graph.
         const kw = traceKeyword.toLowerCase();
