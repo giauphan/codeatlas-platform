@@ -42,10 +42,17 @@ function safeMockModule(specifier: string, mockObj: Record<string, unknown>) {
 const mockSaveDreamMemory = mock.fn();
 const mockSummarizeConversation = mock.fn();
 const mockConsolidationRun = mock.fn();
+const mockExtractGene = mock.fn();
 
 safeMockModule(path.join(srcDir, 'services/dreamingService.js'), {
   DreamingService: {
     saveDreamMemory: mockSaveDreamMemory,
+  },
+});
+
+safeMockModule(path.join(srcDir, 'services/genomeService.js'), {
+  GenomeService: {
+    extractGene: mockExtractGene,
   },
 });
 
@@ -122,11 +129,16 @@ describe('DreamPipelineService', () => {
   });
 
   describe('runSessionIngestion', () => {
+    beforeEach(() => {
+      mockExtractGene.mock.resetCalls();
+    });
+
     test('processes transcript, saves dreams, and returns duration', async () => {
       mockSummarizeConversation.mock.mockImplementation(async () => [
         { memoryType: 'KNOWLEDGE', content: 'Design systems scale cleanly', importance: 8 },
       ]);
       mockSaveDreamMemory.mock.mockImplementation(async () => 'mem-101');
+      mockExtractGene.mock.mockImplementation(async () => 'gene-101');
 
       const result = await DreamPipelineService.runSessionIngestion({
         content: '[USER] We refactored the pipeline into a separate service.',
@@ -145,6 +157,69 @@ describe('DreamPipelineService', () => {
       assert.strictEqual(result.dreams.length, 1);
       assert.strictEqual(result.dreams[0].id, 'mem-101');
       assert.ok(result.durationMs >= 0);
+    });
+
+    test('auto-saves a genome gene for each saved dream', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => [
+        { memoryType: 'PATTERN', content: 'Repository adapters isolate SQL dialects', importance: 7 },
+      ]);
+      mockSaveDreamMemory.mock.mockImplementation(async () => 'mem-201');
+      mockExtractGene.mock.mockImplementation(async () => 'gene-201');
+
+      const result = await DreamPipelineService.runSessionIngestion({
+        content: '[ASSISTANT] The repository adapter isolates SQL dialects behind one interface.',
+        sessionId: 'sess-gene',
+        project: 'codeatlas-platform',
+        provider: 'claude',
+      });
+
+      assert.strictEqual(result.genesSaved, 1);
+      assert.strictEqual(mockExtractGene.mock.callCount(), 1);
+      const call = mockExtractGene.mock.calls[0].arguments[0];
+      assert.strictEqual(call.sourceType, 'dream');
+      assert.strictEqual(call.sourceId, 'mem-201');
+      assert.strictEqual(call.project, 'codeatlas-platform');
+    });
+
+    test('auto-save failure does not fail ingestion', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => [
+        { memoryType: 'KNOWLEDGE', content: 'Embedding cache prevents duplicate API calls', importance: 6 },
+      ]);
+      mockSaveDreamMemory.mock.mockImplementation(async () => 'mem-301');
+      mockExtractGene.mock.mockImplementation(async () => {
+        throw new Error('embedding provider unavailable');
+      });
+
+      const result = await DreamPipelineService.runSessionIngestion({
+        content: '[USER] We cached embeddings so repeated queries do not hit the API.',
+        sessionId: 'sess-fail',
+        project: 'codeatlas-platform',
+        provider: 'claude',
+      });
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.dreamsExtracted, 1);
+      assert.strictEqual(result.genesSaved, 0);
+    });
+
+    test('skips gene auto-save for noise-blocked dreams', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => [
+        { memoryType: 'KNOWLEDGE', content: 'This is noise', importance: 1 },
+      ]);
+      mockSaveDreamMemory.mock.mockImplementation(async () => '__noise_blocked__');
+      mockExtractGene.mock.mockImplementation(async () => 'gene-never');
+
+      const result = await DreamPipelineService.runSessionIngestion({
+        content: '[USER] This is noise',
+        sessionId: 'sess-noise',
+        project: 'codeatlas-platform',
+        provider: 'claude',
+      });
+
+      assert.strictEqual(result.dreamsExtracted, 0);
+      assert.strictEqual(result.noiseBlocked, 1);
+      assert.strictEqual(result.genesSaved, 0);
+      assert.strictEqual(mockExtractGene.mock.callCount(), 0);
     });
   });
 
