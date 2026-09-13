@@ -1227,25 +1227,28 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           }
 
           // Define shutdown handler
-          const shutdown = async (signal: string, server: Server) => {
+          const shutdown = (signal: string, server: Server) => {
             logger.info(`${signal} received: Closing HTTP server...`);
+
+            // Wait a grace period for active requests to finish, or force close
+            server.closeAllConnections(); // For Node >= 18.2 to close keep-alive
             server.close(async () => {
               logger.info('HTTP server closed');
               try {
                 const { DreamingService } = await import('../services/dreamingService.js');
-                if (DreamingService.activeBackgroundTasks.size > 0) {
-                  logger.info(`Waiting for ${DreamingService.activeBackgroundTasks.size} pending database writes to complete...`);
-                  await Promise.race([
-                    Promise.allSettled(Array.from(DreamingService.activeBackgroundTasks)),
-                    new Promise(r => setTimeout(r, 5000))
-                  ]);
-                }
+                await DreamingService.waitForBackgroundTasks(5000);
               } catch (err) {
                 logger.error('Error during graceful shutdown:', err instanceof Error ? err.message : String(err));
               } finally {
                 process.exit(0);
               }
             });
+
+            // Hard exit fallback if `server.close` hangs (e.g. idle connections missing `closeAllConnections` on older node)
+            setTimeout(() => {
+              logger.error('Graceful shutdown timed out, forcing exit.');
+              process.exit(1);
+            }, 6000).unref();
           };
 
           // Register handlers once

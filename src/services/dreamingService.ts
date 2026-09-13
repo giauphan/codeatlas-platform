@@ -71,7 +71,27 @@ export interface DreamMemory {
  */
 export class DreamingService {
   /** Track pending fire-and-forget database writes for graceful shutdown */
-  static activeBackgroundTasks = new Set<Promise<unknown>>();
+  static readonly activeBackgroundTasks = new Set<Promise<unknown>>();
+
+  /**
+   * Waits for pending background tasks to settle, up to a specified timeout.
+   * Logs a warning if any tasks are still pending after the timeout.
+   */
+  static async waitForBackgroundTasks(timeoutMs: number = 5000): Promise<void> {
+    if (DreamingService.activeBackgroundTasks.size === 0) return;
+
+    logger.info(`Waiting for ${DreamingService.activeBackgroundTasks.size} pending database writes to complete...`);
+
+    let settled = false;
+    const settlePromise = Promise.allSettled(Array.from(DreamingService.activeBackgroundTasks)).then(() => { settled = true; });
+    const timeoutPromise = new Promise(resolve => setTimeout(resolve, timeoutMs));
+
+    await Promise.race([settlePromise, timeoutPromise]);
+
+    if (!settled && DreamingService.activeBackgroundTasks.size > 0) {
+      logger.warn(`${DreamingService.activeBackgroundTasks.size} background database writes were dropped during graceful shutdown due to timeout.`);
+    }
+  }
 
 
   /** Cache of detected columns so we only check once per process lifetime */
@@ -414,10 +434,16 @@ export class DreamingService {
           if (ids.length > 0) {
             const baseBind = { tenantId };
             const updateBinds = ids.map(id => ({ id, ...baseBind }));
-            const updatePromise = db.executeMany(
-              `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-              updateBinds
-            );
+            let updatePromise: Promise<any>;
+            try {
+              updatePromise = db.executeMany(
+                `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
+                updateBinds
+              );
+            } catch (syncErr) {
+              // Catch synchronous throws from db drivers before they return a Promise
+              updatePromise = Promise.reject(syncErr);
+            }
             const updateTask = updatePromise.catch(bumpErr => {
               logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
             });
