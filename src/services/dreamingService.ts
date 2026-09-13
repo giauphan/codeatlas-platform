@@ -78,14 +78,24 @@ export class DreamingService {
    * Logs a warning if any tasks are still pending after the timeout.
    */
   static async waitForBackgroundTasks(timeoutMs: number = 5000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+
     while (DreamingService.activeBackgroundTasks.size > 0) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) break; // Timeout triggered
+
       logger.info(`Waiting for ${DreamingService.activeBackgroundTasks.size} pending database writes to complete...`);
 
       let settled = false;
       const settlePromise = Promise.allSettled(Array.from(DreamingService.activeBackgroundTasks)).then(() => { settled = true; });
-      const timeoutPromise = new Promise(resolve => setTimeout(resolve, timeoutMs));
+
+      let timeoutId: NodeJS.Timeout;
+      const timeoutPromise = new Promise(resolve => {
+        timeoutId = setTimeout(resolve, remainingMs);
+      });
 
       await Promise.race([settlePromise, timeoutPromise]);
+      clearTimeout(timeoutId!); // Ensure event loop isn't held open if settle wins
 
       if (!settled) {
         break; // Timeout triggered
@@ -439,11 +449,9 @@ export class DreamingService {
           if (ids.length > 0) {
             const baseBind = { tenantId };
             const updateBinds = ids.map(id => ({ id, ...baseBind }));
-            const updatePromise = Promise.resolve().then(() =>
-              db.executeMany(
-                `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-                updateBinds
-              )
+            const updatePromise = db.executeMany(
+              `UPDATE ai_dreaming_memory SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
+              updateBinds
             );
             const updateTask = updatePromise.catch(bumpErr => {
               logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
