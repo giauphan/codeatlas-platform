@@ -3,28 +3,9 @@ import * as crypto from "crypto";
 import { logger } from "./utils/logger.js";
 import { createDatabaseAdapter } from "./database/factory.js";
 import { authStorage } from "./utils/context.js";
+import { hashApiKey } from "./utils/apiKey.js";
 
-export const DEFAULT_API_KEY_PEPPER = 'codeatlas-api-key-pepper-v1';
-
-let warnedDefaultPepper = false;
-
-export function getApiKeyPepper(): string {
-  if (!process.env.API_KEY_PEPPER && !warnedDefaultPepper) {
-    warnedDefaultPepper = true;
-    logger.warn("API_KEY_PEPPER is unset. Using compatibility fallback; configure a secret pepper for production.");
-  }
-  return process.env.API_KEY_PEPPER || DEFAULT_API_KEY_PEPPER;
-}
-
-export async function hashApiKey(apiKey: string): Promise<string> {
-  const pepper = getApiKeyPepper();
-  return new Promise<string>((resolve, reject) => {
-    crypto.pbkdf2(apiKey, Buffer.from(pepper, 'utf8'), 100000, 64, 'sha256', (err, derivedKey) => {
-      if (err) reject(err);
-      else resolve(derivedKey.toString('hex'));
-    });
-  });
-}
+export { DEFAULT_API_KEY_PEPPER, getApiKeyPepper, hashApiKey } from "./utils/apiKey.js";
 
 /**
  * Domain Interface for User Authentication details
@@ -46,6 +27,18 @@ export interface IAuthRepository {
 
 /** Activity log parameters (JSON-serializable key-value pairs) */
 export type ActivityParams = Record<string, unknown>;
+
+function sanitizeActivityParams(params: ActivityParams): string {
+  try {
+    const serialized = JSON.stringify(params);
+    if (serialized.length > 2000) {
+      return serialized.slice(0, 2000) + '... [truncated]';
+    }
+    return serialized;
+  } catch (e) {
+    return '{"error": "Failed to serialize params"}';
+  }
+}
 
 /**
  * Activity Logging Repository interface
@@ -136,7 +129,7 @@ export class FirestoreActivityLogger implements IActivityLogger {
       await db.collection('users').doc(uid).collection('activity').add({
         keyId,
         tool,
-        params: JSON.stringify(params),
+        params: sanitizeActivityParams(params),
         success,
         timestamp: FieldValue.serverTimestamp()
       });
@@ -162,7 +155,7 @@ export class SqliteAuthRepository implements IAuthRepository {
       const db = createDatabaseAdapter();
       const keyHash = await hashApiKey(apiKey);
       const rows = await db.query<{ tier: string; uid: string | null; keyId: string; expiresAt: string | null }>(
-        `SELECT id AS keyId, user_id AS uid, tier, expires_at AS expiresAt
+        `SELECT id AS "keyId", user_id AS "uid", tier, expires_at AS "expiresAt"
          FROM keys
          WHERE key_hash = :keyHash
          LIMIT 1`,
@@ -172,7 +165,7 @@ export class SqliteAuthRepository implements IAuthRepository {
 
       const row = rows[0];
       const expires = row.expiresAt ? new Date(row.expiresAt).getTime() : Infinity;
-      if (expires < Date.now()) return null;
+      if (Number.isNaN(expires) || expires < Date.now()) return null;
 
       return {
         tier: row.tier || 'free',
@@ -208,7 +201,7 @@ export class SqliteActivityLogger implements IActivityLogger {
     try {
       const db = createDatabaseAdapter();
       const users = await db.query<{ tenantId: string }>(
-        `SELECT tenant_id AS tenantId FROM users WHERE id = :uid LIMIT 1`,
+        `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
         { uid }
       );
       const tenantId = users[0]?.tenantId || authStorage.getStore()?.uid || uid;
@@ -220,7 +213,7 @@ export class SqliteActivityLogger implements IActivityLogger {
           tenantId,
           keyId,
           tool,
-          params: JSON.stringify(params),
+          params: sanitizeActivityParams(params),
           success
         }
       );

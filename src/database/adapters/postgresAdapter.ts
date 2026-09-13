@@ -287,11 +287,18 @@ export class PostgresAdapter implements IDatabaseAdapter {
       CREATE INDEX IF NOT EXISTS idx_activity_log_tenant ON activity_log(tenant_id, created_at);
     `);
 
-    // Schema migration: drop legacy plaintext 'key' column from 'keys' table if present
+    // Schema migration: drop legacy plaintext 'key' column and ensure key_hash is present and backfilled
     const hasKeyCol = await this.checkColumnExists("keys", "key");
+    const hasKeyHashCol = await this.checkColumnExists("keys", "key_hash");
+    if (!hasKeyHashCol) {
+      await this.pool!.query(`ALTER TABLE keys ADD COLUMN IF NOT EXISTS key_hash VARCHAR(255);`);
+    }
+    await this.pool!.query(`DELETE FROM keys WHERE key_hash IS NULL;`);
+    await this.pool!.query(`ALTER TABLE keys ALTER COLUMN key_hash SET NOT NULL;`);
     if (hasKeyCol) {
       await this.pool!.query(`ALTER TABLE keys DROP COLUMN IF EXISTS key;`);
     }
+    await this.pool!.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_keys_key_hash ON keys(key_hash);`);
 
     await this.pool!.query(`
       CREATE TABLE IF NOT EXISTS codeatlas_genome (

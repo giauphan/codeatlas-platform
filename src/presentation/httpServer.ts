@@ -382,7 +382,7 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
       let effectiveTenantId = ownerTenantId || 'default';
       if (ownerTenantId) {
         const users = await db.query<{ tenantId: string }>(
-          `SELECT tenant_id AS tenantId FROM users WHERE id = :uid LIMIT 1`,
+          `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
           { uid: ownerTenantId }
         );
         if (users[0]?.tenantId) effectiveTenantId = users[0].tenantId;
@@ -690,7 +690,7 @@ app.get("/api/keys", authMiddleware, localRateLimiter, async (req, res) => {
 
     const db = createDatabaseAdapter();
     const keys = await db.query<{ id: string; name: string; tier: string; createdAt: string }>(
-      `SELECT id, name, tier, created_at AS createdAt
+      `SELECT id, name, tier, created_at AS "createdAt"
        FROM keys
        WHERE user_id = :uid
        ORDER BY created_at DESC`,
@@ -714,7 +714,7 @@ app.post("/api/keys", authMiddleware, localRateLimiter, async (req, res) => {
     const db = createDatabaseAdapter();
     const keyId = crypto.randomUUID();
     const userNameRows = await db.query<{ tenantId: string }>(
-      `SELECT tenant_id AS tenantId FROM users WHERE id = :uid LIMIT 1`,
+      `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
       { uid: auth.uid }
     );
     const tenantId = userNameRows[0]?.tenantId || auth.uid;
@@ -894,7 +894,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
             let effectiveTenantId = tenantId || 'default';
             if (tenantId) {
               const users = await db.query<{ tenantId: string }>(
-                `SELECT tenant_id AS tenantId FROM users WHERE id = :uid LIMIT 1`,
+                `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
                 { uid: tenantId }
               );
               if (users.length > 0 && users[0].tenantId) {

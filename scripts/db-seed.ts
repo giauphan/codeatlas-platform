@@ -2,7 +2,8 @@
 // scripts/db-seed.ts
 import "dotenv/config";
 import { createDatabaseAdapter } from "../src/database/factory";
-import { pbkdf2Sync, randomUUID } from "node:crypto";
+import { hashApiKey } from "../src/utils/apiKey.js";
+import { randomUUID } from "node:crypto";
 import { logger } from "../src/utils/logger";
 
 async function seed() {
@@ -31,8 +32,7 @@ async function seed() {
 
     // 2. Seed API Key (if not exists)
     const apiKey = process.env.CODEATLAS_API_KEY || `sk-${randomUUID().replace(/-/g, "").slice(0, 32)}`;
-    const PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
-    const keyHash = pbkdf2Sync(apiKey, Buffer.from(PEPPER, 'utf8'), 100000, 64, 'sha256').toString('hex');
+    const keyHash = await hashApiKey(apiKey);
     const keyExists = await db.query(
       "SELECT 1 FROM users WHERE id = ? AND EXISTS (SELECT 1 FROM keys WHERE user_id = ? AND key_hash = ?)",
       [tenantId, tenantId, keyHash]

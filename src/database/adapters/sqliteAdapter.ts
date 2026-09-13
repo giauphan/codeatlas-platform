@@ -1,6 +1,7 @@
 // src/database/adapters/sqliteAdapter.ts
 import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
 import { authStorage } from "../../utils/context.js";
+import { hashApiKey } from "../../utils/apiKey.js";
 import { logger } from "../../utils/logger.js";
 
 interface SqliteStatement {
@@ -363,35 +364,40 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       }
     };
 
-    const keyColumns = this.db!.pragma("table_info(keys)") as Array<{ name: string }>;
+    let keyColumns = this.db!.pragma("table_info(keys)") as Array<{ name: string }>;
     if (keyColumns.some((entry) => entry.name === "key")) {
-      try {
-        this.db!.exec("ALTER TABLE keys DROP COLUMN key");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("cannot drop") || msg.includes("UNIQUE")) {
-          this.db!.exec(`
-            CREATE TABLE IF NOT EXISTS keys_new (
-              id TEXT PRIMARY KEY,
-              tenant_id TEXT NOT NULL REFERENCES tenants(id),
-              user_id TEXT REFERENCES users(id),
-              name TEXT,
-              key_hash TEXT NOT NULL UNIQUE,
-              tier TEXT DEFAULT 'free',
-              expires_at TEXT,
-              created_at TEXT DEFAULT (datetime('now')),
-              updated_at TEXT DEFAULT (datetime('now'))
-            );
-          `);
-          const cols = keyColumns.filter((c) => c.name !== "key").map((c) => c.name).join(", ");
-          this.db!.exec(`INSERT OR IGNORE INTO keys_new (${cols}) SELECT ${cols} FROM keys`);
-          this.db!.exec("DROP TABLE keys");
-          this.db!.exec("ALTER TABLE keys_new RENAME TO keys");
-          this.db!.exec("CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id)");
-        } else {
-          throw err;
+      if (!keyColumns.some((entry) => entry.name === "key_hash")) {
+        addColumnIfMissing("keys", "key_hash", "TEXT");
+        const legacyKeys = this.db!.prepare("SELECT id, key FROM keys WHERE key_hash IS NULL").all() as Array<{ id: string; key: string }>;
+        const updateKeyHash = this.db!.prepare("UPDATE keys SET key_hash = ? WHERE id = ?");
+        for (const legacyKey of legacyKeys) {
+          updateKeyHash.run(await hashApiKey(legacyKey.key), legacyKey.id);
         }
+        keyColumns = this.db!.pragma("table_info(keys)") as Array<{ name: string }>;
       }
+
+      const rebuildKeys = this.db!.transaction(() => {
+        this.db!.exec("DROP TABLE IF EXISTS keys_new");
+        this.db!.exec(`
+          CREATE TABLE keys_new (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL REFERENCES tenants(id),
+            user_id TEXT REFERENCES users(id),
+            name TEXT,
+            key_hash TEXT NOT NULL UNIQUE,
+            tier TEXT DEFAULT 'free',
+            expires_at TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+          );
+        `);
+        const cols = keyColumns.filter((c) => c.name !== "key").map((c) => c.name).join(", ");
+        this.db!.exec(`INSERT INTO keys_new (${cols}) SELECT ${cols} FROM keys`);
+        this.db!.exec("DROP TABLE keys");
+        this.db!.exec("ALTER TABLE keys_new RENAME TO keys");
+        this.db!.exec("CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id)");
+      });
+      rebuildKeys();
     }
     addColumnIfMissing("ai_episodic_memory", "project_name", "TEXT");
     addColumnIfMissing("ai_dreaming_memory", "evidence_count", "INTEGER DEFAULT 0");
