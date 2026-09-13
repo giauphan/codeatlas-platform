@@ -1227,12 +1227,18 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           }
 
           // Define shutdown handler
+          let isShuttingDown = false;
           const shutdown = (signal: string, server: Server) => {
+            if (isShuttingDown) return;
+            isShuttingDown = true;
             logger.info(`${signal} received: Closing HTTP server...`);
 
+            type ModernServer = Server & { closeIdleConnections?: () => void, closeAllConnections?: () => void };
+            const mServer = server as ModernServer;
+
             // Kill idle keep-alive connections first (Node >= 18.2)
-            if (typeof (server as any).closeIdleConnections === 'function') {
-              (server as any).closeIdleConnections();
+            if (typeof mServer.closeIdleConnections === 'function') {
+              mServer.closeIdleConnections();
             }
 
             server.close(async () => {
@@ -1249,8 +1255,8 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
 
             // Hard exit fallback if `server.close` hangs (e.g. active connections not resolving)
             setTimeout(() => {
-              if (typeof (server as any).closeAllConnections === 'function') {
-                (server as any).closeAllConnections();
+              if (typeof mServer.closeAllConnections === 'function') {
+                mServer.closeAllConnections();
               }
               logger.error('Graceful shutdown timed out after 10s, forcing exit.');
               process.exit(1);

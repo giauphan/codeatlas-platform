@@ -78,18 +78,22 @@ export class DreamingService {
    * Logs a warning if any tasks are still pending after the timeout.
    */
   static async waitForBackgroundTasks(timeoutMs: number = 5000): Promise<void> {
-    if (DreamingService.activeBackgroundTasks.size === 0) return;
+    while (DreamingService.activeBackgroundTasks.size > 0) {
+      logger.info(`Waiting for ${DreamingService.activeBackgroundTasks.size} pending database writes to complete...`);
 
-    logger.info(`Waiting for ${DreamingService.activeBackgroundTasks.size} pending database writes to complete...`);
+      let settled = false;
+      const settlePromise = Promise.allSettled(Array.from(DreamingService.activeBackgroundTasks)).then(() => { settled = true; });
+      const timeoutPromise = new Promise(resolve => setTimeout(resolve, timeoutMs));
 
-    let settled = false;
-    const settlePromise = Promise.allSettled(Array.from(DreamingService.activeBackgroundTasks)).then(() => { settled = true; });
-    const timeoutPromise = new Promise(resolve => setTimeout(resolve, timeoutMs));
+      await Promise.race([settlePromise, timeoutPromise]);
 
-    await Promise.race([settlePromise, timeoutPromise]);
+      if (!settled) {
+        break; // Timeout triggered
+      }
+      // If we finished successfully but new tasks were added, the while loop will re-check
+    }
 
-    // Re-check size in case tasks resolved/added right as timeout triggered
-    if (!settled && DreamingService.activeBackgroundTasks.size > 0) {
+    if (DreamingService.activeBackgroundTasks.size > 0) {
       logger.warn(`${DreamingService.activeBackgroundTasks.size} background database writes were dropped during graceful shutdown due to timeout.`);
     }
   }
