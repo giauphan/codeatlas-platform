@@ -255,8 +255,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         tenant_id VARCHAR(255) NOT NULL REFERENCES tenants(id),
         user_id VARCHAR(255) REFERENCES users(id),
         name VARCHAR(255),
-        key VARCHAR(255) NOT NULL UNIQUE,
-        key_hash VARCHAR(255),
+        key_hash VARCHAR(255) NOT NULL UNIQUE,
         tier VARCHAR(50) DEFAULT 'free',
         expires_at TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -272,10 +271,35 @@ export class PostgresAdapter implements IDatabaseAdapter {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id VARCHAR(255) PRIMARY KEY,
+        tenant_id VARCHAR(255) NOT NULL,
+        key_id VARCHAR(255),
+        tool VARCHAR(255) NOT NULL,
+        params TEXT,
+        success BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_keys_tenant ON keys(tenant_id);
       CREATE INDEX IF NOT EXISTS idx_projects_tenant ON projects(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_activity_log_tenant ON activity_log(tenant_id, created_at);
     `);
+
+    // Schema migration: drop legacy plaintext 'key' column and ensure key_hash is present and backfilled
+    const hasKeyCol = await this.checkColumnExists("keys", "key");
+    const hasKeyHashCol = await this.checkColumnExists("keys", "key_hash");
+    if (!hasKeyHashCol) {
+      await this.pool!.query(`ALTER TABLE keys ADD COLUMN IF NOT EXISTS key_hash VARCHAR(255);`);
+    }
+    await this.pool!.query(`DELETE FROM keys WHERE key_hash IS NULL;`);
+    await this.pool!.query(`ALTER TABLE keys ALTER COLUMN key_hash SET NOT NULL;`);
+    if (hasKeyCol) {
+      await this.pool!.query(`ALTER TABLE keys DROP COLUMN IF EXISTS key;`);
+    }
+    await this.pool!.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_keys_key_hash ON keys(key_hash);`);
+
     await this.pool!.query(`
       CREATE TABLE IF NOT EXISTS codeatlas_genome (
         id VARCHAR(255) PRIMARY KEY,

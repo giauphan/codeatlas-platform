@@ -125,6 +125,26 @@ describe('PostgresAdapter', () => {
     assert.strictEqual(exists, true);
   });
 
+  test('query and execute translate named parameters to PostgreSQL placeholders', async () => {
+    await adapter.connect();
+    mockPgPoolInstance.query.mock.mockImplementation(async () => ({ rows: [], rowCount: 1 }));
+
+    await adapter.query('SELECT * FROM keys WHERE key_hash = :keyHash LIMIT 1', { keyHash: 'hash-value' });
+    assert.deepStrictEqual(mockPgPoolInstance.query.mock.calls[0].arguments, [
+      'SELECT * FROM keys WHERE key_hash = $1 LIMIT 1',
+      ['hash-value'],
+    ]);
+
+    await adapter.execute('UPDATE keys SET updated_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :uid', {
+      id: 'key-1',
+      uid: 'user-1',
+    });
+    assert.deepStrictEqual(mockPgPoolInstance.query.mock.calls[1].arguments, [
+      'UPDATE keys SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND user_id = $2',
+      ['key-1', 'user-1'],
+    ]);
+  });
+
   test('query, execute, executeMany CRUD operations', async () => {
     await adapter.connect();
 

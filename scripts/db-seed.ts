@@ -2,6 +2,7 @@
 // scripts/db-seed.ts
 import "dotenv/config";
 import { createDatabaseAdapter } from "../src/database/factory";
+import { hashApiKey } from "../src/utils/apiKey.js";
 import { randomUUID } from "node:crypto";
 import { logger } from "../src/utils/logger";
 
@@ -31,10 +32,10 @@ async function seed() {
 
     // 2. Seed API Key (if not exists)
     const apiKey = process.env.CODEATLAS_API_KEY || `sk-${randomUUID().replace(/-/g, "").slice(0, 32)}`;
-    const keyHash = ""; // Will be computed by auth service
+    const keyHash = await hashApiKey(apiKey);
     const keyExists = await db.query(
-      "SELECT 1 FROM users WHERE id = ? AND EXISTS (SELECT 1 FROM keys WHERE user_id = ? AND key = ?)",
-      [tenantId, tenantId, apiKey]
+      "SELECT 1 FROM users WHERE id = ? AND EXISTS (SELECT 1 FROM keys WHERE user_id = ? AND key_hash = ?)",
+      [tenantId, tenantId, keyHash]
     );
     if (keyExists.length === 0) {
       await db.execute(
@@ -42,8 +43,8 @@ async function seed() {
         [tenantId, tenantId, "enterprise"]
       );
       await db.execute(
-        "INSERT INTO keys (id, tenant_id, user_id, key, key_hash, tier) VALUES (?, ?, ?, ?, ?, ?)",
-        [randomUUID(), tenantId, tenantId, apiKey, keyHash, "enterprise"]
+        "INSERT INTO keys (id, tenant_id, user_id, key_hash, tier) VALUES (?, ?, ?, ?, ?)",
+        [randomUUID(), tenantId, tenantId, keyHash, "enterprise"]
       );
       logger.info(`[Seeder] Created API key for tenant: ${tenantId}`);
     }
