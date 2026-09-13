@@ -625,6 +625,9 @@ describe('DreamingService', () => {
 
       const rows = await DreamingService.queryDreamMemories('test-project', 'bump fails', 10);
 
+      // Wait for background tasks to settle to ensure warning is logged
+      await DreamingService.waitForBackgroundTasks(1000);
+
       assert.strictEqual(rows.length, 2, 'results must still be returned');
       assert.ok(
         mockLogger.warn.mock.calls.length >= 1,
