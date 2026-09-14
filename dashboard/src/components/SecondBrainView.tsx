@@ -194,8 +194,28 @@ export function SecondBrainView() {
       {/* Empty state */}
       {!loading && !error && filtered.length === 0 && (
         <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
-          <Lightbulb size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-          <p style={{ fontSize: '1.1rem' }}>No concepts yet. Run consolidation first.</p>
+          <Lightbulb size={48} style={{ opacity: 0.3, marginBottom: '1rem', display: 'inline-block' }} />
+          <p style={{ fontSize: '1.1rem', marginBottom: '1.5rem' }}>
+            {searchQuery.trim() ? "No concepts match your search." : "No concepts yet. Extract knowledge from your dream memories by running consolidation."}
+          </p>
+          {!searchQuery.trim() && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleConsolidate}
+              disabled={consolidating}
+              className={FOCUS_RING_CLASS}
+              style={{
+                padding: '0.75rem 1.5rem', background: 'rgba(0,240,255,0.1)',
+                border: '1px solid var(--primary-neon)', borderRadius: '12px', color: 'var(--primary-neon)', fontWeight: 700, fontSize: '0.9rem',
+                cursor: consolidating ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                opacity: consolidating ? 0.6 : 1,
+              }}
+            >
+              {consolidating ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+              {consolidating ? 'Consolidating…' : 'Run Consolidation Now'}
+            </motion.button>
+          )}
         </div>
       )}
 
