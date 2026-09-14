@@ -662,8 +662,6 @@ app.post("/api/projects/settings", authMiddleware, localRateLimiter, async (req,
         logger.warn("[Settings API] Firestore settings backup unavailable:", e instanceof Error ? e.message : String(e));
       }
     }
-    
-    }
 
     res.json({ success: true, indexingEnabled });
   } catch (err: unknown) {
