@@ -263,7 +263,6 @@ export class AuthenticateUserUseCase {
         // Fallback gracefully if Firestore is unconfigured or unavailable
         logger.debug(`[AuthenticateUserUseCase] Super admin lookup failed, using fallback: ${err instanceof Error ? err.message : String(err)}`);
       }
-      }
       // Cache the fallback briefly so a degraded store is not hit on every request
       // We don't overwrite `expires` semantics of the original payload so downstream systems don't treat it differently.
       const fallback: AuthData = {

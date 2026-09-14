@@ -341,6 +341,7 @@ export function DreamMemoryView() {
           <Settings size={18} style={{ marginRight: '0.5rem' }} /> Config
         </button>
         <button onClick={() => { setShowAll(!showAll); fetchMemories(searchQuery, 0, dreamConfig); }}
+          aria-pressed={showAll}
           className={FOCUS_RING_CLASS}
           style={{
             padding: '0.75rem 1.25rem', borderRadius: '12px', border: showAll ? '1px solid var(--primary-neon)' : '1px solid rgba(255,255,255,0.1)',
