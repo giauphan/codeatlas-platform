@@ -663,6 +663,8 @@ app.post("/api/projects/settings", authMiddleware, localRateLimiter, async (req,
       }
     }
     
+    }
+
     res.json({ success: true, indexingEnabled });
   } catch (err: unknown) {
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
