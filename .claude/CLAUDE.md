@@ -31,3 +31,20 @@ Native Claude Code assets live here:
 - `.claude/skills/codeatlas-verify/SKILL.md` — build and test verification.
 
 Use these files, not legacy JSON files, for Claude Code discovery.
+
+## 10. Project Rules (Post-Commit Required)
+
+- Every commit and push must be followed by full test run (`pnpm test` or `npm test`).
+- Only merge/push after tests pass and CI is green.
+- All code changes require corresponding test updates in `tests/unit/` or `tests/integration/`.
+- Do not push with broken CI; fix errors before committing/pushing.
+- Before ending work, confirm: behavior verified, diff clean, `sync_system_memory` called, no secrets added.
+
+## 11. Required Agents
+
+Agent rules:
+- Test first: run `node --test 'tests/**/*.test.ts'` or equivalent.
+- Check `tests/unit/settings-api.test.ts` for settings endpoint coverage.
+- Add/update tests for any changed endpoint behavior (e.g., `POST /api/projects/settings` syntax fix).
+- Ensure build passes (`pnpm build` / `npm run build`) and type-check clean (`pnpm typecheck`).
+
