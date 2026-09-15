@@ -76,7 +76,14 @@ export class WikiService {
       },
     ];
 
-    const exportBaseDir = path.join(process.cwd(), '.codeatlas', 'wiki', projectName);
+    // Sanitize projectName to prevent directory traversal
+    const safeProjectName = path.basename(projectName).replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+    const rootWikiDir = path.resolve(process.cwd(), '.codeatlas', 'wiki');
+    const exportBaseDir = path.resolve(rootWikiDir, safeProjectName);
+    if (!exportBaseDir.startsWith(rootWikiDir)) {
+      throw new Error('Invalid project name path traversal');
+    }
+
     if (options.exportToDisk) {
       if (!fs.existsSync(exportBaseDir)) {
         fs.mkdirSync(exportBaseDir, { recursive: true });
@@ -116,10 +123,16 @@ export class WikiService {
       await this.dbAdapter.saveWikiPage(record);
 
       if (options.exportToDisk) {
-        // Sanitize path for file system: remove leading slash, ensure .md extension
+        // Sanitize path for file system: prevent traversal and ensure .md extension
         // e.g. /modules/services -> modules/services.md
-        const safePath = pageDef.path.replace(/^\/+/, '');
-        const fullPath = path.join(exportBaseDir, `${safePath}.md`);
+        const normalizedPath = path.normalize(pageDef.path);
+        const safePath = normalizedPath.replace(/^([\\\/]|(\.\.[\/\\]))+/, '');
+        const fullPath = path.resolve(exportBaseDir, `${safePath}.md`);
+
+        if (!fullPath.startsWith(exportBaseDir)) {
+          throw new Error('Invalid wiki page path mapping');
+        }
+
         const dirPath = path.dirname(fullPath);
         if (!fs.existsSync(dirPath)) {
           fs.mkdirSync(dirPath, { recursive: true });

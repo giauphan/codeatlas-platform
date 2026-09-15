@@ -101,9 +101,17 @@ export class LLMProviderService {
       return this.generateTemplateResponse(options.prompt, options.systemPrompt);
     }
 
-    const baseUrl = (options.baseUrl || 'https://api.anthropic.com').replace(/\/+$/, '');
+    let baseUrl = 'https://api.anthropic.com';
+    if (options.baseUrl) {
+      try {
+        const parsed = new URL(options.baseUrl);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          baseUrl = parsed.toString().endsWith('/') ? parsed.toString().slice(0, -1) : parsed.toString();
+        }
+      } catch {}
+    }
     const model = options.model || 'claude-3-5-sonnet-20241022';
-    const url = `${baseUrl}/v1/messages`;
+    const url = baseUrl + '/v1/messages';
 
     const res = await fetch(url, {
       method: 'POST',
@@ -145,16 +153,32 @@ export class LLMProviderService {
       return this.generateTemplateResponse(options.prompt, options.systemPrompt);
     }
 
-    const baseUrl = (options.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    let baseUrl = 'https://api.openai.com/v1';
+    if (options.baseUrl) {
+      try {
+        const parsed = new URL(options.baseUrl);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          baseUrl = parsed.toString().endsWith('/') ? parsed.toString().slice(0, -1) : parsed.toString();
+        }
+      } catch {}
+    }
     const model = options.model || 'gpt-4o-mini';
-    return this.callOpenAIFormatEndpoint(`${baseUrl}/chat/completions`, apiKey, model, options);
+    return this.callOpenAIFormatEndpoint(baseUrl + '/chat/completions', apiKey, model, options);
   }
 
   private async callOpenAICompatible(options: LLMGenerateOptions): Promise<string> {
     const apiKey = options.apiKey || process.env.OPENAI_API_KEY || '';
-    const baseUrl = (options.baseUrl || 'http://localhost:11434/v1').replace(/\/+$/, '');
+    let baseUrl = 'http://localhost:11434/v1';
+    if (options.baseUrl) {
+      try {
+        const parsed = new URL(options.baseUrl);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          baseUrl = parsed.toString().endsWith('/') ? parsed.toString().slice(0, -1) : parsed.toString();
+        }
+      } catch {}
+    }
     const model = options.model || 'default';
-    return this.callOpenAIFormatEndpoint(`${baseUrl}/chat/completions`, apiKey, model, options);
+    return this.callOpenAIFormatEndpoint(baseUrl + '/chat/completions', apiKey, model, options);
   }
 
   private async callOpenAIFormatEndpoint(
