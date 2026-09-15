@@ -35,6 +35,10 @@ export class WikiService {
   ) {}
 
   async generateProjectWiki(projectName: string, options: GenerateWikiOptions = {}): Promise<WikiTreeResponse> {
+    if (!projectName || !/^[a-zA-Z0-9_\-\.]+$/.test(projectName)) {
+      throw new Error('Invalid project name: contains invalid or unsafe characters');
+    }
+
     const tenantId = options.tenantId || 'default';
     logger.info(`Generating wiki for project '${projectName}' (tenant: ${tenantId})`);
 

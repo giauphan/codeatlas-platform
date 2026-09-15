@@ -119,6 +119,6 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
 }
 
 export function mountWikiRoutes(app: express.Application): void {
-  // Use authMiddleware for all wiki endpoints in production
-  app.use('/api/wiki', authMiddleware, createWikiRouter());
+  // Use rate limiting and authMiddleware for all wiki endpoints in production
+  app.use('/api/wiki', wikiRateLimiter, authMiddleware, createWikiRouter());
 }
