@@ -1,5 +1,5 @@
 // src/database/adapters/postgresAdapter.ts
-import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
+import { IDatabaseAdapter, VectorSearchResult, WikiPageRecord } from "./interface.js";
 import { logger } from "../../utils/logger.js";
 
 interface PgPoolClient {

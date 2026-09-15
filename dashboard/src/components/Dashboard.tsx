@@ -33,6 +33,7 @@ import { CloudIndexView } from './CloudIndexView';
 import { DreamMemoryView } from './DreamMemoryView';
 import { SecondBrainView } from './SecondBrainView';
 import { DocumentationView } from './DocumentationView';
+import { WikiView } from './WikiView';
 import { MemoryTreeView } from './MemoryTreeView';
 import { OrchestrationTasksView } from './OrchestrationTasksView';
 import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
@@ -508,6 +509,12 @@ export const Dashboard: React.FC = () => {
         return <DocumentationView />;
       case 'Memory Tree':
         return <MemoryTreeView />;
+      case 'DeepWiki':
+        return <WikiView
+          projects={projects}
+          selectedProjectDir={selectedProjectDir}
+          onProjectChange={handleProjectChange}
+        />;
       default:
         return <ControlCenterView
           stats={stats}
@@ -540,7 +547,7 @@ export const Dashboard: React.FC = () => {
             CODEATLAS <ShieldCheck size={20} />
           </h1>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {['Control Center', 'Knowledge Graph', 'Memory Tree', 'Cloud Index', 'Dream Memories', 'Second Brain', 'Orchestration Tasks', 'Documentation'].map(tab => (
+            {['Control Center', 'Knowledge Graph', 'Memory Tree', 'DeepWiki', 'Cloud Index', 'Dream Memories', 'Second Brain', 'Orchestration Tasks', 'Documentation'].map(tab => (
               <li key={tab} style={{ marginBottom: '1rem' }}>
                 <button
                   onClick={() => setActiveTab(tab)}
@@ -558,6 +565,7 @@ export const Dashboard: React.FC = () => {
                 >
                   {tab === 'Control Center' && <LayoutDashboard size={18} />}
                   {tab === 'Knowledge Graph' && <Network size={18} />}
+                  {tab === 'DeepWiki' && <BookOpen size={18} />}
                   {tab === 'Cloud Index' && <Globe size={18} />}
                   {tab === 'Dream Memories' && <Brain size={18} />}
                   {tab === 'Second Brain' && <Lightbulb size={18} />}

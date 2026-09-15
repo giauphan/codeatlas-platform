@@ -1,5 +1,5 @@
 // src/database/adapters/sqliteAdapter.ts
-import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
+import { IDatabaseAdapter, VectorSearchResult, WikiPageRecord } from "./interface.js";
 import { authStorage } from "../../utils/context.js";
 import { hashApiKey } from "../../utils/apiKey.js";
 import { logger } from "../../utils/logger.js";
@@ -51,8 +51,17 @@ export class SQLiteAdapter implements IDatabaseAdapter {
   private connectPromise: Promise<void> | null = null;
   private readonly dbPath: string;
 
-  constructor() {
-    this.dbPath = process.env.CODEATLAS_SQLITE_PATH || "./data/codeatlas.db";
+  constructor(dbPath?: string) {
+    this.dbPath = dbPath || process.env.CODEATLAS_SQLITE_PATH || "./data/codeatlas.db";
+  }
+
+  async initialize(): Promise<void> {
+    await this.connect();
+    await this.initializeSchema();
+  }
+
+  async close(): Promise<void> {
+    await this.disconnect();
   }
 
   async connect(): Promise<void> {

@@ -31,6 +31,7 @@ import { registerA2AOrchestrationTools } from "./a2aOrchestrationTools.js";
 import { wrapServerWithToolFilter } from "./toolFilter.js";
 import { registerDreamingRoutes } from "./dreamingRoutes.js";
 import { mountSecondBrainRoutes } from "./secondBrainRoutes.js";
+import { mountWikiRoutes } from "./routes/wikiRoutes.js";
 import { mountConsolidationRoutes } from "./consolidationRoutes.js";
 import { mountGenomeRoutes } from "./genomeRoutes.js";
 import { mountA2ARoutes } from "./a2a/a2aRoutes.js";
@@ -1226,6 +1227,7 @@ app.get("/api/docs/memory-setup", authMiddleware, localRateLimiter, (req, res) =
 export function startHttpServer(port: number, retries = 5): Promise<void> {
   registerDreamingRoutes(app);
   mountSecondBrainRoutes(app);
+  mountWikiRoutes(app);
   mountConsolidationRoutes(app);
   mountGenomeRoutes(app);
   mountA2ARoutes(app, a2aExecutor, `http://localhost:${port}`);

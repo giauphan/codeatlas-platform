@@ -1,0 +1,114 @@
+import express from 'express';
+import { WikiService } from '../../services/wikiService.js';
+import { createDatabaseAdapter } from '../../database/factory.js';
+import { LLMProviderService } from '../../services/llmProviderService.js';
+import { logger } from '../../utils/logger.js';
+import { authMiddleware } from '../../middleware/auth.js';
+
+export function createWikiRouter(wikiService?: WikiService): express.Router {
+  const router = express.Router();
+
+  // Middleware to initialize or extract tracking/auth could go here
+  // For the default production usage, we lazy-init WikiService if not provided
+  const getWikiService = () => {
+    if (wikiService) return wikiService;
+    const db = createDatabaseAdapter();
+    const llmProvider = new LLMProviderService(); // Use default configs
+    return new WikiService(db, llmProvider);
+  };
+
+  /**
+   * POST /api/wiki/:project/generate
+   * Generates or rebuilds the project wiki layout.
+   */
+  router.post('/:project/generate', async (req, res) => {
+    try {
+      const { project } = req.params;
+      if (!project) {
+        return res.status(400).json({ error: 'Missing logic required: projectName parameter' });
+      }
+
+      const options = req.body || {};
+      const service = getWikiService();
+
+      const result = await service.generateProjectWiki(project, options);
+      res.json(result);
+    } catch (err) {
+      logger.error(`[WikiRoutes] generateProjectWiki failed:`, err);
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  /**
+   * GET /api/wiki/:project/tree
+   * Returns the nested page tree structure.
+   */
+  router.get('/:project/tree', async (req, res) => {
+    try {
+      const { project } = req.params;
+      const service = getWikiService();
+      const tree = await service.getWikiTree(project);
+      res.json(tree);
+    } catch (err) {
+      logger.error(`[WikiRoutes] getWikiTree failed:`, err);
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  /**
+   * GET /api/wiki/:project/page
+   * Query params: ?path=/overview
+   * Retrieves specific page content.
+   */
+  router.get('/:project/page', async (req, res) => {
+    try {
+      const { project } = req.params;
+      const { path } = req.query;
+
+      if (!path || typeof path !== 'string') {
+        return res.status(400).json({ error: "Missing required 'path' query parameter" });
+      }
+
+      const service = getWikiService();
+      const page = await service.getWikiPage(project, path);
+
+      if (!page) {
+        return res.status(404).json({ error: "Wiki page not found" });
+      }
+
+      res.json(page);
+    } catch (err) {
+      logger.error(`[WikiRoutes] getWikiPage failed:`, err);
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  /**
+   * POST /api/wiki/:project/query
+   * Interactive Q&A against the wiki.
+   */
+  router.post('/:project/query', async (req, res) => {
+    try {
+      const { project } = req.params;
+      const { query } = req.body;
+
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Missing or invalid 'query' parameter" });
+      }
+
+      const service = getWikiService();
+      const result = await service.queryWiki(project, query);
+      res.json(result);
+    } catch (err) {
+      logger.error(`[WikiRoutes] queryWiki failed:`, err);
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  return router;
+}
+
+export function mountWikiRoutes(app: express.Application): void {
+  // Use authMiddleware for all wiki endpoints in production
+  app.use('/api/wiki', authMiddleware, createWikiRouter());
+}
