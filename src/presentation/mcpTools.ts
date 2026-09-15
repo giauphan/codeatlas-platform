@@ -23,7 +23,7 @@ import { indexingService } from "../services/indexingService.js";
 import { authStorage } from "../utils/context.js";
 import { randomUUID } from "node:crypto";
 import { isToolEnabled } from "../config/env.js";
-import { GraphNode } from "../types/index.js";
+import { GraphNode, GraphLink } from "../types/index.js";
 import {
   loadMemoryManually,
   getMemoryStatus,
@@ -34,6 +34,31 @@ import {
   reloadMemory,
   MemorySystemStatus
 } from "../services/memoryController.js";
+
+/**
+ * Builds an adjacency index (incoming/outgoing links) from a flat list of graph links.
+ * ⚡ Bolt Optimization: Replace O(N^2) loops with a single O(E) pass.
+ */
+function buildAdjacencyIndex(links: GraphLink[], nodeMap: Map<string, string>, options?: { incoming?: boolean; outgoing?: boolean }) {
+  const { incoming = true, outgoing = true } = options ?? {};
+  const incomingByTarget = incoming ? new Map<string, Array<{ from: string; type: string }>>() : undefined;
+  const outgoingBySource = outgoing ? new Map<string, Array<{ to: string; type: string }>>() : undefined;
+
+  for (const l of links) {
+    if (incomingByTarget) {
+      const targetArr = incomingByTarget.get(l.target) ?? [];
+      targetArr.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
+      incomingByTarget.set(l.target, targetArr);
+    }
+
+    if (outgoingBySource) {
+      const sourceArr = outgoingBySource.get(l.source) ?? [];
+      sourceArr.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
+      outgoingBySource.set(l.source, sourceArr);
+    }
+  }
+  return { incomingByTarget, outgoingBySource };
+}
 
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
@@ -323,16 +348,15 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const links = loaded.analysis.graph.links;
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
 
+      // ⚡ Bolt Optimization: Pre-compute adjacency lists in a single pass to replace O(N^2) filter loops inside the map
+      const { incomingByTarget, outgoingBySource } = buildAdjacencyIndex(links, nodeMap);
+
       const result = {
         query,
         matchCount: matches.length,
         results: matches.slice(0, 50).map((n) => {
-          const incomingLinks = links
-            .filter((l) => l.target === n.id)
-            .map((l) => ({ from: nodeMap.get(l.source) || l.source, type: l.type }));
-          const outgoingLinks = links
-            .filter((l) => l.source === n.id)
-            .map((l) => ({ to: nodeMap.get(l.target) || l.target, type: l.type }));
+          const incomingLinks = incomingByTarget?.get(n.id) ?? [];
+          const outgoingLinks = outgoingBySource?.get(n.id) ?? [];
 
           return {
             name: n.label,
@@ -384,6 +408,9 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       let filesEntries = Array.from(byFile.entries());
 
+      // ⚡ Bolt Optimization: Pre-compute adjacency lists in a single pass to replace O(N^2) filter loops inside the map
+      const { outgoingBySource } = buildAdjacencyIndex(links, nodeMap, { incoming: false });
+
       const result = {
         query: filePath,
         filesFound: byFile.size,
@@ -395,9 +422,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
             name: e.label,
             type: e.type,
             line: e.line || null,
-            dependencies: links
-              .filter((l) => l.source === e.id)
-              .map((l) => ({ to: nodeMap.get(l.target) || l.target, type: l.type })),
+            dependencies: outgoingBySource?.get(e.id) ?? [],
           })),
         })),
       };
