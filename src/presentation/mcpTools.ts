@@ -39,9 +39,10 @@ import {
  * Builds an adjacency index (incoming/outgoing links) from a flat list of graph links.
  * ⚡ Bolt Optimization: Replace O(N^2) loops with a single O(E) pass.
  */
-function buildAdjacencyIndex(links: GraphLink[], nodeMap: Map<string, string>, options: { incoming?: boolean; outgoing?: boolean } = { incoming: true, outgoing: true }) {
-  const incomingByTarget = options.incoming ? new Map<string, Array<{ from: string; type: string }>>() : undefined;
-  const outgoingBySource = options.outgoing ? new Map<string, Array<{ to: string; type: string }>>() : undefined;
+function buildAdjacencyIndex(links: GraphLink[], nodeMap: Map<string, string>, options?: { incoming?: boolean; outgoing?: boolean }) {
+  const { incoming = true, outgoing = true } = options ?? {};
+  const incomingByTarget = incoming ? new Map<string, Array<{ from: string; type: string }>>() : undefined;
+  const outgoingBySource = outgoing ? new Map<string, Array<{ to: string; type: string }>>() : undefined;
 
   for (const l of links) {
     if (incomingByTarget) {

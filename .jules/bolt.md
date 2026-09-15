@@ -4,3 +4,7 @@
 ## 2026-09-15 - Graph Node Search Adjacency Pre-computation
 **Learning:** In `src/presentation/mcpTools.ts` functions like `search_entities` and `get_file_entities`, fetching relationships by chaining `links.filter(...).map(...)` inside loop scopes mapping nodes caused O(V*E) complexity.
 **Action:** In graph traversal algorithms, compute node adjacencies by pre-calculating adjacency lists using Maps in a single pass before iterating nodes. This avoids nested `Array.prototype.filter()` loops for every node.
+
+## 2026-09-15 - Graph Adjacency Object Destructuring Defaults
+**Learning:** In TypeScript, relying on `= { incoming: true, outgoing: true }` in the parameter list means `{}` or `{ outgoing: true }` overwrites the entire default object, setting `incoming` to `undefined`.
+**Action:** When parsing optional configuration objects, normalize options using nullish coalescing and default destructuring (`const { incoming = true, outgoing = true } = options ?? {};`) instead of manually checking properties. This ensures empty objects `{}` are safely handled and defaults are properly applied across partial properties.
