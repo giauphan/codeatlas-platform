@@ -39,18 +39,22 @@ import {
  * Builds an adjacency index (incoming/outgoing links) from a flat list of graph links.
  * ⚡ Bolt Optimization: Replace O(N^2) loops with a single O(E) pass.
  */
-function buildAdjacencyIndex(links: GraphLink[], nodeMap: Map<string, string>) {
-  const incomingByTarget = new Map<string, Array<{ from: string; type: string }>>();
-  const outgoingBySource = new Map<string, Array<{ to: string; type: string }>>();
+function buildAdjacencyIndex(links: GraphLink[], nodeMap: Map<string, string>, options: { incoming?: boolean; outgoing?: boolean } = { incoming: true, outgoing: true }) {
+  const incomingByTarget = options.incoming ? new Map<string, Array<{ from: string; type: string }>>() : undefined;
+  const outgoingBySource = options.outgoing ? new Map<string, Array<{ to: string; type: string }>>() : undefined;
 
   for (const l of links) {
-    const targetArr = incomingByTarget.get(l.target) ?? [];
-    targetArr.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
-    incomingByTarget.set(l.target, targetArr);
+    if (incomingByTarget) {
+      const targetArr = incomingByTarget.get(l.target) ?? [];
+      targetArr.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
+      incomingByTarget.set(l.target, targetArr);
+    }
 
-    const sourceArr = outgoingBySource.get(l.source) ?? [];
-    sourceArr.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
-    outgoingBySource.set(l.source, sourceArr);
+    if (outgoingBySource) {
+      const sourceArr = outgoingBySource.get(l.source) ?? [];
+      sourceArr.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
+      outgoingBySource.set(l.source, sourceArr);
+    }
   }
   return { incomingByTarget, outgoingBySource };
 }
@@ -344,11 +348,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
 
       // ⚡ Bolt Optimization: Pre-compute adjacency lists in a single pass to replace O(N^2) filter loops inside the map
-      let incomingByTarget: Map<string, Array<{ from: string; type: string }>> | undefined = undefined;
-      let outgoingBySource: Map<string, Array<{ to: string; type: string }>> | undefined = undefined;
-      if (matches.length > 0) {
-        ({ incomingByTarget, outgoingBySource } = buildAdjacencyIndex(links, nodeMap));
-      }
+      const { incomingByTarget, outgoingBySource } = buildAdjacencyIndex(links, nodeMap);
 
       const result = {
         query,
@@ -408,10 +408,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       let filesEntries = Array.from(byFile.entries());
 
       // ⚡ Bolt Optimization: Pre-compute adjacency lists in a single pass to replace O(N^2) filter loops inside the map
-      let outgoingBySource: Map<string, Array<{ to: string; type: string }>> | undefined = undefined;
-      if (byFile.size > 0) {
-        ({ outgoingBySource } = buildAdjacencyIndex(links, nodeMap));
-      }
+      const { outgoingBySource } = buildAdjacencyIndex(links, nodeMap, { outgoing: true });
 
       const result = {
         query: filePath,
