@@ -381,6 +381,94 @@ export class PostgresAdapter implements IDatabaseAdapter {
       );
     `);
     logger.info("[PostgresAdapter] Schema initialized.");
+
+    await this.pool!.query(
+      `CREATE TABLE IF NOT EXISTS codeatlas_wiki_pages (
+        id VARCHAR(255) PRIMARY KEY,
+        project_name VARCHAR(255) NOT NULL,
+        path VARCHAR(500) NOT NULL,
+        title VARCHAR(255),
+        summary TEXT,
+        content TEXT,
+        diagram_data TEXT,
+        parent_path VARCHAR(500),
+        order_index INTEGER,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        tenant_id VARCHAR(255),
+        UNIQUE (project_name, path, tenant_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_wiki_project_tenant ON codeatlas_wiki_pages(project_name, tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_wiki_path ON codeatlas_wiki_pages(path);`
+    );
+  }
+
+  async saveWikiPage(page: WikiPageRecord): Promise<void> {
+    if (!this.pool) await this.connect();
+    const sql = `
+      INSERT INTO codeatlas_wiki_pages (
+        id,
+        project_name,
+        path,
+        title,
+        summary,
+        content,
+        diagram_data,
+        parent_path,
+        order_index,
+        updated_at,
+        tenant_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10)
+      ON CONFLICT (project_name, path, tenant_id) DO UPDATE SET
+        title = EXCLUDED.title,
+        summary = EXCLUDED.summary,
+        content = EXCLUDED.content,
+        diagram_data = EXCLUDED.diagram_data,
+        parent_path = EXCLUDED.parent_path,
+        order_index = EXCLUDED.order_index,
+        updated_at = NOW()
+    `;
+    await this.pool!.query(sql, [
+      page.id,
+      page.project_name,
+      page.path,
+      page.title,
+      page.summary,
+      page.content,
+      page.diagram_data,
+      page.parent_path,
+      page.order_index,
+      page.tenant_id
+    ]);
+  }
+
+  async getWikiPage(projectName: string, path: string, tenantId?: string): Promise<WikiPageRecord | null> {
+    if (!this.pool) await this.connect();
+    const sql = `
+      SELECT * FROM codeatlas_wiki_pages
+      WHERE project_name = $1 AND path = $2 AND tenant_id = $3
+    `;
+    const rows = await this.query<WikiPageRecord>(sql, [projectName, path, tenantId || '']);
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async listWikiPages(projectName: string, tenantId?: string): Promise<WikiPageRecord[]> {
+    if (!this.pool) await this.connect();
+    const sql = `
+      SELECT * FROM codeatlas_wiki_pages
+      WHERE project_name = $1 AND tenant_id = $2
+      ORDER BY order_index ASC
+    `;
+    return this.query<WikiPageRecord>(sql, [projectName, tenantId || '']);
+  }
+
+  async deleteWikiPages(projectName: string, tenantId?: string): Promise<void> {
+    if (!this.pool) await this.connect();
+    const sql = `
+      DELETE FROM codeatlas_wiki_pages
+      WHERE project_name = $1 AND tenant_id = $2
+    `;
+    await this.pool!.query(sql, [projectName, tenantId || '']);
   }
 
   async checkColumnExists(table: string, column: string): Promise<boolean> {
