@@ -323,16 +323,23 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const links = loaded.analysis.graph.links;
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
 
+      // ⚡ Bolt Optimization: Pre-compute adjacency lists in a single pass to replace O(N^2) filter loops inside the map
+      const targetMap = new Map<string, Array<{ from: string; type: string }>>();
+      const sourceMap = new Map<string, Array<{ to: string; type: string }>>();
+      for (const l of links) {
+        if (!targetMap.has(l.target)) targetMap.set(l.target, []);
+        targetMap.get(l.target)!.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
+
+        if (!sourceMap.has(l.source)) sourceMap.set(l.source, []);
+        sourceMap.get(l.source)!.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
+      }
+
       const result = {
         query,
         matchCount: matches.length,
         results: matches.slice(0, 50).map((n) => {
-          const incomingLinks = links
-            .filter((l) => l.target === n.id)
-            .map((l) => ({ from: nodeMap.get(l.source) || l.source, type: l.type }));
-          const outgoingLinks = links
-            .filter((l) => l.source === n.id)
-            .map((l) => ({ to: nodeMap.get(l.target) || l.target, type: l.type }));
+          const incomingLinks = targetMap.get(n.id) || [];
+          const outgoingLinks = sourceMap.get(n.id) || [];
 
           return {
             name: n.label,
@@ -384,6 +391,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       let filesEntries = Array.from(byFile.entries());
 
+      // ⚡ Bolt Optimization: Pre-compute adjacency lists in a single pass to replace O(N^2) filter loops inside the map
+      const sourceMap = new Map<string, Array<{ to: string; type: string }>>();
+      for (const l of links) {
+        if (!sourceMap.has(l.source)) sourceMap.set(l.source, []);
+        sourceMap.get(l.source)!.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
+      }
+
       const result = {
         query: filePath,
         filesFound: byFile.size,
@@ -395,9 +409,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
             name: e.label,
             type: e.type,
             line: e.line || null,
-            dependencies: links
-              .filter((l) => l.source === e.id)
-              .map((l) => ({ to: nodeMap.get(l.target) || l.target, type: l.type })),
+            dependencies: sourceMap.get(e.id) || [],
           })),
         })),
       };
