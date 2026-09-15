@@ -480,7 +480,7 @@ export function DreamMemoryView() {
 
       {/* Pagination */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', padding: '0.75rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
-        <button onClick={() => goToPage(page - 1)} disabled={!hasPrev}
+        <button onClick={() => goToPage(page - 1)} disabled={!hasPrev} aria-label="Previous page"
           className={FOCUS_RING_CLASS}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
@@ -493,7 +493,7 @@ export function DreamMemoryView() {
         <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>
           Page {page + 1}
         </span>
-        <button onClick={() => goToPage(page + 1)} disabled={!hasNext}
+        <button onClick={() => goToPage(page + 1)} disabled={!hasNext} aria-label="Next page"
           className={FOCUS_RING_CLASS}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
