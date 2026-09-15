@@ -1,0 +1,300 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { IDatabaseAdapter, WikiPageRecord } from '../database/adapters/interface.js';
+import { LLMProviderService } from './llmProviderService.js';
+import { logger } from '../utils/logger.js';
+
+export interface WikiNode {
+  path: string;
+  title: string;
+  summary?: string;
+  children?: WikiNode[];
+}
+
+export interface WikiTreeResponse {
+  projectName: string;
+  root: WikiNode[];
+  totalPages: number;
+  lastGeneratedAt?: string;
+}
+
+export interface GenerateWikiOptions {
+  provider?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+  exportToDisk?: boolean;
+  tenantId?: string;
+}
+
+export class WikiService {
+  constructor(
+    private readonly dbAdapter: IDatabaseAdapter,
+    private readonly llmProvider: LLMProviderService = new LLMProviderService()
+  ) {}
+
+  async generateProjectWiki(projectName: string, options: GenerateWikiOptions = {}): Promise<WikiTreeResponse> {
+    if (!projectName || !/^[a-zA-Z0-9_\-\.]+$/.test(projectName)) {
+      throw new Error('Invalid project name: contains invalid or unsafe characters');
+    }
+
+    const tenantId = options.tenantId || 'default';
+    logger.info(`Generating wiki for project '${projectName}' (tenant: ${tenantId})`);
+
+    // Clean up existing wiki pages
+    await this.dbAdapter.deleteWikiPages(projectName, tenantId);
+
+    const pagesToGenerate = [
+      {
+        path: '/overview',
+        title: 'Overview',
+        summary: 'Project overview and high-level architecture',
+        parentPath: undefined,
+        orderIndex: 0,
+        prompt: `# Overview\n\nCreate a comprehensive overview for the project '${projectName}'. Include executive summary, assumed tech stack, and key components.`,
+      },
+      {
+        path: '/architecture',
+        title: 'Architecture',
+        summary: 'System architecture and flow diagram',
+        parentPath: undefined,
+        orderIndex: 1,
+        prompt: `Create an architecture document for '${projectName}' that MUST include a Mermaid diagram showing a typical layered system flow (Client -> Presentation -> Services -> Database). Format the diagram with \`\`\`mermaid.`,
+      },
+      {
+        path: '/modules/services',
+        title: 'Services Layer',
+        summary: 'Domain logic and service components',
+        parentPath: '/modules',
+        orderIndex: 2,
+        prompt: `Document the services layer for '${projectName}'. Explain how domain logic and orchestration should be structured.`,
+      },
+      {
+        path: '/modules/database',
+        title: 'Database Layer',
+        summary: 'Persistence and database adapters',
+        parentPath: '/modules',
+        orderIndex: 3,
+        prompt: `Document the database layer for '${projectName}'. Describe how persistence, adapters, and schemas are managed.`,
+      },
+    ];
+
+    // Sanitize projectName to prevent directory traversal
+    const safeProjectName = path.basename(projectName).replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+    const rootWikiDir = path.resolve(process.cwd(), '.codeatlas', 'wiki');
+    const exportBaseDir = path.resolve(rootWikiDir, safeProjectName);
+    if (!exportBaseDir.startsWith(rootWikiDir)) {
+      throw new Error('Invalid project name path traversal');
+    }
+
+    if (options.exportToDisk) {
+      if (!fs.existsSync(exportBaseDir)) {
+        fs.mkdirSync(exportBaseDir, { recursive: true });
+      }
+    }
+
+    const timestamp = new Date().toISOString();
+
+    for (const pageDef of pagesToGenerate) {
+      const content = await this.llmProvider.generateText({
+        prompt: pageDef.prompt,
+        systemPrompt: 'You are an expert technical documentation assistant. Generate detailed markdown documentation.',
+        provider: options.provider as any,
+        apiKey: options.apiKey,
+        baseUrl: options.baseUrl,
+        model: options.model,
+      });
+
+      const diagramMatch = content.match(/```mermaid[\s\S]*?```/);
+      const diagramData = diagramMatch ? JSON.stringify({ type: 'mermaid', content: diagramMatch[0] }) : undefined;
+
+      const record: WikiPageRecord = {
+        id: crypto.randomUUID(),
+        project_name: projectName,
+        path: pageDef.path,
+        title: pageDef.title,
+        summary: pageDef.summary,
+        content,
+        diagram_data: diagramData,
+        parent_path: pageDef.parentPath,
+        order_index: pageDef.orderIndex,
+        tenant_id: tenantId,
+        created_at: timestamp,
+        updated_at: timestamp,
+      };
+
+      await this.dbAdapter.saveWikiPage(record);
+
+      if (options.exportToDisk) {
+        // Sanitize path for file system: prevent traversal and ensure .md extension
+        // e.g. /modules/services -> modules/services.md
+        const normalizedPath = path.normalize(pageDef.path);
+        const safePath = normalizedPath.replace(/^([\\\/]|(\.\.[\/\\]))+/, '');
+        const fullPath = path.resolve(exportBaseDir, `${safePath}.md`);
+
+        if (!fullPath.startsWith(exportBaseDir)) {
+          throw new Error('Invalid wiki page path mapping');
+        }
+
+        const dirPath = path.dirname(fullPath);
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true });
+        }
+        fs.writeFileSync(fullPath, content, 'utf8');
+      }
+    }
+
+    return this.getWikiTree(projectName, tenantId);
+  }
+
+  async getWikiTree(projectName: string, tenantId: string = 'default'): Promise<WikiTreeResponse> {
+    const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
+
+    if (pages.length === 0) {
+      return {
+        projectName,
+        root: [],
+        totalPages: 0,
+      };
+    }
+
+    // Map DB records to WikiNodes
+    const nodeMap = new Map<string, WikiNode>();
+    for (const page of pages) {
+      nodeMap.set(page.path, {
+        path: page.path,
+        title: page.title,
+        summary: page.summary,
+        children: [],
+      });
+    }
+
+    // Automatically synthesize missing parent nodes if they don't exist
+    for (const page of pages) {
+      if (page.parent_path && !nodeMap.has(page.parent_path)) {
+        // Extract a title for the synthesized parent from its path name
+        const titleMatch = page.parent_path.match(/([^\/]+)$/);
+        const title = titleMatch ? titleMatch[1].charAt(0).toUpperCase() + titleMatch[1].slice(1) : page.parent_path;
+
+        nodeMap.set(page.parent_path, {
+          path: page.parent_path,
+          title,
+          children: [],
+        });
+      }
+    }
+
+    const root: WikiNode[] = [];
+
+    // Link children to parents
+    for (const page of pages) {
+      const node = nodeMap.get(page.path)!;
+      if (page.parent_path && nodeMap.has(page.parent_path)) {
+        nodeMap.get(page.parent_path)!.children!.push(node);
+      } else {
+        root.push(node);
+      }
+    }
+
+    // Also place synthesized parents in the root if they have no explicit parent
+    // In a full implementation, we might need to recursively synthesize and link up to root
+    for (const [path, node] of nodeMap.entries()) {
+      // If this node wasn't in the original pages, child nodes were just added
+      const originalPage = pages.find((p) => p.path === path);
+      if (!originalPage) {
+        // It's a synthesized page. Determine if it connects deeper or belongs in root.
+        const parentPath = this.extractParentPath(path);
+        if (parentPath && nodeMap.has(parentPath)) {
+           nodeMap.get(parentPath)!.children!.push(node);
+        } else {
+           root.push(node);
+        }
+      }
+    }
+
+    // Sort nodes to preserve order_index or path
+    const sortByOrder = (a: WikiNode, b: WikiNode) => {
+      const pageA = pages.find((p) => p.path === a.path);
+      const pageB = pages.find((p) => p.path === b.path);
+      const indexA = pageA?.order_index ?? 999;
+      const indexB = pageB?.order_index ?? 999;
+      if (indexA !== indexB) return indexA - indexB;
+      return a.path.localeCompare(b.path);
+    };
+
+    root.sort(sortByOrder);
+    for (const node of nodeMap.values()) {
+      if (node.children && node.children.length > 0) {
+        node.children.sort(sortByOrder);
+      } else {
+        delete node.children; // Clean up empty children arrays
+      }
+    }
+
+    // Determine latest updated_at
+    const lastGeneratedAt = pages.reduce((latest, current) => {
+      if (!current.updated_at) return latest;
+      if (!latest) return current.updated_at;
+      return new Date(current.updated_at) > new Date(latest) ? current.updated_at : latest;
+    }, '' as string) || undefined;
+
+    return {
+      projectName,
+      root,
+      totalPages: pages.length,
+      lastGeneratedAt,
+    };
+  }
+
+  async getWikiPage(projectName: string, path: string, tenantId: string = 'default'): Promise<WikiPageRecord | null> {
+    return await this.dbAdapter.getWikiPage(projectName, path, tenantId);
+  }
+
+  async queryWiki(projectName: string, query: string, tenantId: string = 'default'): Promise<{ answer: string; references: string[] }> {
+    const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
+
+    // Very basic keyword matching/scoring for demo purposes.
+    // In production, use vector embeddings.
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+
+    let scoredPages = pages.map(page => {
+      let score = 0;
+      const contentLower = page.content.toLowerCase();
+      const titleLower = page.title.toLowerCase();
+
+      for (const term of queryTerms) {
+        if (titleLower.includes(term)) score += 5;
+        if (contentLower.includes(term)) score += 1;
+      }
+      return { page, score };
+    });
+
+    // Filter to relevant stuff, or take all if list is short
+    scoredPages.sort((a, b) => b.score - a.score);
+    const topContexts = scoredPages.slice(0, 3).filter(p => p.score > 0 || scoredPages.length <= 3);
+
+    const references = topContexts.map(scp => scp.page.path);
+
+    const contextStr = topContexts.map(scp => `--- Page: ${scp.page.title} (${scp.page.path}) ---\n${scp.page.content}`).join('\n\n');
+
+    const prompt = `Context from Project Wiki:\n${contextStr}\n\nUser Query: ${query}\n\nPlease answer the user query based on the context above. Cite the paths of pages you used to formulate your answer.`;
+
+    const answer = await this.llmProvider.generateText({
+      prompt,
+      systemPrompt: 'You are an advanced documentation QA assistant running on CodeAtlas platform.'
+    });
+
+    return {
+      answer,
+      references
+    };
+  }
+
+  private extractParentPath(pathStr: string): string | undefined {
+    const parts = pathStr.split('/').filter(Boolean);
+    if (parts.length <= 1) return undefined;
+    parts.pop();
+    return '/' + parts.join('/');
+  }
+}

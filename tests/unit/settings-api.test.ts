@@ -69,6 +69,9 @@ describe('Settings API - Firestore Quota / Fallback resilience', () => {
       }
     });
 
+    if (res.status !== 200) {
+      console.error('GET error response:', res.status, await res.text());
+    }
     assert.strictEqual(res.status, 200, 'Should gracefully fall back to 200 with default setting');
     const data = await res.json() as any;
     assert.strictEqual(data.indexingEnabled, true, 'Default indexingEnabled should be true');
@@ -87,6 +90,9 @@ describe('Settings API - Firestore Quota / Fallback resilience', () => {
       })
     });
 
+    if (res.status !== 200) {
+      console.error('POST error response:', res.status, await res.text());
+    }
     assert.strictEqual(res.status, 200, 'Should succeed locally even if Firestore is exhausted');
     const data = await res.json() as any;
     assert.strictEqual(data.success, true);

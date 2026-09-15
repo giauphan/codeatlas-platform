@@ -21,10 +21,31 @@ export interface IDatabaseAdapter {
   detectCircularDependencies(project: string, tenantId: string): Promise<Array<{ entity_name: string; file_path: string }>>;
   detectGodObjects(project: string, tenantId: string): Promise<Array<{ entity_name: string; in_degree: number }>>;
   detectDeadCode(project: string, tenantId: string): Promise<Array<{ entity_name: string; file_path: string }>>;
+
+  // Wiki operations
+  saveWikiPage(page: WikiPageRecord): Promise<void>;
+  getWikiPage(projectName: string, path: string, tenantId?: string): Promise<WikiPageRecord | null>;
+  listWikiPages(projectName: string, tenantId?: string): Promise<WikiPageRecord[]>;
+  deleteWikiPages(projectName: string, tenantId?: string): Promise<void>;
 }
 
 export interface VectorSearchResult {
   id: string;
   score: number; // 0..1 (1 = most similar)
   // ... other fields from the table
+}
+
+export interface WikiPageRecord {
+  id: string;
+  project_name: string;
+  path: string;
+  title: string;
+  summary?: string;
+  content: string;
+  diagram_data?: string;
+  parent_path?: string;
+  order_index?: number;
+  created_at?: string;
+  updated_at?: string;
+  tenant_id?: string;
 }
