@@ -409,7 +409,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       let filesEntries = Array.from(byFile.entries());
 
       // ⚡ Bolt Optimization: Pre-compute adjacency lists in a single pass to replace O(N^2) filter loops inside the map
-      const { outgoingBySource } = buildAdjacencyIndex(links, nodeMap, { outgoing: true });
+      const { outgoingBySource } = buildAdjacencyIndex(links, nodeMap, { incoming: false });
 
       const result = {
         query: filePath,
