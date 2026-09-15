@@ -44,11 +44,13 @@ function buildAdjacencyIndex(links: GraphLink[], nodeMap: Map<string, string>) {
   const outgoingBySource = new Map<string, Array<{ to: string; type: string }>>();
 
   for (const l of links) {
-    if (!incomingByTarget.has(l.target)) incomingByTarget.set(l.target, []);
-    incomingByTarget.get(l.target)!.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
+    const targetArr = incomingByTarget.get(l.target) ?? [];
+    targetArr.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
+    incomingByTarget.set(l.target, targetArr);
 
-    if (!outgoingBySource.has(l.source)) outgoingBySource.set(l.source, []);
-    outgoingBySource.get(l.source)!.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
+    const sourceArr = outgoingBySource.get(l.source) ?? [];
+    sourceArr.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
+    outgoingBySource.set(l.source, sourceArr);
   }
   return { incomingByTarget, outgoingBySource };
 }
@@ -342,8 +344,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
 
       // ⚡ Bolt Optimization: Pre-compute adjacency lists in a single pass to replace O(N^2) filter loops inside the map
-      let incomingByTarget: Map<string, Array<{ from: string; type: string }>> | undefined;
-      let outgoingBySource: Map<string, Array<{ to: string; type: string }>> | undefined;
+      let incomingByTarget: Map<string, Array<{ from: string; type: string }>> | undefined = undefined;
+      let outgoingBySource: Map<string, Array<{ to: string; type: string }>> | undefined = undefined;
       if (matches.length > 0) {
         ({ incomingByTarget, outgoingBySource } = buildAdjacencyIndex(links, nodeMap));
       }
@@ -406,7 +408,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       let filesEntries = Array.from(byFile.entries());
 
       // ⚡ Bolt Optimization: Pre-compute adjacency lists in a single pass to replace O(N^2) filter loops inside the map
-      let outgoingBySource: Map<string, Array<{ to: string; type: string }>> | undefined;
+      let outgoingBySource: Map<string, Array<{ to: string; type: string }>> | undefined = undefined;
       if (byFile.size > 0) {
         ({ outgoingBySource } = buildAdjacencyIndex(links, nodeMap));
       }
