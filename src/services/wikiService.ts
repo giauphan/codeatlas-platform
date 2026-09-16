@@ -186,8 +186,23 @@ export class WikiService {
     }
 
     const root: WikiNode[] = [];
+    const synthesizedPaths = new Set<string>();
 
-    // Link children to parents
+    for (const page of pages) {
+      if (page.parent_path && !nodeMap.has(page.parent_path)) {
+        const titleMatch = page.parent_path.match(/([^\/]+)$/);
+        const title = titleMatch ? titleMatch[1].charAt(0).toUpperCase() + titleMatch[1].slice(1) : page.parent_path;
+
+        nodeMap.set(page.parent_path, {
+          path: page.parent_path,
+          title,
+          children: [],
+        });
+        synthesizedPaths.add(page.parent_path);
+      }
+    }
+
+    // Link children to parents and collect root nodes in a single pass O(N)
     for (const page of pages) {
       const node = nodeMap.get(page.path)!;
       if (page.parent_path && nodeMap.has(page.parent_path)) {
@@ -197,28 +212,24 @@ export class WikiService {
       }
     }
 
-    // Also place synthesized parents in the root if they have no explicit parent
-    // In a full implementation, we might need to recursively synthesize and link up to root
-    for (const [path, node] of nodeMap.entries()) {
-      // If this node wasn't in the original pages, child nodes were just added
-      const originalPage = pages.find((p) => p.path === path);
-      if (!originalPage) {
-        // It's a synthesized page. Determine if it connects deeper or belongs in root.
-        const parentPath = this.extractParentPath(path);
-        if (parentPath && nodeMap.has(parentPath)) {
-           nodeMap.get(parentPath)!.children!.push(node);
-        } else {
-           root.push(node);
-        }
+    // Handle synthesized parents connection
+    for (const synthPath of synthesizedPaths) {
+      const node = nodeMap.get(synthPath)!;
+      const parentPath = this.extractParentPath(synthPath);
+      if (parentPath && nodeMap.has(parentPath)) {
+         nodeMap.get(parentPath)!.children!.push(node);
+      } else {
+         root.push(node);
       }
     }
 
-    // Sort nodes to preserve order_index or path
+    // Single look-up map for order
+    const orderMap = new Map<string, number>();
+    for (const page of pages) orderMap.set(page.path, page.order_index ?? 999);
+
     const sortByOrder = (a: WikiNode, b: WikiNode) => {
-      const pageA = pages.find((p) => p.path === a.path);
-      const pageB = pages.find((p) => p.path === b.path);
-      const indexA = pageA?.order_index ?? 999;
-      const indexB = pageB?.order_index ?? 999;
+      const indexA = orderMap.get(a.path) ?? 999;
+      const indexB = orderMap.get(b.path) ?? 999;
       if (indexA !== indexB) return indexA - indexB;
       return a.path.localeCompare(b.path);
     };
@@ -232,12 +243,14 @@ export class WikiService {
       }
     }
 
-    // Determine latest updated_at
-    const lastGeneratedAt = pages.reduce((latest, current) => {
-      if (!current.updated_at) return latest;
-      if (!latest) return current.updated_at;
-      return new Date(current.updated_at) > new Date(latest) ? current.updated_at : latest;
-    }, '' as string) || undefined;
+    // Determine latest updated_at using one pass
+    let lastGeneratedAt: string | undefined = undefined;
+    for (const current of pages) {
+      if (!current.updated_at) continue;
+      if (!lastGeneratedAt || new Date(current.updated_at) > new Date(lastGeneratedAt)) {
+        lastGeneratedAt = current.updated_at;
+      }
+    }
 
     return {
       projectName,
