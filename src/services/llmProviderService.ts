@@ -182,7 +182,7 @@ export class LLMProviderService {
   }
 
   private async callOpenAIFormatEndpoint(
-    endpoint: string,
+    endpointUrl: string,
     apiKey: string,
     model: string,
     options: LLMGenerateOptions
@@ -200,7 +200,17 @@ export class LLMProviderService {
     }
     messages.push({ role: 'user', content: options.prompt });
 
-    const res = await fetch(endpoint, {
+    // Enforce URL safety right before fetch, even though callers sanitize first
+    let safeUrl = endpointUrl;
+    if (safeUrl !== 'https://api.openai.com/v1/chat/completions') {
+       const urlObj = new URL(safeUrl);
+       if (urlObj.hostname !== '127.0.0.1' && urlObj.hostname !== 'localhost') {
+         // Fallback to strict localhost if URL was somehow mutated
+         safeUrl = 'http://127.0.0.1:11434/v1/chat/completions';
+       }
+    }
+
+    const res = await fetch(safeUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify({
