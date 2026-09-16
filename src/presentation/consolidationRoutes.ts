@@ -4,6 +4,7 @@
 import express from "express";
 import { consolidationEngine, type ConsolidationJob } from "../services/consolidationEngine.js";
 import { authMiddleware } from "../services/authService.js";
+import { buildInClause } from "../database/utils.js";
 import { rejectArrayParams } from "../middleware/validation.js";
 import { logger } from "../utils/logger.js";
 import rateLimit from "express-rate-limit";
@@ -103,15 +104,16 @@ export function mountConsolidationRoutes(app: express.Application): void {
 
         res.json({ concepts });
 
-        // Batch update access counts - reduces N roundtrips to 1
+        // ⚡ Bolt: Batch update access counts using a single IN clause (fire-and-forget to avoid write-on-read bottleneck)
         if (concepts.length > 0) {
-          try {
-            const binds = concepts.map(c => ({ id: c.id, tenantId }));
-            await adapter.executeMany(
-              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = datetime('now') WHERE id = :id AND tenant_id = :tenantId`,
-              binds
-            );
-          } catch { /* skip */ }
+          const { clause, binds } = buildInClause(
+            concepts.map((c) => c.id),
+            { tenantId }
+          );
+          adapter.execute(
+            `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = datetime('now') WHERE tenant_id = :tenantId AND id IN (${clause})`,
+            binds
+          ).catch(() => { /* skip */ });
         }
     } catch (err) {
       logger.error(`[Concepts API] ${err}`);
