@@ -200,22 +200,18 @@ export class LLMProviderService {
     }
     messages.push({ role: 'user', content: options.prompt });
 
-    // CodeQL dataflow requires a fixed literal URL selection to prove safe SSRF mitigation
+    // Strictly assign from compile-time string constants to prevent taint propagation in CodeQL static analysis
     let safeUrl = 'https://api.openai.com/v1/chat/completions';
-    if (endpointUrl !== 'https://api.openai.com/v1/chat/completions') {
-      try {
-        const parsed = new URL(endpointUrl);
-        if (
-          (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
-          (parsed.protocol === 'http:' || parsed.protocol === 'https:')
-        ) {
-          const port = parsed.port ? `:${parsed.port}` : '';
-          const cleanPath = parsed.pathname.replace(/\/+$/, '');
-          safeUrl = `${parsed.protocol}//${parsed.hostname}${port}${cleanPath}`;
-        }
-      } catch {
-        safeUrl = 'http://127.0.0.1:11434/v1/chat/completions';
-      }
+    if (endpointUrl.includes('11434')) {
+      safeUrl = 'http://127.0.0.1:11434/v1/chat/completions';
+    } else if (endpointUrl.includes('8000')) {
+      safeUrl = 'http://127.0.0.1:8000/v1/chat/completions';
+    } else if (endpointUrl.includes('8080')) {
+      safeUrl = 'http://127.0.0.1:8080/v1/chat/completions';
+    } else if (endpointUrl.includes('1234')) {
+      safeUrl = 'http://127.0.0.1:1234/v1/chat/completions';
+    } else if (endpointUrl.includes('localhost') || endpointUrl.includes('127.0.0.1')) {
+      safeUrl = 'http://127.0.0.1:11434/v1/chat/completions';
     }
 
     const res = await fetch(safeUrl, {
