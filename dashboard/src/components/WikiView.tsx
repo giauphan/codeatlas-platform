@@ -520,6 +520,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
               Pages Tree
             </span>
             <button
+              type="button"
               aria-label="Refresh pages tree"
               onClick={() => fetchTree(currentProject)}
               disabled={loadingTree}
