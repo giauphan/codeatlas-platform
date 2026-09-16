@@ -34,6 +34,8 @@ import {
   reloadMemory,
   MemorySystemStatus
 } from "../services/memoryController.js";
+import { createDatabaseAdapter } from "../database/factory.js";
+import { WikiService } from "../services/wikiService.js";
 
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
@@ -2026,7 +2028,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     async () => {
       const auth = await checkAuth();
       await logActivity(auth, "reset_memory", {});
-      
+
       try {
         resetMemory();
         return { content: [{
@@ -2038,14 +2040,175 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           }, null, 2)
         }] };
       } catch (err: unknown) {
-        return { 
-          content: [{ 
-            type: "text" as const, 
-            text: `Memory reset failed: ${err instanceof Error ? err.message : String(err)}` 
-          }], 
-          isError: true as const 
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Memory reset failed: ${err instanceof Error ? err.message : String(err)}`
+          }],
+          isError: true as const
         };
       }
+    }
+  );
+
+  // --- DeepWiki Tools ---
+  let wikiServiceCache: WikiService | null = null;
+  const getWikiService = () => {
+    if (!wikiServiceCache) {
+      wikiServiceCache = new WikiService(createDatabaseAdapter());
+    }
+    return wikiServiceCache;
+  };
+
+  server.tool(
+    "generate_project_wiki",
+    "Generate a complete multi-page DeepWiki documentation for a project with architecture diagrams, module deep-dives, and component flows.",
+    {
+      project: z.string().describe("Project name or path"),
+      provider: z.string().optional().describe("LLM provider (e.g. 'template', 'anthropic', 'openai')"),
+      apiKey: z.string().optional().describe("API key for LLM provider"),
+      baseUrl: z.string().optional().describe("Base URL for custom OpenAI-compatible endpoint"),
+      model: z.string().optional().describe("Model name to use"),
+      exportToDisk: z.boolean().optional().describe("Whether to export markdown files to .codeatlas/wiki/<project>/"),
+    },
+    async (params) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "generate_project_wiki", { project: params.project });
+      try {
+        const service = getWikiService();
+        const tree = await service.generateProjectWiki(params.project, {
+          provider: params.provider,
+          apiKey: params.apiKey,
+          baseUrl: params.baseUrl,
+          model: params.model,
+          exportToDisk: params.exportToDisk,
+          tenantId: "default",
+        });
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              success: true,
+              message: "Wiki generated successfully",
+              projectName: tree.projectName,
+              totalPages: tree.totalPages,
+            }, null, 2),
+          }],
+        };
+      } catch (err: unknown) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Failed to generate wiki: ${err instanceof Error ? err.message : String(err)}`,
+          }],
+          isError: true as const,
+        };
+      }
+    }
+  );
+  a2aReal(
+    "generate_project_wiki",
+    "Generate a complete multi-page DeepWiki documentation for a project with architecture diagrams, module deep-dives, and component flows.",
+    ["project", "provider", "apiKey", "baseUrl", "model", "exportToDisk"],
+    async (params: Record<string, unknown>) => {
+      const service = getWikiService();
+      const tree = await service.generateProjectWiki(params.project as string, {
+        provider: params.provider as string | undefined,
+        apiKey: params.apiKey as string | undefined,
+        baseUrl: params.baseUrl as string | undefined,
+        model: params.model as string | undefined,
+        exportToDisk: params.exportToDisk as boolean | undefined,
+        tenantId: "default",
+      });
+      return {
+        success: true,
+        message: "Wiki generated successfully",
+        projectName: tree.projectName,
+        totalPages: tree.totalPages,
+      };
+    }
+  );
+
+  server.tool(
+    "get_wiki_page",
+    "Retrieve the content and diagram metadata of a specific wiki page by path.",
+    {
+      project: z.string().describe("Project name or path"),
+      path: z.string().describe("Page path (e.g. '/overview', '/architecture', '/modules/services')"),
+    },
+    async ({ project, path }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "get_wiki_page", { project, path });
+      try {
+        const service = getWikiService();
+        const page = await service.getWikiPage(project, path, "default");
+        if (!page) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({ error: "Wiki page not found", project, path }, null, 2),
+            }],
+            isError: true as const,
+          };
+        }
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(page, null, 2) }],
+        };
+      } catch (err: unknown) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Failed to get wiki page: ${err instanceof Error ? err.message : String(err)}`,
+          }],
+          isError: true as const,
+        };
+      }
+    }
+  );
+  a2aReal(
+    "get_wiki_page",
+    "Retrieve the content and diagram metadata of a specific wiki page by path.",
+    ["project", "path"],
+    async (params: Record<string, unknown>) => {
+      const service = getWikiService();
+      return (await service.getWikiPage(params.project as string, params.path as string, "default")) || { error: "Wiki page not found" };
+    }
+  );
+
+  server.tool(
+    "query_project_wiki",
+    "Query and chat with the project documentation wiki using semantic search and QA synthesis.",
+    {
+      project: z.string().describe("Project name or path"),
+      query: z.string().describe("Natural language query or question about the project documentation"),
+    },
+    async ({ project, query }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "query_project_wiki", { project, query });
+      try {
+        const service = getWikiService();
+        const result = await service.queryWiki(project, query, "default");
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err: unknown) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Failed to query wiki: ${err instanceof Error ? err.message : String(err)}`,
+          }],
+          isError: true as const,
+        };
+      }
+    }
+  );
+  a2aReal(
+    "query_project_wiki",
+    "Query and chat with the project documentation wiki using semantic search and QA synthesis.",
+    ["project", "query"],
+    async (params: Record<string, unknown>) => {
+      const service = getWikiService();
+      return await service.queryWiki(params.project as string, params.query as string, "default");
     }
   );
 

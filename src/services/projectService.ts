@@ -127,7 +127,7 @@ export function isSystemIdeDirectory(dir: string): boolean {
       isIde = true;
     } else {
       const parts = absPath.split(path.sep);
-      if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas')) {
+      if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas' && part !== '.claude')) {
         isIde = true;
       } else if (
         (() => {

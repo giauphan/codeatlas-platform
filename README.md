@@ -22,6 +22,7 @@ Ship a secure, multi-tenant codebase intelligence backend without rebuilding aut
 | **Knowledge graph** | Genome DNA + immune system patterns, consolidation engine |
 | **Multi-tenant** | Tenant isolation via `authStorage.run` + Firebase auth |
 | **AST analysis** | TypeScript/Python/JS parsing via `@typescript-eslint/typescript-estree` and `py-ast` |
+| **DeepWiki** | Multi-provider LLM (Anthropic/OpenAI/Ollama) automated architecture documentation with Q&A |
 | **Security scanner** | Enterprise vulnerability scanning built-in |
 | **A2A protocol** | Agent-to-agent orchestration with registry |
 | **Dashboard** | React + Vite management UI for API keys and projects |
@@ -149,6 +150,7 @@ See [`docs/API_EXAMPLES.md`](docs/API_EXAMPLES.md) for full curl flows and trans
 | Code | `code_search`, `search_files`, `read_file` |
 | Projects | `list_projects`, `get_project_structure`, `get_dependencies` |
 | Architecture | `generate_system_flow`, `generate_feature_flow_diagram`, `trace_feature_flow` |
+| DeepWiki | `deepwiki_generate`, `deepwiki_get_tree`, `deepwiki_get_page`, `deepwiki_query` |
 
 Full tool reference: [`docs/architecture/mcp.md`](docs/architecture/mcp.md).
 
@@ -158,6 +160,7 @@ Full tool reference: [`docs/architecture/mcp.md`](docs/architecture/mcp.md).
 |---|---|
 | [Development](docs/DEVELOPMENT.md) | Local dev setup, env vars, troubleshooting |
 | [Deployment](docs/DEPLOYMENT.md) | PM2, systemd, Nginx TLS reverse proxy |
+| [DeepWiki](docs/superpowers/specs/2026-09-15-deepwiki-integration-design.md) | LLM config, Markdown docs, architecture generation |
 | [API examples](docs/API_EXAMPLES.md) | curl flows, MCP configs, REST endpoints |
 | [Architecture overview](docs/architecture/overview.md) | Layers, services, integrations |
 | [MCP architecture](docs/architecture/mcp.md) | Tool registration, transports, request flow |

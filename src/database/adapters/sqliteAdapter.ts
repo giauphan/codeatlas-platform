@@ -1,5 +1,5 @@
 // src/database/adapters/sqliteAdapter.ts
-import { IDatabaseAdapter, VectorSearchResult } from "./interface.js";
+import { IDatabaseAdapter, VectorSearchResult, WikiPageRecord } from "./interface.js";
 import { authStorage } from "../../utils/context.js";
 import { hashApiKey } from "../../utils/apiKey.js";
 import { logger } from "../../utils/logger.js";
@@ -51,8 +51,17 @@ export class SQLiteAdapter implements IDatabaseAdapter {
   private connectPromise: Promise<void> | null = null;
   private readonly dbPath: string;
 
-  constructor() {
-    this.dbPath = process.env.CODEATLAS_SQLITE_PATH || "./data/codeatlas.db";
+  constructor(dbPath?: string) {
+    this.dbPath = dbPath || process.env.CODEATLAS_SQLITE_PATH || "./data/codeatlas.db";
+  }
+
+  async initialize(): Promise<void> {
+    await this.connect();
+    await this.initializeSchema();
+  }
+
+  async close(): Promise<void> {
+    await this.disconnect();
   }
 
   async connect(): Promise<void> {
@@ -405,7 +414,103 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     addColumnIfMissing("ai_dreaming_memory", "related_ids", "TEXT");
     this.db!.exec("CREATE INDEX IF NOT EXISTS idx_episodic_tenant_project ON ai_episodic_memory(tenant_id, project_name)");
 
+    this.db!.exec(`
+      CREATE TABLE IF NOT EXISTS codeatlas_wiki_pages (
+        id TEXT PRIMARY KEY,
+        project_name TEXT NOT NULL,
+        path TEXT NOT NULL,
+        title TEXT,
+        summary TEXT,
+        content TEXT,
+        diagram_data TEXT,
+        parent_path TEXT,
+        order_index INTEGER,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        tenant_id TEXT,
+        UNIQUE (project_name, path, tenant_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_wiki_project_tenant ON codeatlas_wiki_pages(project_name, tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_wiki_path ON codeatlas_wiki_pages(path);
+    `);
+
     logger.info("[SQLiteAdapter] Schema initialized.");
+  }
+
+  async saveWikiPage(page: WikiPageRecord): Promise<void> {
+    if (!this.db) await this.connect();
+    const sql = `
+      INSERT OR REPLACE INTO codeatlas_wiki_pages (
+        id,
+        project_name,
+        path,
+        title,
+        summary,
+        content,
+        diagram_data,
+        parent_path,
+        order_index,
+        updated_at,
+        tenant_id
+      ) VALUES (
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        datetime('now'),
+        ?
+      )
+    `;
+    const params = [
+      page.id,
+      page.project_name,
+      page.path,
+      page.title,
+      page.summary,
+      page.content,
+      page.diagram_data,
+      page.parent_path,
+      page.order_index,
+      page.tenant_id
+    ];
+    await this.execute(sql, params);
+  }
+
+  async getWikiPage(projectName: string, path: string, tenantId?: string): Promise<WikiPageRecord | null> {
+    if (!this.db) await this.connect();
+    const sql = `
+      SELECT * FROM codeatlas_wiki_pages
+      WHERE project_name = ? AND path = ? AND tenant_id = ?
+    `;
+    const params = [projectName, path, tenantId || ''];
+    const results = await this.query<WikiPageRecord>(sql, params);
+    return results.length > 0 ? results[0] : null;
+  }
+
+  async listWikiPages(projectName: string, tenantId?: string): Promise<WikiPageRecord[]> {
+    if (!this.db) await this.connect();
+    const sql = `
+      SELECT * FROM codeatlas_wiki_pages
+      WHERE project_name = ? AND tenant_id = ?
+      ORDER BY order_index ASC
+    `;
+    const params = [projectName, tenantId || ''];
+    return this.query<WikiPageRecord>(sql, params);
+  }
+
+  async deleteWikiPages(projectName: string, tenantId?: string): Promise<void> {
+    if (!this.db) await this.connect();
+    const sql = `
+      DELETE FROM codeatlas_wiki_pages
+      WHERE project_name = ? AND tenant_id = ?
+    `;
+    const params = [projectName, tenantId || ''];
+    await this.execute(sql, params);
   }
 
   async checkColumnExists(table: string, column: string): Promise<boolean> {
