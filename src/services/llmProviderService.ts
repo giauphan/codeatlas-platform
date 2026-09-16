@@ -200,14 +200,22 @@ export class LLMProviderService {
     }
     messages.push({ role: 'user', content: options.prompt });
 
-    // Enforce URL safety right before fetch, even though callers sanitize first
-    let safeUrl = endpointUrl;
-    if (safeUrl !== 'https://api.openai.com/v1/chat/completions') {
-       const urlObj = new URL(safeUrl);
-       if (urlObj.hostname !== '127.0.0.1' && urlObj.hostname !== 'localhost') {
-         // Fallback to strict localhost if URL was somehow mutated
-         safeUrl = 'http://127.0.0.1:11434/v1/chat/completions';
-       }
+    // CodeQL dataflow requires a fixed literal URL selection to prove safe SSRF mitigation
+    let safeUrl = 'https://api.openai.com/v1/chat/completions';
+    if (endpointUrl !== 'https://api.openai.com/v1/chat/completions') {
+      try {
+        const parsed = new URL(endpointUrl);
+        if (
+          (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
+          (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+        ) {
+          const port = parsed.port ? `:${parsed.port}` : '';
+          const cleanPath = parsed.pathname.replace(/\/+$/, '');
+          safeUrl = `${parsed.protocol}//${parsed.hostname}${port}${cleanPath}`;
+        }
+      } catch {
+        safeUrl = 'http://127.0.0.1:11434/v1/chat/completions';
+      }
     }
 
     const res = await fetch(safeUrl, {
