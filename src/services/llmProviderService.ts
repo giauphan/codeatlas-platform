@@ -106,8 +106,11 @@ export class LLMProviderService {
       try {
         const parsed = new URL(options.baseUrl);
         if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-          if (parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
+          if (parsed.protocol === 'http:' && parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
             throw new Error('HTTP is only allowed for localhost');
+          }
+          if (parsed.hostname.toLowerCase() === 'metadata.google.internal' || parsed.hostname === '169.254.169.254') {
+             throw new Error('Cannot access cloud metadata endpoints');
           }
           baseUrl = parsed.toString().endsWith('/') ? parsed.toString().slice(0, -1) : parsed.toString();
         }
@@ -164,6 +167,9 @@ export class LLMProviderService {
           if (parsed.protocol === 'http:' && parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
             throw new Error('HTTP is only allowed for localhost');
           }
+          if (parsed.hostname.toLowerCase() === 'metadata.google.internal' || parsed.hostname === '169.254.169.254') {
+             throw new Error('Cannot access cloud metadata endpoints');
+          }
           baseUrl = parsed.toString().endsWith('/') ? parsed.toString().slice(0, -1) : parsed.toString();
         }
       } catch {}
@@ -181,6 +187,9 @@ export class LLMProviderService {
         if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
           if (parsed.protocol === 'http:' && parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
             throw new Error('HTTP is only allowed for localhost');
+          }
+          if (parsed.hostname.toLowerCase() === 'metadata.google.internal' || parsed.hostname === '169.254.169.254') {
+             throw new Error('Cannot access cloud metadata endpoints');
           }
           baseUrl = parsed.toString().endsWith('/') ? parsed.toString().slice(0, -1) : parsed.toString();
         }
