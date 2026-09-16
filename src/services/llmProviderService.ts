@@ -214,7 +214,7 @@ export class LLMProviderService {
       safeUrl = 'http://127.0.0.1:11434/v1/chat/completions';
     }
 
-    const res = await fetch(safeUrl, {
+    const res = await fetch(String(safeUrl), {
       method: 'POST',
       headers,
       body: JSON.stringify({
