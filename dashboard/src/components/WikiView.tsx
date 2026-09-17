@@ -913,8 +913,6 @@ export const WikiView: React.FC<WikiViewProps> = ({
                 </>
               )}
 
-              
-              
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                 {/* Save Preset Section */}
                 <div>
@@ -981,12 +979,12 @@ export const WikiView: React.FC<WikiViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowGenModal(false)}
-                    style={{ 
-                      background: 'rgba(255,255,255,0.05)', 
-                      border: '1px solid rgba(255,255,255,0.1)', 
-                      borderRadius: '8px', 
-                      padding: '0.75rem 1.25rem', 
-                      color: '#fff', 
+                    style={{
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      padding: '0.75rem 1.25rem',
+                      color: '#fff',
                       cursor: 'pointer',
                       fontSize: '0.9rem',
                       fontWeight: 500
@@ -999,11 +997,11 @@ export const WikiView: React.FC<WikiViewProps> = ({
                     onClick={handleGenerateWiki}
                     disabled={isGenerating}
                     className={`btn-neon-cyan ${FOCUS_RING_CLASS}`}
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '8px', 
-                      borderRadius: '8px', 
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderRadius: '8px',
                       padding: '0.75rem 1.25rem',
                       fontSize: '0.9rem',
                       fontWeight: 600
