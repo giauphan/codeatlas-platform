@@ -283,7 +283,7 @@ export class GenomeService {
       genes.sort((a, b) => b.score - a.score);
 
       // Increment usage count for returned genes
-      // ⚡ Bolt: Use a single UPDATE statement with IN clause to avoid executeMany overhead
+      // ⚡ Bolt: Batch updates via IN clause with chunks of 900 to reduce round-trips compared to executeMany
       if (genes.length > 0) {
         try {
           const geneIds = Array.from(new Set(genes.map((g) => g.id))); // dedupe
