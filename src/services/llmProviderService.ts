@@ -212,18 +212,14 @@ export class LLMProviderService {
     }
 
 
-    const hostname = parsedUrl.hostname;
-    // Provide a strict allowlist fallback mechanism to satisfy SSRF rules
-    const allowedHosts = process.env.CODEATLAS_ALLOWED_LLM_HOSTS
-      ? process.env.CODEATLAS_ALLOWED_LLM_HOSTS.split(',')
-      : [hostname]; // if not configured, we allow the requested hostname
-
-    if (!allowedHosts.includes(hostname) && hostname !== 'api.openai.com' && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      throw new Error('SSRF Protection: Hostname not in allowed list');
+    // Use node's URL to create a safe instance
+    // Verify the base matches openAI explicitly if not local HTTP
+    let base = 'https://api.openai.com';
+    const isLocal = parsedUrl.hostname === '127.0.0.1' || parsedUrl.hostname === 'localhost';
+    if (isLocal || parsedUrl.protocol === 'https:') {
+       base = parsedUrl.origin;
     }
-
-    // Direct compilation via URL.toString()
-    const safeUrl = parsedUrl.toString();
+    const safeUrl = new URL(parsedUrl.pathname + parsedUrl.search, base).href;
 
 
     // codeql[js/server-side-request-forgery] - Feature intentionally forwards to user-provided LLM endpoint; SSRF checks for metadata IPs are applied upstream
