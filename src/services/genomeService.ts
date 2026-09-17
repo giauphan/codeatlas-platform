@@ -283,16 +283,15 @@ export class GenomeService {
       genes.sort((a, b) => b.score - a.score);
 
       // Increment usage count for returned genes
+      // ⚡ Bolt: Use a single UPDATE statement with IN clause to avoid executeMany overhead
       if (genes.length > 0) {
         try {
-          const binds = genes.map((g) => ({
-            id: g.id,
-            tenantId: getTenantId(),
-          }));
-          await connection.executeMany(
+          const geneIds = genes.map((g) => g.id);
+          const { clause: inClause, binds: inBinds } = buildInClause(geneIds, { tenantId: getTenantId() });
+          await connection.execute(
             `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
-             updated_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-            binds as any,
+             updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
+            inBinds as any,
             { autoCommit: true },
           );
         } catch {
