@@ -291,11 +291,11 @@ export class GenomeService {
           await connection.execute(
             `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
              updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
-            inBinds as any,
+            inBinds,
             { autoCommit: true },
           );
-        } catch {
-          /* skip */
+        } catch (err) {
+          logger.warn(`[Genome] Failed to increment usage counts for genes: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
