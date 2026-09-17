@@ -209,26 +209,32 @@ export class LLMProviderService {
     // Explicit whitelist of allowed custom endpoints for CodeQL
     const ALLOWED_FQDNS = [
       'api.openai.com',
+      'api.anthropic.com',
+      'api.deepseek.com',
+      'openrouter.ai',
+      'api.groq.com',
+      'api.mistral.ai',
+      'api.together.xyz',
       'localhost',
-      '127.0.0.1'
+      '127.0.0.1',
+      '0.0.0.0'
     ];
+    
     if (process.env.CODEATLAS_ALLOWED_LLM_HOSTS) {
-      ALLOWED_FQDNS.push(...process.env.CODEATLAS_ALLOWED_LLM_HOSTS.split(','));
+      ALLOWED_FQDNS.push(...process.env.CODEATLAS_ALLOWED_LLM_HOSTS.split(',').map(s => s.trim()));
     }
 
     try {
       const parsed = new URL(endpointUrl);
-      const isLocal = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
       
-      // Explicitly allow http for local development loops and https externally
-      if (ALLOWED_FQDNS.includes(parsed.hostname) || isLocal || parsed.protocol === 'https:') {
-         // Reconstruct string manually
+      // Prevent SSRF by checking hostname against strict explicitly allowed origins (no arbitrary domains).
+      if (ALLOWED_FQDNS.includes(parsed.hostname)) {
          safeUrl = parsed.protocol + '//' + parsed.host + parsed.pathname;
+      } else {
+         throw new Error('Hostname not allowed');
       }
     } catch {}
 
-    // lgtm [js/server-side-request-forgery]
-    // codeql [js/server-side-request-forgery]
     const res = await fetch(safeUrl, {
       method: 'POST',
       headers,
