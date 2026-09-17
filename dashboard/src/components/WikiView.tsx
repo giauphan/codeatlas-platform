@@ -926,15 +926,15 @@ export const WikiView: React.FC<WikiViewProps> = ({
                       onChange={e => setProfileNameInput(e.target.value)}
                       placeholder="e.g. My Claude Sub"
                       className={FOCUS_RING_CLASS}
-                      style={{ 
-                        flex: 1, 
-                        background: 'rgba(255,255,255,0.05)', 
-                        border: '1px solid rgba(255,255,255,0.15)', 
-                        borderRadius: '6px', 
-                        padding: '0.6rem 0.75rem', 
-                        color: '#fff', 
-                        outline: 'none', 
-                        fontSize: '0.85rem' 
+                      style={{
+                        flex: 1,
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '6px',
+                        padding: '0.6rem 0.75rem',
+                        color: '#fff',
+                        outline: 'none',
+                        fontSize: '0.85rem'
                       }}
                     />
                     <button
@@ -954,19 +954,19 @@ export const WikiView: React.FC<WikiViewProps> = ({
                         setProfileNameInput('');
                       }}
                       disabled={!profileNameInput.trim()}
-                      style={{ 
-                        background: 'rgba(0, 240, 255, 0.1)', 
-                        color: 'var(--primary-neon)', 
-                        border: '1px solid rgba(0, 240, 255, 0.3)', 
-                        borderRadius: '6px', 
-                        padding: '0.6rem 1rem', 
-                        cursor: 'pointer', 
-                        fontSize: '0.85rem', 
-                        fontWeight: 600, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '6px', 
-                        opacity: !profileNameInput.trim() ? 0.3 : 1 
+                      style={{
+                        background: 'rgba(0, 240, 255, 0.1)',
+                        color: 'var(--primary-neon)',
+                        border: '1px solid rgba(0, 240, 255, 0.3)',
+                        borderRadius: '6px',
+                        padding: '0.6rem 1rem',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        opacity: !profileNameInput.trim() ? 0.3 : 1
                       }}
                     >
                       <Save size={16} /> Save
