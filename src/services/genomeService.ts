@@ -283,7 +283,7 @@ export class GenomeService {
       genes.sort((a, b) => b.score - a.score);
 
       // Increment usage count for returned genes
-      // ⚡ Bolt: Batch updates via IN clause with chunks of 900 to reduce round-trips compared to executeMany.
+      // ⚡ Bolt: Batch updates via IN clause with chunks of 900 to reduce statement executions compared to executeMany.
       // Deduplicating the array ensures we correctly count '1 visit' even if the payload has duplicates.
       if (genes.length > 0) {
         try {
