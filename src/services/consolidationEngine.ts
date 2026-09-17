@@ -138,6 +138,8 @@ export class ConsolidationEngine {
 
   /**
    * Helper to execute batched IN queries for better performance, handling chunking, variable limits, and logging.
+   * Uses a default chunk size of 900 to safely stay under SQLite's 999 bind limit and Oracle's 1000 expression limit,
+   * leaving room for extra bind parameters. This can be overridden via CODEATLAS_CHUNK_SIZE.
    * Rethrows errors so calling functions can handle failure state appropriately.
    */
   private async executeChunkedIn(db: IDatabaseAdapter, sql: string, ids: string[], extraBinds: Record<string, unknown>, operationName: string): Promise<number> {
@@ -315,18 +317,16 @@ export class ConsolidationEngine {
 
         // Optimization: Batch delete using IN clause is faster than sequential executeMany.
         if (toRemove.size > 0) {
-          try {
-            const removed = await this.executeChunkedIn(
-              db,
-              `DELETE FROM ai_dreaming_memory WHERE id IN ({clause}) AND tenant_id = :tenantId`,
-              Array.from(toRemove),
-              { tenantId },
-              "duplicate deletion"
-            );
-            merged += removed;
-          } catch (err) {
-            logger.error(`[Consolidation] Error in chunked duplicate deletion execution:`, err instanceof Error ? err.message : String(err));
-          }
+          // We let the error propagate from executeChunkedIn to fail the job if duplicate deletion fails,
+          // ensuring we don't proceed with inconsistent database state.
+          const removed = await this.executeChunkedIn(
+            db,
+            `DELETE FROM ai_dreaming_memory WHERE id IN ({clause}) AND tenant_id = :tenantId`,
+            Array.from(toRemove),
+            { tenantId },
+            "duplicate deletion"
+          );
+          merged += removed;
         }
       }
 
