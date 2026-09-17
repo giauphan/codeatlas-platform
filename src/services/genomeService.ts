@@ -287,11 +287,12 @@ export class GenomeService {
       // Deduplicating the array ensures we correctly count '1 visit' even if the payload has duplicates.
       if (genes.length > 0) {
         try {
+          const tenantId = getTenantId();
           const geneIds = Array.from(new Set(genes.map((g) => g.id))); // dedupe
           const chunkSize = 900;
           for (let i = 0; i < geneIds.length; i += chunkSize) {
             const chunk = geneIds.slice(i, i + chunkSize);
-            const { clause: inClause, binds: inBinds } = buildInClause(chunk, { tenantId: getTenantId() });
+            const { clause: inClause, binds: inBinds } = buildInClause(chunk, { tenantId });
             await connection.execute(
               `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
                updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
