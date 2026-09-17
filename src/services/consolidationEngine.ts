@@ -169,9 +169,13 @@ export class ConsolidationEngine {
         const res = await db.execute(finalSql, binds);
         affected += res.rowsAffected || 0;
       } catch (err) {
-        const sqlSnippet = sql.length > 100 ? sql.substring(0, 97) + '...' : sql;
+        const sqlSnippet = sql.length > 300 ? sql.substring(0, 297) + '...' : sql;
         logger.error(`[Consolidation] Error in chunked ${operationName} execution (chunk ${i / chunkSize}) for query [${sqlSnippet}]:`, err instanceof Error ? err.message : String(err));
-        throw new Error(`[Consolidation] Chunked ${operationName} failed: ${err instanceof Error ? err.message : String(err)}`);
+        if (err instanceof Error) {
+          err.message = `[Consolidation] Chunked ${operationName} failed: ${err.message}`;
+          throw err;
+        }
+        throw new Error(`[Consolidation] Chunked ${operationName} failed: ${String(err)}`);
       }
     }
     return affected;
