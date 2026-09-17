@@ -203,7 +203,7 @@ export class LLMProviderService {
     }
     messages.push({ role: 'user', content: options.prompt });
 
-    // Enforce strict URL reconstruction to satisfy SSRF CodeQL validations
+    // Enforce strict URL reconstruction from sanitized constants to satisfy SSRF CodeQL validations
     let safeUrl = 'https://api.openai.com/v1/chat/completions';
     
     // Explicit whitelist of allowed custom endpoints for CodeQL
@@ -221,21 +221,29 @@ export class LLMProviderService {
     ];
     
     if (process.env.CODEATLAS_ALLOWED_LLM_HOSTS) {
-      ALLOWED_FQDNS.push(...process.env.CODEATLAS_ALLOWED_LLM_HOSTS.split(',').map(s => s.trim()));
+      ALLOWED_FQDNS.push(...process.env.CODEATLAS_ALLOWED_LLM_HOSTS.split(',').map(s => s.trim()).filter(Boolean));
     }
 
-    // SSRF Regex Sanitizer for CodeQL (tests the full string)
-    const isValidUrl = (url: string) => /^(https?):\/\/([^\/?#]+)(\/[^?#]*)?$/.test(url);
+    const ALLOWED_PATHS = [
+      '/v1/chat/completions',
+      '/chat/completions',
+      '/api/v1/chat/completions',
+      '/api/chat/completions'
+    ];
 
-    if (isValidUrl(endpointUrl)) {
-      try {
-        const parsed = new URL(endpointUrl);
-        // Prevent SSRF by checking hostname against strict explicitly allowed origins
-        if (ALLOWED_FQDNS.includes(parsed.hostname)) {
-           safeUrl = endpointUrl; // Sanitized by regex
-        }
-      } catch {}
-    }
+    try {
+      const parsed = new URL(endpointUrl);
+      const matchedHost = ALLOWED_FQDNS.find(h => h.toLowerCase() === parsed.hostname.toLowerCase());
+      const matchedPath = ALLOWED_PATHS.find(p => p.toLowerCase() === parsed.pathname.toLowerCase()) || '/v1/chat/completions';
+      
+      if (matchedHost) {
+        const protocol = (parsed.protocol === 'http:' && (matchedHost === 'localhost' || matchedHost === '127.0.0.1' || matchedHost === '0.0.0.0'))
+          ? 'http:'
+          : 'https:';
+        const port = parsed.port && /^[0-9]{1,5}$/.test(parsed.port) ? `:${parsed.port}` : '';
+        safeUrl = `${protocol}//${matchedHost}${port}${matchedPath}`;
+      }
+    } catch {}
 
     const res = await fetch(safeUrl, {
       method: 'POST',
