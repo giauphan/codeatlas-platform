@@ -149,11 +149,12 @@ export class ConsolidationEngine {
 
     // SQLite default max binds is 999. Oracle is 1000 expressions.
     // We reserve some slots for extraBinds. 900 is safe across all supported DBs.
-    let chunkSize = chunkSizeOverride || 900;
+    let chunkSize = chunkSizeOverride ?? 900;
     if (!chunkSizeOverride && process.env.CODEATLAS_CHUNK_SIZE) {
       const parsed = parseInt(process.env.CODEATLAS_CHUNK_SIZE, 10);
+      // Cap at 900 to ensure we don't accidentally exceed DB bind limits.
       if (!Number.isNaN(parsed) && parsed > 0) {
-        chunkSize = parsed;
+        chunkSize = Math.min(parsed, 900);
       }
     }
 
@@ -319,8 +320,9 @@ export class ConsolidationEngine {
 
         // Optimization: Batch delete using IN clause is faster than sequential executeMany.
         if (toRemove.size > 0) {
-          // We let the error propagate from executeChunkedIn to fail the job if duplicate deletion fails,
-          // ensuring we don't proceed with inconsistent database state.
+          // We let the error propagate from executeChunkedIn to fail the job if duplicate deletion fails.
+          // Note: execution isn't strictly atomic across chunks unless the adapter supports wrapping in a transaction,
+          // so partial application may occur on failure.
           const removed = await this.executeChunkedIn(
             db,
             `DELETE FROM ai_dreaming_memory WHERE id IN ({clause}) AND tenant_id = :tenantId`,
