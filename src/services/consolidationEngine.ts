@@ -141,16 +141,21 @@ export class ConsolidationEngine {
    */
   private async executeChunkedIn(db: IDatabaseAdapter, sql: string, ids: string[], extraBinds: Record<string, unknown>, operationName: string): Promise<number> {
     let affected = 0;
-    for (let i = 0; i < ids.length; i += 1000) {
-      try {
-        const chunk = ids.slice(i, i + 1000);
-        const { clause, binds } = buildInClause(chunk, extraBinds);
-        const finalSql = sql.replace('{clause}', clause);
-        const res = await db.execute(finalSql, binds);
-        affected += res.rowsAffected || 0;
-      } catch (err) {
-        logger.error(`[Consolidation] Error in chunked ${operationName} execution:`, err instanceof Error ? err.message : String(err));
-      }
+    const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
+
+    // SQLite default max binds is 999.
+    // We reserve some slots for extraBinds. 900 is safe across all supported DBs.
+    const chunkSize = dbType === "sqlite" ? 900 : 900;
+
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const { clause, binds } = buildInClause(chunk, extraBinds);
+
+      // Use split/join to safely replace all instances of {clause} without regex special char issues ($)
+      const finalSql = sql.split('{clause}').join(clause);
+
+      const res = await db.execute(finalSql, binds);
+      affected += res.rowsAffected || 0;
     }
     return affected;
   }
@@ -297,16 +302,19 @@ export class ConsolidationEngine {
         }
 
         // Optimization: Batch delete using IN clause is faster than sequential executeMany.
-        // Chunked to 1000 items per batch to avoid SQL variable bounds limits.
         if (toRemove.size > 0) {
-          const removed = await this.executeChunkedIn(
-            db,
-            `DELETE FROM ai_dreaming_memory WHERE id IN ({clause}) AND tenant_id = :tenantId`,
-            Array.from(toRemove),
-            { tenantId },
-            "duplicate deletion"
-          );
-          merged += removed;
+          try {
+            const removed = await this.executeChunkedIn(
+              db,
+              `DELETE FROM ai_dreaming_memory WHERE id IN ({clause}) AND tenant_id = :tenantId`,
+              Array.from(toRemove),
+              { tenantId },
+              "duplicate deletion"
+            );
+            merged += removed;
+          } catch (err) {
+            logger.error(`[Consolidation] Error in chunked duplicate deletion execution:`, err instanceof Error ? err.message : String(err));
+          }
         }
       }
 
@@ -620,13 +628,17 @@ export class ConsolidationEngine {
 
       if (toSupersede.size > 0) {
         const tid = authStorage.getStore()!.uid;
-        supersededCount = await this.executeChunkedIn(
-          db,
-          `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN ({clause}) AND tenant_id = :tid`,
-          Array.from(toSupersede),
-          { tid },
-          "superseding memories"
-        );
+        try {
+          supersededCount = await this.executeChunkedIn(
+            db,
+            `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN ({clause}) AND tenant_id = :tid`,
+            Array.from(toSupersede),
+            { tid },
+            "superseding memories"
+          );
+        } catch (err) {
+          logger.error(`[Consolidation] Error superseding batch of dreams`, err);
+        }
       }
     }
 
