@@ -3,6 +3,8 @@ import { IDatabaseAdapter, VectorSearchResult, WikiPageRecord } from "./interfac
 import { authStorage } from "../../utils/context.js";
 import { hashApiKey } from "../../utils/apiKey.js";
 import { logger } from "../../utils/logger.js";
+import * as path from "path";
+import * as os from "os";
 
 interface SqliteStatement {
   all(...params: unknown[]): unknown[];
@@ -52,7 +54,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
   private readonly dbPath: string;
 
   constructor(dbPath?: string) {
-    this.dbPath = dbPath || process.env.CODEATLAS_SQLITE_PATH || "./data/codeatlas.db";
+    this.dbPath = dbPath || process.env.CODEATLAS_SQLITE_PATH || path.join(os.homedir(), ".codeatlas", "codeatlas.db");
   }
 
   async initialize(): Promise<void> {
