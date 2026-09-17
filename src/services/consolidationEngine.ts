@@ -145,6 +145,8 @@ export class ConsolidationEngine {
    * previous silent failure states for duplicate deletion.
    */
   private async executeChunkedIn(db: IDatabaseAdapter, sql: string, ids: string[], extraBinds: Record<string, unknown>, operationName: string, chunkSizeOverride?: number): Promise<number> {
+    if (!ids || ids.length === 0) return 0;
+
     let affected = 0;
 
     // SQLite default max binds is 999. Oracle is 1000 expressions.
