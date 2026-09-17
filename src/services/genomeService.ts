@@ -286,14 +286,18 @@ export class GenomeService {
       // ⚡ Bolt: Use a single UPDATE statement with IN clause to avoid executeMany overhead
       if (genes.length > 0) {
         try {
-          const geneIds = genes.map((g) => g.id);
-          const { clause: inClause, binds: inBinds } = buildInClause(geneIds, { tenantId: getTenantId() });
-          await connection.execute(
-            `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
-             updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
-            inBinds,
-            { autoCommit: true },
-          );
+          const geneIds = Array.from(new Set(genes.map((g) => g.id))); // dedupe
+          const chunkSize = 900;
+          for (let i = 0; i < geneIds.length; i += chunkSize) {
+            const chunk = geneIds.slice(i, i + chunkSize);
+            const { clause: inClause, binds: inBinds } = buildInClause(chunk, { tenantId: getTenantId() });
+            await connection.execute(
+              `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
+               updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
+              inBinds,
+              { autoCommit: true },
+            );
+          }
         } catch (err) {
           logger.warn(`[Genome] Failed to increment usage counts for genes: ${err instanceof Error ? err.message : String(err)}`);
         }
