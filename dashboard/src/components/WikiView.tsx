@@ -118,13 +118,19 @@ export const WikiView: React.FC<WikiViewProps> = ({
   const [profileNameInput, setProfileNameInput] = useState('');
 
   // Save to config continuously
-  useEffect(() => { localStorage.setItem('ca_wiki_saved_profiles', JSON.stringify(profiles)); }, [profiles]);
-  useEffect(() => { localStorage.setItem('ca_wiki_active_profile_id', activeProfileId); }, [activeProfileId]);
+  useEffect(() => {
+    localStorage.setItem('ca_wiki_saved_profiles', JSON.stringify(profiles));
+  }, [profiles]);
+  useEffect(() => {
+    localStorage.setItem('ca_wiki_active_profile_id', activeProfileId);
+  }, [activeProfileId]);
 
   useEffect(() => { localStorage.setItem('ca_wiki_provider', genProvider); }, [genProvider]);
   useEffect(() => { localStorage.setItem('ca_wiki_model', genModel); }, [genModel]);
-  useEffect(() => { localStorage.setItem('ca_wiki_api_key', genApiKey); }, [genApiKey]);
+  // Intentionally avoid writing api keys to localStorage (CI CodeQL flags clear-text storage)
   useEffect(() => { localStorage.setItem('ca_wiki_base_url', genBaseUrl); }, [genBaseUrl]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { /* keep apiKey in memory only */ }, []);
 
   // Q&A State
   const [queryInput, setQueryInput] = useState('');
@@ -943,7 +949,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                         color: 'var(--primary-neon)', 
                         border: '1px solid rgba(0, 240, 255, 0.3)', 
                         borderRadius: '6px', 
-                        padding: '0 1rem', 
+                        padding: '0.6rem 1rem', 
                         cursor: 'pointer', 
                         fontSize: '0.85rem', 
                         fontWeight: 600, 

@@ -44,7 +44,7 @@ describe('WikiView Component', () => {
     await user.clear(baseUrlInput);
     await user.type(baseUrlInput, 'http://test-url.local/v1');
 
-    const configNameInput = screen.getByPlaceholderText(/Config Name/i);
+    const configNameInput = screen.getByPlaceholderText(/e.g. My Claude Sub/i);
     await user.type(configNameInput, 'My Local Profile');
 
     const saveBtn = screen.getByRole('button', { name: /Save/i });
