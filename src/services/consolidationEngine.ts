@@ -14,6 +14,7 @@ import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 import { DreamingService } from "./dreamingService.js";
+import { buildInClause } from "../database/utils.js";
 
 // Row index helpers for concept/dream queries
 const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.85;
@@ -275,13 +276,14 @@ export class ConsolidationEngine {
           }
         }
 
-        // Batch delete duplicate concepts using executeMany for N+1 avoidance.
+        // Batch delete duplicate concepts using IN clause instead of executeMany for N+1 avoidance.
+        // ⚡ Bolt Optimization: executeMany executes multiple statements sequentially. A single query with IN clause is significantly faster.
         if (toRemove.size > 0) {
           try {
-            const binds = Array.from(toRemove).map((id) => ({ id, tenantId }));
-            await db.executeMany(
-              `DELETE FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
-              binds as any
+            const { clause, binds } = buildInClause(Array.from(toRemove), { tenantId });
+            await db.execute(
+              `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
+              binds
             );
             merged += toRemove.size;
           } catch {
@@ -599,10 +601,12 @@ export class ConsolidationEngine {
       }
 
       if (toSupersede.size > 0) {
-        const batch = Array.from(toSupersede).map((id: string) => ({ sid: id, tid: authStorage.getStore()!.uid }));
-        await db.executeMany(
-          `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id = :sid AND tenant_id = :tid`,
-          batch as any
+        // ⚡ Bolt Optimization: Batch update superseded memories using an IN clause rather than executeMany
+        // to avoid sequential query execution overhead and reduce DB roundtrips.
+        const { clause, binds } = buildInClause(Array.from(toSupersede), { tid: authStorage.getStore()!.uid });
+        await db.execute(
+          `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid`,
+          binds
         );
         supersededCount = toSupersede.size;
       }
