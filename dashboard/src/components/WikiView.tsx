@@ -896,42 +896,83 @@ export const WikiView: React.FC<WikiViewProps> = ({
               )}
 
               
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                <div style={{ display: 'flex', gap: '8px', flex: 1, marginRight: '1rem' }}>
-                  <input
-                    type="text"
-                    value={profileNameInput}
-                    onChange={e => setProfileNameInput(e.target.value)}
-                    placeholder="Config Name (e.g. My Claude Sub)"
-                    className={FOCUS_RING_CLASS}
-                    style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', padding: '0.5rem', color: '#fff', outline: 'none', fontSize: '0.85rem' }}
-                  />
-                  <button
-                    onClick={() => {
-                      if (!profileNameInput.trim()) return;
-                      const newId = Date.now().toString();
-                      setProfiles(prev => [...prev, {
-                        id: newId,
-                        name: profileNameInput.trim(),
-                        provider: genProvider,
-                        model: genModel,
-                        apiKey: genApiKey,
-                        baseUrl: genBaseUrl,
-                      }]);
-                      setActiveProfileId(newId);
-                      setProfileNameInput('');
-                    }}
-                    disabled={!profileNameInput.trim()}
-                    style={{ background: 'var(--primary-neon)', color: '#000', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', opacity: !profileNameInput.trim() ? 0.5 : 1 }}
-                  >
-                    <Save size={14} /> Save
-                  </button>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                {/* Save Preset Section */}
+                <div>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    Save Current Config as Preset
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      value={profileNameInput}
+                      onChange={e => setProfileNameInput(e.target.value)}
+                      placeholder="e.g. My Claude Sub"
+                      className={FOCUS_RING_CLASS}
+                      style={{ 
+                        flex: 1, 
+                        background: 'rgba(255,255,255,0.05)', 
+                        border: '1px solid rgba(255,255,255,0.15)', 
+                        borderRadius: '6px', 
+                        padding: '0.6rem 0.75rem', 
+                        color: '#fff', 
+                        outline: 'none', 
+                        fontSize: '0.85rem' 
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!profileNameInput.trim()) return;
+                        const newId = Date.now().toString();
+                        setProfiles(prev => [...prev, {
+                          id: newId,
+                          name: profileNameInput.trim(),
+                          provider: genProvider,
+                          model: genModel,
+                          apiKey: genApiKey,
+                          baseUrl: genBaseUrl,
+                        }]);
+                        setActiveProfileId(newId);
+                        setProfileNameInput('');
+                      }}
+                      disabled={!profileNameInput.trim()}
+                      style={{ 
+                        background: 'rgba(0, 240, 255, 0.1)', 
+                        color: 'var(--primary-neon)', 
+                        border: '1px solid rgba(0, 240, 255, 0.3)', 
+                        borderRadius: '6px', 
+                        padding: '0 1rem', 
+                        cursor: 'pointer', 
+                        fontSize: '0.85rem', 
+                        fontWeight: 600, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px', 
+                        opacity: !profileNameInput.trim() ? 0.3 : 1 
+                      }}
+                    >
+                      <Save size={16} /> Save
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+
+                {/* Primary Actions */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '0.5rem' }}>
                   <button
                     type="button"
                     onClick={() => setShowGenModal(false)}
-                    style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.6rem 1rem', color: '#fff', cursor: 'pointer' }}
+                    style={{ 
+                      background: 'rgba(255,255,255,0.05)', 
+                      border: '1px solid rgba(255,255,255,0.1)', 
+                      borderRadius: '8px', 
+                      padding: '0.75rem 1.25rem', 
+                      color: '#fff', 
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: 500
+                    }}
                   >
                     Close
                   </button>
@@ -940,9 +981,17 @@ export const WikiView: React.FC<WikiViewProps> = ({
                     onClick={handleGenerateWiki}
                     disabled={isGenerating}
                     className={`btn-neon-cyan ${FOCUS_RING_CLASS}`}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', borderRadius: '8px', padding: '0.6rem 1rem' }}
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      borderRadius: '8px', 
+                      padding: '0.75rem 1.25rem',
+                      fontSize: '0.9rem',
+                      fontWeight: 600
+                    }}
                   >
-                    {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isGenerating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
                     {isGenerating ? 'Building...' : 'Generate Wiki'}
                   </button>
                 </div>
