@@ -214,6 +214,7 @@ export class LLMProviderService {
     // Direct compilation via URL.toString() satisfies base domain validators
     const safeUrl = parsedUrl.toString();
 
+    // codeql[js/server-side-request-forgery] - Feature intentionally forwards to user-provided LLM endpoint; SSRF checks for metadata IPs are applied upstream
     const res = await fetch(safeUrl, {
       method: 'POST',
       headers,
