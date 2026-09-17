@@ -279,19 +279,19 @@ export class ConsolidationEngine {
         // ⚡ Bolt Optimization: Batch delete using IN clause is significantly faster than sequential executeMany.
         // Chunked to 1000 items per batch to avoid SQL variable bounds limits.
         if (toRemove.size > 0) {
-          try {
-            const allIds = Array.from(toRemove);
-            for (let i = 0; i < allIds.length; i += 1000) {
+          const allIds = Array.from(toRemove);
+          for (let i = 0; i < allIds.length; i += 1000) {
+            try {
               const chunk = allIds.slice(i, i + 1000);
               const { clause, binds } = buildInClause(chunk, { tenantId });
               await db.execute(
                 `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
                 binds
               );
+              merged += chunk.length;
+            } catch {
+              // skip delete errors for this chunk
             }
-            merged += toRemove.size;
-          } catch {
-            // skip delete errors
           }
         }
       }
@@ -606,15 +606,21 @@ export class ConsolidationEngine {
 
       if (toSupersede.size > 0) {
         const allIds = Array.from(toSupersede);
+        const tid = authStorage.getStore()!.uid;
         for (let i = 0; i < allIds.length; i += 1000) {
-          const chunk = allIds.slice(i, i + 1000);
-          const { clause, binds } = buildInClause(chunk, { tid: authStorage.getStore()!.uid });
-          await db.execute(
-            `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid`,
-            binds
-          );
+          try {
+            const chunk = allIds.slice(i, i + 1000);
+            const { clause, binds } = buildInClause(chunk, { tid });
+            await db.execute(
+              `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid`,
+              binds
+            );
+            supersededCount += chunk.length;
+          } catch (err) {
+            logger.error(`[Consolidation] Error superseding batch of dreams`, err);
+            // continue with next chunk
+          }
         }
-        supersededCount = toSupersede.size;
       }
     }
 
