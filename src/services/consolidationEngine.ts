@@ -14,6 +14,8 @@ import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 import { DreamingService } from "./dreamingService.js";
+import { buildInClause } from "../database/utils.js";
+import { IDatabaseAdapter } from "../database/adapters/interface.js";
 
 // Row index helpers for concept/dream queries
 const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.85;
@@ -132,6 +134,55 @@ export class ConsolidationEngine {
       logger.debug(`[Consolidation] Vector normalization: norm is 0 for id ${id}. Using raw vector.`);
     }
     return vec;
+  }
+
+  /**
+   * Helper to execute batched IN queries for better performance, handling chunking, variable limits, and logging.
+   * Uses a default chunk size of 900 to safely stay under SQLite's 999 bind limit and Oracle's 1000 expression limit,
+   * leaving room for extra bind parameters. This can be overridden globally via CODEATLAS_CHUNK_SIZE, or per-operation
+   * via the optional chunkSizeOverride param.
+   * Rethrows errors so calling functions can handle failure state appropriately. Note: this is a behavioral change from
+   * previous silent failure states for duplicate deletion.
+   */
+  private async executeChunkedIn(db: IDatabaseAdapter, sql: string, ids: string[], extraBinds: Record<string, unknown>, operationName: string, chunkSizeOverride?: number): Promise<number> {
+    if (!ids || ids.length === 0) return 0;
+
+    let affected = 0;
+
+    // SQLite default max binds is 999. Oracle is 1000 expressions.
+    // We cap at 900 to safely stay under limits across all DBs while leaving up to 99 extraBinds slots.
+    let chunkSize = 900;
+
+    if (chunkSizeOverride !== undefined && chunkSizeOverride > 0) {
+      chunkSize = Math.min(chunkSizeOverride, 900);
+    } else if (process.env.CODEATLAS_CHUNK_SIZE) {
+      const parsed = parseInt(process.env.CODEATLAS_CHUNK_SIZE, 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        chunkSize = Math.min(parsed, 900);
+      }
+    }
+
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      try {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { clause, binds } = buildInClause(chunk, extraBinds);
+
+        // Use split/join to safely replace all instances of {clause} without regex special char issues ($)
+        const finalSql = sql.split('{clause}').join(clause);
+
+        const res = await db.execute(finalSql, binds);
+        affected += res.rowsAffected || 0;
+      } catch (err) {
+        const sqlSnippet = sql.length > 300 ? sql.substring(0, 297) + '...' : sql;
+        logger.error(`[Consolidation] Error in chunked ${operationName} execution (chunk ${i / chunkSize}) for query [${sqlSnippet}]:`, err instanceof Error ? err.message : String(err));
+        if (err instanceof Error) {
+          err.message = `[Consolidation] Chunked ${operationName} failed: ${err.message}`;
+          throw err;
+        }
+        throw new Error(`[Consolidation] Chunked ${operationName} failed: ${String(err)}`);
+      }
+    }
+    return affected;
   }
 
   /**
@@ -275,18 +326,19 @@ export class ConsolidationEngine {
           }
         }
 
-        // Batch delete duplicate concepts using executeMany for N+1 avoidance.
+        // Optimization: Batch delete using IN clause is faster than sequential executeMany.
         if (toRemove.size > 0) {
-          try {
-            const binds = Array.from(toRemove).map((id) => ({ id, tenantId }));
-            await db.executeMany(
-              `DELETE FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
-              binds as any
-            );
-            merged += toRemove.size;
-          } catch {
-            // skip delete errors
-          }
+          // We let the error propagate from executeChunkedIn to fail the job if duplicate deletion fails.
+          // Note: execution isn't strictly atomic across chunks unless the adapter supports wrapping in a transaction,
+          // so partial application may occur on failure.
+          const removed = await this.executeChunkedIn(
+            db,
+            `DELETE FROM ai_dreaming_memory WHERE id IN ({clause}) AND tenant_id = :tenantId`,
+            Array.from(toRemove),
+            { tenantId },
+            "duplicate deletion"
+          );
+          merged += removed;
         }
       }
 
@@ -599,12 +651,16 @@ export class ConsolidationEngine {
       }
 
       if (toSupersede.size > 0) {
-        const batch = Array.from(toSupersede).map((id: string) => ({ sid: id, tid: authStorage.getStore()!.uid }));
-        await db.executeMany(
-          `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id = :sid AND tenant_id = :tid`,
-          batch as any
+        const tid = authStorage.getStore()!.uid;
+        // executeChunkedIn will log and rethrow the error.
+        // We let it propagate naturally to fail the job if superseding fails.
+        supersededCount = await this.executeChunkedIn(
+          db,
+          `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN ({clause}) AND tenant_id = :tid`,
+          Array.from(toSupersede),
+          { tid },
+          "superseding memories"
         );
-        supersededCount = toSupersede.size;
       }
     }
 
