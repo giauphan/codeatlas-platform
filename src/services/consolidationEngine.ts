@@ -276,15 +276,19 @@ export class ConsolidationEngine {
           }
         }
 
-        // Batch delete duplicate concepts using IN clause instead of executeMany for N+1 avoidance.
-        // ⚡ Bolt Optimization: executeMany executes multiple statements sequentially. A single query with IN clause is significantly faster.
+        // ⚡ Bolt Optimization: Batch delete using IN clause is significantly faster than sequential executeMany.
+        // Chunked to 1000 items per batch to avoid SQL variable bounds limits.
         if (toRemove.size > 0) {
           try {
-            const { clause, binds } = buildInClause(Array.from(toRemove), { tenantId });
-            await db.execute(
-              `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
-              binds
-            );
+            const allIds = Array.from(toRemove);
+            for (let i = 0; i < allIds.length; i += 1000) {
+              const chunk = allIds.slice(i, i + 1000);
+              const { clause, binds } = buildInClause(chunk, { tenantId });
+              await db.execute(
+                `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
+                binds
+              );
+            }
             merged += toRemove.size;
           } catch {
             // skip delete errors
@@ -601,13 +605,15 @@ export class ConsolidationEngine {
       }
 
       if (toSupersede.size > 0) {
-        // ⚡ Bolt Optimization: Batch update superseded memories using an IN clause rather than executeMany
-        // to avoid sequential query execution overhead and reduce DB roundtrips.
-        const { clause, binds } = buildInClause(Array.from(toSupersede), { tid: authStorage.getStore()!.uid });
-        await db.execute(
-          `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid`,
-          binds
-        );
+        const allIds = Array.from(toSupersede);
+        for (let i = 0; i < allIds.length; i += 1000) {
+          const chunk = allIds.slice(i, i + 1000);
+          const { clause, binds } = buildInClause(chunk, { tid: authStorage.getStore()!.uid });
+          await db.execute(
+            `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid`,
+            binds
+          );
+        }
         supersededCount = toSupersede.size;
       }
     }
