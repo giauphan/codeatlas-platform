@@ -283,20 +283,24 @@ export class GenomeService {
       genes.sort((a, b) => b.score - a.score);
 
       // Increment usage count for returned genes
+      // Dedupe + batch increments into chunks of 900.
       if (genes.length > 0) {
         try {
-          const binds = genes.map((g) => ({
-            id: g.id,
-            tenantId: getTenantId(),
-          }));
-          await connection.executeMany(
-            `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
-             updated_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-            binds as any,
-            { autoCommit: true },
-          );
-        } catch {
-          /* skip */
+          const tenantId = getTenantId();
+          const geneIds = Array.from(new Set(genes.map((g) => g.id))); // dedupe
+          const chunkSize = 900;
+          for (let i = 0; i < geneIds.length; i += chunkSize) {
+            const chunk = geneIds.slice(i, i + chunkSize);
+            const { clause: inClause, binds: inBinds } = buildInClause(chunk, { tenantId });
+            await connection.execute(
+              `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
+               updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
+              inBinds,
+              { autoCommit: true },
+            );
+          }
+        } catch (err) {
+          logger.warn(`[Genome] Failed to increment usage counts for genes: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
