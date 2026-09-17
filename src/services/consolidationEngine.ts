@@ -148,11 +148,13 @@ export class ConsolidationEngine {
     let affected = 0;
 
     // SQLite default max binds is 999. Oracle is 1000 expressions.
-    // We reserve some slots for extraBinds. 900 is safe across all supported DBs.
-    let chunkSize = chunkSizeOverride ?? 900;
-    if (!chunkSizeOverride && process.env.CODEATLAS_CHUNK_SIZE) {
+    // We cap at 900 to safely stay under limits across all DBs while leaving up to 99 extraBinds slots.
+    let chunkSize = 900;
+
+    if (chunkSizeOverride !== undefined && chunkSizeOverride > 0) {
+      chunkSize = Math.min(chunkSizeOverride, 900);
+    } else if (process.env.CODEATLAS_CHUNK_SIZE) {
       const parsed = parseInt(process.env.CODEATLAS_CHUNK_SIZE, 10);
-      // Cap at 900 to ensure we don't accidentally exceed DB bind limits.
       if (!Number.isNaN(parsed) && parsed > 0) {
         chunkSize = Math.min(parsed, 900);
       }

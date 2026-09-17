@@ -145,3 +145,25 @@ describe('executeChunkedIn', () => {
 
     delete process.env.CODEATLAS_CHUNK_SIZE;
   });
+
+  test('validates chunkSizeOverride to prevent infinite loops and binds limits', async () => {
+    const mockDb = {
+      execute: mock.fn(async () => ({ rowsAffected: 5 })),
+      query: mock.fn(),
+      executeMany: mock.fn()
+    };
+
+    const ids = Array.from({ length: 1800 }, (_, i) => `id-${i}`);
+
+    // Should fall back to 900 for negative/zero values
+    // @ts-ignore
+    await consolidationEngine.executeChunkedIn(mockDb as any, 'UPDATE', ids, {}, 'test', 0);
+    assert.strictEqual(mockDb.execute.mock.calls.length, 2);
+
+    mockDb.execute.mock.resetCalls();
+
+    // Should cap at 900 for excessively large values
+    // @ts-ignore
+    await consolidationEngine.executeChunkedIn(mockDb as any, 'UPDATE', ids, {}, 'test', 5000);
+    assert.strictEqual(mockDb.execute.mock.calls.length, 2);
+  });
