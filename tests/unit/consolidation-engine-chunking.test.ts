@@ -91,7 +91,32 @@ describe('executeChunkedIn', () => {
       );
       assert.fail('Should have thrown');
     } catch (err: any) {
-      assert.strictEqual(err.message, 'DB Error');
+      assert.ok(err.message.includes('DB Error'));
     }
+  });
+
+  test('falls back to default chunk size on invalid CODEATLAS_CHUNK_SIZE', async () => {
+    process.env.CODEATLAS_CHUNK_SIZE = 'invalid';
+    const mockDb = {
+      execute: mock.fn(async () => ({ rowsAffected: 5 })),
+      query: mock.fn(),
+      executeMany: mock.fn()
+    };
+
+    const ids = Array.from({ length: 1800 }, (_, i) => `id-${i}`);
+
+    // @ts-ignore
+    await consolidationEngine.executeChunkedIn(
+      mockDb as any,
+      'UPDATE table SET status = "superseded" WHERE id IN ({clause})',
+      ids,
+      { extra: 'bind' },
+      'test_operation'
+    );
+
+    // Should fall back to 900 -> 1800/900 = 2 chunks
+    assert.strictEqual(mockDb.execute.mock.calls.length, 2);
+
+    delete process.env.CODEATLAS_CHUNK_SIZE;
   });
 });

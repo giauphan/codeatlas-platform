@@ -152,7 +152,7 @@ export class ConsolidationEngine {
     let chunkSize = chunkSizeOverride || 900;
     if (!chunkSizeOverride && process.env.CODEATLAS_CHUNK_SIZE) {
       const parsed = parseInt(process.env.CODEATLAS_CHUNK_SIZE, 10);
-      if (Number.isFinite(parsed) && parsed > 0) {
+      if (!Number.isNaN(parsed) && parsed > 0) {
         chunkSize = parsed;
       }
     }
@@ -170,7 +170,7 @@ export class ConsolidationEngine {
       } catch (err) {
         const sqlSnippet = sql.length > 100 ? sql.substring(0, 97) + '...' : sql;
         logger.error(`[Consolidation] Error in chunked ${operationName} execution (chunk ${i / chunkSize}) for query [${sqlSnippet}]:`, err instanceof Error ? err.message : String(err));
-        throw err;
+        throw new Error(`[Consolidation] Chunked ${operationName} failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
     return affected;
