@@ -138,24 +138,30 @@ export class ConsolidationEngine {
 
   /**
    * Helper to execute batched IN queries for better performance, handling chunking, variable limits, and logging.
+   * Rethrows errors so calling functions can handle failure state appropriately.
    */
   private async executeChunkedIn(db: IDatabaseAdapter, sql: string, ids: string[], extraBinds: Record<string, unknown>, operationName: string): Promise<number> {
     let affected = 0;
     const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
 
-    // SQLite default max binds is 999.
+    // SQLite default max binds is 999. Oracle is 1000 expressions.
     // We reserve some slots for extraBinds. 900 is safe across all supported DBs.
-    const chunkSize = dbType === "sqlite" ? 900 : 900;
+    const chunkSize = process.env.CODEATLAS_CHUNK_SIZE ? parseInt(process.env.CODEATLAS_CHUNK_SIZE, 10) : 900;
 
     for (let i = 0; i < ids.length; i += chunkSize) {
-      const chunk = ids.slice(i, i + chunkSize);
-      const { clause, binds } = buildInClause(chunk, extraBinds);
+      try {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { clause, binds } = buildInClause(chunk, extraBinds);
 
-      // Use split/join to safely replace all instances of {clause} without regex special char issues ($)
-      const finalSql = sql.split('{clause}').join(clause);
+        // Use split/join to safely replace all instances of {clause} without regex special char issues ($)
+        const finalSql = sql.split('{clause}').join(clause);
 
-      const res = await db.execute(finalSql, binds);
-      affected += res.rowsAffected || 0;
+        const res = await db.execute(finalSql, binds);
+        affected += res.rowsAffected || 0;
+      } catch (err) {
+        logger.error(`[Consolidation] Error in chunked ${operationName} execution (chunk ${i / chunkSize}):`, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
     }
     return affected;
   }
