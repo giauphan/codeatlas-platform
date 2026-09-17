@@ -92,6 +92,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
   const [genProvider, setGenProvider] = useState('mock');
   const [genModel, setGenModel] = useState('default');
   const [genApiKey, setGenApiKey] = useState('');
+  const [genBaseUrl, setGenBaseUrl] = useState('');
 
   // Q&A State
   const [queryInput, setQueryInput] = useState('');
@@ -173,6 +174,8 @@ export const WikiView: React.FC<WikiViewProps> = ({
       const payload: Record<string, unknown> = {
         provider: genProvider,
       };
+
+      if (genBaseUrl.trim()) payload.baseUrl = genBaseUrl.trim();
       if (genModel && genModel !== 'default') payload.model = genModel;
       if (genApiKey) payload.apiKey = genApiKey;
 
@@ -774,6 +777,28 @@ export const WikiView: React.FC<WikiViewProps> = ({
                       value={genApiKey}
                       onChange={(e) => setGenApiKey(e.target.value)}
                       placeholder="sk-..."
+                      className={FOCUS_RING_CLASS}
+                      style={{
+                        width: '100%',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '8px',
+                        padding: '0.6rem',
+                        color: '#fff',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                      Custom API Endpoint (Base URL)
+                    </label>
+                    <input
+                      type="text"
+                      value={genBaseUrl}
+                      onChange={(e) => setGenBaseUrl(e.target.value)}
+                      placeholder="e.g. http://127.0.0.1:11434/v1/chat/completions"
                       className={FOCUS_RING_CLASS}
                       style={{
                         width: '100%',
