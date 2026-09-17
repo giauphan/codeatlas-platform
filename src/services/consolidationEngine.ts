@@ -15,6 +15,7 @@ import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 import { DreamingService } from "./dreamingService.js";
 import { buildInClause } from "../database/utils.js";
+import { IDatabaseAdapter } from "../database/adapters/interface.js";
 
 // Row index helpers for concept/dream queries
 const CONSOLIDATION_SIMILARITY_THRESHOLD = 0.85;
@@ -133,6 +134,25 @@ export class ConsolidationEngine {
       logger.debug(`[Consolidation] Vector normalization: norm is 0 for id ${id}. Using raw vector.`);
     }
     return vec;
+  }
+
+  /**
+   * Helper to execute batched IN queries for better performance, handling chunking, variable limits, and logging.
+   */
+  private async executeChunkedIn(db: IDatabaseAdapter, sql: string, ids: string[], extraBinds: Record<string, unknown>, operationName: string): Promise<number> {
+    let affected = 0;
+    for (let i = 0; i < ids.length; i += 1000) {
+      try {
+        const chunk = ids.slice(i, i + 1000);
+        const { clause, binds } = buildInClause(chunk, extraBinds);
+        const finalSql = sql.replace('{clause}', clause);
+        const res = await db.execute(finalSql, binds);
+        affected += res.rowsAffected || 0;
+      } catch (err) {
+        logger.error(`[Consolidation] Error in chunked ${operationName} execution:`, err instanceof Error ? err.message : String(err));
+      }
+    }
+    return affected;
   }
 
   /**
@@ -276,23 +296,17 @@ export class ConsolidationEngine {
           }
         }
 
-        // ⚡ Bolt Optimization: Batch delete using IN clause is significantly faster than sequential executeMany.
+        // Optimization: Batch delete using IN clause is faster than sequential executeMany.
         // Chunked to 1000 items per batch to avoid SQL variable bounds limits.
         if (toRemove.size > 0) {
-          const allIds = Array.from(toRemove);
-          for (let i = 0; i < allIds.length; i += 1000) {
-            try {
-              const chunk = allIds.slice(i, i + 1000);
-              const { clause, binds } = buildInClause(chunk, { tenantId });
-              await db.execute(
-                `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
-                binds
-              );
-              merged += chunk.length;
-            } catch {
-              // skip delete errors for this chunk
-            }
-          }
+          const removed = await this.executeChunkedIn(
+            db,
+            `DELETE FROM ai_dreaming_memory WHERE id IN ({clause}) AND tenant_id = :tenantId`,
+            Array.from(toRemove),
+            { tenantId },
+            "duplicate deletion"
+          );
+          merged += removed;
         }
       }
 
@@ -605,22 +619,14 @@ export class ConsolidationEngine {
       }
 
       if (toSupersede.size > 0) {
-        const allIds = Array.from(toSupersede);
         const tid = authStorage.getStore()!.uid;
-        for (let i = 0; i < allIds.length; i += 1000) {
-          try {
-            const chunk = allIds.slice(i, i + 1000);
-            const { clause, binds } = buildInClause(chunk, { tid });
-            await db.execute(
-              `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid`,
-              binds
-            );
-            supersededCount += chunk.length;
-          } catch (err) {
-            logger.error(`[Consolidation] Error superseding batch of dreams`, err);
-            // continue with next chunk
-          }
-        }
+        supersededCount = await this.executeChunkedIn(
+          db,
+          `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN ({clause}) AND tenant_id = :tid`,
+          Array.from(toSupersede),
+          { tid },
+          "superseding memories"
+        );
       }
     }
 
