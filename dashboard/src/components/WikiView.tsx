@@ -15,7 +15,10 @@ import {
   Code,
   Layers,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Settings,
+  Save,
+  Trash2
 } from 'lucide-react';
 import { getAuthHeaders } from '../lib/auth';
 import { FOCUS_RING_CLASS } from '../lib/constants';
@@ -32,6 +35,16 @@ interface WikiTreeResponse {
   root: WikiNode[];
   totalPages: number;
   lastGeneratedAt?: string;
+}
+
+
+interface WikiLLMConfigProfile {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  apiKey: string;
+  baseUrl: string;
 }
 
 interface WikiPage {
@@ -94,7 +107,20 @@ export const WikiView: React.FC<WikiViewProps> = ({
   const [genApiKey, setGenApiKey] = useState(() => localStorage.getItem('ca_wiki_api_key') || '');
   const [genBaseUrl, setGenBaseUrl] = useState(() => localStorage.getItem('ca_wiki_base_url') || '');
 
+
+  // Saved Config Profiles
+  const [profiles, setProfiles] = useState<WikiLLMConfigProfile[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ca_wiki_saved_profiles') || '[]');
+    } catch { return []; }
+  });
+  const [activeProfileId, setActiveProfileId] = useState(() => localStorage.getItem('ca_wiki_active_profile_id') || '');
+  const [profileNameInput, setProfileNameInput] = useState('');
+
   // Save to config continuously
+  useEffect(() => { localStorage.setItem('ca_wiki_saved_profiles', JSON.stringify(profiles)); }, [profiles]);
+  useEffect(() => { localStorage.setItem('ca_wiki_active_profile_id', activeProfileId); }, [activeProfileId]);
+
   useEffect(() => { localStorage.setItem('ca_wiki_provider', genProvider); }, [genProvider]);
   useEffect(() => { localStorage.setItem('ca_wiki_model', genModel); }, [genModel]);
   useEffect(() => { localStorage.setItem('ca_wiki_api_key', genApiKey); }, [genApiKey]);
@@ -727,10 +753,49 @@ export const WikiView: React.FC<WikiViewProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Sparkles size={20} color="var(--primary-neon)" />
+                <Settings size={20} color="var(--primary-neon)" />
                 <h2 className="tech-font" style={{ fontSize: '1.25rem', color: '#fff', margin: 0 }}>
-                  Generate Wiki for {currentProject}
+                  LLM Settings & Generation for {currentProject}
                 </h2>
+              </div>
+
+              <div style={{ padding: '0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                  Load Saved Preset
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select
+                    value={activeProfileId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setActiveProfileId(id);
+                      const p = profiles.find(x => x.id === id);
+                      if (p) {
+                        setGenProvider(p.provider);
+                        setGenModel(p.model);
+                        setGenApiKey(p.apiKey);
+                        setGenBaseUrl(p.baseUrl);
+                      }
+                    }}
+                    className={FOCUS_RING_CLASS}
+                    style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', padding: '0.5rem', color: '#fff', outline: 'none' }}
+                  >
+                    <option value="" style={{ background: '#111' }}>-- Custom / Temporary Config --</option>
+                    {profiles.map(p => <option key={p.id} value={p.id} style={{ background: '#111' }}>{p.name}</option>)}
+                  </select>
+                  {activeProfileId && (
+                    <button
+                      onClick={() => {
+                        setProfiles(prev => prev.filter(x => x.id !== activeProfileId));
+                        setActiveProfileId('');
+                      }}
+                      style={{ background: 'rgba(255, 75, 75, 0.1)', color: '#FFB4AB', border: '1px solid rgba(255, 75, 75, 0.3)', borderRadius: '6px', padding: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      title="Delete selected preset"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -828,40 +893,61 @@ export const WikiView: React.FC<WikiViewProps> = ({
                 </>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '0.5rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowGenModal(false)}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '8px',
-                    padding: '0.6rem 1.25rem',
-                    color: '#fff',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGenerateWiki}
-                  disabled={isGenerating}
-                  className={`btn-neon-cyan ${FOCUS_RING_CLASS}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    borderRadius: '8px',
-                    padding: '0.6rem 1.25rem'
-                  }}
-                >
-                  {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  {isGenerating ? 'Building Wiki...' : 'Start Generation'}
-                </button>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ display: 'flex', gap: '8px', flex: 1, marginRight: '1rem' }}>
+                  <input
+                    type="text"
+                    value={profileNameInput}
+                    onChange={e => setProfileNameInput(e.target.value)}
+                    placeholder="Config Name (e.g. My Claude Sub)"
+                    className={FOCUS_RING_CLASS}
+                    style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', padding: '0.5rem', color: '#fff', outline: 'none', fontSize: '0.85rem' }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!profileNameInput.trim()) return;
+                      const newId = Date.now().toString();
+                      setProfiles(prev => [...prev, {
+                        id: newId,
+                        name: profileNameInput.trim(),
+                        provider: genProvider,
+                        model: genModel,
+                        apiKey: genApiKey,
+                        baseUrl: genBaseUrl,
+                      }]);
+                      setActiveProfileId(newId);
+                      setProfileNameInput('');
+                    }}
+                    disabled={!profileNameInput.trim()}
+                    style={{ background: 'var(--primary-neon)', color: '#000', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', opacity: !profileNameInput.trim() ? 0.5 : 1 }}
+                  >
+                    <Save size={14} /> Save
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowGenModal(false)}
+                    style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '0.6rem 1rem', color: '#fff', cursor: 'pointer' }}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateWiki}
+                    disabled={isGenerating}
+                    className={`btn-neon-cyan ${FOCUS_RING_CLASS}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', borderRadius: '8px', padding: '0.6rem 1rem' }}
+                  >
+                    {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isGenerating ? 'Building...' : 'Generate Wiki'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
+
         )}
       </AnimatePresence>
 
