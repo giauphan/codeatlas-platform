@@ -139,16 +139,18 @@ export class ConsolidationEngine {
   /**
    * Helper to execute batched IN queries for better performance, handling chunking, variable limits, and logging.
    * Uses a default chunk size of 900 to safely stay under SQLite's 999 bind limit and Oracle's 1000 expression limit,
-   * leaving room for extra bind parameters. This can be overridden via CODEATLAS_CHUNK_SIZE.
-   * Rethrows errors so calling functions can handle failure state appropriately.
+   * leaving room for extra bind parameters. This can be overridden globally via CODEATLAS_CHUNK_SIZE, or per-operation
+   * via the optional chunkSizeOverride param.
+   * Rethrows errors so calling functions can handle failure state appropriately. Note: this is a behavioral change from
+   * previous silent failure states for duplicate deletion.
    */
-  private async executeChunkedIn(db: IDatabaseAdapter, sql: string, ids: string[], extraBinds: Record<string, unknown>, operationName: string): Promise<number> {
+  private async executeChunkedIn(db: IDatabaseAdapter, sql: string, ids: string[], extraBinds: Record<string, unknown>, operationName: string, chunkSizeOverride?: number): Promise<number> {
     let affected = 0;
 
     // SQLite default max binds is 999. Oracle is 1000 expressions.
     // We reserve some slots for extraBinds. 900 is safe across all supported DBs.
-    let chunkSize = 900;
-    if (process.env.CODEATLAS_CHUNK_SIZE) {
+    let chunkSize = chunkSizeOverride || 900;
+    if (!chunkSizeOverride && process.env.CODEATLAS_CHUNK_SIZE) {
       const parsed = parseInt(process.env.CODEATLAS_CHUNK_SIZE, 10);
       if (Number.isFinite(parsed) && parsed > 0) {
         chunkSize = parsed;
