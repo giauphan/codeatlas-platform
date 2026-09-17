@@ -28,6 +28,14 @@ export interface GenerateWikiOptions {
   tenantId?: string;
 }
 
+export interface QueryWikiOptions {
+  provider?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+  tenantId?: string;
+}
+
 export class WikiService {
   constructor(
     private readonly dbAdapter: IDatabaseAdapter,
@@ -264,7 +272,8 @@ export class WikiService {
     return await this.dbAdapter.getWikiPage(projectName, path, tenantId);
   }
 
-  async queryWiki(projectName: string, query: string, tenantId: string = 'default'): Promise<{ answer: string; references: string[] }> {
+  async queryWiki(projectName: string, query: string, options: QueryWikiOptions = {}): Promise<{ answer: string; references: string[] }> {
+    const tenantId = options.tenantId || 'default';
     const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
 
     // Very basic keyword matching/scoring for demo purposes.
@@ -295,7 +304,11 @@ export class WikiService {
 
     const answer = await this.llmProvider.generateText({
       prompt,
-      systemPrompt: 'You are an advanced documentation QA assistant running on CodeAtlas platform.'
+      systemPrompt: 'You are an advanced documentation QA assistant running on CodeAtlas platform.',
+      provider: options.provider as any,
+      apiKey: options.apiKey,
+      baseUrl: options.baseUrl,
+      model: options.model,
     });
 
     return {

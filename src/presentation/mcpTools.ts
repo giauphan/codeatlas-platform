@@ -2187,7 +2187,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       await logActivity(auth, "query_project_wiki", { project, query });
       try {
         const service = getWikiService();
-        const result = await service.queryWiki(project, query, "default");
+        const result = await service.queryWiki(project, query, { tenantId: "default" });
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
         };
@@ -2208,7 +2208,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     ["project", "query"],
     async (params: Record<string, unknown>) => {
       const service = getWikiService();
-      return await service.queryWiki(params.project as string, params.query as string, "default");
+      return await service.queryWiki(params.project as string, params.query as string, { tenantId: "default" });
     }
   );
 

@@ -100,14 +100,14 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
   router.post('/:project/query', async (req, res) => {
     try {
       const { project } = req.params;
-      const { query } = req.body;
+      const { query, ...options } = req.body || {};
 
       if (!query || typeof query !== 'string') {
         return res.status(400).json({ error: "Missing or invalid 'query' parameter" });
       }
 
       const service = getWikiService();
-      const result = await service.queryWiki(project, query);
+      const result = await service.queryWiki(project, query, options);
       res.json(result);
     } catch (err) {
       logger.error(`[WikiRoutes] queryWiki failed:`, err);

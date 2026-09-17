@@ -237,6 +237,9 @@ app.use(authProxyRouter);
 // REST API Dreaming (dream memories)
 registerDreamingRoutes(app);
 
+// REST API Wiki
+mountWikiRoutes(app);
+
 // REST API: Get all discovered projects
 app.get("/api/projects", authMiddleware, localRateLimiter, async (req, res) => {
   try {
@@ -1225,9 +1228,7 @@ app.get("/api/docs/memory-setup", authMiddleware, localRateLimiter, (req, res) =
  * Start the HTTP/SSE Express server on a specified port with retry on EADDRINUSE
  */
 export function startHttpServer(port: number, retries = 5): Promise<void> {
-  registerDreamingRoutes(app);
   mountSecondBrainRoutes(app);
-  mountWikiRoutes(app);
   mountConsolidationRoutes(app);
   mountGenomeRoutes(app);
   mountA2ARoutes(app, a2aExecutor, `http://localhost:${port}`);

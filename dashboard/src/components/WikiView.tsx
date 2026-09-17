@@ -89,10 +89,16 @@ export const WikiView: React.FC<WikiViewProps> = ({
 
   // Generation Modal State
   const [showGenModal, setShowGenModal] = useState(false);
-  const [genProvider, setGenProvider] = useState('mock');
-  const [genModel, setGenModel] = useState('default');
-  const [genApiKey, setGenApiKey] = useState('');
-  const [genBaseUrl, setGenBaseUrl] = useState('');
+  const [genProvider, setGenProvider] = useState(() => localStorage.getItem('ca_wiki_provider') || 'mock');
+  const [genModel, setGenModel] = useState(() => localStorage.getItem('ca_wiki_model') || 'default');
+  const [genApiKey, setGenApiKey] = useState(() => localStorage.getItem('ca_wiki_api_key') || '');
+  const [genBaseUrl, setGenBaseUrl] = useState(() => localStorage.getItem('ca_wiki_base_url') || '');
+
+  // Save to config continuously
+  useEffect(() => { localStorage.setItem('ca_wiki_provider', genProvider); }, [genProvider]);
+  useEffect(() => { localStorage.setItem('ca_wiki_model', genModel); }, [genModel]);
+  useEffect(() => { localStorage.setItem('ca_wiki_api_key', genApiKey); }, [genApiKey]);
+  useEffect(() => { localStorage.setItem('ca_wiki_base_url', genBaseUrl); }, [genBaseUrl]);
 
   // Q&A State
   const [queryInput, setQueryInput] = useState('');
@@ -216,13 +222,21 @@ export const WikiView: React.FC<WikiViewProps> = ({
 
     try {
       const headers = await getAuthHeaders();
+      const payload: Record<string, unknown> = {
+        query: userText,
+        provider: genProvider
+      };
+      if (genBaseUrl.trim()) payload.baseUrl = genBaseUrl.trim();
+      if (genModel && genModel !== 'default') payload.model = genModel;
+      if (genApiKey) payload.apiKey = genApiKey;
+
       const resp = await fetch(`${API_BASE}/api/wiki/${encodeURIComponent(currentProject)}/query`, {
         method: 'POST',
         headers: {
           ...headers,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ query: userText })
+        body: JSON.stringify(payload)
       });
 
       if (!resp.ok) {
