@@ -765,6 +765,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <select
+                    aria-label="Load Saved Preset"
                     value={activeProfileId}
                     onChange={(e) => {
                       const id = e.target.value;
@@ -803,6 +804,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                   LLM Provider
                 </label>
                 <select
+                  aria-label="LLM Provider"
                   value={genProvider}
                   onChange={(e) => setGenProvider(e.target.value)}
                   className={FOCUS_RING_CLASS}

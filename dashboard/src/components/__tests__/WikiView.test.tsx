@@ -1,9 +1,9 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WikiView } from '../WikiView';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach, Mock } from 'vitest';
 
-const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as unknown as typeof global.fetch;
+global.fetch = vi.fn();
 
 function mockTreeResponse() {
   return { ok: true, json: async () => ({ root: [], totalPages: 0, projectName: 'test-project' }) };
@@ -17,12 +17,11 @@ describe('WikiView Component', () => {
     localStorage.clear();
     vi.resetAllMocks();
 
-    mockFetch.mockImplementation(async (url: string) => {
+    (global.fetch as Mock).mockImplementation(async (url: string) => {
       if (url.includes('/tree')) return mockTreeResponse();
       if (url.includes('/query')) return mockQueryResponse();
       return { ok: true, json: async () => ({}) };
     });
-    global.fetch = mockFetch;
   });
 
   afterEach(() => { localStorage.clear(); });
@@ -38,9 +37,11 @@ describe('WikiView Component', () => {
     await user.selectOptions(providerSelect, 'openai-compatible');
 
     const modelInput = screen.getByPlaceholderText(/claude-3-7-sonnet/i);
+    await user.clear(modelInput);
     await user.type(modelInput, 'custom-llama-3');
 
     const baseUrlInput = screen.getByPlaceholderText(/127\.0\.0\.1/i);
+    await user.clear(baseUrlInput);
     await user.type(baseUrlInput, 'http://test-url.local/v1');
 
     const configNameInput = screen.getByPlaceholderText(/Config Name/i);
@@ -76,12 +77,14 @@ describe('WikiView Component', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: /LLM Provider/i }), 'openai-compatible');
 
     const modelInput = screen.getByPlaceholderText(/claude-3-7-sonnet/i);
+    await user.clear(modelInput);
     await user.type(modelInput, 'gpt-temp');
 
     const generateBtn = screen.getByRole('button', { name: /Start Generation|Generate Wiki/i });
     await user.click(generateBtn);
 
-    const generateCall = mockFetch.mock.calls.find((call: any) => typeof call[0] === 'string' && call[0].includes('/generate'));
+    const fetchMock = global.fetch as Mock;
+    const generateCall = fetchMock.mock.calls.find((call: any) => typeof call[0] === 'string' && call[0].includes('/generate'));
 
     expect(generateCall).toBeDefined();
     if (generateCall) {
@@ -103,8 +106,9 @@ describe('WikiView Component', () => {
     await user.type(input, 'What does the user service do?');
     fireEvent.submit(input);
 
+    const fetchMock = global.fetch as Mock;
     await waitFor(() => {
-      const queryCall = mockFetch.mock.calls.find((call: any) => typeof call[0] === 'string' && call[0].includes('/query'));
+      const queryCall = fetchMock.mock.calls.find((call: any) => typeof call[0] === 'string' && call[0].includes('/query'));
       expect(queryCall).toBeDefined();
 
       if (queryCall) {
