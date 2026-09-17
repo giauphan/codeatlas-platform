@@ -142,11 +142,16 @@ export class ConsolidationEngine {
    */
   private async executeChunkedIn(db: IDatabaseAdapter, sql: string, ids: string[], extraBinds: Record<string, unknown>, operationName: string): Promise<number> {
     let affected = 0;
-    const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
 
     // SQLite default max binds is 999. Oracle is 1000 expressions.
     // We reserve some slots for extraBinds. 900 is safe across all supported DBs.
-    const chunkSize = process.env.CODEATLAS_CHUNK_SIZE ? parseInt(process.env.CODEATLAS_CHUNK_SIZE, 10) : 900;
+    let chunkSize = 900;
+    if (process.env.CODEATLAS_CHUNK_SIZE) {
+      const parsed = parseInt(process.env.CODEATLAS_CHUNK_SIZE, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        chunkSize = parsed;
+      }
+    }
 
     for (let i = 0; i < ids.length; i += chunkSize) {
       try {
@@ -634,17 +639,15 @@ export class ConsolidationEngine {
 
       if (toSupersede.size > 0) {
         const tid = authStorage.getStore()!.uid;
-        try {
-          supersededCount = await this.executeChunkedIn(
-            db,
-            `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN ({clause}) AND tenant_id = :tid`,
-            Array.from(toSupersede),
-            { tid },
-            "superseding memories"
-          );
-        } catch (err) {
-          logger.error(`[Consolidation] Error superseding batch of dreams`, err);
-        }
+        // executeChunkedIn will log and rethrow the error.
+        // We let it propagate naturally to fail the job if superseding fails.
+        supersededCount = await this.executeChunkedIn(
+          db,
+          `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN ({clause}) AND tenant_id = :tid`,
+          Array.from(toSupersede),
+          { tid },
+          "superseding memories"
+        );
       }
     }
 
