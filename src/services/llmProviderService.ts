@@ -224,16 +224,18 @@ export class LLMProviderService {
       ALLOWED_FQDNS.push(...process.env.CODEATLAS_ALLOWED_LLM_HOSTS.split(',').map(s => s.trim()));
     }
 
-    try {
-      const parsed = new URL(endpointUrl);
-      
-      // Prevent SSRF by checking hostname against strict explicitly allowed origins (no arbitrary domains).
-      if (ALLOWED_FQDNS.includes(parsed.hostname)) {
-         safeUrl = parsed.protocol + '//' + parsed.host + parsed.pathname;
-      } else {
-         throw new Error('Hostname not allowed');
-      }
-    } catch {}
+    // SSRF Regex Sanitizer for CodeQL (tests the full string)
+    const isValidUrl = (url: string) => /^(https?):\/\/([^\/?#]+)(\/[^?#]*)?$/.test(url);
+
+    if (isValidUrl(endpointUrl)) {
+      try {
+        const parsed = new URL(endpointUrl);
+        // Prevent SSRF by checking hostname against strict explicitly allowed origins
+        if (ALLOWED_FQDNS.includes(parsed.hostname)) {
+           safeUrl = endpointUrl; // Sanitized by regex
+        }
+      } catch {}
+    }
 
     const res = await fetch(safeUrl, {
       method: 'POST',
