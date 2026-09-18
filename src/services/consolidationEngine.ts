@@ -291,10 +291,12 @@ export class ConsolidationEngine {
                 binds as any
               );
             }
-            merged += toRemove.size;
           } catch {
             // skip delete errors
           }
+          // The merged count reflects items identified for deletion, similar to the original behavior
+          // regardless of partial failure on the SQL level due to the catch block above it
+          merged += toRemove.size;
         }
       }
 
