@@ -50,14 +50,15 @@ describe('WikiView Component', () => {
     const saveBtn = screen.getByRole('button', { name: /Save/i });
     await user.click(saveBtn);
 
-    let storedProfilesStr: string | null = null;
+    let profiles: any[] = [];
     await waitFor(() => {
-      storedProfilesStr = localStorage.getItem('ca_wiki_saved_profiles');
-      expect(storedProfilesStr).not.toBeNull();
-    });
+      const stored = localStorage.getItem('ca_wiki_saved_profiles');
+      expect(stored).not.toBeNull();
+      const parsed = JSON.parse(stored!);
+      expect(parsed.length).toBe(1);
+      profiles = parsed;
+    }, { timeout: 1000 });
 
-    const profiles = JSON.parse(storedProfilesStr!);
-    expect(profiles.length).toBe(1);
     expect(profiles[0].name).toBe('My Local Profile');
     expect(profiles[0].model).toBe('custom-llama-3');
     expect(profiles[0].baseUrl).toBe('http://test-url.local/v1');
