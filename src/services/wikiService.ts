@@ -274,8 +274,9 @@ export class WikiService {
     return await this.dbAdapter.getWikiPage(projectName, path, tenantId);
   }
 
-  async queryWiki(projectName: string, query: string, options: QueryWikiOptions = {}): Promise<{ answer: string; references: string[] }> {
-    const tenantId = options.tenantId || 'default';
+  async queryWiki(projectName: string, query: string, options: QueryWikiOptions | string = {}): Promise<{ answer: string; references: string[] }> {
+    const opts: QueryWikiOptions = typeof options === 'string' ? { tenantId: options } : (options || {});
+    const tenantId = opts.tenantId || 'default';
     const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
 
     // Very basic keyword matching/scoring for demo purposes.

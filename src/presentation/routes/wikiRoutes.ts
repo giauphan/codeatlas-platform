@@ -40,6 +40,7 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
 
       const { provider, apiKey, baseUrl, model, systemPrompt } = req.body || {};
       const cleanBaseUrl = typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : undefined;
+      if (provider && !["anthropic", "openai", "openai-compatible", "template"].includes(provider)) { return res.status(400).json({ error: "Invalid provider" }); }
       const options = { provider, apiKey, baseUrl: cleanBaseUrl, model, systemPrompt };
       const service = getWikiService();
 
@@ -104,6 +105,7 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
       const { project } = req.params;
       const { query, provider, apiKey, baseUrl, model } = req.body || {};
       const cleanBaseUrl = typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : undefined;
+      if (provider && !["anthropic", "openai", "openai-compatible", "template"].includes(provider)) { return res.status(400).json({ error: "Invalid provider" }); }
       const options = { provider, apiKey, baseUrl: cleanBaseUrl, model };
 
       if (!query || typeof query !== 'string') {

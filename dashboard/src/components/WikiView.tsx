@@ -131,7 +131,15 @@ export const WikiView: React.FC<WikiViewProps> = ({
       return JSON.parse(localStorage.getItem('ca_wiki_saved_profiles') || '[]');
     } catch { return []; }
   });
-  const [activeProfileId, setActiveProfileId] = useState(() => localStorage.getItem('ca_wiki_active_profile_id') || '');
+  const [activeProfileId, setActiveProfileId] = useState(() => {
+    const stored = localStorage.getItem('ca_wiki_active_profile_id');
+    if (stored) return stored;
+    try {
+      const parsed = JSON.parse(localStorage.getItem('ca_wiki_saved_profiles') || '[]');
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
+    } catch {}
+    return '';
+  });
   const [profileNameInput, setProfileNameInput] = useState('');
 
   // Persist config to localStorage in a single effect to avoid multiple synchronous writes
