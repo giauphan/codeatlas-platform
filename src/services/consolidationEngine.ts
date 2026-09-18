@@ -278,10 +278,10 @@ export class ConsolidationEngine {
 
         if (toRemove.size > 0) {
           const ids = Array.from(toRemove);
-          const chunkSize = 900;
+          const BATCH_DELETE_CHUNK_SIZE = 900;
           try {
-            for (let k = 0; k < ids.length; k += chunkSize) {
-              const chunk = ids.slice(k, k + chunkSize);
+            for (let k = 0; k < ids.length; k += BATCH_DELETE_CHUNK_SIZE) {
+              const chunk = ids.slice(k, k + BATCH_DELETE_CHUNK_SIZE);
               const { clause, binds } = buildInClause(chunk, { tenantId });
               const result = await db.execute(
                 `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
@@ -605,9 +605,9 @@ export class ConsolidationEngine {
 
       if (toSupersede.size > 0) {
         const ids = Array.from(toSupersede);
-        const chunkSize = 900;
-        for (let k = 0; k < ids.length; k += chunkSize) {
-          const chunk = ids.slice(k, k + chunkSize);
+        const BATCH_DELETE_CHUNK_SIZE = 900;
+        for (let k = 0; k < ids.length; k += BATCH_DELETE_CHUNK_SIZE) {
+          const chunk = ids.slice(k, k + BATCH_DELETE_CHUNK_SIZE);
           const { clause, binds } = buildInClause(chunk, { tid: authStorage.getStore()!.uid });
           const result = await db.execute(
             `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid`,
