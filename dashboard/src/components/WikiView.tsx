@@ -710,7 +710,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                     color: '#fff'
                   }}
                 >
-                  <div>{msg.text}</div>
+                  {renderMarkdownContent(msg.text)}
                   {msg.citations && msg.citations.length > 0 && (
                     <div style={{ marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.4rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                       <strong>Sources:</strong> {msg.citations.join(', ')}
