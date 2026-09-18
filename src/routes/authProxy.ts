@@ -33,7 +33,11 @@ const AUTH_RATE_LIMIT_ALLOW_IPS = (process.env.CODEATLAS_AUTH_RATE_LIMIT_ALLOW_I
   .map(s => s.trim())
   .filter(Boolean);
 
-const authRateLimitAllowIps = new Set([...DEFAULT_AUTH_RATE_LIMIT_ALLOW_IPS, ...AUTH_RATE_LIMIT_ALLOW_IPS].map(normalizeIp));
+const authRateLimitAllowIps = new Set(
+  [...DEFAULT_AUTH_RATE_LIMIT_ALLOW_IPS, ...AUTH_RATE_LIMIT_ALLOW_IPS]
+    .map(normalizeIp)
+    .filter(Boolean)
+);
 
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -43,7 +47,7 @@ const authRateLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   skip: (req) => {
     const ip = normalizeIp(req.ip);
-    return authRateLimitAllowIps.has(ip);
+    return Boolean(ip) && authRateLimitAllowIps.has(ip);
   },
 });
 
