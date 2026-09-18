@@ -155,6 +155,7 @@ export const syncQueue = new TaskQueue(1);
 
 // Setup Express app to serve as both MCP SSE and REST API
 export const app = express();
+app.set("trust proxy", 1);
 // Use helmet for standard security headers
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin to match CORS logic below
@@ -236,6 +237,9 @@ app.use(authProxyRouter);
 
 // REST API Dreaming (dream memories)
 registerDreamingRoutes(app);
+
+// REST API Wiki
+mountWikiRoutes(app);
 
 // REST API: Get all discovered projects
 app.get("/api/projects", authMiddleware, localRateLimiter, async (req, res) => {
@@ -1225,9 +1229,7 @@ app.get("/api/docs/memory-setup", authMiddleware, localRateLimiter, (req, res) =
  * Start the HTTP/SSE Express server on a specified port with retry on EADDRINUSE
  */
 export function startHttpServer(port: number, retries = 5): Promise<void> {
-  registerDreamingRoutes(app);
   mountSecondBrainRoutes(app);
-  mountWikiRoutes(app);
   mountConsolidationRoutes(app);
   mountGenomeRoutes(app);
   mountA2ARoutes(app, a2aExecutor, `http://localhost:${port}`);

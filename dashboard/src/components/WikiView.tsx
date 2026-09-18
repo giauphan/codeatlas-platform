@@ -15,7 +15,10 @@ import {
   Code,
   Layers,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Settings,
+  Save,
+  Trash2
 } from 'lucide-react';
 import { getAuthHeaders } from '../lib/auth';
 import { FOCUS_RING_CLASS } from '../lib/constants';
@@ -32,6 +35,16 @@ interface WikiTreeResponse {
   root: WikiNode[];
   totalPages: number;
   lastGeneratedAt?: string;
+}
+
+
+interface WikiLLMConfigProfile {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  apiKey: string;
+  baseUrl: string;
 }
 
 interface WikiPage {
@@ -55,6 +68,23 @@ interface WikiViewProps {
 const API_BASE = window.location.origin.includes('localhost:5173')
   ? 'http://localhost:8080'
   : window.location.origin;
+
+const modalInputStyle: React.CSSProperties = {
+  width: '100%',
+  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid rgba(255,255,255,0.15)',
+  borderRadius: '8px',
+  padding: '0.6rem',
+  color: '#fff',
+  outline: 'none',
+};
+
+const modalLabelStyle: React.CSSProperties = {
+  fontSize: '0.85rem',
+  color: 'var(--text-muted)',
+  display: 'block',
+  marginBottom: '6px',
+};
 
 export const WikiView: React.FC<WikiViewProps> = ({
   projects = [],
@@ -89,9 +119,40 @@ export const WikiView: React.FC<WikiViewProps> = ({
 
   // Generation Modal State
   const [showGenModal, setShowGenModal] = useState(false);
-  const [genProvider, setGenProvider] = useState('mock');
-  const [genModel, setGenModel] = useState('default');
+  const [genProvider, setGenProvider] = useState(() => localStorage.getItem('ca_wiki_provider') || 'mock');
+  const [genModel, setGenModel] = useState(() => localStorage.getItem('ca_wiki_model') || 'default');
   const [genApiKey, setGenApiKey] = useState('');
+  const [genBaseUrl, setGenBaseUrl] = useState(() => localStorage.getItem('ca_wiki_base_url') || '');
+
+
+  // Saved Config Profiles
+  const [profiles, setProfiles] = useState<WikiLLMConfigProfile[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ca_wiki_saved_profiles') || '[]');
+    } catch { return []; }
+  });
+  const [activeProfileId, setActiveProfileId] = useState(() => {
+    const stored = localStorage.getItem('ca_wiki_active_profile_id');
+    if (stored) return stored;
+    try {
+      const parsed = JSON.parse(localStorage.getItem('ca_wiki_saved_profiles') || '[]');
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
+    } catch {}
+    return '';
+  });
+  const [profileNameInput, setProfileNameInput] = useState('');
+
+  // Persist config to localStorage in a debounced effect to avoid excessive synchronous writes
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      localStorage.setItem('ca_wiki_saved_profiles', JSON.stringify(profiles));
+      localStorage.setItem('ca_wiki_active_profile_id', activeProfileId);
+      localStorage.setItem('ca_wiki_provider', genProvider);
+      localStorage.setItem('ca_wiki_model', genModel);
+      localStorage.setItem('ca_wiki_base_url', genBaseUrl);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [profiles, activeProfileId, genProvider, genModel, genBaseUrl]);
 
   // Q&A State
   const [queryInput, setQueryInput] = useState('');
@@ -166,6 +227,20 @@ export const WikiView: React.FC<WikiViewProps> = ({
   // Handle Wiki Generation
   const handleGenerateWiki = async () => {
     if (!currentProject) return;
+
+    if (genBaseUrl.trim()) {
+      try {
+        const parsed = new URL(genBaseUrl.trim());
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          setError('Base URL must use http: or https: protocol.');
+          return;
+        }
+      } catch {
+        setError('Invalid Base URL format.');
+        return;
+      }
+    }
+
     setIsGenerating(true);
     setError(null);
     try {
@@ -173,6 +248,8 @@ export const WikiView: React.FC<WikiViewProps> = ({
       const payload: Record<string, unknown> = {
         provider: genProvider,
       };
+
+      if (genBaseUrl.trim()) payload.baseUrl = genBaseUrl.trim();
       if (genModel && genModel !== 'default') payload.model = genModel;
       if (genApiKey) payload.apiKey = genApiKey;
 
@@ -213,13 +290,21 @@ export const WikiView: React.FC<WikiViewProps> = ({
 
     try {
       const headers = await getAuthHeaders();
+      const payload: Record<string, unknown> = {
+        query: userText,
+        provider: genProvider
+      };
+      if (genBaseUrl.trim()) payload.baseUrl = genBaseUrl.trim();
+      if (genModel && genModel !== 'default') payload.model = genModel;
+      if (genApiKey) payload.apiKey = genApiKey;
+
       const resp = await fetch(`${API_BASE}/api/wiki/${encodeURIComponent(currentProject)}/query`, {
         method: 'POST',
         headers: {
           ...headers,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ query: userText })
+        body: JSON.stringify(payload)
       });
 
       if (!resp.ok) {
@@ -710,10 +795,50 @@ export const WikiView: React.FC<WikiViewProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Sparkles size={20} color="var(--primary-neon)" />
+                <Settings size={20} color="var(--primary-neon)" />
                 <h2 className="tech-font" style={{ fontSize: '1.25rem', color: '#fff', margin: 0 }}>
-                  Generate Wiki for {currentProject}
+                  LLM Settings & Generation for {currentProject}
                 </h2>
+              </div>
+
+              <div style={{ padding: '0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                  Load Saved Preset
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select
+                    aria-label="Load Saved Preset"
+                    value={activeProfileId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setActiveProfileId(id);
+                      const p = profiles.find(x => x.id === id);
+                      if (p) {
+                        setGenProvider(p.provider);
+                        setGenModel(p.model);
+                        setGenApiKey(p.apiKey);
+                        setGenBaseUrl(p.baseUrl);
+                      }
+                    }}
+                    className={FOCUS_RING_CLASS}
+                    style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', padding: '0.5rem', color: '#fff', outline: 'none' }}
+                  >
+                    <option value="" style={{ background: '#111' }}>-- Custom / Temporary Config --</option>
+                    {profiles.map(p => <option key={p.id} value={p.id} style={{ background: '#111' }}>{p.name}</option>)}
+                  </select>
+                  {activeProfileId && (
+                    <button
+                      onClick={() => {
+                        setProfiles(prev => prev.filter(x => x.id !== activeProfileId));
+                        setActiveProfileId('');
+                      }}
+                      style={{ background: 'rgba(255, 75, 75, 0.1)', color: '#FFB4AB', border: '1px solid rgba(255, 75, 75, 0.3)', borderRadius: '6px', padding: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      title="Delete selected preset"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -721,6 +846,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                   LLM Provider
                 </label>
                 <select
+                  aria-label="LLM Provider"
                   value={genProvider}
                   onChange={(e) => setGenProvider(e.target.value)}
                   className={FOCUS_RING_CLASS}
@@ -744,7 +870,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
               {genProvider !== 'mock' && (
                 <>
                   <div>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    <label style={modalLabelStyle}>
                       Model Name
                     </label>
                     <input
@@ -753,20 +879,12 @@ export const WikiView: React.FC<WikiViewProps> = ({
                       onChange={(e) => setGenModel(e.target.value)}
                       placeholder="e.g. claude-3-7-sonnet-20250219 or gpt-4o"
                       className={FOCUS_RING_CLASS}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        borderRadius: '8px',
-                        padding: '0.6rem',
-                        color: '#fff',
-                        outline: 'none'
-                      }}
+                      style={modalInputStyle}
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    <label style={modalLabelStyle}>
                       API Key (Optional if already configured)
                     </label>
                     <input
@@ -775,54 +893,130 @@ export const WikiView: React.FC<WikiViewProps> = ({
                       onChange={(e) => setGenApiKey(e.target.value)}
                       placeholder="sk-..."
                       className={FOCUS_RING_CLASS}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        borderRadius: '8px',
-                        padding: '0.6rem',
-                        color: '#fff',
-                        outline: 'none'
-                      }}
+                      style={modalInputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={modalLabelStyle}>
+                      Custom API Endpoint (Base URL)
+                    </label>
+                    <input
+                      type="text"
+                      value={genBaseUrl}
+                      onChange={(e) => setGenBaseUrl(e.target.value)}
+                      placeholder="e.g. http://127.0.0.1:11434/v1/chat/completions"
+                      className={FOCUS_RING_CLASS}
+                      style={modalInputStyle}
                     />
                   </div>
                 </>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '0.5rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowGenModal(false)}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '8px',
-                    padding: '0.6rem 1.25rem',
-                    color: '#fff',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGenerateWiki}
-                  disabled={isGenerating}
-                  className={`btn-neon-cyan ${FOCUS_RING_CLASS}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    borderRadius: '8px',
-                    padding: '0.6rem 1.25rem'
-                  }}
-                >
-                  {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  {isGenerating ? 'Building Wiki...' : 'Start Generation'}
-                </button>
+              
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                {/* Save Preset Section */}
+                <div>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    Save Current Config as Preset
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      value={profileNameInput}
+                      onChange={e => setProfileNameInput(e.target.value)}
+                      placeholder="e.g. My Claude Sub"
+                      className={FOCUS_RING_CLASS}
+                      style={{ 
+                        flex: 1, 
+                        background: 'rgba(255,255,255,0.05)', 
+                        border: '1px solid rgba(255,255,255,0.15)', 
+                        borderRadius: '6px', 
+                        padding: '0.6rem 0.75rem', 
+                        color: '#fff', 
+                        outline: 'none', 
+                        fontSize: '0.85rem' 
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!profileNameInput.trim()) return;
+                        const newId = Date.now().toString();
+                        setProfiles(prev => [...prev, {
+                          id: newId,
+                          name: profileNameInput.trim(),
+                          provider: genProvider,
+                          model: genModel,
+                          apiKey: "", // Deliberately omit api key from preset save to prevent persistent cleartext storage
+                          baseUrl: genBaseUrl,
+                        }]);
+                        setActiveProfileId(newId);
+                        setProfileNameInput('');
+                      }}
+                      disabled={!profileNameInput.trim()}
+                      style={{ 
+                        background: 'rgba(0, 240, 255, 0.1)', 
+                        color: 'var(--primary-neon)', 
+                        border: '1px solid rgba(0, 240, 255, 0.3)', 
+                        borderRadius: '6px', 
+                        padding: '0.6rem 1rem', 
+                        cursor: 'pointer', 
+                        fontSize: '0.85rem', 
+                        fontWeight: 600, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px', 
+                        opacity: !profileNameInput.trim() ? 0.3 : 1 
+                      }}
+                    >
+                      <Save size={16} /> Save
+                    </button>
+                  </div>
+                </div>
+
+                {/* Primary Actions */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowGenModal(false)}
+                    style={{ 
+                      background: 'rgba(255,255,255,0.05)', 
+                      border: '1px solid rgba(255,255,255,0.1)', 
+                      borderRadius: '8px', 
+                      padding: '0.75rem 1.25rem', 
+                      color: '#fff', 
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: 500
+                    }}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateWiki}
+                    disabled={isGenerating}
+                    className={`btn-neon-cyan ${FOCUS_RING_CLASS}`}
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      borderRadius: '8px', 
+                      padding: '0.75rem 1.25rem',
+                      fontSize: '0.9rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    {isGenerating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                    {isGenerating ? 'Building...' : 'Generate Wiki'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
+
         )}
       </AnimatePresence>
 

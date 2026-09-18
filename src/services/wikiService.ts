@@ -20,12 +20,22 @@ export interface WikiTreeResponse {
 }
 
 export interface GenerateWikiOptions {
-  provider?: string;
+  provider?: LLMProviderType;
   apiKey?: string;
   baseUrl?: string;
   model?: string;
   exportToDisk?: boolean;
   tenantId?: string;
+}
+
+export type LLMProviderType = 'anthropic' | 'openai' | 'openai-compatible' | 'template';
+
+export interface QueryWikiOptions {
+  tenantId?: string;
+  provider?: LLMProviderType;
+  model?: string;
+  apiKey?: string;
+  baseUrl?: string;
 }
 
 export class WikiService {
@@ -100,7 +110,7 @@ export class WikiService {
       const content = await this.llmProvider.generateText({
         prompt: pageDef.prompt,
         systemPrompt: 'You are an expert technical documentation assistant. Generate detailed markdown documentation.',
-        provider: options.provider as any,
+        provider: options.provider,
         apiKey: options.apiKey,
         baseUrl: options.baseUrl,
         model: options.model,
@@ -264,7 +274,9 @@ export class WikiService {
     return await this.dbAdapter.getWikiPage(projectName, path, tenantId);
   }
 
-  async queryWiki(projectName: string, query: string, tenantId: string = 'default'): Promise<{ answer: string; references: string[] }> {
+  async queryWiki(projectName: string, query: string, options: QueryWikiOptions | string = {}): Promise<{ answer: string; references: string[] }> {
+    const opts: QueryWikiOptions = typeof options === 'string' ? { tenantId: options } : (options || {});
+    const tenantId = opts.tenantId || 'default';
     const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
 
     // Very basic keyword matching/scoring for demo purposes.
@@ -295,7 +307,11 @@ export class WikiService {
 
     const answer = await this.llmProvider.generateText({
       prompt,
-      systemPrompt: 'You are an advanced documentation QA assistant running on CodeAtlas platform.'
+      systemPrompt: 'You are an advanced documentation QA assistant running on CodeAtlas platform.',
+      provider: opts.provider,
+      apiKey: opts.apiKey,
+      baseUrl: opts.baseUrl,
+      model: opts.model,
     });
 
     return {

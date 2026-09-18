@@ -38,7 +38,10 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
         return res.status(400).json({ error: 'Missing logic required: projectName parameter' });
       }
 
-      const options = req.body || {};
+      const { provider, apiKey, baseUrl, model, systemPrompt } = req.body || {};
+      const cleanBaseUrl = typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : undefined;
+      if (provider && !["anthropic", "openai", "openai-compatible", "template", "mock"].includes(provider)) { return res.status(400).json({ error: "Invalid provider" }); }
+      const options = { provider, apiKey, baseUrl: cleanBaseUrl, model, systemPrompt };
       const service = getWikiService();
 
       const result = await service.generateProjectWiki(project, options);
@@ -100,14 +103,17 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
   router.post('/:project/query', async (req, res) => {
     try {
       const { project } = req.params;
-      const { query } = req.body;
+      const { query, provider, apiKey, baseUrl, model } = req.body || {};
+      const cleanBaseUrl = typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : undefined;
+      if (provider && !["anthropic", "openai", "openai-compatible", "template", "mock"].includes(provider)) { return res.status(400).json({ error: "Invalid provider" }); }
+      const options = { provider, apiKey, baseUrl: cleanBaseUrl, model };
 
       if (!query || typeof query !== 'string') {
         return res.status(400).json({ error: "Missing or invalid 'query' parameter" });
       }
 
       const service = getWikiService();
-      const result = await service.queryWiki(project, query);
+      const result = await service.queryWiki(project, query, options);
       res.json(result);
     } catch (err) {
       logger.error(`[WikiRoutes] queryWiki failed:`, err);

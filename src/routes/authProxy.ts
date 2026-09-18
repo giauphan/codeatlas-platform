@@ -22,12 +22,33 @@ import { logger } from "../utils/logger.js";
 const router = express.Router();
 
 // Rate limiter for authentication endpoint to prevent brute-force attacks
+function normalizeIp(ip: string | undefined): string {
+  if (!ip) return '';
+  return ip.replace(/^::ffff:/, '');
+}
+
+const DEFAULT_AUTH_RATE_LIMIT_ALLOW_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+const AUTH_RATE_LIMIT_ALLOW_IPS = (process.env.CODEATLAS_AUTH_RATE_LIMIT_ALLOW_IPS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+const authRateLimitAllowIps = new Set(
+  [...DEFAULT_AUTH_RATE_LIMIT_ALLOW_IPS, ...AUTH_RATE_LIMIT_ALLOW_IPS]
+    .map(normalizeIp)
+    .filter(Boolean)
+);
+
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 sign-in requests per `window` (here, per 15 minutes)
+  max: 10, // Limit each IP to 10 sign-in requests per `window` to prevent brute-force attacks
   message: { error: "Too many sign-in attempts from this IP, please try again after 15 minutes" },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => {
+    const ip = normalizeIp(req.ip);
+    return Boolean(ip) && authRateLimitAllowIps.has(ip);
+  },
 });
 
 // Use the same service account as Firebase Admin for Google Cloud APIs

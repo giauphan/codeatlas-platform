@@ -154,7 +154,9 @@ export class LLMProviderService {
           !parsed.hostname.toLowerCase().includes('metadata')
         ) {
           const safeBase = parsed.origin + parsed.pathname.replace(/\/+$/, '');
-          endpoint = safeBase + '/chat/completions';
+          endpoint = safeBase.endsWith('/chat/completions') || safeBase.endsWith('/v1/chat/completions')
+                ? safeBase
+                : safeBase + '/chat/completions';
         }
       } catch {}
     }
@@ -169,11 +171,17 @@ export class LLMProviderService {
       try {
         const parsed = new URL(options.baseUrl);
         if (
-          (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
-          !parsed.hostname.toLowerCase().includes('metadata')
+          !parsed.hostname.toLowerCase().includes('metadata') &&
+          parsed.hostname !== '169.254.169.254'
         ) {
-          const safeBase = parsed.origin + parsed.pathname.replace(/\/+$/, '');
-          endpoint = safeBase + '/chat/completions';
+          // Allow https externally, local http
+          if (parsed.protocol === 'https:' || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+            const safeBase = parsed.origin + parsed.pathname.replace(/\/+$/, '');
+            // Only append path if base doesn't already contain it exactly as trailing element
+            endpoint = safeBase.endsWith('/chat/completions') || safeBase.endsWith('/v1/chat/completions')
+                ? safeBase
+                : safeBase + '/chat/completions';
+          }
         }
       } catch {}
     }
@@ -200,21 +208,68 @@ export class LLMProviderService {
     }
     messages.push({ role: 'user', content: options.prompt });
 
-    // Strictly assign from compile-time string constants to prevent taint propagation in CodeQL static analysis
     let safeUrl = 'https://api.openai.com/v1/chat/completions';
-    if (endpointUrl.includes('11434')) {
-      safeUrl = 'http://127.0.0.1:11434/v1/chat/completions';
-    } else if (endpointUrl.includes('8000')) {
-      safeUrl = 'http://127.0.0.1:8000/v1/chat/completions';
-    } else if (endpointUrl.includes('8080')) {
-      safeUrl = 'http://127.0.0.1:8080/v1/chat/completions';
-    } else if (endpointUrl.includes('1234')) {
-      safeUrl = 'http://127.0.0.1:1234/v1/chat/completions';
-    } else if (endpointUrl.includes('localhost') || endpointUrl.includes('127.0.0.1')) {
-      safeUrl = 'http://127.0.0.1:11434/v1/chat/completions';
+
+    const _DEFAULT_FQDNS = [
+      'api.openai.com',
+      'api.anthropic.com',
+      'api.deepseek.com',
+      'openrouter.ai',
+      'api.groq.com',
+      'api.mistral.ai',
+      'api.together.xyz',
+      'localhost',
+      '127.0.0.1'
+    ];
+
+    const ALLOWED_FQDNS = [..._DEFAULT_FQDNS];
+    if (process.env.CODEATLAS_ALLOWED_LLM_HOSTS) {
+      ALLOWED_FQDNS.push(...process.env.CODEATLAS_ALLOWED_LLM_HOSTS.split(',').map(s => s.trim()).filter(Boolean));
     }
 
-    const res = await fetch(String(safeUrl), {
+    const ALLOWED_PATHS = [
+      '/v1/chat/completions',
+      '/openai/v1/chat/completions',
+      '/chat/completions',
+      '/api/v1/chat/completions',
+      '/api/chat/completions'
+    ];
+
+    try {
+      const parsed = new URL(endpointUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('Invalid protocol: only http: and https: are allowed');
+      }
+
+      const matchedHost = ALLOWED_FQDNS.find(h => h.toLowerCase() === parsed.hostname.toLowerCase());
+      // Ensure path matches explicitly (ignoring trailing slash on allowed paths matching)
+      const normPath = parsed.pathname.replace(/\/$/, "");
+      const matchedPath = ALLOWED_PATHS.find(p => p.toLowerCase() === normPath.toLowerCase());
+      if (!matchedPath) {
+        throw new Error('SSRF Validation Error: Path not allowed');
+      }
+
+      if (matchedHost) {
+        const protocol = (parsed.protocol === 'http:' && (matchedHost === 'localhost' || matchedHost === '127.0.0.1'))
+          ? 'http:'
+          : 'https:';
+
+        // Strict port guard
+        let port = '';
+        if (parsed.port) {
+          if (matchedHost !== 'localhost' && matchedHost !== '127.0.0.1') {
+             throw new Error('SSRF Validation Error: Custom ports only allowed for local endpoints');
+          }
+           port = /^[0-9]{1,5}$/.test(parsed.port) ? `:${parsed.port}` : '';
+        }
+
+        safeUrl = `${protocol}//${matchedHost}${port}${matchedPath}`;
+      }
+    } catch (err) {
+      console.warn('[LLMProviderService] SSRF validation failed, using safe fallback. Reason:', err instanceof Error ? err.message : String(err));
+    }
+
+    const res = await fetch(safeUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify({

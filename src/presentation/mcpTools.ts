@@ -35,7 +35,7 @@ import {
   MemorySystemStatus
 } from "../services/memoryController.js";
 import { createDatabaseAdapter } from "../database/factory.js";
-import { WikiService } from "../services/wikiService.js";
+import { WikiService, LLMProviderType } from "../services/wikiService.js";
 
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
@@ -2053,6 +2053,15 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
   // --- DeepWiki Tools ---
   let wikiServiceCache: WikiService | null = null;
+  const validateLLMProvider = (provider: unknown): LLMProviderType | undefined => {
+    if (typeof provider !== 'string') return undefined;
+    if (provider === 'template') return 'template';
+    if (provider === 'anthropic') return 'anthropic';
+    if (provider === 'openai') return 'openai';
+    if (provider === 'openai-compatible') return 'openai-compatible';
+    return undefined;
+  };
+
   const getWikiService = () => {
     if (!wikiServiceCache) {
       wikiServiceCache = new WikiService(createDatabaseAdapter());
@@ -2077,7 +2086,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       try {
         const service = getWikiService();
         const tree = await service.generateProjectWiki(params.project, {
-          provider: params.provider,
+          provider: validateLLMProvider(params.provider),
           apiKey: params.apiKey,
           baseUrl: params.baseUrl,
           model: params.model,
@@ -2113,7 +2122,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     async (params: Record<string, unknown>) => {
       const service = getWikiService();
       const tree = await service.generateProjectWiki(params.project as string, {
-        provider: params.provider as string | undefined,
+        provider: validateLLMProvider(params.provider),
         apiKey: params.apiKey as string | undefined,
         baseUrl: params.baseUrl as string | undefined,
         model: params.model as string | undefined,
@@ -2187,7 +2196,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       await logActivity(auth, "query_project_wiki", { project, query });
       try {
         const service = getWikiService();
-        const result = await service.queryWiki(project, query, "default");
+        const result = await service.queryWiki(project, query, { tenantId: "default" });
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
         };
@@ -2208,7 +2217,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     ["project", "query"],
     async (params: Record<string, unknown>) => {
       const service = getWikiService();
-      return await service.queryWiki(params.project as string, params.query as string, "default");
+      return await service.queryWiki(params.project as string, params.query as string, { tenantId: "default" });
     }
   );
 
