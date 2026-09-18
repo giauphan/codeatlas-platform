@@ -39,7 +39,8 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
       }
 
       const { provider, apiKey, baseUrl, model, systemPrompt } = req.body || {};
-      const options = { provider, apiKey, baseUrl, model, systemPrompt };
+      const cleanBaseUrl = typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : undefined;
+      const options = { provider, apiKey, baseUrl: cleanBaseUrl, model, systemPrompt };
       const service = getWikiService();
 
       const result = await service.generateProjectWiki(project, options);
@@ -102,7 +103,8 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
     try {
       const { project } = req.params;
       const { query, provider, apiKey, baseUrl, model } = req.body || {};
-      const options = { provider, apiKey, baseUrl, model };
+      const cleanBaseUrl = typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : undefined;
+      const options = { provider, apiKey, baseUrl: cleanBaseUrl, model };
 
       if (!query || typeof query !== 'string') {
         return res.status(400).json({ error: "Missing or invalid 'query' parameter" });

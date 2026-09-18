@@ -121,7 +121,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
   const [showGenModal, setShowGenModal] = useState(false);
   const [genProvider, setGenProvider] = useState(() => localStorage.getItem('ca_wiki_provider') || 'mock');
   const [genModel, setGenModel] = useState(() => localStorage.getItem('ca_wiki_model') || 'default');
-  const [genApiKey, setGenApiKey] = useState(() => localStorage.getItem('ca_wiki_api_key') || '');
+  const [genApiKey, setGenApiKey] = useState('');
   const [genBaseUrl, setGenBaseUrl] = useState(() => localStorage.getItem('ca_wiki_base_url') || '');
 
 

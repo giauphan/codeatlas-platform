@@ -2053,6 +2053,15 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
   // --- DeepWiki Tools ---
   let wikiServiceCache: WikiService | null = null;
+  const validateLLMProvider = (provider: unknown): LLMProviderType | undefined => {
+    if (typeof provider !== 'string') return undefined;
+    if (provider === 'template') return 'template';
+    if (provider === 'anthropic') return 'anthropic';
+    if (provider === 'openai') return 'openai';
+    if (provider === 'openai-compatible') return 'openai-compatible';
+    return undefined;
+  };
+
   const getWikiService = () => {
     if (!wikiServiceCache) {
       wikiServiceCache = new WikiService(createDatabaseAdapter());
@@ -2077,7 +2086,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       try {
         const service = getWikiService();
         const tree = await service.generateProjectWiki(params.project, {
-          provider: params.provider as LLMProviderType | undefined,
+          provider: validateLLMProvider(params.provider),
           apiKey: params.apiKey,
           baseUrl: params.baseUrl,
           model: params.model,
@@ -2113,7 +2122,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     async (params: Record<string, unknown>) => {
       const service = getWikiService();
       const tree = await service.generateProjectWiki(params.project as string, {
-        provider: params.provider as LLMProviderType | undefined,
+        provider: validateLLMProvider(params.provider),
         apiKey: params.apiKey as string | undefined,
         baseUrl: params.baseUrl as string | undefined,
         model: params.model as string | undefined,

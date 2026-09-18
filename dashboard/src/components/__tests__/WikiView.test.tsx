@@ -97,7 +97,6 @@ describe('WikiView Component', () => {
   it('sends correct configuration when asking Wiki Assistant', async () => {
     localStorage.setItem('ca_wiki_provider', 'openai');
     localStorage.setItem('ca_wiki_model', 'gpt-4o');
-    localStorage.setItem('ca_wiki_api_key', 'test-key-123');
 
     const user = userEvent.setup();
     render(<WikiView projects={[{ name: 'test-project', dir: '/test' }]} selectedProjectDir="/test" />);
@@ -116,7 +115,6 @@ describe('WikiView Component', () => {
         expect(payload.query).toBe('What does the user service do?');
         expect(payload.provider).toBe('openai');
         expect(payload.model).toBe('gpt-4o');
-        expect(payload.apiKey).toBe('test-key-123');
       }
     });
   });
