@@ -229,6 +229,7 @@ export class LLMProviderService {
 
     const ALLOWED_PATHS = [
       '/v1/chat/completions',
+      '/openai/v1/chat/completions',
       '/chat/completions',
       '/api/v1/chat/completions',
       '/api/chat/completions'

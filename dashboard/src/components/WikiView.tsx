@@ -142,13 +142,16 @@ export const WikiView: React.FC<WikiViewProps> = ({
   });
   const [profileNameInput, setProfileNameInput] = useState('');
 
-  // Persist config to localStorage in a single effect to avoid multiple synchronous writes
+  // Persist config to localStorage in a debounced effect to avoid excessive synchronous writes
   useEffect(() => {
-    localStorage.setItem('ca_wiki_saved_profiles', JSON.stringify(profiles));
-    localStorage.setItem('ca_wiki_active_profile_id', activeProfileId);
-    localStorage.setItem('ca_wiki_provider', genProvider);
-    localStorage.setItem('ca_wiki_model', genModel);
-    localStorage.setItem('ca_wiki_base_url', genBaseUrl);
+    const timeout = setTimeout(() => {
+      localStorage.setItem('ca_wiki_saved_profiles', JSON.stringify(profiles));
+      localStorage.setItem('ca_wiki_active_profile_id', activeProfileId);
+      localStorage.setItem('ca_wiki_provider', genProvider);
+      localStorage.setItem('ca_wiki_model', genModel);
+      localStorage.setItem('ca_wiki_base_url', genBaseUrl);
+    }, 500);
+    return () => clearTimeout(timeout);
   }, [profiles, activeProfileId, genProvider, genModel, genBaseUrl]);
 
   // Q&A State
@@ -224,6 +227,20 @@ export const WikiView: React.FC<WikiViewProps> = ({
   // Handle Wiki Generation
   const handleGenerateWiki = async () => {
     if (!currentProject) return;
+
+    if (genBaseUrl.trim()) {
+      try {
+        const parsed = new URL(genBaseUrl.trim());
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          setError('Base URL must use http: or https: protocol.');
+          return;
+        }
+      } catch {
+        setError('Invalid Base URL format.');
+        return;
+      }
+    }
+
     setIsGenerating(true);
     setError(null);
     try {

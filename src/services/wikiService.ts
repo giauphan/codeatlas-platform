@@ -308,10 +308,10 @@ export class WikiService {
     const answer = await this.llmProvider.generateText({
       prompt,
       systemPrompt: 'You are an advanced documentation QA assistant running on CodeAtlas platform.',
-      provider: options.provider,
-      apiKey: options.apiKey,
-      baseUrl: options.baseUrl,
-      model: options.model,
+      provider: opts.provider,
+      apiKey: opts.apiKey,
+      baseUrl: opts.baseUrl,
+      model: opts.model,
     });
 
     return {
