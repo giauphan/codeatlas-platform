@@ -283,15 +283,15 @@ export class ConsolidationEngine {
             for (let k = 0; k < ids.length; k += chunkSize) {
               const chunk = ids.slice(k, k + chunkSize);
               const { clause, binds } = buildInClause(chunk, { tenantId });
-              await db.execute(
+              const result = await db.execute(
                 `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
-                binds as any
+                binds as Record<string, unknown>
               );
+              merged += result.rowsAffected || 0;
             }
           } catch {
             // skip delete errors
           }
-          merged += toRemove.size;
         }
       }
 
@@ -609,12 +609,12 @@ export class ConsolidationEngine {
         for (let k = 0; k < ids.length; k += chunkSize) {
           const chunk = ids.slice(k, k + chunkSize);
           const { clause, binds } = buildInClause(chunk, { tid: authStorage.getStore()!.uid });
-          await db.execute(
+          const result = await db.execute(
             `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid`,
-            binds as any
+            binds as Record<string, unknown>
           );
+          supersededCount += result.rowsAffected || 0;
         }
-        supersededCount = toSupersede.size;
       }
     }
 
