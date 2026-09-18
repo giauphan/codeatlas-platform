@@ -276,9 +276,6 @@ export class ConsolidationEngine {
           }
         }
 
-        // ⚡ Bolt Optimization: Batch delete duplicate concepts using a single execution
-        // with an IN clause rather than executing sequential DELETE queries. We chunk
-        // the IDs to avoid SQLite limits.
         if (toRemove.size > 0) {
           const ids = Array.from(toRemove);
           const chunkSize = 900;
@@ -294,8 +291,6 @@ export class ConsolidationEngine {
           } catch {
             // skip delete errors
           }
-          // The merged count reflects items identified for deletion, similar to the original behavior
-          // regardless of partial failure on the SQL level due to the catch block above it
           merged += toRemove.size;
         }
       }
@@ -608,9 +603,6 @@ export class ConsolidationEngine {
         }
       }
 
-      // ⚡ Bolt Optimization: Batch update superseded dreams using a single execution
-      // with an IN clause rather than executing sequential UPDATE queries. We chunk
-      // the IDs to avoid SQLite limits.
       if (toSupersede.size > 0) {
         const ids = Array.from(toSupersede);
         const chunkSize = 900;
