@@ -520,6 +520,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
               Pages Tree
             </span>
             <button
+              aria-label="Refresh pages tree"
               onClick={() => fetchTree(currentProject)}
               disabled={loadingTree}
               style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
@@ -661,6 +662,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
             />
             <button
               type="submit"
+              aria-label="Submit query"
               disabled={isQuerying || !queryInput.trim()}
               className={FOCUS_RING_CLASS}
               style={{
