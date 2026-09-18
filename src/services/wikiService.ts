@@ -20,7 +20,7 @@ export interface WikiTreeResponse {
 }
 
 export interface GenerateWikiOptions {
-  provider?: string;
+  provider?: LLMProviderType;
   apiKey?: string;
   baseUrl?: string;
   model?: string;
@@ -28,12 +28,14 @@ export interface GenerateWikiOptions {
   tenantId?: string;
 }
 
+export type LLMProviderType = 'anthropic' | 'openai' | 'openai-compatible' | 'template';
+
 export interface QueryWikiOptions {
-  provider?: string;
+  tenantId?: string;
+  provider?: LLMProviderType;
+  model?: string;
   apiKey?: string;
   baseUrl?: string;
-  model?: string;
-  tenantId?: string;
 }
 
 export class WikiService {
@@ -108,7 +110,7 @@ export class WikiService {
       const content = await this.llmProvider.generateText({
         prompt: pageDef.prompt,
         systemPrompt: 'You are an expert technical documentation assistant. Generate detailed markdown documentation.',
-        provider: options.provider as any,
+        provider: options.provider,
         apiKey: options.apiKey,
         baseUrl: options.baseUrl,
         model: options.model,
@@ -305,7 +307,7 @@ export class WikiService {
     const answer = await this.llmProvider.generateText({
       prompt,
       systemPrompt: 'You are an advanced documentation QA assistant running on CodeAtlas platform.',
-      provider: options.provider as any,
+      provider: options.provider,
       apiKey: options.apiKey,
       baseUrl: options.baseUrl,
       model: options.model,

@@ -35,7 +35,7 @@ import {
   MemorySystemStatus
 } from "../services/memoryController.js";
 import { createDatabaseAdapter } from "../database/factory.js";
-import { WikiService } from "../services/wikiService.js";
+import { WikiService, LLMProviderType } from "../services/wikiService.js";
 
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
@@ -2077,7 +2077,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       try {
         const service = getWikiService();
         const tree = await service.generateProjectWiki(params.project, {
-          provider: params.provider,
+          provider: params.provider as LLMProviderType | undefined,
           apiKey: params.apiKey,
           baseUrl: params.baseUrl,
           model: params.model,
@@ -2113,7 +2113,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     async (params: Record<string, unknown>) => {
       const service = getWikiService();
       const tree = await service.generateProjectWiki(params.project as string, {
-        provider: params.provider as string | undefined,
+        provider: params.provider as LLMProviderType | undefined,
         apiKey: params.apiKey as string | undefined,
         baseUrl: params.baseUrl as string | undefined,
         model: params.model as string | undefined,

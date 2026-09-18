@@ -203,10 +203,8 @@ export class LLMProviderService {
     }
     messages.push({ role: 'user', content: options.prompt });
 
-    // Enforce strict URL reconstruction from sanitized constants to satisfy SSRF CodeQL validations
     let safeUrl = 'https://api.openai.com/v1/chat/completions';
-    
-    // Explicit whitelist of allowed custom endpoints for CodeQL
+
     const ALLOWED_FQDNS = [
       'api.openai.com',
       'api.anthropic.com',
@@ -216,10 +214,9 @@ export class LLMProviderService {
       'api.mistral.ai',
       'api.together.xyz',
       'localhost',
-      '127.0.0.1',
-      '0.0.0.0'
+      '127.0.0.1'
     ];
-    
+
     if (process.env.CODEATLAS_ALLOWED_LLM_HOSTS) {
       ALLOWED_FQDNS.push(...process.env.CODEATLAS_ALLOWED_LLM_HOSTS.split(',').map(s => s.trim()).filter(Boolean));
     }
@@ -233,11 +230,18 @@ export class LLMProviderService {
 
     try {
       const parsed = new URL(endpointUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('Invalid protocol: only http: and https: are allowed');
+      }
+
       const matchedHost = ALLOWED_FQDNS.find(h => h.toLowerCase() === parsed.hostname.toLowerCase());
-      const matchedPath = ALLOWED_PATHS.find(p => p.toLowerCase() === parsed.pathname.toLowerCase()) || '/v1/chat/completions';
-      
+      const matchedPath = ALLOWED_PATHS.find(p => p.toLowerCase() === parsed.pathname.toLowerCase());
+      if (!matchedPath) {
+        throw new Error('SSRF Validation Error: Path not allowed');
+      }
+
       if (matchedHost) {
-        const protocol = (parsed.protocol === 'http:' && (matchedHost === 'localhost' || matchedHost === '127.0.0.1' || matchedHost === '0.0.0.0'))
+        const protocol = (parsed.protocol === 'http:' && (matchedHost === 'localhost' || matchedHost === '127.0.0.1'))
           ? 'http:'
           : 'https:';
         const port = parsed.port && /^[0-9]{1,5}$/.test(parsed.port) ? `:${parsed.port}` : '';

@@ -69,6 +69,23 @@ const API_BASE = window.location.origin.includes('localhost:5173')
   ? 'http://localhost:8080'
   : window.location.origin;
 
+const modalInputStyle: React.CSSProperties = {
+  width: '100%',
+  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid rgba(255,255,255,0.15)',
+  borderRadius: '8px',
+  padding: '0.6rem',
+  color: '#fff',
+  outline: 'none',
+};
+
+const modalLabelStyle: React.CSSProperties = {
+  fontSize: '0.85rem',
+  color: 'var(--text-muted)',
+  display: 'block',
+  marginBottom: '6px',
+};
+
 export const WikiView: React.FC<WikiViewProps> = ({
   projects = [],
   selectedProjectDir = '',
@@ -117,20 +134,14 @@ export const WikiView: React.FC<WikiViewProps> = ({
   const [activeProfileId, setActiveProfileId] = useState(() => localStorage.getItem('ca_wiki_active_profile_id') || '');
   const [profileNameInput, setProfileNameInput] = useState('');
 
-  // Save to config continuously
+  // Persist config to localStorage in a single effect to avoid multiple synchronous writes
   useEffect(() => {
     localStorage.setItem('ca_wiki_saved_profiles', JSON.stringify(profiles));
-  }, [profiles]);
-  useEffect(() => {
     localStorage.setItem('ca_wiki_active_profile_id', activeProfileId);
-  }, [activeProfileId]);
-
-  useEffect(() => { localStorage.setItem('ca_wiki_provider', genProvider); }, [genProvider]);
-  useEffect(() => { localStorage.setItem('ca_wiki_model', genModel); }, [genModel]);
-  // Intentionally avoid writing api keys to localStorage (CI CodeQL flags clear-text storage)
-  useEffect(() => { localStorage.setItem('ca_wiki_base_url', genBaseUrl); }, [genBaseUrl]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { /* keep apiKey in memory only */ }, []);
+    localStorage.setItem('ca_wiki_provider', genProvider);
+    localStorage.setItem('ca_wiki_model', genModel);
+    localStorage.setItem('ca_wiki_base_url', genBaseUrl);
+  }, [profiles, activeProfileId, genProvider, genModel, genBaseUrl]);
 
   // Q&A State
   const [queryInput, setQueryInput] = useState('');
@@ -834,7 +845,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
               {genProvider !== 'mock' && (
                 <>
                   <div>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    <label style={modalLabelStyle}>
                       Model Name
                     </label>
                     <input
@@ -843,20 +854,12 @@ export const WikiView: React.FC<WikiViewProps> = ({
                       onChange={(e) => setGenModel(e.target.value)}
                       placeholder="e.g. claude-3-7-sonnet-20250219 or gpt-4o"
                       className={FOCUS_RING_CLASS}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        borderRadius: '8px',
-                        padding: '0.6rem',
-                        color: '#fff',
-                        outline: 'none'
-                      }}
+                      style={modalInputStyle}
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    <label style={modalLabelStyle}>
                       API Key (Optional if already configured)
                     </label>
                     <input
@@ -865,20 +868,12 @@ export const WikiView: React.FC<WikiViewProps> = ({
                       onChange={(e) => setGenApiKey(e.target.value)}
                       placeholder="sk-..."
                       className={FOCUS_RING_CLASS}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        borderRadius: '8px',
-                        padding: '0.6rem',
-                        color: '#fff',
-                        outline: 'none'
-                      }}
+                      style={modalInputStyle}
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                    <label style={modalLabelStyle}>
                       Custom API Endpoint (Base URL)
                     </label>
                     <input
@@ -887,15 +882,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                       onChange={(e) => setGenBaseUrl(e.target.value)}
                       placeholder="e.g. http://127.0.0.1:11434/v1/chat/completions"
                       className={FOCUS_RING_CLASS}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        borderRadius: '8px',
-                        padding: '0.6rem',
-                        color: '#fff',
-                        outline: 'none'
-                      }}
+                      style={modalInputStyle}
                     />
                   </div>
                 </>
@@ -937,7 +924,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                           name: profileNameInput.trim(),
                           provider: genProvider,
                           model: genModel,
-                          apiKey: genApiKey,
+                          apiKey: "", // Deliberately omit api key from preset save to prevent persistent cleartext storage
                           baseUrl: genBaseUrl,
                         }]);
                         setActiveProfileId(newId);

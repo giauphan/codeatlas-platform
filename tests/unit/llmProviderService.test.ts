@@ -126,4 +126,49 @@ describe('LLMProviderService', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test('SSRF: rejects file: protocol URLs', async () => {
+    let capturedUrl = '';
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (url: string | URL | Request) => {
+        capturedUrl = url.toString();
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: 'Mocked API response' } }]
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }) as typeof globalThis.fetch;
+
+      await service.generateText({
+        prompt: 'ssrf test',
+        provider: 'openai-compatible',
+        baseUrl: 'file:///etc/passwd/v1/chat/completions',
+        apiKey: 'test-key'
+      });
+      // Should reject file: protocol, falling back safely to default localhost Ollama URL without reading file scheme
+      assert.strictEqual(capturedUrl, 'http://127.0.0.1:11434/v1/chat/completions');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('SSRF: rejects unrecognized hosts and falls back to default URL', async () => {
+    let capturedUrl = '';
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (url: string | URL | Request) => {
+        capturedUrl = url.toString();
+        return new Response('', { status: 500 });
+      }) as typeof globalThis.fetch;
+
+      await service.generateText({
+        prompt: 'ssrf test 2',
+        provider: 'openai-compatible',
+        baseUrl: 'https://malicious.evil.com/v1/chat/completions',
+        apiKey: 'test-key'
+      });
+      assert.strictEqual(capturedUrl, 'https://api.openai.com/v1/chat/completions');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
