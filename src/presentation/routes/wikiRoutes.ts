@@ -38,7 +38,8 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
         return res.status(400).json({ error: 'Missing logic required: projectName parameter' });
       }
 
-      const options = req.body || {};
+      const { provider, apiKey, baseUrl, model, systemPrompt } = req.body || {};
+      const options = { provider, apiKey, baseUrl, model, systemPrompt };
       const service = getWikiService();
 
       const result = await service.generateProjectWiki(project, options);
@@ -100,7 +101,8 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
   router.post('/:project/query', async (req, res) => {
     try {
       const { project } = req.params;
-      const { query, ...options } = req.body || {};
+      const { query, provider, apiKey, baseUrl, model } = req.body || {};
+      const options = { provider, apiKey, baseUrl, model };
 
       if (!query || typeof query !== 'string') {
         return res.status(400).json({ error: "Missing or invalid 'query' parameter" });
