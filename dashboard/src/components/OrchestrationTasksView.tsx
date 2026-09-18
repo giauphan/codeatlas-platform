@@ -96,6 +96,7 @@ export function OrchestrationTasksView() {
           onClick={fetchTasks}
           disabled={loading}
           aria-label="Refresh tasks"
+          className={FOCUS_RING_CLASS}
           style={{
             padding: '0.75rem 1.5rem', background: 'linear-gradient(135deg, #00f0ff, #7c3aed)',
             border: 'none', borderRadius: '12px', color: '#fff', fontWeight: 700, fontSize: '0.9rem',
