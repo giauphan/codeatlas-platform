@@ -2,7 +2,6 @@ import { logger } from "../utils/logger.js";
 import { DreamingService } from "./dreamingService.js";
 import { GenomeService } from "./genomeService.js";
 import { WikiService } from "./wikiService.js";
-import { createDatabaseAdapter } from "../database/factory.js";
 import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 import { countMatching } from "../utils/array.js";
 
@@ -124,7 +123,8 @@ export async function summarizeConversationForDreams(
 export async function loadContextAtSessionStart(
   sessionId: string,
   project: string,
-  task: string
+  task: string,
+  wikiService?: WikiService
 ): Promise<string> {
   try {
     const dreams = await DreamingService.queryDreamMemories(
@@ -155,8 +155,8 @@ export async function loadContextAtSessionStart(
     let wikiPages: Array<{ path: string; title: string; excerpt: string }> = [];
     if (strictTask.length > 0) {
       try {
-        const wikiService = new WikiService(createDatabaseAdapter());
-        wikiPages = (await wikiService.searchWiki(project, strictTask, {
+        const service = wikiService || WikiService.getInstance();
+        wikiPages = (await service.searchWiki(project, strictTask, {
           maxPages: 3,
           maxChars: 500,
         })).pages;

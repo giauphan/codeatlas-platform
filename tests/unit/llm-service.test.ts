@@ -99,6 +99,10 @@ safeMockModule(path.join(srcDir, 'services/genomeService.js'), {
 
 safeMockModule(path.join(srcDir, 'services/wikiService.js'), {
   WikiService: class {
+    static getInstance = () => ({
+      searchWiki: mockSearchWiki,
+    });
+
     searchWiki = mockSearchWiki;
   },
 });
@@ -343,7 +347,9 @@ describe('llmService Unit Tests', () => {
         pages: [{ path: '/architecture', title: 'Architecture', excerpt: 'Layered project architecture.' }],
       }));
 
-      const context = await loadContextAtSessionStart('sess-wiki', 'my-app', 'architecture');
+      const context = await loadContextAtSessionStart('sess-wiki', 'my-app', 'architecture', {
+        searchWiki: mockSearchWiki,
+      } as never);
 
       assert.ok(context.includes('# Project Wiki Reference'));
       assert.ok(context.includes('Architecture (/architecture)'));

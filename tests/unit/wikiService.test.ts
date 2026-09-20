@@ -96,6 +96,57 @@ describe('WikiService', () => {
     assert.ok(!result.pages.some(page => page.path.includes('other-tenant')));
   });
 
+  test('should return no wiki pages when no content matches the query', async () => {
+    const now = new Date().toISOString();
+    await adapter.saveWikiPage({
+      id: 'wiki-unrelated',
+      project_name: 'search-app',
+      path: '/database',
+      title: 'Database',
+      content: 'SQLite adapter details.',
+      tenant_id: 'tenant-a',
+      created_at: now,
+      updated_at: now,
+    });
+
+    const result = await service.searchWiki('search-app', 'authentication', {
+      tenantId: 'tenant-a',
+    });
+
+    assert.deepStrictEqual(result.pages, []);
+  });
+
+  test('should order equal-score pages with missing order indexes deterministically', async () => {
+    const now = new Date().toISOString();
+    await adapter.saveWikiPage({
+      id: 'wiki-z',
+      project_name: 'search-app',
+      path: '/zeta',
+      title: 'Zeta',
+      content: 'shared keyword',
+      tenant_id: 'tenant-a',
+      created_at: now,
+      updated_at: now,
+    });
+    await adapter.saveWikiPage({
+      id: 'wiki-a',
+      project_name: 'search-app',
+      path: '/alpha',
+      title: 'Alpha',
+      content: 'shared keyword',
+      tenant_id: 'tenant-a',
+      created_at: now,
+      updated_at: now,
+    });
+
+    const result = await service.searchWiki('search-app', 'shared', {
+      tenantId: 'tenant-a',
+      maxPages: 2,
+    });
+
+    assert.deepStrictEqual(result.pages.map(page => page.path), ['/alpha', '/zeta']);
+  });
+
   test('should build hierarchical wiki tree with synthesized parent nodes', async () => {
     await service.generateProjectWiki('hierarchical-app', { provider: 'template' });
     const tree = await service.getWikiTree('hierarchical-app');

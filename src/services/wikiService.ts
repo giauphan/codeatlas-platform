@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { IDatabaseAdapter, WikiPageRecord } from '../database/adapters/interface.js';
 import { LLMProviderService } from './llmProviderService.js';
+import { createDatabaseAdapter } from '../database/factory.js';
 import { logger } from '../utils/logger.js';
 
 export interface WikiNode {
@@ -39,10 +40,19 @@ export interface QueryWikiOptions {
 }
 
 export class WikiService {
+  private static instance: WikiService | null = null;
+
   constructor(
     private readonly dbAdapter: IDatabaseAdapter,
     private readonly llmProvider: LLMProviderService = new LLMProviderService()
   ) {}
+
+  static getInstance(dbAdapter?: IDatabaseAdapter): WikiService {
+    if (!WikiService.instance) {
+      WikiService.instance = new WikiService(dbAdapter || createDatabaseAdapter());
+    }
+    return WikiService.instance;
+  }
 
   async generateProjectWiki(projectName: string, options: GenerateWikiOptions = {}): Promise<WikiTreeResponse> {
     if (!projectName || !/^[a-zA-Z0-9_\-\.]+$/.test(projectName)) {
@@ -295,9 +305,8 @@ export class WikiService {
       return { page, score };
     });
 
-    // Filter to relevant stuff, or take all if list is short
-    scoredPages.sort((a, b) => b.score - a.score || a.page.order_index! - b.page.order_index! || a.page.path.localeCompare(b.page.path));
-    const topContexts = scoredPages.slice(0, 3).filter(p => p.score > 0 || scoredPages.length <= 3);
+    scoredPages.sort((a, b) => b.score - a.score || (a.page.order_index ?? 0) - (b.page.order_index ?? 0) || a.page.path.localeCompare(b.page.path));
+    const topContexts = scoredPages.slice(0, 3).filter(p => p.score > 0);
 
     const references = topContexts.map(scp => scp.page.path);
 
@@ -350,9 +359,8 @@ export class WikiService {
       return { page, score };
     });
 
-    // Sort and bound results
-    scoredPages.sort((a, b) => b.score - a.score || a.page.order_index! - b.page.order_index! || a.page.path.localeCompare(b.page.path));
-    const topPages = scoredPages.slice(0, maxPages).filter(p => p.score > 0 || scoredPages.length <= maxPages);
+    scoredPages.sort((a, b) => b.score - a.score || (a.page.order_index ?? 0) - (b.page.order_index ?? 0) || a.page.path.localeCompare(b.page.path));
+    const topPages = scoredPages.slice(0, maxPages).filter(p => p.score > 0);
 
     // Extract excerpts
     const results = topPages.map(scp => {
