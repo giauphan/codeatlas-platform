@@ -43,6 +43,7 @@ const mockSaveDreamMemory = mock.fn();
 const mockSummarizeConversation = mock.fn();
 const mockConsolidationRun = mock.fn();
 const mockExtractGene = mock.fn();
+const mockUpdateProjectWiki = mock.fn();
 
 safeMockModule(path.join(srcDir, 'services/dreamingService.js'), {
   DreamingService: {
@@ -53,6 +54,14 @@ safeMockModule(path.join(srcDir, 'services/dreamingService.js'), {
 safeMockModule(path.join(srcDir, 'services/genomeService.js'), {
   GenomeService: {
     extractGene: mockExtractGene,
+  },
+});
+
+safeMockModule(path.join(srcDir, 'services/wikiService.js'), {
+  WikiService: class {
+    static getInstance() {
+      return { updateProjectWiki: mockUpdateProjectWiki };
+    }
   },
 });
 
@@ -89,6 +98,12 @@ describe('DreamPipelineService', () => {
     mockSaveDreamMemory.mock.resetCalls();
     mockSummarizeConversation.mock.resetCalls();
     mockConsolidationRun.mock.resetCalls();
+    mockUpdateProjectWiki.mock.resetCalls();
+    mockUpdateProjectWiki.mock.mockImplementation(async (projectName: string) => ({
+      projectName,
+      root: [],
+      totalPages: 1,
+    }));
   });
 
   describe('runDailyPipeline', () => {
@@ -179,6 +194,70 @@ describe('DreamPipelineService', () => {
       assert.strictEqual(call.sourceType, 'dream');
       assert.strictEqual(call.sourceId, 'mem-201');
       assert.strictEqual(call.project, 'codeatlas-platform');
+    });
+
+    test('auto-updates existing project Wiki once with all saved dreams', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => [
+        { memoryType: 'KNOWLEDGE', content: 'Wiki search uses deterministic scoring', importance: 7 },
+        { memoryType: 'PATTERN', content: 'Session context includes project Wiki excerpts', importance: 8 },
+      ]);
+      mockSaveDreamMemory.mock.mockImplementation(async (_project, _session, memoryType) => `mem-${memoryType}`);
+      mockExtractGene.mock.mockImplementation(async () => 'gene');
+
+      const result = await DreamPipelineService.runSessionIngestion({
+        content: '[USER] Document the Wiki integration changes.',
+        sessionId: 'sess-wiki-update',
+        project: 'codeatlas-platform',
+        provider: 'template',
+      });
+
+      assert.strictEqual(result.wikiUpdated, true);
+      assert.strictEqual(mockUpdateProjectWiki.mock.callCount(), 1);
+      const [project, context, options] = mockUpdateProjectWiki.mock.calls[0].arguments;
+      assert.strictEqual(project, 'codeatlas-platform');
+      assert.match(context, /\[KNOWLEDGE\] Wiki search uses deterministic scoring/);
+      assert.match(context, /\[PATTERN\] Session context includes project Wiki excerpts/);
+      assert.deepStrictEqual(options, { tenantId: 'test-tenant', provider: 'template' });
+    });
+
+    test('Wiki auto-update failure does not fail ingestion', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => [
+        { memoryType: 'KNOWLEDGE', content: 'Wiki updates after session ingestion', importance: 7 },
+      ]);
+      mockSaveDreamMemory.mock.mockImplementation(async () => 'mem-wiki-fail');
+      mockExtractGene.mock.mockImplementation(async () => 'gene-wiki-fail');
+      mockUpdateProjectWiki.mock.mockImplementation(async () => {
+        throw new Error('Wiki provider unavailable');
+      });
+
+      const result = await DreamPipelineService.runSessionIngestion({
+        content: '[USER] Update project documentation.',
+        sessionId: 'sess-wiki-fail',
+        project: 'codeatlas-platform',
+        provider: 'template',
+      });
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.dreamsExtracted, 1);
+      assert.strictEqual(result.wikiUpdated, false);
+    });
+
+    test('does not auto-update Wiki for noise-blocked dreams', async () => {
+      mockSummarizeConversation.mock.mockImplementation(async () => [
+        { memoryType: 'KNOWLEDGE', content: 'This is noise', importance: 1 },
+      ]);
+      mockSaveDreamMemory.mock.mockImplementation(async () => '__noise_blocked__');
+      mockExtractGene.mock.mockImplementation(async () => 'gene-never');
+
+      const result = await DreamPipelineService.runSessionIngestion({
+        content: '[USER] This is noise',
+        sessionId: 'sess-wiki-noise',
+        project: 'codeatlas-platform',
+        provider: 'template',
+      });
+
+      assert.strictEqual(result.wikiUpdated, false);
+      assert.strictEqual(mockUpdateProjectWiki.mock.callCount(), 0);
     });
 
     test('auto-save failure does not fail ingestion', async () => {

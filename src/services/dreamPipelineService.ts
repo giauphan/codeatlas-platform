@@ -11,6 +11,7 @@ import { DreamingService, type DreamMemoryType } from "./dreamingService.js";
 import { summarizeConversationForDreams } from "./llmService.js";
 import { ConsolidationEngine, type ConsolidationReport } from "./consolidationEngine.js";
 import { GenomeService } from "./genomeService.js";
+import { WikiService } from "./wikiService.js";
 
 export interface DailyPipelineOptions {
   project?: string;
@@ -44,6 +45,7 @@ export interface SessionIngestionResult {
   dreamsExtracted: number;
   noiseBlocked: number;
   genesSaved: number;
+  wikiUpdated: boolean;
   dreams: Array<{ id: string; memory_type: string; content: string }>;
   startedAt: string;
   completedAt: string;
@@ -183,6 +185,7 @@ export class DreamPipelineService {
         dreamsExtracted: 0,
         noiseBlocked: 0,
         genesSaved: 0,
+        wikiUpdated: false,
         dreams: [],
         startedAt,
         completedAt,
@@ -225,6 +228,25 @@ export class DreamPipelineService {
     );
     const genesSaved = geneResults.filter((r) => r.status === "fulfilled").length;
 
+    let wikiUpdated = false;
+    if (savedDreams.length > 0 && project !== "global") {
+      try {
+        const wikiService = WikiService.getInstance();
+        const context = savedDreams
+          .map((dream) => `[${dream.memory_type}] ${dream.content}`)
+          .join("\n\n");
+        const wikiTree = await wikiService.updateProjectWiki(project, context, {
+          tenantId: auth.uid,
+          provider: provider === "anthropic" || provider === "openai" || provider === "openai-compatible" || provider === "template"
+            ? provider
+            : undefined,
+        });
+        wikiUpdated = wikiTree.totalPages > 0;
+      } catch (err) {
+        logger.warn(`[Dreaming Pipeline] Wiki auto-update failed for project="${project}": ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     const totalMs = Date.now() - ingestStartTime;
     const completedAt = new Date().toISOString();
     logger.info(`[Dreaming Pipeline] [${completedAt}] Session="${sessId}" ingestion COMPLETED in ${totalMs}ms: saved=${savedDreams.length}, noise_blocked=${skipped.length}, genes_saved=${genesSaved} for project="${project}" provider="${provider}"`);
@@ -238,6 +260,7 @@ export class DreamPipelineService {
       dreamsExtracted: savedDreams.length,
       noiseBlocked: skipped.length,
       genesSaved,
+      wikiUpdated,
       dreams: savedDreams,
       startedAt,
       completedAt,

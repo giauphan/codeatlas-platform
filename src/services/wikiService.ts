@@ -39,6 +39,11 @@ export interface QueryWikiOptions {
   baseUrl?: string;
 }
 
+export interface AutoUpdateWikiOptions {
+  tenantId?: string;
+  provider?: LLMProviderType;
+}
+
 export class WikiService {
   private static instance: WikiService | null = null;
 
@@ -52,6 +57,33 @@ export class WikiService {
       WikiService.instance = new WikiService(dbAdapter || createDatabaseAdapter());
     }
     return WikiService.instance;
+  }
+
+  async updateProjectWiki(projectName: string, context: string, options: AutoUpdateWikiOptions = {}): Promise<WikiTreeResponse> {
+    const tenantId = options.tenantId || 'default';
+    const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
+    if (pages.length === 0) {
+      return this.getWikiTree(projectName, tenantId);
+    }
+
+    const updatedAt = new Date().toISOString();
+    for (const page of pages) {
+      const content = await this.llmProvider.generateText({
+        prompt: `Update this project Wiki page using the latest session knowledge. Preserve useful existing details and Markdown structure.\n\nPage: ${page.title}\nPath: ${page.path}\n\nExisting content:\n${page.content}\n\nLatest session knowledge:\n${context}`,
+        systemPrompt: 'You maintain project-specific technical documentation. Do not treat session memories as graph data or personal preferences unless they directly change project documentation.',
+        provider: options.provider,
+      });
+      const diagramMatch = content.match(/```mermaid[\s\S]*?```/);
+      await this.dbAdapter.saveWikiPage({
+        ...page,
+        content,
+        diagram_data: diagramMatch ? JSON.stringify({ type: 'mermaid', content: diagramMatch[0] }) : page.diagram_data,
+        updated_at: updatedAt,
+      });
+    }
+
+    logger.info(`Auto-updated Wiki for project '${projectName}' (tenant: ${tenantId}, pages: ${pages.length})`);
+    return this.getWikiTree(projectName, tenantId);
   }
 
   async generateProjectWiki(projectName: string, options: GenerateWikiOptions = {}): Promise<WikiTreeResponse> {
