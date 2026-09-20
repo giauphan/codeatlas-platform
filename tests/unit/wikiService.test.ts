@@ -51,6 +51,51 @@ describe('WikiService', () => {
     assert.ok(Array.isArray(response.references));
   });
 
+  test('should search wiki deterministically with title ranking and bounded excerpts', async () => {
+    const now = new Date().toISOString();
+    await adapter.saveWikiPage({
+      id: 'wiki-architecture',
+      project_name: 'search-app',
+      path: '/architecture',
+      title: 'Architecture',
+      content: 'Architecture content '.repeat(80),
+      tenant_id: 'tenant-a',
+      created_at: now,
+      updated_at: now,
+    });
+    await adapter.saveWikiPage({
+      id: 'wiki-service',
+      project_name: 'search-app',
+      path: '/services',
+      title: 'Services',
+      content: 'The architecture service uses the database.',
+      tenant_id: 'tenant-a',
+      created_at: now,
+      updated_at: now,
+    });
+    await adapter.saveWikiPage({
+      id: 'wiki-other-tenant',
+      project_name: 'search-app',
+      path: '/architecture-other-tenant',
+      title: 'Architecture',
+      content: 'Should not leak across tenants.',
+      tenant_id: 'tenant-b',
+      created_at: now,
+      updated_at: now,
+    });
+
+    const result = await service.searchWiki('search-app', 'architecture', {
+      tenantId: 'tenant-a',
+      maxPages: 1,
+      maxChars: 40,
+    });
+
+    assert.strictEqual(result.pages.length, 1);
+    assert.strictEqual(result.pages[0].path, '/architecture');
+    assert.ok(result.pages[0].excerpt.length <= 43);
+    assert.ok(!result.pages.some(page => page.path.includes('other-tenant')));
+  });
+
   test('should build hierarchical wiki tree with synthesized parent nodes', async () => {
     await service.generateProjectWiki('hierarchical-app', { provider: 'template' });
     const tree = await service.getWikiTree('hierarchical-app');

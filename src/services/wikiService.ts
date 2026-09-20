@@ -296,7 +296,7 @@ export class WikiService {
     });
 
     // Filter to relevant stuff, or take all if list is short
-    scoredPages.sort((a, b) => b.score - a.score);
+    scoredPages.sort((a, b) => b.score - a.score || a.page.order_index! - b.page.order_index! || a.page.path.localeCompare(b.page.path));
     const topContexts = scoredPages.slice(0, 3).filter(p => p.score > 0 || scoredPages.length <= 3);
 
     const references = topContexts.map(scp => scp.page.path);
@@ -318,6 +318,55 @@ export class WikiService {
       answer,
       references
     };
+  }
+
+  /**
+   * Search project Wiki for context matching a query.
+   * Returns page excerpts and paths for agent context.
+   * Does NOT invoke LLM — low-cost retrieval only.
+   *
+   * @param projectName - Project to search
+   * @param query - Search terms
+   * @param options - Optional tenantId, maxPages (default 3), maxChars (default 500)
+   * @returns { pages: { path: string; title: string; excerpt: string }[] }
+   */
+  async searchWiki(projectName: string, query: string, options: { tenantId?: string; maxPages?: number; maxChars?: number } = {}): Promise<{ pages: { path: string; title: string; excerpt: string }[] }> {
+    const tenantId = options.tenantId || 'default';
+    const maxPages = Math.max(0, Math.min(options.maxPages ?? 3, 10));
+    const maxChars = Math.max(0, Math.min(options.maxChars ?? 500, 2000));
+    const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
+
+    // Reuse keyword scoring from queryWiki but return excerpts only
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    const scoredPages = pages.map(page => {
+      let score = 0;
+      const contentLower = page.content.toLowerCase();
+      const titleLower = page.title.toLowerCase();
+
+      for (const term of queryTerms) {
+        if (titleLower.includes(term)) score += 5;
+        if (contentLower.includes(term)) score += 1;
+      }
+      return { page, score };
+    });
+
+    // Sort and bound results
+    scoredPages.sort((a, b) => b.score - a.score || a.page.order_index! - b.page.order_index! || a.page.path.localeCompare(b.page.path));
+    const topPages = scoredPages.slice(0, maxPages).filter(p => p.score > 0 || scoredPages.length <= maxPages);
+
+    // Extract excerpts
+    const results = topPages.map(scp => {
+      const excerpt = scp.page.content.length > maxChars
+        ? scp.page.content.substring(0, maxChars) + '...'
+        : scp.page.content;
+      return {
+        path: scp.page.path,
+        title: scp.page.title,
+        excerpt
+      };
+    });
+
+    return { pages: results };
   }
 
   private extractParentPath(pathStr: string): string | undefined {

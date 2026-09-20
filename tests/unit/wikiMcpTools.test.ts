@@ -123,4 +123,61 @@ describe('DeepWiki MCP Tools', () => {
     assert.ok(parsed.answer);
     assert.ok(Array.isArray(parsed.references));
   });
+
+  test('search_project_wiki tool should be registered', () => {
+    assert.ok(registeredTools.has('search_project_wiki'), 'search_project_wiki tool should be registered');
+  });
+
+  test('search_project_wiki tool handler should return matching pages', async () => {
+    // Generate wiki first
+    const genTool = registeredTools.get('generate_project_wiki');
+    assert.ok(genTool);
+    await genTool.handler({
+      project: 'sample-project',
+      provider: 'template'
+    });
+
+    const searchTool = registeredTools.get('search_project_wiki');
+    assert.ok(searchTool);
+
+    const result = await searchTool.handler({
+      project: 'sample-project',
+      query: 'architecture overview',
+      limit: 3
+    });
+
+    assert.ok(result);
+    assert.strictEqual(result.content[0].type, 'text');
+    const parsed = JSON.parse(result.content[0].text);
+    assert.ok(Array.isArray(parsed.pages));
+    assert.ok(parsed.pages.length >= 0);
+    assert.ok(parsed.pages.length <= 3);
+
+    for (const page of parsed.pages) {
+      assert.ok(page.path);
+      assert.ok(page.title);
+      assert.ok(page.excerpt);
+    }
+  });
+
+  test('search_project_wiki handler should respect limit', async () => {
+    const genTool = registeredTools.get('generate_project_wiki');
+    assert.ok(genTool);
+    await genTool.handler({
+      project: 'sample-project',
+      provider: 'template'
+    });
+
+    const searchTool = registeredTools.get('search_project_wiki');
+    assert.ok(searchTool);
+
+    const result = await searchTool.handler({
+      project: 'sample-project',
+      query: 'overview',
+      limit: 1
+    });
+
+    const parsed = JSON.parse(result.content[0].text);
+    assert.ok(parsed.pages.length <= 1);
+  });
 });

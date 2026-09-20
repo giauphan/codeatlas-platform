@@ -1,6 +1,8 @@
 import { logger } from "../utils/logger.js";
 import { DreamingService } from "./dreamingService.js";
 import { GenomeService } from "./genomeService.js";
+import { WikiService } from "./wikiService.js";
+import { createDatabaseAdapter } from "../database/factory.js";
 import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 import { countMatching } from "../utils/array.js";
 
@@ -150,7 +152,20 @@ export async function loadContextAtSessionStart(
       }
     }
 
-    if ((!dreams || dreams.length === 0) && genes.length === 0 && !immuneContext) {
+    let wikiPages: Array<{ path: string; title: string; excerpt: string }> = [];
+    if (strictTask.length > 0) {
+      try {
+        const wikiService = new WikiService(createDatabaseAdapter());
+        wikiPages = (await wikiService.searchWiki(project, strictTask, {
+          maxPages: 3,
+          maxChars: 500,
+        })).pages;
+      } catch (err) {
+        logger.warn(`[Memory Loading] Wiki context unavailable: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    if ((!dreams || dreams.length === 0) && genes.length === 0 && !immuneContext && wikiPages.length === 0) {
       return "";
     }
 
@@ -170,7 +185,7 @@ export async function loadContextAtSessionStart(
     if (blockedCount > 0) {
       logger.info(`[Memory Loading] Inject-gate filtered ${blockedCount} noisy dream(s)`);
     }
-    if (cleanDreams.length === 0 && genes.length === 0 && !immuneContext) {
+    if (cleanDreams.length === 0 && genes.length === 0 && !immuneContext && wikiPages.length === 0) {
       return "";
     }
 
@@ -204,11 +219,21 @@ export async function loadContextAtSessionStart(
       parts.push(immuneContext);
     }
 
+    if (wikiPages.length > 0) {
+      parts.push("\n# Project Wiki Reference\n");
+      parts.push("Use Wiki pages as project documentation reference. Verify current source before making changes.");
+      for (const page of wikiPages) {
+        parts.push(`### ${page.title} (${page.path})`);
+        parts.push(page.excerpt);
+        parts.push("");
+      }
+    }
+
     const context = parts.join("\n");
 
     // Log context loading event
     const fs = await import('node:fs');
-    const logEntry = `[${new Date().toISOString()}] LOADED: session=${sessionId}, project=${project}, dreams=${dreams?.length ?? 0}, genes=${genes.length}, immune=${immuneContext ? 1 : 0}\n`;
+    const logEntry = `[${new Date().toISOString()}] LOADED: session=${sessionId}, project=${project}, dreams=${dreams?.length ?? 0}, genes=${genes.length}, immune=${immuneContext ? 1 : 0}, wiki=${wikiPages.length}\n`;
     try {
       await fs.promises.appendFile('/tmp/memory_loading.log', logEntry);
     } catch (err) {
