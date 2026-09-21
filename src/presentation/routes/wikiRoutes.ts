@@ -5,6 +5,7 @@ import { createDatabaseAdapter } from '../../database/factory.js';
 import { LLMProviderService } from '../../services/llmProviderService.js';
 import { logger } from '../../utils/logger.js';
 import { authMiddleware } from '../../middleware/auth.js';
+import { rejectArrayParams } from '../../middleware/validation.js';
 
 const wikiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -73,7 +74,7 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
    * Query params: ?path=/overview
    * Retrieves specific page content.
    */
-  router.get('/:project/page', async (req, res) => {
+  router.get('/:project/page', rejectArrayParams('path'), async (req, res) => {
     try {
       const { project } = req.params;
       const { path } = req.query;
