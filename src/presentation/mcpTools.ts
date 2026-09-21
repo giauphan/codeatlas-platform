@@ -34,8 +34,7 @@ import {
   reloadMemory,
   MemorySystemStatus
 } from "../services/memoryController.js";
-import { createDatabaseAdapter } from "../database/factory.js";
-import { WikiService, LLMProviderType } from "../services/wikiService.js";
+import { isLLMProviderType, WikiService, LLMProviderType } from "../services/wikiService.js";
 
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
@@ -2054,17 +2053,12 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   // --- DeepWiki Tools ---
   let wikiServiceCache: WikiService | null = null;
   const validateLLMProvider = (provider: unknown): LLMProviderType | undefined => {
-    if (typeof provider !== 'string') return undefined;
-    if (provider === 'template') return 'template';
-    if (provider === 'anthropic') return 'anthropic';
-    if (provider === 'openai') return 'openai';
-    if (provider === 'openai-compatible') return 'openai-compatible';
-    return undefined;
+    return typeof provider === 'string' && isLLMProviderType(provider) ? provider : undefined;
   };
 
   const getWikiService = () => {
     if (!wikiServiceCache) {
-      wikiServiceCache = new WikiService(createDatabaseAdapter());
+      wikiServiceCache = WikiService.getInstance();
     }
     return wikiServiceCache;
   };
@@ -2264,12 +2258,16 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     "Search the project documentation wiki for relevant pages and excerpts. Returns page paths and content snippets for agent context.",
     ["project", "query", "limit"],
     async (params: Record<string, unknown>) => {
+      if (typeof params.project !== "string" || typeof params.query !== "string") {
+        throw new Error("'project' and 'query' must be strings");
+      }
+      if (params.limit !== undefined && (typeof params.limit !== "number" || !Number.isFinite(params.limit))) {
+        throw new Error("'limit' must be a finite number");
+      }
       const service = getWikiService();
-      return await service.searchWiki(
-        params.project as string,
-        params.query as string,
-        { maxPages: params.limit ? Number(params.limit) : 3 }
-      );
+      return service.searchWiki(params.project, params.query, {
+        maxPages: params.limit === undefined ? 3 : params.limit,
+      });
     }
   );
 }

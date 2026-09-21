@@ -155,7 +155,7 @@ export async function loadContextAtSessionStart(
     let wikiPages: Array<{ path: string; title: string; excerpt: string }> = [];
     if (strictTask.length > 0) {
       try {
-        const service = wikiService || WikiService.getInstance();
+        const service = wikiService ?? WikiService.getInstance();
         wikiPages = (await service.searchWiki(project, strictTask, {
           maxPages: 3,
           maxChars: 500,

@@ -147,6 +147,91 @@ describe('WikiService', () => {
     assert.deepStrictEqual(result.pages.map(page => page.path), ['/alpha', '/zeta']);
   });
 
+  test('should match short technical query terms', async () => {
+    const now = new Date().toISOString();
+    await adapter.saveWikiPage({
+      id: 'wiki-ci',
+      project_name: 'search-app',
+      path: '/ci',
+      title: 'CI',
+      content: 'CI and DB checks run before release.',
+      tenant_id: 'tenant-a',
+      created_at: now,
+      updated_at: now,
+    });
+
+    const result = await service.searchWiki('search-app', 'CI', { tenantId: 'tenant-a' });
+
+    assert.deepStrictEqual(result.pages.map(page => page.path), ['/ci']);
+  });
+
+  test('clamps zero search bounds to one result and character', async () => {
+    const now = new Date().toISOString();
+    await adapter.saveWikiPage({
+      id: 'wiki-bounds',
+      project_name: 'search-app',
+      path: '/bounds',
+      title: 'Bounds',
+      content: 'bounds content',
+      tenant_id: 'tenant-a',
+      created_at: now,
+      updated_at: now,
+    });
+
+    const result = await service.searchWiki('search-app', 'bounds', {
+      tenantId: 'tenant-a',
+      maxPages: 0,
+      maxChars: 0,
+    });
+
+    assert.strictEqual(result.pages.length, 1);
+    assert.strictEqual(result.pages[0].excerpt, 'b...');
+  });
+
+  test('updates existing Wiki pages while preserving Mermaid metadata', async () => {
+    const now = new Date().toISOString();
+    await adapter.saveWikiPage({
+      id: 'wiki-update',
+      project_name: 'update-app',
+      path: '/architecture',
+      title: 'Architecture',
+      content: 'Old architecture',
+      diagram_data: JSON.stringify({ type: 'mermaid', content: '```mermaid\nflowchart TD\n```' }),
+      tenant_id: 'tenant-a',
+      created_at: now,
+      updated_at: now,
+    });
+    const updated = await service.updateProjectWiki('update-app', 'New service boundary', { tenantId: 'tenant-a', provider: 'template' });
+    const page = await service.getWikiPage('update-app', '/architecture', 'tenant-a');
+
+    assert.strictEqual(updated.totalPages, 1);
+    assert.ok(page?.content.includes('Architecture'));
+    assert.ok(page?.diagram_data?.includes('mermaid'));
+  });
+
+  test('continues updating pages when one page provider call fails', async () => {
+    const now = new Date().toISOString();
+    await adapter.saveWikiPage({
+      id: 'wiki-failing', project_name: 'partial-app', path: '/a', title: 'A', content: 'A', tenant_id: 'tenant-a', created_at: now, updated_at: now,
+    });
+    await adapter.saveWikiPage({
+      id: 'wiki-success', project_name: 'partial-app', path: '/b', title: 'B', content: 'B', tenant_id: 'tenant-a', created_at: now, updated_at: now,
+    });
+    const failingProvider = {
+      generateText: async ({ prompt }: { prompt: string }) => {
+        if (prompt.includes('Path: /a')) throw new Error('page failure');
+        return 'Updated B';
+      },
+    } as unknown as LLMProviderService;
+    const partialService = new WikiService(adapter, failingProvider);
+
+    const updated = await partialService.updateProjectWiki('partial-app', 'Latest knowledge', { tenantId: 'tenant-a' });
+    const page = await partialService.getWikiPage('partial-app', '/b', 'tenant-a');
+
+    assert.strictEqual(updated.totalPages, 2);
+    assert.strictEqual(page?.content, 'Updated B');
+  });
+
   test('should build hierarchical wiki tree with synthesized parent nodes', async () => {
     await service.generateProjectWiki('hierarchical-app', { provider: 'template' });
     const tree = await service.getWikiTree('hierarchical-app');

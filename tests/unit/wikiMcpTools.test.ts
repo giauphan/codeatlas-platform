@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerTools } from '../../src/presentation/mcpTools.js';
 import { SQLiteAdapter } from '../../src/database/adapters/sqliteAdapter.js';
 import { setDatabaseAdapter, resetDatabaseAdapter } from '../../src/database/factory.js';
+import { WikiService } from '../../src/services/wikiService.js';
 
 describe('DeepWiki MCP Tools', () => {
   let adapter: SQLiteAdapter;
@@ -19,6 +20,7 @@ describe('DeepWiki MCP Tools', () => {
       await adapter.initializeSchema();
     }
     setDatabaseAdapter(adapter);
+    WikiService.resetInstance();
 
     registeredTools = new Map();
     mockServer = {
@@ -37,6 +39,7 @@ describe('DeepWiki MCP Tools', () => {
       await adapter.disconnect();
     }
     resetDatabaseAdapter();
+    WikiService.resetInstance();
   });
 
   test('should register generate_project_wiki, get_wiki_page, and query_project_wiki', () => {

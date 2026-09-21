@@ -11,7 +11,14 @@ import { DreamingService, type DreamMemoryType } from "./dreamingService.js";
 import { summarizeConversationForDreams } from "./llmService.js";
 import { ConsolidationEngine, type ConsolidationReport } from "./consolidationEngine.js";
 import { GenomeService } from "./genomeService.js";
-import { WikiService } from "./wikiService.js";
+import { WikiService, type LLMProviderType } from "./wikiService.js";
+
+function normalizeWikiProvider(provider: string): LLMProviderType | undefined {
+  if (provider === "anthropic" || provider === "openai" || provider === "openai-compatible" || provider === "template") {
+    return provider;
+  }
+  return undefined;
+}
 
 export interface DailyPipelineOptions {
   project?: string;
@@ -237,9 +244,7 @@ export class DreamPipelineService {
           .join("\n\n");
         const wikiTree = await wikiService.updateProjectWiki(project, context, {
           tenantId: auth.uid,
-          provider: provider === "anthropic" || provider === "openai" || provider === "openai-compatible" || provider === "template"
-            ? provider
-            : undefined,
+          provider: normalizeWikiProvider(provider),
         });
         wikiUpdated = wikiTree.totalPages > 0;
       } catch (err) {

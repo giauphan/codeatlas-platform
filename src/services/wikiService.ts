@@ -5,6 +5,7 @@ import { IDatabaseAdapter, WikiPageRecord } from '../database/adapters/interface
 import { LLMProviderService } from './llmProviderService.js';
 import { createDatabaseAdapter } from '../database/factory.js';
 import { logger } from '../utils/logger.js';
+import pLimit from 'p-limit';
 
 export interface WikiNode {
   path: string;
@@ -31,6 +32,10 @@ export interface GenerateWikiOptions {
 
 export type LLMProviderType = 'anthropic' | 'openai' | 'openai-compatible' | 'template';
 
+export function isLLMProviderType(provider: string): provider is LLMProviderType {
+  return provider === 'anthropic' || provider === 'openai' || provider === 'openai-compatible' || provider === 'template';
+}
+
 export interface QueryWikiOptions {
   tenantId?: string;
   provider?: LLMProviderType;
@@ -52,11 +57,15 @@ export class WikiService {
     private readonly llmProvider: LLMProviderService = new LLMProviderService()
   ) {}
 
-  static getInstance(dbAdapter?: IDatabaseAdapter): WikiService {
+  static getInstance(): WikiService {
     if (!WikiService.instance) {
-      WikiService.instance = new WikiService(dbAdapter || createDatabaseAdapter());
+      WikiService.instance = new WikiService(createDatabaseAdapter());
     }
     return WikiService.instance;
+  }
+
+  static resetInstance(): void {
+    WikiService.instance = null;
   }
 
   async updateProjectWiki(projectName: string, context: string, options: AutoUpdateWikiOptions = {}): Promise<WikiTreeResponse> {
@@ -66,23 +75,34 @@ export class WikiService {
       return this.getWikiTree(projectName, tenantId);
     }
 
-    const updatedAt = new Date().toISOString();
-    for (const page of pages) {
+    const updatePage = async (page: WikiPageRecord): Promise<void> => {
       const content = await this.llmProvider.generateText({
         prompt: `Update this project Wiki page using the latest session knowledge. Preserve useful existing details and Markdown structure.\n\nPage: ${page.title}\nPath: ${page.path}\n\nExisting content:\n${page.content}\n\nLatest session knowledge:\n${context}`,
         systemPrompt: 'You maintain project-specific technical documentation. Do not treat session memories as graph data or personal preferences unless they directly change project documentation.',
         provider: options.provider,
       });
+      if (!content.trim()) {
+        throw new Error(`Wiki provider returned empty content for ${page.path}`);
+      }
       const diagramMatch = content.match(/```mermaid[\s\S]*?```/);
       await this.dbAdapter.saveWikiPage({
         ...page,
         content,
         diagram_data: diagramMatch ? JSON.stringify({ type: 'mermaid', content: diagramMatch[0] }) : page.diagram_data,
-        updated_at: updatedAt,
       });
+    };
+
+    const limit = pLimit(2);
+    const updates = await Promise.allSettled(pages.map((page) => limit(() => updatePage(page))));
+    const failures = updates.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failures.length > 0) {
+      logger.warn(`Wiki auto-update completed with ${failures.length} failed page(s) for project '${projectName}'`);
+    }
+    if (failures.length === pages.length) {
+      throw new Error(`Wiki auto-update failed for all ${pages.length} page(s)`);
     }
 
-    logger.info(`Auto-updated Wiki for project '${projectName}' (tenant: ${tenantId}, pages: ${pages.length})`);
+    logger.info(`Auto-updated Wiki for project '${projectName}' (tenant: ${tenantId}, pages: ${pages.length - failures.length}/${pages.length})`);
     return this.getWikiTree(projectName, tenantId);
   }
 
@@ -323,7 +343,7 @@ export class WikiService {
 
     // Very basic keyword matching/scoring for demo purposes.
     // In production, use vector embeddings.
-    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
 
     let scoredPages = pages.map(page => {
       let score = 0;
@@ -373,12 +393,12 @@ export class WikiService {
    */
   async searchWiki(projectName: string, query: string, options: { tenantId?: string; maxPages?: number; maxChars?: number } = {}): Promise<{ pages: { path: string; title: string; excerpt: string }[] }> {
     const tenantId = options.tenantId || 'default';
-    const maxPages = Math.max(0, Math.min(options.maxPages ?? 3, 10));
-    const maxChars = Math.max(0, Math.min(options.maxChars ?? 500, 2000));
+    const maxPages = Math.max(1, Math.min(options.maxPages ?? 3, 10));
+    const maxChars = Math.max(1, Math.min(options.maxChars ?? 500, 2000));
     const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
 
     // Reuse keyword scoring from queryWiki but return excerpts only
-    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
     const scoredPages = pages.map(page => {
       let score = 0;
       const contentLower = page.content.toLowerCase();
