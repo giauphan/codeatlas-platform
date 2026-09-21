@@ -357,7 +357,7 @@ export class WikiService {
       return { page, score };
     });
 
-    scoredPages.sort((a, b) => b.score - a.score || (a.page.order_index ?? 0) - (b.page.order_index ?? 0) || a.page.path.localeCompare(b.page.path));
+    scoredPages.sort((a, b) => b.score - a.score || (a.page.order_index ?? Infinity) - (b.page.order_index ?? Infinity) || a.page.path.localeCompare(b.page.path));
     const topContexts = scoredPages.slice(0, 3).filter(p => p.score > 0);
 
     const references = topContexts.map(scp => scp.page.path);
@@ -411,11 +411,14 @@ export class WikiService {
       return { page, score };
     });
 
-    scoredPages.sort((a, b) => b.score - a.score || (a.page.order_index ?? 0) - (b.page.order_index ?? 0) || a.page.path.localeCompare(b.page.path));
-    const topPages = scoredPages.slice(0, maxPages).filter(p => p.score > 0);
+    scoredPages.sort((a, b) => b.score - a.score || (a.page.order_index ?? Infinity) - (b.page.order_index ?? Infinity) || a.page.path.localeCompare(b.page.path));
+    const topPages = scoredPages.slice(0, maxPages);
+    const relevanceTopPages = topPages.filter(p => p.score > 0);
+    const useRelevance = scoredPages.length > maxPages || relevanceTopPages.length > 0;
+    const finalTopPages = useRelevance ? relevanceTopPages : topPages;
 
     // Extract excerpts
-    const results = topPages.map(scp => {
+    const results = finalTopPages.map(scp => {
       const excerpt = scp.page.content.length > maxChars
         ? scp.page.content.substring(0, maxChars) + '...'
         : scp.page.content;
