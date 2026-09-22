@@ -46,6 +46,7 @@ export function mountConsolidationRoutes(app: express.Application): void {
 
       const { initAdapter, setSessionContext } = await import("../database/connection.js");
       const { generateEmbedding } = await import("../services/embeddingService.js");
+      const { buildInClause } = await import("../database/utils.js");
 
       const embedding = await generateEmbedding(query, "query");
       if (!embedding || embedding.length === 0) {
@@ -106,9 +107,10 @@ export function mountConsolidationRoutes(app: express.Application): void {
         // Batch update access counts - reduces N roundtrips to 1
         if (concepts.length > 0) {
           try {
-            const binds = concepts.map(c => ({ id: c.id, tenantId }));
-            await adapter.executeMany(
-              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = datetime('now') WHERE id = :id AND tenant_id = :tenantId`,
+            const ids = concepts.map(c => c.id);
+            const { clause, binds } = buildInClause(ids, { tenantId });
+            await adapter.execute(
+              `UPDATE codeatlas_concepts SET access_count = access_count + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id IN (${clause}) AND tenant_id = :tenantId`,
               binds
             );
           } catch { /* skip */ }
