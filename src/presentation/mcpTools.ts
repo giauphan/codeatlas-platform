@@ -324,16 +324,25 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const links = loaded.analysis.graph.links;
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
 
+      // Pre-calculate adjacency lists for O(1) lookup
+      const linksByTarget = new Map<string, Array<{ from: string; type: string }>>();
+      const linksBySource = new Map<string, Array<{ to: string; type: string }>>();
+      for (const l of links) {
+        const byTarget = linksByTarget.get(l.target) ?? [];
+        byTarget.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
+        linksByTarget.set(l.target, byTarget);
+
+        const bySource = linksBySource.get(l.source) ?? [];
+        bySource.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
+        linksBySource.set(l.source, bySource);
+      }
+
       const result = {
         query,
         matchCount: matches.length,
         results: matches.slice(0, 50).map((n) => {
-          const incomingLinks = links
-            .filter((l) => l.target === n.id)
-            .map((l) => ({ from: nodeMap.get(l.source) || l.source, type: l.type }));
-          const outgoingLinks = links
-            .filter((l) => l.source === n.id)
-            .map((l) => ({ to: nodeMap.get(l.target) || l.target, type: l.type }));
+          const incomingLinks = linksByTarget.get(n.id) ?? [];
+          const outgoingLinks = linksBySource.get(n.id) ?? [];
 
           return {
             name: n.label,
@@ -375,6 +384,14 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const links = loaded.analysis.graph.links;
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
 
+      // Pre-calculate adjacency lists for O(1) lookup
+      const linksBySource = new Map<string, Array<{ to: string; type: string }>>();
+      for (const l of links) {
+        const bySource = linksBySource.get(l.source) ?? [];
+        bySource.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
+        linksBySource.set(l.source, bySource);
+      }
+
       // Group by file
       const byFile = new Map<string, typeof matches>();
       for (const n of matches) {
@@ -396,9 +413,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
             name: e.label,
             type: e.type,
             line: e.line || null,
-            dependencies: links
-              .filter((l) => l.source === e.id)
-              .map((l) => ({ to: nodeMap.get(l.target) || l.target, type: l.type })),
+            dependencies: linksBySource.get(e.id) ?? [],
           })),
         })),
       };
