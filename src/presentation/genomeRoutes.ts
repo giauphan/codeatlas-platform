@@ -84,7 +84,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // GET /api/genome/list — List genes (paginated, no vector search)
-  app.get("/api/genome/list", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/genome/list", genomeRateLimiter, authMiddleware, rejectArrayParams("limit", "offset", "project", "category"), async (req: express.Request, res: express.Response) => {
     try {
       // Lazy load dependencies to optimize cold starts for non-DB endpoints
       const [{ initAdapter }, { authStorage }] = await Promise.all([
@@ -105,15 +105,9 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      // Clean query parameter parsing, rejecting arrays and converting to strict numbers
+      // Clean query parameter parsing, converting to strict numbers
       const rawLimitParam = req.query.limit;
       const rawOffsetParam = req.query.offset;
-
-      if (Array.isArray(req.query.project) || Array.isArray(req.query.category) ||
-          Array.isArray(rawLimitParam) || Array.isArray(rawOffsetParam)) {
-        res.status(400).json({ error: "Bad Request: array parameters not supported" });
-        return;
-      }
 
       // Treat empty string explicitly as undefined to trigger defaults, avoid 0 coercion
       const rawLimit = rawLimitParam !== undefined && rawLimitParam !== '' ? Number(rawLimitParam) : undefined;
