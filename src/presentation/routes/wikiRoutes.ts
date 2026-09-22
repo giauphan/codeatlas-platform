@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { WikiService } from '../../services/wikiService.js';
 import { logger } from '../../utils/logger.js';
 import { authMiddleware } from '../../middleware/auth.js';
+import { rejectArrayParams } from '../../middleware/validation.js';
 
 const wikiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -47,7 +48,7 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
    * GET /api/wiki/:project/tree
    * Returns the nested page tree structure.
    */
-  router.get('/:project/tree', async (req, res) => {
+  router.get('/:project/tree', async (req: express.Request, res: express.Response) => {
     try {
       const { project } = req.params;
       const service = getWikiService();
@@ -64,7 +65,7 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
    * Query params: ?path=/overview
    * Retrieves specific page content.
    */
-  router.get('/:project/page', async (req, res) => {
+  router.get('/:project/page', rejectArrayParams('path'), async (req: express.Request, res: express.Response) => {
     try {
       const { project } = req.params;
       const { path } = req.query;
@@ -91,7 +92,7 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
    * POST /api/wiki/:project/query
    * Interactive Q&A against the wiki.
    */
-  router.post('/:project/query', async (req, res) => {
+  router.post('/:project/query', async (req: express.Request, res: express.Response) => {
     try {
       const { project } = req.params;
       const { query, provider, apiKey, baseUrl, model } = req.body || {};

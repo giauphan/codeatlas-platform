@@ -317,7 +317,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   // ════════════════════════════════════════════════════════
 
   // GET /api/genome/immune?problem=...&project=... — Scan immune genes
-  app.get("/api/genome/immune", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/genome/immune", genomeRateLimiter, authMiddleware, rejectArrayParams("problem", "project"), async (req: express.Request, res: express.Response) => {
     try {
       const problem = String(req.query.problem || "");
       if (!problem) {
@@ -349,7 +349,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // GET /api/genome/immune/context — Build prevention context for injection
-  app.get("/api/genome/immune/context", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
+  app.get("/api/genome/immune/context", genomeRateLimiter, authMiddleware, rejectArrayParams("problem", "project"), async (req: express.Request, res: express.Response) => {
     try {
       const problem = String(req.query.problem || "");
       if (!problem) {
