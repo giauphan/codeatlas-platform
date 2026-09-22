@@ -912,19 +912,38 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const visited = new Set<string>(seedNodes);
       let frontier = new Set<string>(seedNodes);
 
+      // ⚡ Bolt Optimization: Pre-calculate adjacency lists to replace O(V*E) BFS iteration
+      // with O(V+E) lookup based on previous performance learnings.
+      const adjList = new Map<string, string[]>();
+      for (const link of links) {
+        let srcList = adjList.get(link.source);
+        if (!srcList) {
+          srcList = [];
+          adjList.set(link.source, srcList);
+        }
+        srcList.push(link.target);
+
+        let tgtList = adjList.get(link.target);
+        if (!tgtList) {
+          tgtList = [];
+          adjList.set(link.target, tgtList);
+        }
+        tgtList.push(link.source);
+      }
+
       for (let d = 0; d < maxDepth; d++) {
         const nextFrontier = new Set<string>();
-        for (const link of links) {
-          if (frontier.has(link.source) && !visited.has(link.target)) {
-            nextFrontier.add(link.target);
-            visited.add(link.target);
-          }
-          if (frontier.has(link.target) && !visited.has(link.source)) {
-            nextFrontier.add(link.source);
-            visited.add(link.source);
+        for (const current of frontier) {
+          const neighbors = adjList.get(current) || [];
+          for (const neighbor of neighbors) {
+            if (!visited.has(neighbor)) {
+              nextFrontier.add(neighbor);
+              visited.add(neighbor);
+            }
           }
         }
         frontier = nextFrontier;
+        if (nextFrontier.size === 0) break;
       }
 
       const traceNodes = nodes.filter((n) => visited.has(n.id));
@@ -1054,16 +1073,34 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       let frontier = new Set<string>(seedNodes);
       const callAndContainsLinks = links.filter((l) => l.type === "call" || l.type === "contains");
 
+      // ⚡ Bolt Optimization: Pre-calculate adjacency lists to replace O(V*E) BFS iteration
+      // with O(V+E) lookup based on previous performance learnings.
+      const callAdjList = new Map<string, string[]>();
+      for (const link of callAndContainsLinks) {
+        let srcList = callAdjList.get(link.source);
+        if (!srcList) {
+          srcList = [];
+          callAdjList.set(link.source, srcList);
+        }
+        srcList.push(link.target);
+
+        let tgtList = callAdjList.get(link.target);
+        if (!tgtList) {
+          tgtList = [];
+          callAdjList.set(link.target, tgtList);
+        }
+        tgtList.push(link.source);
+      }
+
       for (let d = 0; d < maxDepth; d++) {
         const nextFrontier = new Set<string>();
-        for (const link of callAndContainsLinks) {
-          if (frontier.has(link.source) && !visited.has(link.target)) {
-            nextFrontier.add(link.target);
-            visited.add(link.target);
-          }
-          if (frontier.has(link.target) && !visited.has(link.source)) {
-            nextFrontier.add(link.source);
-            visited.add(link.source);
+        for (const current of frontier) {
+          const neighbors = callAdjList.get(current) || [];
+          for (const neighbor of neighbors) {
+            if (!visited.has(neighbor)) {
+              nextFrontier.add(neighbor);
+              visited.add(neighbor);
+            }
           }
         }
         frontier = nextFrontier;
