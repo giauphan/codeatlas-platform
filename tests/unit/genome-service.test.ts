@@ -292,7 +292,7 @@ describe("GenomeService", () => {
       await GenomeService.searchGenes("test", { limit: 5 });
 
       // Should have at least one UPDATE usage_count call
-      const updateCalls = mockConnection.executeMany.mock.calls.filter(
+      const updateCalls = mockConnection.execute.mock.calls.filter(
         (c: any) =>
           typeof c.arguments[0] === "string" &&
           c.arguments[0].includes("usage_count = usage_count + 1"),
