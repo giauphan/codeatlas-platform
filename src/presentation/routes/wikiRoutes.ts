@@ -1,8 +1,6 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { WikiService } from '../../services/wikiService.js';
-import { createDatabaseAdapter } from '../../database/factory.js';
-import { LLMProviderService } from '../../services/llmProviderService.js';
 import { logger } from '../../utils/logger.js';
 import { authMiddleware } from '../../middleware/auth.js';
 
@@ -18,14 +16,7 @@ export function createWikiRouter(wikiService?: WikiService): express.Router {
   const router = express.Router();
   router.use(wikiRateLimiter);
 
-  // Middleware to initialize or extract tracking/auth could go here
-  // For the default production usage, we lazy-init WikiService if not provided
-  const getWikiService = () => {
-    if (wikiService) return wikiService;
-    const db = createDatabaseAdapter();
-    const llmProvider = new LLMProviderService(); // Use default configs
-    return new WikiService(db, llmProvider);
-  };
+  const getWikiService = () => wikiService ?? WikiService.getInstance();
 
   /**
    * POST /api/wiki/:project/generate

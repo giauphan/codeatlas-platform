@@ -3,7 +3,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { IDatabaseAdapter, WikiPageRecord } from '../database/adapters/interface.js';
 import { LLMProviderService } from './llmProviderService.js';
+import { createDatabaseAdapter } from '../database/factory.js';
 import { logger } from '../utils/logger.js';
+import pLimit from 'p-limit';
 
 export interface WikiNode {
   path: string;
@@ -30,6 +32,10 @@ export interface GenerateWikiOptions {
 
 export type LLMProviderType = 'anthropic' | 'openai' | 'openai-compatible' | 'template';
 
+export function isLLMProviderType(provider: string): provider is LLMProviderType {
+  return provider === 'anthropic' || provider === 'openai' || provider === 'openai-compatible' || provider === 'template';
+}
+
 export interface QueryWikiOptions {
   tenantId?: string;
   provider?: LLMProviderType;
@@ -38,11 +44,67 @@ export interface QueryWikiOptions {
   baseUrl?: string;
 }
 
+export interface AutoUpdateWikiOptions {
+  tenantId?: string;
+  provider?: LLMProviderType;
+}
+
 export class WikiService {
+  private static instance: WikiService | null = null;
+
   constructor(
     private readonly dbAdapter: IDatabaseAdapter,
     private readonly llmProvider: LLMProviderService = new LLMProviderService()
   ) {}
+
+  static getInstance(): WikiService {
+    if (!WikiService.instance) {
+      WikiService.instance = new WikiService(createDatabaseAdapter());
+    }
+    return WikiService.instance;
+  }
+
+  static resetInstance(): void {
+    WikiService.instance = null;
+  }
+
+  async updateProjectWiki(projectName: string, context: string, options: AutoUpdateWikiOptions = {}): Promise<WikiTreeResponse> {
+    const tenantId = options.tenantId || 'default';
+    const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
+    if (pages.length === 0) {
+      return this.getWikiTree(projectName, tenantId);
+    }
+
+    const updatePage = async (page: WikiPageRecord): Promise<void> => {
+      const content = await this.llmProvider.generateText({
+        prompt: `Update this project Wiki page using the latest session knowledge. Preserve useful existing details and Markdown structure.\n\nPage: ${page.title}\nPath: ${page.path}\n\nExisting content:\n${page.content}\n\nLatest session knowledge:\n${context}`,
+        systemPrompt: 'You maintain project-specific technical documentation. Do not treat session memories as graph data or personal preferences unless they directly change project documentation.',
+        provider: options.provider,
+      });
+      if (!content.trim()) {
+        throw new Error(`Wiki provider returned empty content for ${page.path}`);
+      }
+      const diagramMatch = content.match(/```mermaid[\s\S]*?```/);
+      await this.dbAdapter.saveWikiPage({
+        ...page,
+        content,
+        diagram_data: diagramMatch ? JSON.stringify({ type: 'mermaid', content: diagramMatch[0] }) : page.diagram_data,
+      });
+    };
+
+    const limit = pLimit(2);
+    const updates = await Promise.allSettled(pages.map((page) => limit(() => updatePage(page))));
+    const failures = updates.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failures.length > 0) {
+      logger.warn(`Wiki auto-update completed with ${failures.length} failed page(s) for project '${projectName}'`);
+    }
+    if (failures.length === pages.length) {
+      throw new Error(`Wiki auto-update failed for all ${pages.length} page(s)`);
+    }
+
+    logger.info(`Auto-updated Wiki for project '${projectName}' (tenant: ${tenantId}, pages: ${pages.length - failures.length}/${pages.length})`);
+    return this.getWikiTree(projectName, tenantId);
+  }
 
   async generateProjectWiki(projectName: string, options: GenerateWikiOptions = {}): Promise<WikiTreeResponse> {
     if (!projectName || !/^[a-zA-Z0-9_\-\.]+$/.test(projectName)) {
@@ -281,7 +343,7 @@ export class WikiService {
 
     // Very basic keyword matching/scoring for demo purposes.
     // In production, use vector embeddings.
-    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
 
     let scoredPages = pages.map(page => {
       let score = 0;
@@ -295,9 +357,8 @@ export class WikiService {
       return { page, score };
     });
 
-    // Filter to relevant stuff, or take all if list is short
-    scoredPages.sort((a, b) => b.score - a.score);
-    const topContexts = scoredPages.slice(0, 3).filter(p => p.score > 0 || scoredPages.length <= 3);
+    scoredPages.sort((a, b) => b.score - a.score || (a.page.order_index ?? Infinity) - (b.page.order_index ?? Infinity) || a.page.path.localeCompare(b.page.path));
+    const topContexts = scoredPages.slice(0, 3).filter(p => p.score > 0);
 
     const references = topContexts.map(scp => scp.page.path);
 
@@ -318,6 +379,57 @@ export class WikiService {
       answer,
       references
     };
+  }
+
+  /**
+   * Search project Wiki for context matching a query.
+   * Returns page excerpts and paths for agent context.
+   * Does NOT invoke LLM — low-cost retrieval only.
+   *
+   * @param projectName - Project to search
+   * @param query - Search terms
+   * @param options - Optional tenantId, maxPages (default 3), maxChars (default 500)
+   * @returns { pages: { path: string; title: string; excerpt: string }[] }
+   */
+  async searchWiki(projectName: string, query: string, options: { tenantId?: string; maxPages?: number; maxChars?: number } = {}): Promise<{ pages: { path: string; title: string; excerpt: string }[] }> {
+    const tenantId = options.tenantId || 'default';
+    const maxPages = Math.max(1, Math.min(options.maxPages ?? 3, 10));
+    const maxChars = Math.max(1, Math.min(options.maxChars ?? 500, 2000));
+    const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
+
+    // Reuse keyword scoring from queryWiki but return excerpts only
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const scoredPages = pages.map(page => {
+      let score = 0;
+      const contentLower = page.content.toLowerCase();
+      const titleLower = page.title.toLowerCase();
+
+      for (const term of queryTerms) {
+        if (titleLower.includes(term)) score += 5;
+        if (contentLower.includes(term)) score += 1;
+      }
+      return { page, score };
+    });
+
+    scoredPages.sort((a, b) => b.score - a.score || (a.page.order_index ?? Infinity) - (b.page.order_index ?? Infinity) || a.page.path.localeCompare(b.page.path));
+    const topPages = scoredPages.slice(0, maxPages);
+    const relevanceTopPages = topPages.filter(p => p.score > 0);
+    const useRelevance = scoredPages.length > maxPages || relevanceTopPages.length > 0;
+    const finalTopPages = useRelevance ? relevanceTopPages : topPages.filter(p => p.score > 0);
+
+    // Extract excerpts
+    const results = finalTopPages.map(scp => {
+      const excerpt = scp.page.content.length > maxChars
+        ? scp.page.content.substring(0, maxChars) + '...'
+        : scp.page.content;
+      return {
+        path: scp.page.path,
+        title: scp.page.title,
+        excerpt
+      };
+    });
+
+    return { pages: results };
   }
 
   private extractParentPath(pathStr: string): string | undefined {

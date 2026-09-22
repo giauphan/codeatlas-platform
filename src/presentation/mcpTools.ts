@@ -34,8 +34,7 @@ import {
   reloadMemory,
   MemorySystemStatus
 } from "../services/memoryController.js";
-import { createDatabaseAdapter } from "../database/factory.js";
-import { WikiService, LLMProviderType } from "../services/wikiService.js";
+import { isLLMProviderType, WikiService, LLMProviderType } from "../services/wikiService.js";
 
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
@@ -758,7 +757,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   // Tool 7.9: Load Context at Session Start
   server.tool(
     "load_context_at_session_start",
-    "Load relevant context from dream memories at the start of a new session. This implements active memory loading for the AI Second Brain.",
+    "Load relevant context from dream memories, verified Genome patterns, immune prevention, and the project Wiki at the start of a new session.",
     {
       session_id: z.string().describe("Session identifier"),
       project: z.string().optional().describe("Project name or path"),
@@ -1440,7 +1439,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   a2a("save_dream_memory", "Save a dreaming memory entry (mistake, preference, knowledge, pattern) with vector embedding.", ["memory_type", "content", "importance", "session_id", "project", "provider"]);
   a2a("query_dream_memories", "Query dreaming memories by semantic similarity using sqlite-vec vector search.", ["query", "project", "limit", "provider"]);
   a2a("ingest_session_transcript", "Ingest conversation transcript, extract dreams per provider.", ["transcript", "session_id", "project", "provider"]);
-  a2a("load_context_at_session_start", "Load relevant context from dream memories at session start.", ["session_id", "project", "task"]);
+  a2a("load_context_at_session_start", "Load relevant context from dream memories and project Wiki at session start.", ["session_id", "project", "task"]);
   a2a("reload_context_mid_session", "Reload cleaned context mid-session after noise filtering.", ["session_id", "project", "task"]);
   a2a("generate_daily_dreams", "Trigger daily dream generation and consolidation.", ["project", "provider"]);
   a2a("trace_feature_flow", "Trace the complete execution flow of a feature through the codebase.", ["project", "keyword", "depth"]);
@@ -2054,17 +2053,12 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   // --- DeepWiki Tools ---
   let wikiServiceCache: WikiService | null = null;
   const validateLLMProvider = (provider: unknown): LLMProviderType | undefined => {
-    if (typeof provider !== 'string') return undefined;
-    if (provider === 'template') return 'template';
-    if (provider === 'anthropic') return 'anthropic';
-    if (provider === 'openai') return 'openai';
-    if (provider === 'openai-compatible') return 'openai-compatible';
-    return undefined;
+    return typeof provider === 'string' && isLLMProviderType(provider) ? provider : undefined;
   };
 
   const getWikiService = () => {
     if (!wikiServiceCache) {
-      wikiServiceCache = new WikiService(createDatabaseAdapter());
+      wikiServiceCache = WikiService.getInstance();
     }
     return wikiServiceCache;
   };
@@ -2224,4 +2218,56 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   a2a("get_skill", "Get an AI skill by name.", ["name"]);
   a2a("search_skills", "Search available AI skills.", ["query", "tag"]);
   a2a("install_skill", "Install or update a skill in the Genome.", ["name", "description", "category", "prompt", "tags"]);
+
+  // Tool 8: Search Project Wiki
+  server.tool(
+    "search_project_wiki",
+    "Search the project documentation wiki for relevant pages and excerpts. Returns page paths and content snippets for agent context.",
+    {
+      project: z.string().describe("Project name or path"),
+      query: z.string().describe("Search terms to find relevant wiki pages"),
+      limit: z.number().optional().describe("Maximum number of results to return (default: 3)")
+    },
+    async ({ project, query, limit }: { project: string; query: string; limit?: number }) => {
+      const auth = await checkAuth();
+      await logActivity(auth, "search_project_wiki", { project, query, limit });
+      try {
+        const service = getWikiService();
+        const result = await service.searchWiki(project, query, { maxPages: limit || 3 });
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify(result, null, 2)
+          }]
+        };
+      } catch (err: unknown) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Failed to search wiki: ${err instanceof Error ? err.message : String(err)}`
+          }],
+          isError: true as const
+        };
+      }
+    }
+  );
+
+  // Register search_project_wiki for A2A
+  a2aReal(
+    "search_project_wiki",
+    "Search the project documentation wiki for relevant pages and excerpts. Returns page paths and content snippets for agent context.",
+    ["project", "query", "limit"],
+    async (params: Record<string, unknown>) => {
+      if (typeof params.project !== "string" || typeof params.query !== "string") {
+        throw new Error("'project' and 'query' must be strings");
+      }
+      if (params.limit !== undefined && (typeof params.limit !== "number" || !Number.isFinite(params.limit))) {
+        throw new Error("'limit' must be a finite number");
+      }
+      const service = getWikiService();
+      return service.searchWiki(params.project, params.query, {
+        maxPages: params.limit === undefined ? 3 : params.limit,
+      });
+    }
+  );
 }

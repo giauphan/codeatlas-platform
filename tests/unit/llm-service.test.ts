@@ -74,6 +74,7 @@ const mockSaveDreamMemory = mock.fn();
 const mockCheckNoiseBlocklist = mock.fn();
 const mockSearchGenes = mock.fn();
 const mockBuildImmuneContext = mock.fn();
+const mockSearchWiki = mock.fn();
 
 const mockLogger = {
   info: mock.fn(),
@@ -94,6 +95,20 @@ safeMockModule(path.join(srcDir, 'services/genomeService.js'), {
     searchGenes: mockSearchGenes,
     buildImmuneContext: mockBuildImmuneContext,
   },
+});
+
+safeMockModule(path.join(srcDir, 'services/wikiService.js'), {
+  WikiService: class {
+    static getInstance = () => ({
+      searchWiki: mockSearchWiki,
+    });
+
+    searchWiki = mockSearchWiki;
+  },
+});
+
+safeMockModule(path.join(srcDir, 'database/factory.js'), {
+  createDatabaseAdapter: () => ({}),
 });
 
 safeMockModule(path.join(srcDir, 'services/noiseBlocklist.js'), {
@@ -124,6 +139,7 @@ describe('llmService Unit Tests', () => {
     mockCheckNoiseBlocklist.mock.resetCalls();
     mockSearchGenes.mock.resetCalls();
     mockBuildImmuneContext.mock.resetCalls();
+    mockSearchWiki.mock.resetCalls();
     mockLogger.info.mock.resetCalls();
     mockLogger.warn.mock.resetCalls();
     mockLogger.error.mock.resetCalls();
@@ -131,6 +147,7 @@ describe('llmService Unit Tests', () => {
     mockCheckNoiseBlocklist.mock.mockImplementation(() => ({ isNoise: false }));
     mockSearchGenes.mock.mockImplementation(async () => []);
     mockBuildImmuneContext.mock.mockImplementation(async () => '');
+    mockSearchWiki.mock.mockImplementation(async () => ({ pages: [] }));
   });
 
   describe('summarizeConversationForDreams', () => {
@@ -324,7 +341,23 @@ describe('llmService Unit Tests', () => {
       assert.ok(!context.includes('# 🧠 Context from Previous Sessions'), 'Must not emit empty dream section header when dreams are empty');
     });
 
-    test('does not call genome services when task is empty', async () => {
+    test('includes bounded project Wiki context when matching pages exist', async () => {
+      mockQueryDreamMemories.mock.mockImplementation(async () => []);
+      mockSearchWiki.mock.mockImplementation(async () => ({
+        pages: [{ path: '/architecture', title: 'Architecture', excerpt: 'Layered project architecture.' }],
+      }));
+
+      const context = await loadContextAtSessionStart('sess-wiki', 'my-app', 'architecture', {
+        searchWiki: mockSearchWiki,
+      } as never);
+
+      assert.ok(context.includes('# Project Wiki Reference'));
+      assert.ok(context.includes('Architecture (/architecture)'));
+      assert.ok(context.includes('Layered project architecture.'));
+      assert.strictEqual(mockSearchWiki.mock.calls.length, 1);
+    });
+
+    test('does not call Wiki search when task is empty', async () => {
       mockQueryDreamMemories.mock.mockImplementation(async () => []);
 
       const empty1 = await loadContextAtSessionStart('sess-13', 'my-app', '');
@@ -333,6 +366,7 @@ describe('llmService Unit Tests', () => {
 
       assert.strictEqual(mockSearchGenes.mock.calls.length, 0);
       assert.strictEqual(mockBuildImmuneContext.mock.calls.length, 0);
+      assert.strictEqual(mockSearchWiki.mock.calls.length, 0);
       assert.strictEqual(empty1, '');
       assert.strictEqual(empty2, '');
       assert.strictEqual(empty3, '');
