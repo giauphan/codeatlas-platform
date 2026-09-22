@@ -84,6 +84,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   });
 
   // GET /api/genome/list — List genes (paginated, no vector search)
+  // rejectArrayParams: prevents HPP injection on pagination and filtering parameters
   app.get("/api/genome/list", genomeRateLimiter, authMiddleware, rejectArrayParams("limit", "offset", "project", "category"), async (req: express.Request, res: express.Response) => {
     try {
       // Lazy load dependencies to optimize cold starts for non-DB endpoints
