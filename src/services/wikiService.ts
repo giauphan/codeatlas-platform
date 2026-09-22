@@ -415,7 +415,7 @@ export class WikiService {
     const topPages = scoredPages.slice(0, maxPages);
     const relevanceTopPages = topPages.filter(p => p.score > 0);
     const useRelevance = scoredPages.length > maxPages || relevanceTopPages.length > 0;
-    const finalTopPages = useRelevance ? relevanceTopPages : topPages;
+    const finalTopPages = useRelevance ? relevanceTopPages : topPages.filter(p => p.score > 0);
 
     // Extract excerpts
     const results = finalTopPages.map(scp => {
