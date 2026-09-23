@@ -185,3 +185,9 @@ For security vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of openi
 ## License
 
 Distributed under the [MIT License](LICENSE). Maintained by [@giauphan](https://github.com/giauphan).
+
+### Performance Optimizations
+CodeAtlas implements several specific performance optimizations (documented as "Bolt Optimizations" in `.jules/bolt.md`), including:
+- **Array Filter Consolidation:** Chaining multiple `.filter()` calls on large arrays (like knowledge graph nodes or edges) creates heavy O(N*Passes) execution overhead and massive GC pressure from intermediate arrays. Our operations combine conditions into single `.filter()` passes and hoist repeated string transformations (like `.toLowerCase()`) outside the loop bodies to ensure O(N) linear time processing of large code graphs.
+- **Pre-calculated Adjacency Lists:** Replaces O(N^2) inner-loop graph traversal lookups with O(V+E) Map-based pre-calculations.
+- **In-Clause Updates:** Eliminates N+1 executeMany sequential bottlenecks by dynamically constructing batched updates with `buildInClause`.
