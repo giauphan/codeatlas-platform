@@ -760,7 +760,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                 opacity: isQuerying || !queryInput.trim() ? 0.5 : 1
               }}
             >
-              <Send size={16} />
+              {isQuerying ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
           </form>
         </div>
