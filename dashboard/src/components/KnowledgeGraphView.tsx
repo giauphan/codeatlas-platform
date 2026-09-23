@@ -7,6 +7,7 @@ import {
 import { SphericalKnowledgeGraph } from './KnowledgeNetwork3D';
 import { getAuthHeaders } from '../lib/auth';
 import { FOCUS_RING_CLASS } from '../lib/constants';
+import { SearchInputWithHint } from './ui/SearchInputWithHint';
 
 interface AnalysisData {
   analysis?: AnalysisData;
@@ -111,19 +112,19 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       >
         {/* Search bar */}
         <div style={{ position: 'absolute', top: '1.5rem', left: '1.5rem', zIndex: 10 }}>
-          <div style={{ position: 'relative', width: '260px' }}>
-            <Search size={18} style={{ position: 'absolute', left: '1rem', top: '0.8rem', color: 'var(--text-muted)' }} />
-            <input
-              type="text"
+          <div className="search-form" style={{ width: '260px' }}>
+            <SearchInputWithHint
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              onSearch={() => {}}
               placeholder="Search sphere…"
-              aria-label="Search knowledge graph sphere"
-              style={{
-                width: '100%', padding: '0.6rem 1rem 0.6rem 2.8rem', borderRadius: '12px',
-                border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.7)',
-                color: '#fff', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box',
+              ariaLabel="Search knowledge graph sphere"
+              hasClearButton={true}
+              onClear={() => setSearchQuery('')}
+              inputStyle={{
+                background: 'rgba(0,0,0,0.7)',
                 backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.15)'
               }}
             />
           </div>
