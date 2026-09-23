@@ -159,7 +159,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       /**
        * ⚡ Bolt Optimization:
        * Combined multiple node filters into a single pass to avoid intermediate
-       * array allocations and O(N * Passes) overhead.
+       * array allocations and O(N * Passes) overhead. We also verify the file path
+       * simultaneously to exclude third party code folders like node_modules and venv.
        */
       let nodes = loaded.analysis.graph.nodes.filter((n) => {
         if (type && type !== "all" && n.type !== type) return false;
@@ -237,6 +238,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           if (!label.toLowerCase().includes(targetLowerCase)) return false;
         }
 
+        // Apply deduplication inline during the single traversal.
+        // This avoids maintaining intermediate duplicate arrays and a separate O(E) filter pass.
         const key = l.source + '|' + l.target + '|' + l.type;
         if (linkDedup.has(key)) return false;
         linkDedup.add(key);
@@ -316,7 +319,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         if (type && type !== "all" && n.type !== type) return false;
 
         // Filter out external dependencies, virtual environments, and
-        // third-party packages to ensure search results only contain relevant project code.
+        // third-party packages to ensure search results only contain relevant project code,
+        // preventing noise from vendor code and keeping the AI context window focused.
         if (n.id.startsWith('external:')) return false;
         if (n.filePath && (
           n.filePath.includes('/venv/') ||
