@@ -156,7 +156,11 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
       }
 
-      // ⚡ Bolt Optimization: Combined multiple node filters into a single pass to avoid intermediate array allocations and O(N * Passes) overhead
+      /**
+       * ⚡ Bolt Optimization:
+       * Combined multiple node filters into a single pass to avoid intermediate
+       * array allocations and O(N * Passes) overhead.
+       */
       let nodes = loaded.analysis.graph.nodes.filter((n) => {
         if (type && type !== "all" && n.type !== type) return false;
 
@@ -211,22 +215,26 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
 
       const linkDedup = new Set<string>();
-      const sourceLower = source?.toLowerCase();
-      const targetLower = target?.toLowerCase();
+      const sourceLowerCase = source?.toLowerCase();
+      const targetLowerCase = target?.toLowerCase();
 
-      // ⚡ Bolt Optimization: Combined 4 successive links.filter() loops into a single O(E) pass.
-      // Also hoisted source/target .toLowerCase() out of the loop body to avoid O(E) repeated string allocations.
+      /**
+       * ⚡ Bolt Optimization:
+       * Combined 4 successive links.filter() loops into a single O(E) pass to minimize array
+       * allocations and loop overhead. Additionally, hoisted source/target .toLowerCase()
+       * conversions outside the loop body to prevent O(E) repeated string allocations.
+       */
       let links = loaded.analysis.graph.links.filter((l) => {
         if (relationship && relationship !== "all" && l.type !== relationship) return false;
 
-        if (sourceLower) {
+        if (sourceLowerCase) {
           const label = nodeMap.get(l.source) || l.source;
-          if (!label.toLowerCase().includes(sourceLower)) return false;
+          if (!label.toLowerCase().includes(sourceLowerCase)) return false;
         }
 
-        if (targetLower) {
+        if (targetLowerCase) {
           const label = nodeMap.get(l.target) || l.target;
-          if (!label.toLowerCase().includes(targetLower)) return false;
+          if (!label.toLowerCase().includes(targetLowerCase)) return false;
         }
 
         const key = l.source + '|' + l.target + '|' + l.type;
@@ -299,8 +307,11 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       const q = query.toLowerCase();
 
-      // ⚡ Bolt Optimization: Combined 3 sequential node array filtering passes into a single pass
-      // to avoid O(N*3) loop overhead and intermediate array GC allocations.
+      /**
+       * ⚡ Bolt Optimization:
+       * Combined 3 sequential node array filtering passes into a single pass
+       * to avoid O(N*3) loop overhead and intermediate array GC allocations.
+       */
       const matches = loaded.analysis.graph.nodes.filter((n) => {
         if (type && type !== "all" && n.type !== type) return false;
 
