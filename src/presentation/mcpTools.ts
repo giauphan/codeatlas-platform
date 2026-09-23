@@ -156,13 +156,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
       }
 
-      let nodes = loaded.analysis.graph.nodes;
-      if (type && type !== "all") {
-        nodes = nodes.filter((n) => n.type === type);
-      }
+      // ⚡ Bolt Optimization: Combined multiple node filters into a single pass to avoid intermediate array allocations and O(N * Passes) overhead
+      let nodes = loaded.analysis.graph.nodes.filter((n) => {
+        if (type && type !== "all" && n.type !== type) return false;
 
-      // Filter out venv/node_modules entities
-      nodes = nodes.filter((n) => {
         const fp = n.filePath || "";
         return !fp.includes("node_modules") && !fp.includes("venv") && !fp.includes(".venv") && !fp.includes("site-packages");
       });
@@ -212,30 +209,30 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
-      let links = loaded.analysis.graph.links;
 
-      if (relationship && relationship !== "all") {
-        links = links.filter((l) => l.type === relationship);
-      }
-      if (source) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.source) || l.source;
-          return label.toLowerCase().includes(source.toLowerCase());
-        });
-      }
-      if (target) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.target) || l.target;
-          return label.toLowerCase().includes(target.toLowerCase());
-        });
-      }
-
-      // Deduplicate links
       const linkDedup = new Set<string>();
-      links = links.filter((l) => {
+      const sourceLower = source?.toLowerCase();
+      const targetLower = target?.toLowerCase();
+
+      // ⚡ Bolt Optimization: Combined 4 successive links.filter() loops into a single O(E) pass.
+      // Also hoisted source/target .toLowerCase() out of the loop body to avoid O(E) repeated string allocations.
+      let links = loaded.analysis.graph.links.filter((l) => {
+        if (relationship && relationship !== "all" && l.type !== relationship) return false;
+
+        if (sourceLower) {
+          const label = nodeMap.get(l.source) || l.source;
+          if (!label.toLowerCase().includes(sourceLower)) return false;
+        }
+
+        if (targetLower) {
+          const label = nodeMap.get(l.target) || l.target;
+          if (!label.toLowerCase().includes(targetLower)) return false;
+        }
+
         const key = l.source + '|' + l.target + '|' + l.type;
         if (linkDedup.has(key)) return false;
         linkDedup.add(key);
+
         return true;
       });
 
@@ -300,13 +297,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
       }
 
-      let nodes = loaded.analysis.graph.nodes;
-      if (type && type !== "all") {
-        nodes = nodes.filter((n) => n.type === type);
-      }
+      const q = query.toLowerCase();
 
-      // Filter out venv/node_modules entities for cleaner results
-      nodes = nodes.filter((n) => {
+      // ⚡ Bolt Optimization: Combined 3 sequential node array filtering passes into a single pass
+      // to avoid O(N*3) loop overhead and intermediate array GC allocations.
+      const matches = loaded.analysis.graph.nodes.filter((n) => {
+        if (type && type !== "all" && n.type !== type) return false;
+
         if (n.id.startsWith('external:')) return false;
         if (n.filePath && (
           n.filePath.includes('/venv/') ||
@@ -314,11 +311,9 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           n.filePath.includes('/node_modules/') ||
           n.filePath.includes('/site-packages/')
         )) return false;
-        return true;
-      });
 
-      const q = query.toLowerCase();
-      const matches = nodes.filter((n) => n.label.toLowerCase().includes(q));
+        return n.label.toLowerCase().includes(q);
+      });
 
       // For each match, find its relationships
       const links = loaded.analysis.graph.links;
