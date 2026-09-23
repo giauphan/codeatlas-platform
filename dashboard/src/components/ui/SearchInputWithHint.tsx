@@ -9,6 +9,8 @@ interface BaseSearchInputWithHintProps {
   onSearch: () => void;
   placeholder?: string;
   ariaLabel?: string;
+  inputClassName?: string;
+  inputStyle?: React.CSSProperties;
 }
 
 interface ClearableSearchProps extends BaseSearchInputWithHintProps {
@@ -47,7 +49,9 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   onClear,
   placeholder = "Search...",
   ariaLabel = "Search input",
-  hasClearButton = false
+  hasClearButton = false,
+  inputClassName = "",
+  inputStyle = {}
 }) => {
   if (hasClearButton && !onClear) {
     const isDev = typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development';
@@ -76,11 +80,11 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
       <Search size={18} className="search-input-icon" aria-hidden="true" focusable="false" />
       <input
         type="text"
-        className={`search-input-field ${FOCUS_RING_CLASS}`}
+        className={`search-input-field ${FOCUS_RING_CLASS} ${inputClassName}`.trim()}
         placeholder={placeholder}
         aria-label={ariaLabel}
         aria-describedby={hintId}
-        style={{ paddingRight: styles.inputPaddingRight }}
+        style={{ paddingRight: styles.inputPaddingRight, ...inputStyle }}
         value={value}
         onChange={onChange}
         onKeyDown={(e) => {
