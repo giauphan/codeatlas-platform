@@ -113,7 +113,8 @@ export function registerDreamingRoutes(app: express.Application): void {
   });
 
   // GET /api/dreams/query — authenticated, tenant-isolated
-  app.get("/api/dreams/query", authMiddleware, rejectArrayParams("query", "project", "limit"), async (req, res) => {
+  // rejectArrayParams: prevents HPP injection on all expected query parameters
+  app.get("/api/dreams/query", authMiddleware, rejectArrayParams("query", "project", "limit", "offset", "memory_type", "provider", "start_date", "end_date", "scope", "tags"), async (req, res) => {
     try {
       const auth = authStorage.getStore()!;
       const queryText = (req.query.query as string)?.trim() || "";
