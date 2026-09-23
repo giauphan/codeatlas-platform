@@ -285,14 +285,36 @@ describe("GenomeService", () => {
     });
 
     test("increments usage_count on retrieved genes", async () => {
+      // Create a specific background connection spy for the async fire-and-forget logic
+      const bgConnection = {
+        execute: mock.fn(async () => ({ rowsAffected: 1 })),
+        executeMany: mock.fn(),
+        close: mock.fn(),
+      };
+
+      // Since initPool returns a Promise that resolves to an object with getConnection,
+      // we need to mock it properly to simulate the subsequent call within the fire-and-forget block.
+      let callCount = 0;
+      mockInitPool.mock.mockImplementation(() => {
+        return Promise.resolve({
+          getConnection: async () => {
+            callCount++;
+            return callCount === 1 ? mockConnection : bgConnection;
+          }
+        });
+      });
+
       mockConnection.execute.mock.mockImplementation(async () => ({
         rows: [mockGeneRow("gene-1", "Test", "pattern")],
       }));
 
       await GenomeService.searchGenes("test", { limit: 5 });
 
-      // Should have at least one UPDATE usage_count call
-      const updateCalls = mockConnection.execute.mock.calls.filter(
+      // Allow the background promise to resolve
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // The UPDATE usage_count call should now be made on the background connection
+      const updateCalls = bgConnection.execute.mock.calls.filter(
         (c: any) =>
           typeof c.arguments[0] === "string" &&
           c.arguments[0].includes("usage_count = usage_count + 1"),

@@ -285,23 +285,28 @@ export class GenomeService {
       // Increment usage count for returned genes
       // Dedupe + batch increments into chunks of 900.
       if (genes.length > 0) {
-        try {
-          const tenantId = getTenantId();
-          const geneIds = Array.from(new Set(genes.map((g) => g.id))); // dedupe
-          const chunkSize = 900;
-          for (let i = 0; i < geneIds.length; i += chunkSize) {
-            const chunk = geneIds.slice(i, i + chunkSize);
-            const { clause: inClause, binds: inBinds } = buildInClause(chunk, { tenantId });
-            await connection.execute(
-              `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
-               updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
-              inBinds,
-              { autoCommit: true },
-            );
-          }
-        } catch (err) {
-          logger.warn(`[Genome] Failed to increment usage counts for genes: ${err instanceof Error ? err.message : String(err)}`);
-        }
+        const capturedTenantId = getTenantId();
+        const geneIds = Array.from(new Set(genes.map((g) => g.id))); // dedupe
+
+        // ⚡ Bolt Optimization: Fire and forget DB update to prevent "Write on Read" N+1 blocking
+        // We must obtain a new connection lifecycle since the main query's connection will be closed.
+        initPool().then(pool => pool.getConnection()).then(bgConn => {
+          return setSessionContext(bgConn).then(async () => {
+            const chunkSize = 900;
+            for (let i = 0; i < geneIds.length; i += chunkSize) {
+              const chunk = geneIds.slice(i, i + chunkSize);
+              const { clause: inClause, binds: inBinds } = buildInClause(chunk, { tenantId: capturedTenantId });
+              await bgConn.execute(
+                `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
+                 updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
+                inBinds,
+                { autoCommit: true },
+              );
+            }
+          }).finally(() => bgConn.close());
+        }).catch(err => {
+          logger.warn(`[Genome] Failed to non-blocking increment usage counts for genes: ${err instanceof Error ? err.message : String(err)}`);
+        });
       }
 
       return genes;
@@ -1089,16 +1094,20 @@ Apply this knowledge when encountering similar problems.
 
     // Increment usage count
     try {
-      const conn = await (await initPool()).getConnection();
-      const auth = authStorage.getStore();
-      const tenantId = getTenantId();
-      await setSessionContext(conn);
-      await conn.execute(
-        `UPDATE codeatlas_genome SET usage_count = usage_count + 1 WHERE id = :id AND tenant_id = :tenantId`,
-        { id: geneId, tenantId: getTenantId() } as any,
-        { autoCommit: true },
-      );
-      await conn.close();
+      const capturedTenantId = getTenantId();
+      initPool().then(pool => pool.getConnection()).then(bgConn => {
+        // ⚡ Bolt Optimization: Fire and forget DB update to prevent "Write on Read" N+1 blocking
+        // Return the promise chain to correctly handle rejections and ensure connection cleanup
+        return setSessionContext(bgConn).then(() => {
+          return bgConn.execute(
+            `UPDATE codeatlas_genome SET usage_count = usage_count + 1 WHERE id = :id AND tenant_id = :tenantId`,
+            { id: geneId, tenantId: capturedTenantId } as any,
+            { autoCommit: true },
+          );
+        }).finally(() => bgConn.close());
+      }).catch(() => {
+        // Non-critical — don't fail the skill generation
+      });
     } catch {
       // Non-critical — don't fail the skill generation
     }
