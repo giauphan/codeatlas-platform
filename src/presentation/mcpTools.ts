@@ -304,6 +304,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const matches = loaded.analysis.graph.nodes.filter((n) => {
         if (type && type !== "all" && n.type !== type) return false;
 
+        // Filter out third-party dependencies, virtual environments, and
+        // external packages to ensure search results only contain relevant project code.
         if (n.id.startsWith('external:')) return false;
         if (n.filePath && (
           n.filePath.includes('/venv/') ||
