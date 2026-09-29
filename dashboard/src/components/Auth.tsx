@@ -187,7 +187,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                     onClick={() => setShowToken(!showToken)}
                     className={`password-toggle-btn ${FOCUS_RING_CLASS}`}
                     aria-label={showToken ? "Hide access key" : "Show access key"}
-                    title={showToken ? "Hide access key" : "Show access key"}
+                    title={showToken ? "Show access key" : "Hide access key"}
                   >
                     {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -218,7 +218,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                       onClick={() => setShowPassword(!showPassword)}
                       className={`password-toggle-btn ${FOCUS_RING_CLASS}`}
                       aria-label={showPassword ? "Hide password" : "Show password"}
-                      title={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? "Show password" : "Hide password"}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
