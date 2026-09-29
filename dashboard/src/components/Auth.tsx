@@ -181,18 +181,19 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <label htmlFor="api-key" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
                   <Key size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                  <input id="api-key" type={showToken ? "text" : "password"} autoComplete="off" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required />
+                  <input id="api-key" type={showToken ? "text" : "password"} autoComplete="off" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required aria-invalid={mode === 'token' && !!error} />
                   <button
                     type="button"
                     onClick={() => setShowToken(!showToken)}
                     className={`password-toggle-btn ${FOCUS_RING_CLASS}`}
                     aria-label={showToken ? "Hide access key" : "Show access key"}
+                    title={showToken ? "Show access key" : "Hide access key"}
                   >
                     {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
               </div>
-              {error && <div style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
+              {error && <div role="alert" style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
               <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={loading}>
                 {loading ? <><Loader2 className="animate-spin" size={24} /> INITIALIZING...</> : 'INITIALIZE SESSION'}
               </button>
@@ -204,26 +205,27 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   <label htmlFor="email" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
                   <div style={{ position: 'relative' }}>
                     <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                    <input id="email" type="email" autoComplete="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                    <input id="email" type="email" autoComplete="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required aria-invalid={mode === 'signin' && !!error} />
                   </div>
                 </div>
                 <div>
                   <label htmlFor="password" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>PASSWORD</label>
                   <div style={{ position: 'relative' }}>
                     <Lock size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                    <input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required aria-invalid={mode === 'signin' && !!error} />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className={`password-toggle-btn ${FOCUS_RING_CLASS}`}
                       aria-label={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? "Show password" : "Hide password"}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
               </div>
-              {error && <div style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
+              {error && <div role="alert" style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
               <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={loading}>
                 {loading ? <><Loader2 className="animate-spin" size={24} /> ENTERING...</> : 'ENTER SYSTEM'}
               </button>
