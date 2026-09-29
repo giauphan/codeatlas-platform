@@ -181,7 +181,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 <label htmlFor="api-key" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
                 <div style={{ position: 'relative' }}>
                   <Key size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                  <input id="api-key" type={showToken ? "text" : "password"} autoComplete="off" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required aria-invalid={!!error ? "true" : undefined} />
+                  <input id="api-key" type={showToken ? "text" : "password"} autoComplete="off" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required aria-invalid={!!error ? "true" : "false"} />
                   <button
                     type="button"
                     onClick={() => setShowToken(!showToken)}
@@ -205,14 +205,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   <label htmlFor="email" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>EMAIL ADDRESS</label>
                   <div style={{ position: 'relative' }}>
                     <Mail size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                    <input id="email" type="email" autoComplete="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required aria-invalid={!!error ? "true" : undefined} />
+                    <input id="email" type="email" autoComplete="email" style={{ paddingLeft: '3rem' }} className="glass-input" placeholder="name@genrostore.com" value={email} onChange={e => setEmail(e.target.value)} required aria-invalid={!!error ? "true" : "false"} />
                   </div>
                 </div>
                 <div>
                   <label htmlFor="password" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>PASSWORD</label>
                   <div style={{ position: 'relative' }}>
                     <Lock size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                    <input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required aria-invalid={!!error ? "true" : undefined} />
+                    <input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required aria-invalid={!!error ? "true" : "false"} />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
