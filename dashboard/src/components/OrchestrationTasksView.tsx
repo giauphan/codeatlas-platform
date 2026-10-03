@@ -66,12 +66,13 @@ export function OrchestrationTasksView() {
     }
   };
 
+  const lowerSearchQuery = searchQuery.toLowerCase();
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = searchQuery.trim() === '' ||
-                          task.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          task.orchestrationTaskId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          task.developerAgentId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          task.leaderAgentId.toLowerCase().includes(searchQuery.toLowerCase());
+                          task.description.toLowerCase().includes(lowerSearchQuery) ||
+                          task.orchestrationTaskId.toLowerCase().includes(lowerSearchQuery) ||
+                          task.developerAgentId?.toLowerCase().includes(lowerSearchQuery) ||
+                          task.leaderAgentId.toLowerCase().includes(lowerSearchQuery);
     const matchesState = filterState === 'all' || task.state === filterState;
     return matchesSearch && matchesState;
   });

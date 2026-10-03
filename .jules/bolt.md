@@ -7,3 +7,6 @@
 ## 2026-09-23 - Independent Connection Pools for Fire-and-Forget
 **Learning:** When attempting to make database updates non-blocking (fire-and-forget) to fix "Write on Read" bottlenecks, reusing the main request's database connection is unsafe. The surrounding code will often close or return the connection to the pool while the async background task is still running, leading to race conditions and "Connection closed" errors.
 **Action:** When implementing fire-and-forget updates in services, explicitly acquire a new background connection (`initPool().then(pool => pool.getConnection())`), capture synchronous context (like `tenantId`) to prevent async state loss, and handle errors/cleanup in a standalone promise chain that ends with `.finally(() => bgConn.close())`.
+## 2024-10-25 - Avoid redundant string operations in React renders
+**Learning:** Redundant string operations (like `toLowerCase()`) inside render loop callbacks (like `.filter()` or color assignment functions) cause unnecessary CPU overhead on every render cycle, which can severely impact frontend performance when processing large datasets or frequent updates.
+**Action:** Always hoist invariant string transformations outside of tight loops and render callbacks by computing them once and caching the result in a local variable or memoized value.

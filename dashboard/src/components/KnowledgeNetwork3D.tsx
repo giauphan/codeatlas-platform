@@ -155,15 +155,16 @@ function ForceGraph2DCanvas({ data, isFullscreen, searchQuery, typeColors, onNod
       variable: '#00FF94',
     };
 
+    const lowerSearchQuery = searchQuery ? searchQuery.toLowerCase() : '';
+
     // Node color: type-based, search dims non-matches
     const getNodeColor = (n: GraphNode): string => {
       const typeColor = colors[n.type || ''];
       const baseColor = typeColor || 'rgba(255,255,255,0.4)';
 
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
+      if (lowerSearchQuery) {
         const label = (n.label || n.name || n.id).toLowerCase();
-        return label.includes(q) ? baseColor : 'rgba(255,255,255,0.08)';
+        return label.includes(lowerSearchQuery) ? baseColor : 'rgba(255,255,255,0.08)';
       }
       return baseColor;
     };
