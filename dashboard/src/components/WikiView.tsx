@@ -830,9 +830,13 @@ export const WikiView: React.FC<WikiViewProps> = ({
                   </select>
                   {activeProfileId && (
                     <button
+                      aria-label="Delete selected preset"
+                      className={FOCUS_RING_CLASS}
                       onClick={() => {
-                        setProfiles(prev => prev.filter(x => x.id !== activeProfileId));
-                        setActiveProfileId('');
+                        if (window.confirm("Are you sure you want to delete this preset?")) {
+                          setProfiles(prev => prev.filter(x => x.id !== activeProfileId));
+                          setActiveProfileId('');
+                        }
                       }}
                       style={{ background: 'rgba(255, 75, 75, 0.1)', color: '#FFB4AB', border: '1px solid rgba(255, 75, 75, 0.3)', borderRadius: '6px', padding: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                       title="Delete selected preset"
