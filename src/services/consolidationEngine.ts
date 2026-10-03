@@ -253,15 +253,16 @@ export class ConsolidationEngine {
       const allToRemove = new Set<string>();
 
       for (const [, group] of byProject) {
-        const toRemove = new Set<string>();
+        // Track deletions within the project group to skip processed items
+        const groupToRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
           const itemI = group[i];
-          if (toRemove.has(itemI.id)) continue;
+          if (groupToRemove.has(itemI.id)) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             const itemJ = group[j];
-            if (toRemove.has(itemJ.id)) continue;
+            if (groupToRemove.has(itemJ.id)) continue;
 
             const similarity = this.cosineSimilarity(itemI.embedding, itemJ.embedding);
 
@@ -270,7 +271,7 @@ export class ConsolidationEngine {
               const keepIdx = itemI.importance >= itemJ.importance ? i : j;
               const removeIdx = keepIdx === i ? j : i;
               const idToRemove = keepIdx === i ? itemJ.id : itemI.id;
-              toRemove.add(idToRemove);
+              groupToRemove.add(idToRemove);
               allToRemove.add(idToRemove);
 
               // If the outer element 'i' is removed, break the inner loop early.
@@ -296,8 +297,8 @@ export class ConsolidationEngine {
             );
             merged += result.rowsAffected || 0;
           }
-        } catch {
-          // skip delete errors
+        } catch (err) {
+          logger.warn(`[Consolidation] Dedup: Failed to delete duplicate dreams`, { count: ids.length, err });
         }
       }
 
