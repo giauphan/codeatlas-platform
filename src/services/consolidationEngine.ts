@@ -287,8 +287,8 @@ export class ConsolidationEngine {
       if (allToRemove.size > 0) {
         const ids = Array.from(allToRemove);
         const BATCH_DELETE_CHUNK_SIZE = 900;
-        try {
-          for (let k = 0; k < ids.length; k += BATCH_DELETE_CHUNK_SIZE) {
+        for (let k = 0; k < ids.length; k += BATCH_DELETE_CHUNK_SIZE) {
+          try {
             const chunk = ids.slice(k, k + BATCH_DELETE_CHUNK_SIZE);
             const { clause, binds } = buildInClause(chunk, { tenantId });
             const result = await db.execute(
@@ -296,9 +296,9 @@ export class ConsolidationEngine {
               binds as Record<string, unknown>
             );
             merged += result.rowsAffected || 0;
+          } catch (err) {
+            logger.warn(`[Consolidation] Dedup: Failed to delete chunk`, { chunkStart: k, err });
           }
-        } catch (err) {
-          logger.warn(`[Consolidation] Dedup: Failed to delete duplicate dreams`, { count: ids.length, err });
         }
       }
 
