@@ -250,16 +250,19 @@ export class ConsolidationEngine {
       }
 
       let merged = 0;
+      const allToRemove = new Set<string>();
+
       for (const [, group] of byProject) {
-        const toRemove = new Set<string>();
+        // Track deletions within the project group to skip processed items
+        const groupToRemove = new Set<string>();
 
         for (let i = 0; i < group.length; i++) {
           const itemI = group[i];
-          if (toRemove.has(itemI.id)) continue;
+          if (groupToRemove.has(itemI.id)) continue;
 
           for (let j = i + 1; j < group.length; j++) {
             const itemJ = group[j];
-            if (toRemove.has(itemJ.id)) continue;
+            if (groupToRemove.has(itemJ.id)) continue;
 
             const similarity = this.cosineSimilarity(itemI.embedding, itemJ.embedding);
 
@@ -268,29 +271,33 @@ export class ConsolidationEngine {
               const keepIdx = itemI.importance >= itemJ.importance ? i : j;
               const removeIdx = keepIdx === i ? j : i;
               const idToRemove = keepIdx === i ? itemJ.id : itemI.id;
-              toRemove.add(idToRemove);
+              groupToRemove.add(idToRemove);
+              allToRemove.add(idToRemove);
 
               // If the outer element 'i' is removed, break the inner loop early.
               if (removeIdx === i) break;
             }
           }
         }
+      }
 
-        if (toRemove.size > 0) {
-          const ids = Array.from(toRemove);
-          const BATCH_DELETE_CHUNK_SIZE = 900;
+      // ⚡ Bolt Optimization: Batch database deletes outside the project loop
+      // to resolve sequential per-project query latency bottleneck where many small IN queries were generated
+      // instead of a few chunked queries when removing duplicates across multiple projects.
+      if (allToRemove.size > 0) {
+        const ids = Array.from(allToRemove);
+        const BATCH_DELETE_CHUNK_SIZE = 900;
+        for (let k = 0; k < ids.length; k += BATCH_DELETE_CHUNK_SIZE) {
           try {
-            for (let k = 0; k < ids.length; k += BATCH_DELETE_CHUNK_SIZE) {
-              const chunk = ids.slice(k, k + BATCH_DELETE_CHUNK_SIZE);
-              const { clause, binds } = buildInClause(chunk, { tenantId });
-              const result = await db.execute(
-                `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
-                binds as Record<string, unknown>
-              );
-              merged += result.rowsAffected || 0;
-            }
-          } catch {
-            // skip delete errors
+            const chunk = ids.slice(k, k + BATCH_DELETE_CHUNK_SIZE);
+            const { clause, binds } = buildInClause(chunk, { tenantId });
+            const result = await db.execute(
+              `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
+              binds as Record<string, unknown>
+            );
+            merged += result.rowsAffected || 0;
+          } catch (err) {
+            logger.warn(`[Consolidation] Dedup: Failed to delete chunk`, { chunkStart: k, error: err instanceof Error ? err.message : String(err) });
           }
         }
       }
