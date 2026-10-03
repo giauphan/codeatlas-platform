@@ -297,7 +297,7 @@ export class ConsolidationEngine {
             );
             merged += result.rowsAffected || 0;
           } catch (err) {
-            logger.warn(`[Consolidation] Dedup: Failed to delete chunk`, { chunkStart: k, err });
+            logger.warn(`[Consolidation] Dedup: Failed to delete chunk`, { chunkStart: k, error: err instanceof Error ? err.message : String(err) });
           }
         }
       }
