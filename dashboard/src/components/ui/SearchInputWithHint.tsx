@@ -9,6 +9,8 @@ interface BaseSearchInputWithHintProps {
   onSearch: () => void;
   placeholder?: string;
   ariaLabel?: string;
+  inputStyle?: React.CSSProperties;
+  wrapperStyle?: React.CSSProperties;
 }
 
 interface ClearableSearchProps extends BaseSearchInputWithHintProps {
@@ -47,7 +49,9 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   onClear,
   placeholder = "Search...",
   ariaLabel = "Search input",
-  hasClearButton = false
+  hasClearButton = false,
+  inputStyle,
+  wrapperStyle,
 }) => {
   if (hasClearButton && !onClear) {
     const isDev = typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development';
@@ -72,7 +76,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   const hintId = React.useId ? React.useId() : React.useMemo(() => `search-kbd-hint-${Math.random().toString(36).slice(2, 9)}`, []);
 
   return (
-    <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
+    <div style={{ flex: 1, minWidth: '280px', position: 'relative', ...wrapperStyle }}>
       <Search size={18} className="search-input-icon" aria-hidden="true" focusable="false" />
       <input
         type="text"
@@ -80,7 +84,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
         placeholder={placeholder}
         aria-label={ariaLabel}
         aria-describedby={hintId}
-        style={{ paddingRight: styles.inputPaddingRight }}
+        style={{ ...inputStyle, paddingRight: styles.inputPaddingRight }}
         value={value}
         onChange={onChange}
         onKeyDown={(e) => {
