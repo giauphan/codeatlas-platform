@@ -338,6 +338,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
     return (
       <div key={node.path} style={{ marginLeft: depth > 0 ? `${depth * 12}px` : '0px' }}>
         <button
+          type="button"
           onClick={() => setSelectedPath(node.path)}
           className={FOCUS_RING_CLASS}
           style={{
@@ -554,6 +555,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
           )}
 
           <button
+            type="button"
             onClick={() => setShowGenModal(true)}
             className={`btn-neon-cyan ${FOCUS_RING_CLASS}`}
             style={{
@@ -605,6 +607,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
               Pages Tree
             </span>
             <button
+              type="button"
               aria-label="Refresh pages tree"
               onClick={() => fetchTree(currentProject)}
               disabled={loadingTree}
@@ -830,6 +833,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                   </select>
                   {activeProfileId && (
                     <button
+                      type="button"
                       onClick={() => {
                         setProfiles(prev => prev.filter(x => x.id !== activeProfileId));
                         setActiveProfileId('');
