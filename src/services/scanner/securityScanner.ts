@@ -11,6 +11,58 @@ export interface SecurityFinding {
   project?: string;
 }
 
+
+const UNSAFE_FUNCS = new Set([
+  "eval",
+  "exec",
+  "system",
+  "child_process",
+  "spawn",
+  "shell_exec",
+]);
+
+const DB_KEYWORDS = [
+  "db",
+  "database",
+  "repository",
+  "model",
+  "oracle",
+  "postgres",
+  "mysql",
+  "sqlite",
+  "sql",
+  "connection",
+  "pool",
+  "transaction",
+];
+
+const NON_SECRET_SUBSTRINGS = new Set([
+  "expired",
+  "count",
+  "length",
+  "type",
+  "url",
+  "path",
+  "status",
+  "valid",
+  "error",
+  "failed",
+  "success",
+  "check",
+  "verify",
+  "duration",
+  "limit",
+  "payload",
+  "header",
+  "name",
+  "id",
+  "store",
+  "storage",
+  "service",
+  "provider",
+  "client",
+]);
+
 export class SecurityScanner {
   /**
    * Scan an analyzed project for security vulnerabilities
@@ -30,28 +82,7 @@ export class SecurityScanner {
       linkMap.get(link.target)!.add(link.source);
     });
 
-    const unsafeFuncs = [
-      "eval",
-      "exec",
-      "system",
-      "child_process",
-      "spawn",
-      "shell_exec",
-    ];
-    const dbKeywords = [
-      "db",
-      "database",
-      "repository",
-      "model",
-      "oracle",
-      "postgres",
-      "mysql",
-      "sqlite",
-      "sql",
-      "connection",
-      "pool",
-      "transaction",
-    ];
+
 
     // Helper to extract words from a camelCase, snake_case, or kebab-case string
     const extractWords = (text: string, includeSlash: boolean = false): string[] => {
@@ -80,35 +111,8 @@ export class SecurityScanner {
     // Helper to detect if a variable name represents a real security secret/token/password
     const isSecretVariable = (label: string): boolean => {
       const parts = extractWords(label);
-      const nonSecretSubstrings = [
-        "expired",
-        "count",
-        "length",
-        "type",
-        "url",
-        "path",
-        "status",
-        "valid",
-        "error",
-        "failed",
-        "success",
-        "check",
-        "verify",
-        "duration",
-        "limit",
-        "payload",
-        "header",
-        "name",
-        "id",
-        "store",
-        "storage",
-        "service",
-        "provider",
-        "client",
-      ];
-
       // If the label contains any non-secret metadata word, skip it to prevent false positives
-      if (parts.some((part) => nonSecretSubstrings.includes(part))) {
+      if (parts.some((part) => NON_SECRET_SUBSTRINGS.has(part))) {
         return false;
       }
 
@@ -158,13 +162,13 @@ export class SecurityScanner {
     const isSqlRelated = (node: GraphNode): boolean => {
       // 1. Check file path
       const fp = (node.filePath || "").toLowerCase();
-      if (dbKeywords.some((k) => fp.includes(k))) {
+      if (DB_KEYWORDS.some((k) => fp.includes(k))) {
         return true;
       }
 
       // 2. Check node label itself
       const labelLower = node.label.toLowerCase();
-      if (dbKeywords.some((k) => labelLower.includes(k))) {
+      if (DB_KEYWORDS.some((k) => labelLower.includes(k))) {
         return true;
       }
 
@@ -177,7 +181,7 @@ export class SecurityScanner {
           const otherLabel = otherNode.label.toLowerCase();
           const otherFp = (otherNode.filePath || "").toLowerCase();
           if (
-            dbKeywords.some(
+            DB_KEYWORDS.some(
               (k) => otherLabel.includes(k) || otherFp.includes(k),
             )
           ) {
@@ -212,7 +216,7 @@ export class SecurityScanner {
 
       // 2. Detect Unsafe Functions (eval, exec, etc.)
       else if (node.type === "function") {
-        if (unsafeFuncs.includes(labelLower)) {
+        if (UNSAFE_FUNCS.has(labelLower)) {
           findings.push({
             severity: "CRITICAL",
             type: "UNSAFE_FUNCTION",
