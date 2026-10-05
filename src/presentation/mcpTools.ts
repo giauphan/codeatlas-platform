@@ -162,8 +162,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       // to reduce iteration overhead and garbage collection.
       nodes = nodes.filter((n) => {
         if (type && type !== "all" && n.type !== type) return false;
-        const fp = n.filePath || "";
-        return !fp.includes("node_modules") && !fp.includes("venv") && !fp.includes(".venv") && !fp.includes("site-packages");
+        if (n.filePath && (
+          n.filePath.includes("/node_modules/") ||
+          n.filePath.includes("/venv/") ||
+          n.filePath.includes("/.venv/") ||
+          n.filePath.includes("/site-packages/")
+        )) return false;
+        return true;
       });
 
       const maxResults = limit || 500;
@@ -307,12 +312,11 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const matches = nodes.filter((n) => {
         if (type && type !== "all" && n.type !== type) return false;
         if (n.id.startsWith('external:')) return false;
-        const fp = n.filePath || "";
-        if (fp && (
-          fp.includes('/venv/') ||
-          fp.includes('/.venv/') ||
-          fp.includes('/node_modules/') ||
-          fp.includes('/site-packages/')
+        if (n.filePath && (
+          n.filePath.includes('/venv/') ||
+          n.filePath.includes('/.venv/') ||
+          n.filePath.includes('/node_modules/') ||
+          n.filePath.includes('/site-packages/')
         )) return false;
         return n.label.toLowerCase().includes(q);
       });
