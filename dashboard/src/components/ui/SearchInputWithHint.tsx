@@ -98,6 +98,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
         <button
           type="button"
           aria-label="Clear search"
+          title="Clear search"
           onClick={onClear}
           className={`clear-search-btn ${FOCUS_RING_CLASS}`}
           style={{ top: '0.85rem' }}

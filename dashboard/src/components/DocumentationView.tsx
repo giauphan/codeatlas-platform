@@ -33,6 +33,7 @@ export const DocumentationView: React.FC = () => {
   const renderCopyButton = (text: string, id: string) => (
     <button
       aria-label="Copy code block"
+      title="Copy code block"
       onClick={() => handleCopy(text, id)}
       style={{
         position: 'absolute',
