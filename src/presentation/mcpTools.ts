@@ -163,10 +163,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       nodes = nodes.filter((n) => {
         if (type && type !== "all" && n.type !== type) return false;
         if (n.filePath && (
-          n.filePath.includes("/node_modules/") ||
-          n.filePath.includes("/venv/") ||
-          n.filePath.includes("/.venv/") ||
-          n.filePath.includes("/site-packages/")
+          n.filePath.includes("node_modules/") ||
+          n.filePath.includes("venv/") ||
+          n.filePath.includes(".venv/") ||
+          n.filePath.includes("site-packages/")
         )) return false;
         return true;
       });
@@ -313,10 +313,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         if (type && type !== "all" && n.type !== type) return false;
         if (n.id.startsWith('external:')) return false;
         if (n.filePath && (
-          n.filePath.includes('/venv/') ||
-          n.filePath.includes('/.venv/') ||
-          n.filePath.includes('/node_modules/') ||
-          n.filePath.includes('/site-packages/')
+          n.filePath.includes('venv/') ||
+          n.filePath.includes('.venv/') ||
+          n.filePath.includes('node_modules/') ||
+          n.filePath.includes('site-packages/')
         )) return false;
         return n.label.toLowerCase().includes(q);
       });
