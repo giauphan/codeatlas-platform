@@ -8,12 +8,12 @@ allowBuilds:
   protobufjs: true
 overrides:
   websocket-driver: "^0.7.5"
-  undici: "^7.25.0"
-  brace-expansion: "^2.1.4"
-  ip-address: "^10.3.1"
+  undici: "^7.29.1"
+  brace-expansion: "^2.1.7"
+  ip-address: "^10.7.1"
   protobufjs: "^7.6.5"
   form-data: "^2.5.6"
-  "@grpc/grpc-js": "^1.14.4"
+  "@grpc/grpc-js": "^1.14.5"
   uuid: "11.1.1"
   qs: "^6.16.0"
   "@babel/core": "^7.29.6"
@@ -22,5 +22,5 @@ overrides:
   # vulnerability in @modelcontextprotocol/sdk -> ajv subdependency (CVE-2025-27758).
   # Note: This is a temporary workaround until the upstream dependency
   # (@modelcontextprotocol/sdk) is updated to use a patched version of ajv.
-  fast-uri: "^3.1.6"
+  fast-uri: "^3.1.8"
   hono: "^4.13.5"

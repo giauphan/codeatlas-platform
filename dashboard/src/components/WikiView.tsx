@@ -606,6 +606,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
             </span>
             <button
               aria-label="Refresh pages tree"
+              title="Refresh pages tree"
               onClick={() => fetchTree(currentProject)}
               disabled={loadingTree}
               style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
@@ -835,6 +836,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
                         setActiveProfileId('');
                       }}
                       style={{ background: 'rgba(255, 75, 75, 0.1)', color: '#FFB4AB', border: '1px solid rgba(255, 75, 75, 0.3)', borderRadius: '6px', padding: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      aria-label="Delete selected preset"
                       title="Delete selected preset"
                     >
                       <Trash2 size={16} />
