@@ -23,9 +23,6 @@ importers:
 
   .:
     dependencies:
-      '@grpc/grpc-js':
-        specifier: ^1.14.4
-        version: 1.14.5
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.1
         version: 1.32.0(zod@4.6.5)
