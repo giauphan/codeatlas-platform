@@ -157,12 +157,11 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       let nodes = loaded.analysis.graph.nodes;
-      if (type && type !== "all") {
-        nodes = nodes.filter((n) => n.type === type);
-      }
 
-      // Filter out venv/node_modules entities
+      // ⚡ Bolt Optimization: Combine multiple O(N) array filtering passes into a single pass
+      // to reduce iteration overhead and garbage collection.
       nodes = nodes.filter((n) => {
+        if (type && type !== "all" && n.type !== type) return false;
         const fp = n.filePath || "";
         return !fp.includes("node_modules") && !fp.includes("venv") && !fp.includes(".venv") && !fp.includes("site-packages");
       });
@@ -301,24 +300,22 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       let nodes = loaded.analysis.graph.nodes;
-      if (type && type !== "all") {
-        nodes = nodes.filter((n) => n.type === type);
-      }
-
-      // Filter out venv/node_modules entities for cleaner results
-      nodes = nodes.filter((n) => {
-        if (n.id.startsWith('external:')) return false;
-        if (n.filePath && (
-          n.filePath.includes('/venv/') ||
-          n.filePath.includes('/.venv/') ||
-          n.filePath.includes('/node_modules/') ||
-          n.filePath.includes('/site-packages/')
-        )) return false;
-        return true;
-      });
 
       const q = query.toLowerCase();
-      const matches = nodes.filter((n) => n.label.toLowerCase().includes(q));
+      // ⚡ Bolt Optimization: Combine multiple O(N) array filtering passes into a single pass
+      // to reduce iteration overhead and garbage collection.
+      const matches = nodes.filter((n) => {
+        if (type && type !== "all" && n.type !== type) return false;
+        if (n.id.startsWith('external:')) return false;
+        const fp = n.filePath || "";
+        if (fp && (
+          fp.includes('/venv/') ||
+          fp.includes('/.venv/') ||
+          fp.includes('/node_modules/') ||
+          fp.includes('/site-packages/')
+        )) return false;
+        return n.label.toLowerCase().includes(q);
+      });
 
       // For each match, find its relationships
       const links = loaded.analysis.graph.links;
