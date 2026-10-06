@@ -214,25 +214,30 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
       let links = loaded.analysis.graph.links;
 
-      if (relationship && relationship !== "all") {
-        links = links.filter((l) => l.type === relationship);
-      }
-      if (source) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.source) || l.source;
-          return label.toLowerCase().includes(source.toLowerCase());
-        });
-      }
-      if (target) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.target) || l.target;
-          return label.toLowerCase().includes(target.toLowerCase());
-        });
+      // ⚡ Bolt Optimization: Pre-calculate matching node sets in a single O(V) pass
+      // to avoid O(V*E) string allocations and redundant map lookups during link filtering.
+      const sourceLower = source?.toLowerCase();
+      const targetLower = target?.toLowerCase();
+      const sourceMatches = new Set<string>();
+      const targetMatches = new Set<string>();
+
+      if (sourceLower || targetLower) {
+        for (const node of loaded.analysis.graph.nodes) {
+          const labelLower = (node.label || node.id).toLowerCase();
+          if (sourceLower && labelLower.includes(sourceLower)) sourceMatches.add(node.id);
+          if (targetLower && labelLower.includes(targetLower)) targetMatches.add(node.id);
+        }
       }
 
-      // Deduplicate links
+      // Deduplicate and filter links in a single pass to avoid O(N * passes)
       const linkDedup = new Set<string>();
       links = links.filter((l) => {
+        if (relationship && relationship !== "all" && l.type !== relationship) return false;
+
+        // Use pre-calculated matches or fallback to raw ID match if node wasn't in graph
+        if (sourceLower && !sourceMatches.has(l.source) && !l.source.toLowerCase().includes(sourceLower)) return false;
+        if (targetLower && !targetMatches.has(l.target) && !l.target.toLowerCase().includes(targetLower)) return false;
+
         const key = l.source + '|' + l.target + '|' + l.type;
         if (linkDedup.has(key)) return false;
         linkDedup.add(key);
