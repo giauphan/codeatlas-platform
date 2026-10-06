@@ -460,8 +460,9 @@ describe("GenomeService", () => {
   // ── retireGenes ────────────────────────────────────────────────────
   describe("retireGenes()", () => {
     test("retires genes and returns count", async () => {
-      mockConnection.executeMany.mock.mockImplementation(async () => ({
+      mockConnection.execute.mock.mockImplementation(async () => ({
         rowsAffected: 2,
+        rows: []
       }));
 
       const count = await GenomeService.retireGenes(["gene-1", "gene-2"]);
