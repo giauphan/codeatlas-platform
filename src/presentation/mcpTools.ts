@@ -214,25 +214,47 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
       let links = loaded.analysis.graph.links;
 
-      if (relationship && relationship !== "all") {
-        links = links.filter((l) => l.type === relationship);
-      }
-      if (source) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.source) || l.source;
-          return label.toLowerCase().includes(source.toLowerCase());
-        });
-      }
-      if (target) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.target) || l.target;
-          return label.toLowerCase().includes(target.toLowerCase());
-        });
+      // ⚡ Bolt Optimization: Pre-calculate matching node IDs for source/target
+      // to avoid repetitive string manipulations and Map lookups inside the links loop.
+      const matchingSourceIds = new Set<string>();
+      const matchingTargetIds = new Set<string>();
+      const srcQuery = source ? source.toLowerCase() : null;
+      const tgtQuery = target ? target.toLowerCase() : null;
+
+      if (srcQuery || tgtQuery) {
+        for (const [id, label] of nodeMap.entries()) {
+          const lowerLabel = label.toLowerCase();
+          if (srcQuery && lowerLabel.includes(srcQuery)) {
+            matchingSourceIds.add(id);
+          }
+          if (tgtQuery && lowerLabel.includes(tgtQuery)) {
+            matchingTargetIds.add(id);
+          }
+        }
       }
 
-      // Deduplicate links
+      // ⚡ Bolt Optimization: Combine multiple sequential filter operations
+      // into a single O(E) pass to reduce iteration overhead and garbage collection.
       const linkDedup = new Set<string>();
       links = links.filter((l) => {
+        if (relationship && relationship !== "all" && l.type !== relationship) {
+          return false;
+        }
+
+        if (srcQuery) {
+          // Fallback to l.source check if node isn't in nodeMap
+          if (!matchingSourceIds.has(l.source) && !l.source.toLowerCase().includes(srcQuery)) {
+            return false;
+          }
+        }
+
+        if (tgtQuery) {
+          // Fallback to l.target check if node isn't in nodeMap
+          if (!matchingTargetIds.has(l.target) && !l.target.toLowerCase().includes(tgtQuery)) {
+            return false;
+          }
+        }
+
         const key = l.source + '|' + l.target + '|' + l.type;
         if (linkDedup.has(key)) return false;
         linkDedup.add(key);
