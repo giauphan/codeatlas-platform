@@ -48,6 +48,9 @@
   },
   "overrides": {
     "uuid": "11.1.1",
+    "proxy-addr": ">=2.0.8",
+    "brace-expansion": ">=2.1.6",
+    "@grpc/grpc-js": ">=1.14.5",
     "fast-uri": ">=3.1.6"
   },
   "devDependencies": {
@@ -65,16 +68,16 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@types/compression": "^1.8.1",
-    "@typescript-eslint/typescript-estree": "^8.0.0",
+    "@typescript-eslint/typescript-estree": "^8.71.1",
     "chokidar": "^5.0.0",
-    "compression": "^1.8.1",
+    "compression": "^1.8.2",
     "cors": "2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
     "express-rate-limit": "^8.6.0",
-    "firebase-admin": "^14.3.0",
+    "firebase-admin": "^14.5.0",
     "glob": "^10.3.10",
     "google-auth-library": "^11.0.1",
     "helmet": "^8.3.0",
