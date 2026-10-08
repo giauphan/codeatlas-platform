@@ -13,7 +13,7 @@
   "dependencies": {
     "3d-force-graph": "^1.80.0",
     "clsx": "^2.1.1",
-    "firebase": "^12.18.0",
+    "firebase": "^13.0.0",
     "force-graph": "^1.51.4",
     "framer-motion": "^13.2.0",
     "idb": "^8.0.3",
@@ -35,8 +35,8 @@
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/ui": "5.0.0",
     "jsdom": "^29.1.1",
-    "undici": "^8.10.2",
     "typescript": "^7.0.2",
+    "undici": "^8.10.2",
     "vite": "^8.2.1",
     "vitest": "^5.0.0"
   }
