@@ -24,8 +24,8 @@ importers:
   .:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: ^1.0.1
-        version: 1.30.0(zod@4.6.2)
+        specifier: ^1.32.1
+        version: 1.32.1(zod@4.6.2)
       '@types/compression':
         specifier: ^1.8.1
         version: 1.8.1
@@ -36,8 +36,8 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0
       compression:
-        specifier: ^1.8.1
-        version: 1.8.1
+        specifier: ^1.8.2
+        version: 1.8.2
       cors:
         specifier: 2.8.5
         version: 2.8.5
@@ -45,14 +45,14 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
       express:
-        specifier: ^4.19.2
-        version: 4.22.2
+        specifier: ^4.22.3
+        version: 4.22.3
       express-rate-limit:
         specifier: ^8.6.0
-        version: 8.7.0(express@4.22.2)
+        version: 8.7.0(express@4.22.3)
       firebase-admin:
-        specifier: ^14.3.0
-        version: 14.4.0(@firebase/app-compat@0.5.17)(@firebase/app@0.16.1)
+        specifier: ^14.5.0
+        version: 14.5.0(@firebase/app-compat@0.5.17)(@firebase/app@0.16.1)
       glob:
         specifier: ^10.3.10
         version: 10.5.0
@@ -693,8 +693,8 @@ packages:
     resolution: {integrity: sha512-iFDlOGBzmzTelslzcf0yTpoqloyfTUi448PxJXvjtbvGqtc2ftT8HUSl5+sKQPRz70y64ha5FqojDhABP103EA==}
     engines: {node: '>=22'}
 
-  '@grpc/grpc-js@1.14.4':
-    resolution: {integrity: sha512-k9Dj3DV/itK9D06Y8f190Qgop7/Ui+D0njFV3LHMPwPT75DpXLQohE9Wmz0QElrJnzsjB7KPWiKJbOl7IPDArQ==}
+  '@grpc/grpc-js@1.14.6':
+    resolution: {integrity: sha512-SgC/B3/VZ8lTyOZ4Cwk6f1skWhmkNAaVfiX90qd5u1rRXGKk1//8FTUEN9GvOUq7rfWIqAYkA3CoyumYVpOS6g==}
     engines: {node: '>=12.10.0'}
 
   '@grpc/proto-loader@0.7.15':
@@ -730,8 +730,8 @@ packages:
   '@js-sdsl/ordered-map@4.4.2':
     resolution: {integrity: sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw==}
 
-  '@modelcontextprotocol/sdk@1.30.0':
-    resolution: {integrity: sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==}
+  '@modelcontextprotocol/sdk@1.32.1':
+    resolution: {integrity: sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
@@ -1290,8 +1290,8 @@ packages:
     resolution: {integrity: sha512-p5tAzS57i5MV9fZFDj9LeIiTZEufbSe2eDozP+ElheSUq1m74CRq1jI4mYNDdVs9vQztXFLuk/Gd6BWTdwRJ5g==}
     engines: {node: '>= 0.8', npm: 1.2.8000 || >= 1.4.16}
 
-  brace-expansion@2.1.4:
-    resolution: {integrity: sha512-hGfVzPxthbf3+2yjg/RBs60cB0FhqBS/zvdV/4wn4/BmN0bNMMHPc4V/BbFieqf1TKAGGAHnY4eSjajCl0f2Xg==}
+  brace-expansion@2.1.7:
+    resolution: {integrity: sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==}
 
   buffer-equal-constant-time@1.0.1:
     resolution: {integrity: sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA==}
@@ -1345,16 +1345,16 @@ packages:
     resolution: {integrity: sha512-AF3r7P5dWxL8MxyITRMlORQNaOA2IkAFaTr4k7BUumjPtRpGDTZpl0Pb1XCO6JeDCBdp126Cgs9sMxqSjgYyRg==}
     engines: {node: '>= 0.6'}
 
-  compression@1.8.1:
-    resolution: {integrity: sha512-9mAqGPHLakhCLeNyxPkK4xVo746zQ/czLH1Ky+vkitMnWfWZps8r0qXuwhwizagCRttsL4lfG4pIOvaWLpAP0w==}
+  compression@1.8.2:
+    resolution: {integrity: sha512-o8vI5RE5A6EVVOd9o41jKp41aJom+QTEO/Bx8MYNjexMo/Bv2WOjUfZr+aL0WnYSgymUy6zeguqLTsIhV0gMvQ==}
     engines: {node: '>= 0.8.0'}
 
   content-disposition@0.5.4:
     resolution: {integrity: sha512-FveZTNuGw04cxlAiWbzi6zTAL/lhehaWbTtgluJh4/E95DqMwTmha3KZN1aAWA8cFIhHzMZUvLevkw5Rqk+tSQ==}
     engines: {node: '>= 0.6'}
 
-  content-disposition@1.1.0:
-    resolution: {integrity: sha512-5jRCH9Z/+DRP7rkvY83B+yGIGX96OYdJmzngqnw2SBSxqCFPd0w2km3s5iawpGX8krnwSGmF0FW5Nhr0Hfai3g==}
+  content-disposition@2.0.1:
+    resolution: {integrity: sha512-e+H0ZXHSWYrENhQzw1LPuP4oF5MzVKmDU6d3hxlvaPEYLLg62MxtQNPRx4SYSuYJSBUgnQIG4HIN2tEtNv7Dog==}
     engines: {node: '>=18'}
 
   content-type@1.0.5:
@@ -1636,12 +1636,12 @@ packages:
     peerDependencies:
       express: '>= 4.11'
 
-  express@4.22.2:
-    resolution: {integrity: sha512-IuL+Elrou2ZvCFHs18/CIzy2Nzvo25nZ1/D2eIZlz7c+QUayAcYoiM2BthCjs+EBHVpjYjcuLDAiCWgeIX3X1Q==}
+  express@4.22.3:
+    resolution: {integrity: sha512-Bdcs4+3qlpVlx2NRn6fgX2Ue2/gGRaPeawebgclM0ERSCqDpA+owF1fdPwjJUTAJWMTuAaxjDf+hzb0/4eKvvw==}
     engines: {node: '>= 0.10.0'}
 
-  express@5.2.1:
-    resolution: {integrity: sha512-hIS4idWWai69NezIdRt2xFVofaF4j+6INOpJlVOLDO8zXGpUVEVzIYk12UUi2JzjEzWL3IOAxcTubgz9Po0yXw==}
+  express@5.3.0:
+    resolution: {integrity: sha512-qCqy1xSoaugxOD4IVHb1ZWdkvCF2W3aE2okKouWj8VwJ+ztskSiXoBnCSJqfKT+cVPJhuJqe9YLbY425+Zh00g==}
     engines: {node: '>= 18'}
 
   extend@3.0.2:
@@ -1691,8 +1691,8 @@ packages:
     resolution: {integrity: sha512-S8KoZgRZN+a5rNwqTxlZZePjT/4cnm0ROV70LedRHZ0p8u9fRID0hJUZQpkKLzro8LfmC8sx23bY6tVNxv8pQA==}
     engines: {node: '>= 18.0.0'}
 
-  firebase-admin@14.4.0:
-    resolution: {integrity: sha512-yEx+GCsHvjH2svh4j1ATW57o8tlfjRQ0klTxvn7XCKUPXWiUQaRTHSzPSqhXtsLYSe4IwTqR7qqrh2sA45A0HA==}
+  firebase-admin@14.5.0:
+    resolution: {integrity: sha512-DElmgmaH9aPXu2dWXGQiDoan33UfTnbfAAKaue4fwEZxmpdaNrTk5DmuFn+vVDki2KZ6TiaC0IHRWcEzcDxB3Q==}
     engines: {node: '>=22'}
 
   firebase@12.18.0:
@@ -1775,16 +1775,16 @@ packages:
     resolution: {integrity: sha512-a4tiq7E0/5fTjxPAaH4jpjkSv/uCaU2p5KC6HVGrvl0cDjA8iBZv4vv1gyzlmK0ZUKqwpOyQMKzZQe3lTit77A==}
     engines: {node: '>=14'}
 
-  gcp-metadata@8.1.2:
-    resolution: {integrity: sha512-zV/5HKTfCeKWnxG0Dmrw51hEWFGfcF2xiXqcA3+J90WDuP0SvoiSO5ORvcBsifmx/FoIjgQN3oNOGaQ5PhLFkg==}
-    engines: {node: '>=18'}
-
   gcp-metadata@8.1.4:
     resolution: {integrity: sha512-iJ9KMsiu+xKtNRX0PmGLSaIU3bUBAyzWTyqKemKPzNPsmmsBCQYmlNg+brEbES7IHSXtdVwzBPzx1vz3FAaipw==}
     engines: {node: '>=18'}
 
   gcp-metadata@9.0.3:
     resolution: {integrity: sha512-2YYnIlHaKBGT2IPg3G2M57hia9Galz15zsEOvw9T3oRf0lSn6KN6VcHQLqby7x8ksYKnjXvp3rp2KJyLCN6zfQ==}
+    engines: {node: '>=22'}
+
+  gcp-metadata@9.1.0:
+    resolution: {integrity: sha512-hV4Abmis9XY9ch/HK8t4oGy/Ho4WNzd6QAj/7PHKF5Ae25LUDviZET0s7DD3i+mG1QpGCqnDji/R/jBiuux4jw==}
     engines: {node: '>=22'}
 
   get-caller-file@2.0.5:
@@ -1811,12 +1811,12 @@ packages:
     resolution: {integrity: sha512-7ABviyMOlX5hIVD60YOfHw4/CxOfBhyduaYB+wbFWCWoni4N7SLcV46hrVRktuBbZjFC9ONyqamZITN7q3n32w==}
     engines: {node: '>=18'}
 
-  google-auth-library@10.9.1:
-    resolution: {integrity: sha512-i1ydyHrqcIxXkWh/uBmVkzCvIuq5yiK2ATndIe5XxKholrG/MTYP9xGYka4sQhrbIAgGjL2B6NOE7rFaiF3fXw==}
-    engines: {node: '>=18'}
-
   google-auth-library@11.0.2:
     resolution: {integrity: sha512-vzpgPutxrghPsnjrjpzLX2bdv8IOL719Rh0oEjGnQu8YCIbnbMuTTQ5zU9LcKvLdOPgCxBwppbvnhgW90Qna5Q==}
+    engines: {node: '>=22'}
+
+  google-auth-library@11.2.0:
+    resolution: {integrity: sha512-R9/Dwc3swSur04RnizQ6EBUmmcno2cC5cAKtrG/C+pY+W7c5l6rSnFWgMkR7NSYj1n6XWmb/KhcjxGslWm4yIA==}
     engines: {node: '>=22'}
 
   google-auth-library@9.15.1:
@@ -1838,10 +1838,6 @@ packages:
   google-logging-utils@1.1.3:
     resolution: {integrity: sha512-eAmLkjDjAFCVXg7A1unxHsLf961m6y17QFqXqAXGj/gVkKFrEICfStRfwUlGNfeCEjNRa32JEWOUTlYXPyyKvA==}
     engines: {node: '>=14'}
-
-  google-logging-utils@1.2.0:
-    resolution: {integrity: sha512-WE9av4wKDZgRjBwgVUabocx8T6/7o3Ca1Fat46FXDhXVAFibzNadedcOXrdgd1Kzmk8tsk/9ZH89Wyf/SqeZ3A==}
-    engines: {node: '>=18'}
 
   google-logging-utils@2.0.1:
     resolution: {integrity: sha512-HMhaQghlOTvbcb3c4T5jmmOMtG3JUF1iOQMezaJXL86CDS+Tm2vHd0IeLFRAx3+ewd+bo9E1HFHoy17X5aJa9A==}
@@ -2478,8 +2474,8 @@ packages:
     resolution: {integrity: sha512-dYDWdjSl5RNb7SgPxGQcRU+GtvP7s2fpkrY0r432PcOIaZ0/rBcxEZnQN67iJhFuQiVw754JDoPruPCNdGsbjg==}
     engines: {node: '>=12.0.0'}
 
-  proxy-addr@2.0.7:
-    resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
+  proxy-addr@2.0.8:
+    resolution: {integrity: sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==}
     engines: {node: '>= 0.10'}
 
   pump@3.0.4:
@@ -3385,7 +3381,7 @@ snapshots:
       '@firebase/logger': 0.5.2
       '@firebase/util': 1.15.3
       '@firebase/webchannel-wrapper': 1.0.7
-      '@grpc/grpc-js': 1.14.4
+      '@grpc/grpc-js': 1.14.6
       '@grpc/proto-loader': 0.7.15
       re2js: 2.8.6
       tslib: 2.8.1
@@ -3587,7 +3583,7 @@ snapshots:
       - supports-color
     optional: true
 
-  '@grpc/grpc-js@1.14.4':
+  '@grpc/grpc-js@1.14.6':
     dependencies:
       '@grpc/proto-loader': 0.8.1
       '@js-sdsl/ordered-map': 4.4.2
@@ -3630,7 +3626,7 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@modelcontextprotocol/sdk@1.30.0(zod@4.6.2)':
+  '@modelcontextprotocol/sdk@1.32.1(zod@4.6.2)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.7)
       ajv: 8.20.0
@@ -3640,8 +3636,8 @@ snapshots:
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
-      express: 5.2.1
-      express-rate-limit: 8.7.0(express@5.2.1)
+      express: 5.3.0
+      express-rate-limit: 8.7.0(express@5.3.0)
       hono: 4.13.7
       jose: 6.2.12
       json-schema-typed: 8.0.2
@@ -4116,7 +4112,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  brace-expansion@2.1.4:
+  brace-expansion@2.1.7:
     dependencies:
       balanced-match: 1.0.2
 
@@ -4169,11 +4165,12 @@ snapshots:
     dependencies:
       mime-db: 1.54.0
 
-  compression@1.8.1:
+  compression@1.8.2:
     dependencies:
       bytes: 3.1.2
       compressible: 2.0.18
       debug: 2.6.9
+      destroy: 1.2.0
       negotiator: 0.6.4
       on-headers: 1.1.0
       safe-buffer: 5.2.1
@@ -4185,7 +4182,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.2.1
 
-  content-disposition@1.1.0: {}
+  content-disposition@2.0.1: {}
 
   content-type@1.0.5: {}
 
@@ -4437,23 +4434,23 @@ snapshots:
 
   expect-type@1.4.0: {}
 
-  express-rate-limit@8.7.0(express@4.22.2):
+  express-rate-limit@8.7.0(express@4.22.3):
     dependencies:
       debug: 4.4.3
-      express: 4.22.2
+      express: 4.22.3
       ip-address: 10.7.0
     transitivePeerDependencies:
       - supports-color
 
-  express-rate-limit@8.7.0(express@5.2.1):
+  express-rate-limit@8.7.0(express@5.3.0):
     dependencies:
       debug: 4.4.3
-      express: 5.2.1
+      express: 5.3.0
       ip-address: 10.7.0
     transitivePeerDependencies:
       - supports-color
 
-  express@4.22.2:
+  express@4.22.3:
     dependencies:
       accepts: 1.3.8
       array-flatten: 1.1.1
@@ -4475,7 +4472,7 @@ snapshots:
       on-finished: 2.4.1
       parseurl: 1.3.3
       path-to-regexp: 0.1.13
-      proxy-addr: 2.0.7
+      proxy-addr: 2.0.8
       qs: 6.16.0
       range-parser: 1.2.1
       safe-buffer: 5.2.1
@@ -4489,12 +4486,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  express@5.2.1:
+  express@5.3.0:
     dependencies:
       accepts: 2.0.0
       body-parser: 1.20.6
-      content-disposition: 1.1.0
-      content-type: 1.0.5
+      content-disposition: 2.0.1
+      content-type: 2.1.0
       cookie: 0.7.2
       cookie-signature: 1.2.2
       debug: 4.4.3
@@ -4510,7 +4507,7 @@ snapshots:
       on-finished: 2.4.1
       once: 1.4.0
       parseurl: 1.3.3
-      proxy-addr: 2.0.7
+      proxy-addr: 2.0.8
       qs: 6.16.0
       range-parser: 1.3.0
       router: 2.2.0
@@ -4584,13 +4581,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  firebase-admin@14.4.0(@firebase/app-compat@0.5.17)(@firebase/app@0.16.1):
+  firebase-admin@14.5.0(@firebase/app-compat@0.5.17)(@firebase/app@0.16.1):
     dependencies:
       '@fastify/busboy': 3.2.2
       '@firebase/database-compat': 2.1.7(@firebase/app-compat@0.5.17)(@firebase/app@0.16.1)
       '@firebase/database-types': 1.0.22
       fast-deep-equal: 3.1.3
-      google-auth-library: 10.9.1
+      google-auth-library: 11.2.0
       jsonwebtoken: 9.0.3
       jwks-rsa: 4.1.0
     optionalDependencies:
@@ -4742,14 +4739,6 @@ snapshots:
       - supports-color
     optional: true
 
-  gcp-metadata@8.1.2:
-    dependencies:
-      gaxios: 7.3.1
-      google-logging-utils: 1.2.0
-      json-bigint: 1.0.0
-    transitivePeerDependencies:
-      - supports-color
-
   gcp-metadata@8.1.4:
     dependencies:
       gaxios: 7.1.3
@@ -4760,6 +4749,14 @@ snapshots:
     optional: true
 
   gcp-metadata@9.0.3:
+    dependencies:
+      gaxios: 7.3.1
+      google-logging-utils: 2.0.1
+      json-bigint: 1.0.0
+    transitivePeerDependencies:
+      - supports-color
+
+  gcp-metadata@9.1.0:
     dependencies:
       gaxios: 7.3.1
       google-logging-utils: 2.0.1
@@ -4804,23 +4801,12 @@ snapshots:
       ecdsa-sig-formatter: 1.0.11
       gaxios: 7.3.1
       gcp-metadata: 8.1.4
-      google-logging-utils: 1.2.0
+      google-logging-utils: 1.1.3
       gtoken: 8.0.0
       jws: 4.0.1
     transitivePeerDependencies:
       - supports-color
     optional: true
-
-  google-auth-library@10.9.1:
-    dependencies:
-      base64-js: 1.5.1
-      ecdsa-sig-formatter: 1.0.11
-      gaxios: 7.3.1
-      gcp-metadata: 8.1.2
-      google-logging-utils: 1.1.3
-      jws: 4.0.1
-    transitivePeerDependencies:
-      - supports-color
 
   google-auth-library@11.0.2:
     dependencies:
@@ -4828,6 +4814,17 @@ snapshots:
       ecdsa-sig-formatter: 1.0.11
       gaxios: 7.3.1
       gcp-metadata: 9.0.3
+      google-logging-utils: 2.0.1
+      jws: 4.0.1
+    transitivePeerDependencies:
+      - supports-color
+
+  google-auth-library@11.2.0:
+    dependencies:
+      base64-js: 1.5.1
+      ecdsa-sig-formatter: 1.0.11
+      gaxios: 7.3.1
+      gcp-metadata: 9.1.0
       google-logging-utils: 2.0.1
       jws: 4.0.1
     transitivePeerDependencies:
@@ -4848,7 +4845,7 @@ snapshots:
 
   google-gax@5.0.8:
     dependencies:
-      '@grpc/grpc-js': 1.14.4
+      '@grpc/grpc-js': 1.14.6
       '@grpc/proto-loader': 0.8.1
       duplexify: 4.1.3
       google-auth-library: 10.5.0
@@ -4865,7 +4862,7 @@ snapshots:
 
   google-gax@6.3.0:
     dependencies:
-      '@grpc/grpc-js': 1.14.4
+      '@grpc/grpc-js': 1.14.6
       '@grpc/proto-loader': 0.8.1
       '@opentelemetry/api': 1.9.1
       duplexify: 4.1.3
@@ -4883,9 +4880,8 @@ snapshots:
   google-logging-utils@0.0.2:
     optional: true
 
-  google-logging-utils@1.1.3: {}
-
-  google-logging-utils@1.2.0: {}
+  google-logging-utils@1.1.3:
+    optional: true
 
   google-logging-utils@2.0.1: {}
 
@@ -5212,11 +5208,11 @@ snapshots:
 
   minimatch@10.2.6:
     dependencies:
-      brace-expansion: 2.1.4
+      brace-expansion: 2.1.7
 
   minimatch@9.0.9:
     dependencies:
-      brace-expansion: 2.1.4
+      brace-expansion: 2.1.7
 
   minimist@1.2.8: {}
 
@@ -5463,7 +5459,7 @@ snapshots:
       '@types/node': 26.6.2
       long: 5.3.2
 
-  proxy-addr@2.0.7:
+  proxy-addr@2.0.8:
     dependencies:
       forwarded: 0.2.0
       ipaddr.js: 1.9.1
