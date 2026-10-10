@@ -214,28 +214,57 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
       let links = loaded.analysis.graph.links;
 
-      if (relationship && relationship !== "all") {
-        links = links.filter((l) => l.type === relationship);
-      }
+      // ⚡ Bolt Optimization: Pre-calculate node matching in O(V) passes and combine
+      // multiple O(E) filter passes into a single pass to avoid excessive garbage collection.
+
+      const matchingSources = new Set<string>();
+      let hasSourceFilter = false;
       if (source) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.source) || l.source;
-          return label.toLowerCase().includes(source.toLowerCase());
-        });
-      }
-      if (target) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.target) || l.target;
-          return label.toLowerCase().includes(target.toLowerCase());
-        });
+        hasSourceFilter = true;
+        const q = source.toLowerCase();
+        for (const [id, label] of nodeMap.entries()) {
+          if (label.toLowerCase().includes(q)) matchingSources.add(id);
+        }
+        // Add nodes where ID matches if they aren't in nodeMap (unresolved dependencies)
+        for (const l of links) {
+          if (!nodeMap.has(l.source) && l.source.toLowerCase().includes(q)) {
+            matchingSources.add(l.source);
+          }
+        }
       }
 
-      // Deduplicate links
+      const matchingTargets = new Set<string>();
+      let hasTargetFilter = false;
+      if (target) {
+        hasTargetFilter = true;
+        const q = target.toLowerCase();
+        for (const [id, label] of nodeMap.entries()) {
+          if (label.toLowerCase().includes(q)) matchingTargets.add(id);
+        }
+        for (const l of links) {
+          if (!nodeMap.has(l.target) && l.target.toLowerCase().includes(q)) {
+            matchingTargets.add(l.target);
+          }
+        }
+      }
+
       const linkDedup = new Set<string>();
+
       links = links.filter((l) => {
+        if (relationship && relationship !== "all" && l.type !== relationship) {
+          return false;
+        }
+        if (hasSourceFilter && !matchingSources.has(l.source)) {
+          return false;
+        }
+        if (hasTargetFilter && !matchingTargets.has(l.target)) {
+          return false;
+        }
+
         const key = l.source + '|' + l.target + '|' + l.type;
         if (linkDedup.has(key)) return false;
         linkDedup.add(key);
+
         return true;
       });
 
