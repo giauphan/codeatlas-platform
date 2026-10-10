@@ -1,6 +1,34 @@
 import { AnalysisResult, GraphNode } from "../../types/index.js";
 import * as path from "path";
 
+// ⚡ Bolt Optimization: Pre-calculate Set for O(1) lookups instead of O(N) Array.includes inside loops
+const NON_SECRET_SUBSTRINGS = new Set([
+  "expired",
+  "count",
+  "length",
+  "type",
+  "url",
+  "path",
+  "status",
+  "valid",
+  "error",
+  "failed",
+  "success",
+  "check",
+  "verify",
+  "duration",
+  "limit",
+  "payload",
+  "header",
+  "name",
+  "id",
+  "store",
+  "storage",
+  "service",
+  "provider",
+  "client",
+]);
+
 export interface SecurityFinding {
   severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
   type: string;
@@ -80,35 +108,9 @@ export class SecurityScanner {
     // Helper to detect if a variable name represents a real security secret/token/password
     const isSecretVariable = (label: string): boolean => {
       const parts = extractWords(label);
-      const nonSecretSubstrings = [
-        "expired",
-        "count",
-        "length",
-        "type",
-        "url",
-        "path",
-        "status",
-        "valid",
-        "error",
-        "failed",
-        "success",
-        "check",
-        "verify",
-        "duration",
-        "limit",
-        "payload",
-        "header",
-        "name",
-        "id",
-        "store",
-        "storage",
-        "service",
-        "provider",
-        "client",
-      ];
 
       // If the label contains any non-secret metadata word, skip it to prevent false positives
-      if (parts.some((part) => nonSecretSubstrings.includes(part))) {
+      if (parts.some((part) => NON_SECRET_SUBSTRINGS.has(part))) {
         return false;
       }
 
