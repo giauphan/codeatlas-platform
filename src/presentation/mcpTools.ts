@@ -214,30 +214,39 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
       let links = loaded.analysis.graph.links;
 
-      if (relationship && relationship !== "all") {
-        links = links.filter((l) => l.type === relationship);
-      }
-      if (source) {
-        links = links.filter((l) => {
+      // Optimize: Combine relationship filtering, source/target matching, and deduplication into a single pass
+      const linkDedup = new Set<string>();
+      const filteredLinks = [];
+      const sourceQuery = source?.toLowerCase();
+      const targetQuery = target?.toLowerCase();
+
+      for (const l of links) {
+        if (relationship && relationship !== "all" && l.type !== relationship) {
+          continue;
+        }
+
+        if (sourceQuery) {
           const label = nodeMap.get(l.source) || l.source;
-          return label.toLowerCase().includes(source.toLowerCase());
-        });
-      }
-      if (target) {
-        links = links.filter((l) => {
+          if (!label.toLowerCase().includes(sourceQuery)) {
+            continue;
+          }
+        }
+
+        if (targetQuery) {
           const label = nodeMap.get(l.target) || l.target;
-          return label.toLowerCase().includes(target.toLowerCase());
-        });
+          if (!label.toLowerCase().includes(targetQuery)) {
+            continue;
+          }
+        }
+
+        const key = l.source + '|' + l.target + '|' + l.type;
+        if (!linkDedup.has(key)) {
+          linkDedup.add(key);
+          filteredLinks.push(l);
+        }
       }
 
-      // Deduplicate links
-      const linkDedup = new Set<string>();
-      links = links.filter((l) => {
-        const key = l.source + '|' + l.target + '|' + l.type;
-        if (linkDedup.has(key)) return false;
-        linkDedup.add(key);
-        return true;
-      });
+      links = filteredLinks;
 
       const maxResults = limit || 100;
       const truncated = links.length > maxResults;
