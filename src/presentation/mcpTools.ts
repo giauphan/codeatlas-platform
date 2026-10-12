@@ -212,32 +212,35 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
-      let links = loaded.analysis.graph.links;
-
-      if (relationship && relationship !== "all") {
-        links = links.filter((l) => l.type === relationship);
-      }
-      if (source) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.source) || l.source;
-          return label.toLowerCase().includes(source.toLowerCase());
-        });
-      }
-      if (target) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.target) || l.target;
-          return label.toLowerCase().includes(target.toLowerCase());
-        });
-      }
-
-      // Deduplicate links
+      const originalLinks = loaded.analysis.graph.links;
+      let links: typeof originalLinks = [];
       const linkDedup = new Set<string>();
-      links = links.filter((l) => {
+
+      const relFilter = relationship && relationship !== "all" ? relationship : undefined;
+      const sourceQuery = source?.toLowerCase();
+      const targetQuery = target?.toLowerCase();
+
+      // ⚡ Bolt Optimization: Combine multiple filters and deduplication into a single O(N) pass,
+      // avoiding O(N * passes) and excessive intermediate array allocations.
+      for (const l of originalLinks) {
+        if (relFilter && l.type !== relFilter) continue;
+
+        if (sourceQuery) {
+          const label = nodeMap.get(l.source) || l.source;
+          if (!label.toLowerCase().includes(sourceQuery)) continue;
+        }
+
+        if (targetQuery) {
+          const label = nodeMap.get(l.target) || l.target;
+          if (!label.toLowerCase().includes(targetQuery)) continue;
+        }
+
         const key = l.source + '|' + l.target + '|' + l.type;
-        if (linkDedup.has(key)) return false;
+        if (linkDedup.has(key)) continue;
         linkDedup.add(key);
-        return true;
-      });
+
+        links.push(l);
+      }
 
       const maxResults = limit || 100;
       const truncated = links.length > maxResults;
