@@ -214,30 +214,35 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
       let links = loaded.analysis.graph.links;
 
-      if (relationship && relationship !== "all") {
-        links = links.filter((l) => l.type === relationship);
-      }
-      if (source) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.source) || l.source;
-          return label.toLowerCase().includes(source.toLowerCase());
-        });
-      }
-      if (target) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.target) || l.target;
-          return label.toLowerCase().includes(target.toLowerCase());
-        });
-      }
-
-      // Deduplicate links
+      // ⚡ Bolt Optimization: Combine multiple .filter() passes into a single loop
+      // to avoid O(N * passes) overhead and excessive intermediate array allocation.
+      const filteredLinks = [];
       const linkDedup = new Set<string>();
-      links = links.filter((l) => {
+
+      const qSource = source ? source.toLowerCase() : null;
+      const qTarget = target ? target.toLowerCase() : null;
+      const filterRel = relationship && relationship !== "all" ? relationship : null;
+
+      for (const l of links) {
+        if (filterRel && l.type !== filterRel) continue;
+
+        if (qSource) {
+          const label = nodeMap.get(l.source) || l.source;
+          if (!label.toLowerCase().includes(qSource)) continue;
+        }
+
+        if (qTarget) {
+          const label = nodeMap.get(l.target) || l.target;
+          if (!label.toLowerCase().includes(qTarget)) continue;
+        }
+
         const key = l.source + '|' + l.target + '|' + l.type;
-        if (linkDedup.has(key)) return false;
+        if (linkDedup.has(key)) continue;
+
         linkDedup.add(key);
-        return true;
-      });
+        filteredLinks.push(l);
+      }
+      links = filteredLinks;
 
       const maxResults = limit || 100;
       const truncated = links.length > maxResults;
