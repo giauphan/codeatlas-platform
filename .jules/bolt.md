@@ -7,3 +7,7 @@
 ## 2026-09-23 - Independent Connection Pools for Fire-and-Forget
 **Learning:** When attempting to make database updates non-blocking (fire-and-forget) to fix "Write on Read" bottlenecks, reusing the main request's database connection is unsafe. The surrounding code will often close or return the connection to the pool while the async background task is still running, leading to race conditions and "Connection closed" errors.
 **Action:** When implementing fire-and-forget updates in services, explicitly acquire a new background connection (`initPool().then(pool => pool.getConnection())`), capture synchronous context (like `tenantId`) to prevent async state loss, and handle errors/cleanup in a standalone promise chain that ends with `.finally(() => bgConn.close())`.
+## 2024-10-13 - Optimize Graph Edge Filtering Performance
+
+**Learning:** When applying multiple successive `.filter()` operations on large arrays containing objects (like graph edges), doing this sequentially forces multiple full passes and allocates large intermediate arrays, causing O(N * passes) overhead and excess garbage collection. Additionally, repeated dynamic transformations (like `.toLowerCase()`) within these array iterations on stable parameters cause heavy string allocation pressure.
+**Action:** Always fuse multiple `.filter()` and `.map()` iterations into a single `for...of` loop when dealing with large datasets (such as nodes and links). Extract stable string transformations (like `.toLowerCase()`) to outside the loop to be computed only once.
