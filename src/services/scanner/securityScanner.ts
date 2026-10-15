@@ -11,6 +11,36 @@ export interface SecurityFinding {
   project?: string;
 }
 
+// ⚡ Bolt Optimization: Converted nonSecretSubstrings to a Set at the module scope
+// This prevents reallocating the array on every call to isSecretVariable
+// and changes the O(N) array .includes() lookup to an O(1) Set .has() lookup.
+const NON_SECRET_SUBSTRINGS = new Set([
+  "expired",
+  "count",
+  "length",
+  "type",
+  "url",
+  "path",
+  "status",
+  "valid",
+  "error",
+  "failed",
+  "success",
+  "check",
+  "verify",
+  "duration",
+  "limit",
+  "payload",
+  "header",
+  "name",
+  "id",
+  "store",
+  "storage",
+  "service",
+  "provider",
+  "client",
+]);
+
 export class SecurityScanner {
   /**
    * Scan an analyzed project for security vulnerabilities
@@ -80,35 +110,9 @@ export class SecurityScanner {
     // Helper to detect if a variable name represents a real security secret/token/password
     const isSecretVariable = (label: string): boolean => {
       const parts = extractWords(label);
-      const nonSecretSubstrings = [
-        "expired",
-        "count",
-        "length",
-        "type",
-        "url",
-        "path",
-        "status",
-        "valid",
-        "error",
-        "failed",
-        "success",
-        "check",
-        "verify",
-        "duration",
-        "limit",
-        "payload",
-        "header",
-        "name",
-        "id",
-        "store",
-        "storage",
-        "service",
-        "provider",
-        "client",
-      ];
 
       // If the label contains any non-secret metadata word, skip it to prevent false positives
-      if (parts.some((part) => nonSecretSubstrings.includes(part))) {
+      if (parts.some((part) => NON_SECRET_SUBSTRINGS.has(part))) {
         return false;
       }
 
