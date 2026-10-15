@@ -7,3 +7,7 @@
 ## 2026-09-23 - Independent Connection Pools for Fire-and-Forget
 **Learning:** When attempting to make database updates non-blocking (fire-and-forget) to fix "Write on Read" bottlenecks, reusing the main request's database connection is unsafe. The surrounding code will often close or return the connection to the pool while the async background task is still running, leading to race conditions and "Connection closed" errors.
 **Action:** When implementing fire-and-forget updates in services, explicitly acquire a new background connection (`initPool().then(pool => pool.getConnection())`), capture synchronous context (like `tenantId`) to prevent async state loss, and handle errors/cleanup in a standalone promise chain that ends with `.finally(() => bgConn.close())`.
+
+## 2026-10-14 - Constant Array Lookups Inside Hot Loops
+**Learning:** Reallocating a static array and calling `.includes()` inside a frequently executed function (like an AST node visitor `isSecretVariable`) creates unnecessary O(N) operations per call. For large abstract syntax trees, this leads to noticeable CPU overhead.
+**Action:** When a constant list of string keywords is used for exact matches inside a hot loop or frequently called function, hoist the list to the module scope and convert it into a `Set`. Use `Set.has()` to improve the lookup performance from O(N) to O(1) and avoid reallocations on each function execution.

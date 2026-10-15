@@ -1,26 +1,40 @@
 packages:
-  - "dashboard"
-  - "."
+  - dashboard
+  - .
+
 allowBuilds:
   '@firebase/util': true
   better-sqlite3: true
   esbuild: true
   protobufjs: true
+
 overrides:
-  websocket-driver: "^0.7.5"
-  undici: "^7.25.0"
-  brace-expansion: "^2.1.4"
-  ip-address: "^10.3.1"
-  protobufjs: "^7.6.5"
-  form-data: "^2.5.6"
-  "@grpc/grpc-js": "^1.14.4"
-  uuid: "11.1.1"
-  qs: "^6.16.0"
-  "@babel/core": "^7.29.6"
-  body-parser: "^1.20.6"
-  # Override fast-uri to ^3.1.6 to resolve high-severity SSRF/Host confusion
-  # vulnerability in @modelcontextprotocol/sdk -> ajv subdependency (CVE-2025-27758).
-  # Note: This is a temporary workaround until the upstream dependency
-  # (@modelcontextprotocol/sdk) is updated to use a patched version of ajv.
-  fast-uri: "^3.1.6"
-  hono: "^4.13.5"
+  '@babel/core': ^7.29.6
+  '@grpc/grpc-js': ^1.14.4
+  '@grpc/grpc-js@>=1.14.0 <1.14.5': '>=1.14.5'
+  '@modelcontextprotocol/sdk@>=1.12.0 <1.31.0': '>=1.31.0'
+  body-parser: ^1.20.6
+  brace-expansion: ^2.1.4
+  brace-expansion@>=2.0.0 <2.1.5: '>=2.1.5'
+  brace-expansion@>=2.0.0 <2.1.6: '>=2.1.6'
+  brace-expansion@>=2.0.0 <2.1.7: '>=2.1.7'
+  compression@<1.8.2: '>=1.8.2'
+  fast-uri: ^3.1.6
+  fast-uri@>=3.0.0 <3.1.8: '>=3.1.8'
+  form-data: ^2.5.6
+  hono: ^4.13.5
+  ip-address: ^10.3.1
+  ip-address@<=10.7.0: '>=10.7.1'
+  protobufjs: ^7.6.5
+  proxy-addr@>=1.1.0 <2.0.8: '>=2.0.8'
+  qs: ^6.16.0
+  source-map-js@>=1.0.0 <1.2.2: '>=1.2.2'
+  undici: ^7.25.0
+  undici@>=7.0.0 <7.29.1: '>=7.29.1'
+  undici@>=7.1.0 <7.29.1: '>=7.29.1'
+  undici@>=7.11.0 <7.29.1: '>=7.29.1'
+  undici@>=7.15.0 <7.29.1: '>=7.29.1'
+  undici@>=7.24.1 <7.29.1: '>=7.29.1'
+  undici@>=7.28.0 <7.29.1: '>=7.29.1'
+  uuid: 11.1.1
+  websocket-driver: ^0.7.5
