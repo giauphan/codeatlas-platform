@@ -214,30 +214,36 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
       let links = loaded.analysis.graph.links;
 
-      if (relationship && relationship !== "all") {
-        links = links.filter((l) => l.type === relationship);
-      }
-      if (source) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.source) || l.source;
-          return label.toLowerCase().includes(source.toLowerCase());
-        });
-      }
-      if (target) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.target) || l.target;
-          return label.toLowerCase().includes(target.toLowerCase());
-        });
-      }
-
-      // Deduplicate links
+      // ⚡ Bolt Optimization: Combine multiple O(N) filter passes into a single pass
+      // and hoist `.toLowerCase()` out of the loop.
+      const qSource = source?.toLowerCase();
+      const qTarget = target?.toLowerCase();
       const linkDedup = new Set<string>();
-      links = links.filter((l) => {
+      const filteredLinks = [];
+
+      for (const l of links) {
+        if (relationship && relationship !== "all" && l.type !== relationship) {
+          continue;
+        }
+
+        if (qSource) {
+          const label = nodeMap.get(l.source) || l.source;
+          if (!label.toLowerCase().includes(qSource)) continue;
+        }
+
+        if (qTarget) {
+          const label = nodeMap.get(l.target) || l.target;
+          if (!label.toLowerCase().includes(qTarget)) continue;
+        }
+
+        // Deduplicate links
         const key = l.source + '|' + l.target + '|' + l.type;
-        if (linkDedup.has(key)) return false;
+        if (linkDedup.has(key)) continue;
+
         linkDedup.add(key);
-        return true;
-      });
+        filteredLinks.push(l);
+      }
+      links = filteredLinks;
 
       const maxResults = limit || 100;
       const truncated = links.length > maxResults;
@@ -301,24 +307,27 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       let nodes = loaded.analysis.graph.nodes;
-      if (type && type !== "all") {
-        nodes = nodes.filter((n) => n.type === type);
-      }
+      // ⚡ Bolt Optimization: Combine multiple O(N) filter passes into a single pass
+      // and hoist `.toLowerCase()` out of the loop.
+      const q = query.toLowerCase();
+      const matches = [];
 
-      // Filter out venv/node_modules entities for cleaner results
-      nodes = nodes.filter((n) => {
-        if (n.id.startsWith('external:')) return false;
+      for (const n of nodes) {
+        if (type && type !== "all" && n.type !== type) continue;
+
+        // Filter out venv/node_modules entities for cleaner results
+        if (n.id.startsWith('external:')) continue;
         if (n.filePath && (
           n.filePath.includes('/venv/') ||
           n.filePath.includes('/.venv/') ||
           n.filePath.includes('/node_modules/') ||
           n.filePath.includes('/site-packages/')
-        )) return false;
-        return true;
-      });
+        )) continue;
 
-      const q = query.toLowerCase();
-      const matches = nodes.filter((n) => n.label.toLowerCase().includes(q));
+        if (n.label.toLowerCase().includes(q)) {
+          matches.push(n);
+        }
+      }
 
       // For each match, find its relationships
       const links = loaded.analysis.graph.links;

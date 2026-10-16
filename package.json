@@ -65,11 +65,13 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.1",
+    "@grpc/grpc-js": "1.14.5",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@types/compression": "^1.8.1",
     "@typescript-eslint/typescript-estree": "^8.0.0",
+    "brace-expansion": "2.1.6",
     "chokidar": "^5.0.0",
-    "compression": "^1.8.1",
+    "compression": "^1.8.2",
     "cors": "2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
@@ -80,6 +82,7 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "p-limit": "^7.3.1",
+    "proxy-addr": "2.0.8",
     "py-ast": "^1.9.0",
     "zod": "^4.5.4"
   }
