@@ -7,3 +7,6 @@
 ## 2026-09-23 - Independent Connection Pools for Fire-and-Forget
 **Learning:** When attempting to make database updates non-blocking (fire-and-forget) to fix "Write on Read" bottlenecks, reusing the main request's database connection is unsafe. The surrounding code will often close or return the connection to the pool while the async background task is still running, leading to race conditions and "Connection closed" errors.
 **Action:** When implementing fire-and-forget updates in services, explicitly acquire a new background connection (`initPool().then(pool => pool.getConnection())`), capture synchronous context (like `tenantId`) to prevent async state loss, and handle errors/cleanup in a standalone promise chain that ends with `.finally(() => bgConn.close())`.
+## 2026-10-17 - O(1) graph edge lookups in Topological Sort
+**Learning:** Using an inner loop to find edges connected to a specific node by iterating over all edges during a graph traversal (like topological sort) results in O(V*E) complexity, which is a major performance bottleneck for large graphs.
+**Action:** When performing graph traversals, pre-calculate an adjacency list (e.g., `outgoingEdgesMap`) mapping source nodes to their target nodes in a single O(E) pass. Then, use this pre-calculated map inside the traversal loop to achieve O(V+E) time complexity.

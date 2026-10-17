@@ -1259,6 +1259,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         calledByMap.set(link.target, byArr);
       }
 
+      const outgoingEdgesMap = new Map<string, string[]>();
+      for (const link of dedupLinks) {
+        const arr = outgoingEdgesMap.get(link.source) ?? [];
+        arr.push(link.target);
+        outgoingEdgesMap.set(link.source, arr);
+      }
+
       const queue: string[] = [];
       for (const [id, deg] of inDegree) {
         if (deg === 0) queue.push(id);
@@ -1287,13 +1294,12 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           });
         }
 
-        for (const link of dedupLinks) {
-          if (link.source === current) {
-            const newDeg = (inDegree.get(link.target) || 1) - 1;
-            inDegree.set(link.target, newDeg);
-            if (newDeg <= 0 && !ordered.has(link.target)) {
-              queue.push(link.target);
-            }
+        const outgoingEdges = outgoingEdgesMap.get(current) || [];
+        for (const targetId of outgoingEdges) {
+          const newDeg = (inDegree.get(targetId) || 1) - 1;
+          inDegree.set(targetId, newDeg);
+          if (newDeg <= 0 && !ordered.has(targetId)) {
+            queue.push(targetId);
           }
         }
       }
