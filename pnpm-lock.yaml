@@ -23,9 +23,6 @@ importers:
 
   .:
     dependencies:
-      '@grpc/grpc-js':
-        specifier: ^1.14.4
-        version: 1.14.6
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(zod@4.6.2)
@@ -126,9 +123,6 @@ importers:
       3d-force-graph:
         specifier: ^1.80.0
         version: 1.80.0
-      '@grpc/grpc-js':
-        specifier: ^1.14.6
-        version: 1.14.6
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

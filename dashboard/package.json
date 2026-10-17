@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "3d-force-graph": "^1.80.0",
-    "@grpc/grpc-js": "^1.14.6",
     "clsx": "^2.1.1",
     "firebase": "^12.18.0",
     "force-graph": "^1.51.4",
