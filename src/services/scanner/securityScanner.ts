@@ -11,6 +11,63 @@ export interface SecurityFinding {
   project?: string;
 }
 
+// Bolt Optimization: Hoist static arrays and sets to avoid reallocation inside the scan loop
+const unsafeFuncs = [
+  "eval",
+  "exec",
+  "system",
+  "child_process",
+  "spawn",
+  "shell_exec",
+];
+
+const dbKeywords = [
+  "db",
+  "database",
+  "repository",
+  "model",
+  "oracle",
+  "postgres",
+  "mysql",
+  "sqlite",
+  "sql",
+  "connection",
+  "pool",
+  "transaction",
+];
+
+// Bolt Optimization: Use a Set for O(1) lookups instead of O(N) Array.includes()
+const nonSecretSubstrings = new Set([
+  "expired",
+  "count",
+  "length",
+  "type",
+  "url",
+  "path",
+  "status",
+  "valid",
+  "error",
+  "failed",
+  "success",
+  "check",
+  "verify",
+  "duration",
+  "limit",
+  "payload",
+  "header",
+  "name",
+  "id",
+  "store",
+  "storage",
+  "service",
+  "provider",
+  "client",
+]);
+
+// Hoist regex patterns to prevent recreation on every extraction
+const SPLIT_WITH_SLASH = /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/;
+const SPLIT_NO_SLASH = /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/;
+
 export class SecurityScanner {
   /**
    * Scan an analyzed project for security vulnerabilities
@@ -30,35 +87,9 @@ export class SecurityScanner {
       linkMap.get(link.target)!.add(link.source);
     });
 
-    const unsafeFuncs = [
-      "eval",
-      "exec",
-      "system",
-      "child_process",
-      "spawn",
-      "shell_exec",
-    ];
-    const dbKeywords = [
-      "db",
-      "database",
-      "repository",
-      "model",
-      "oracle",
-      "postgres",
-      "mysql",
-      "sqlite",
-      "sql",
-      "connection",
-      "pool",
-      "transaction",
-    ];
-
     // Helper to extract words from a camelCase, snake_case, or kebab-case string
     const extractWords = (text: string, includeSlash: boolean = false): string[] => {
-      const regex = includeSlash
-        ? /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/
-        : /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/;
-      return text.split(regex).map((p) => p.toLowerCase());
+      return text.split(includeSlash ? SPLIT_WITH_SLASH : SPLIT_NO_SLASH).map((p) => p.toLowerCase());
     };
 
     // Helper to identify test, mock or diagnostic files
@@ -80,35 +111,10 @@ export class SecurityScanner {
     // Helper to detect if a variable name represents a real security secret/token/password
     const isSecretVariable = (label: string): boolean => {
       const parts = extractWords(label);
-      const nonSecretSubstrings = [
-        "expired",
-        "count",
-        "length",
-        "type",
-        "url",
-        "path",
-        "status",
-        "valid",
-        "error",
-        "failed",
-        "success",
-        "check",
-        "verify",
-        "duration",
-        "limit",
-        "payload",
-        "header",
-        "name",
-        "id",
-        "store",
-        "storage",
-        "service",
-        "provider",
-        "client",
-      ];
 
       // If the label contains any non-secret metadata word, skip it to prevent false positives
-      if (parts.some((part) => nonSecretSubstrings.includes(part))) {
+      // Bolt Optimization: O(1) Set lookup
+      if (parts.some((part) => nonSecretSubstrings.has(part))) {
         return false;
       }
 
