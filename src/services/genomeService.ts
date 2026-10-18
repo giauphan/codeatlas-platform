@@ -531,15 +531,17 @@ export class GenomeService {
       // Mark source genes as merged
       // ⚡ Bolt Optimization: Batch updates and inserts instead of querying inside loop (avoids N+1 DB roundtrips)
       if (genes.length > 0) {
-        const updateBinds = genes.map((g) => ({
-          id: String(g[0]),
-          tenantId: getTenantId(),
-        }));
-        await connection.executeMany(
-          `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-          updateBinds as any,
-          { autoCommit: true },
-        );
+        const updateIds = genes.map((g) => String(g[0]));
+        const BATCH_CHUNK_SIZE = 900;
+        for (let k = 0; k < updateIds.length; k += BATCH_CHUNK_SIZE) {
+          const chunk = updateIds.slice(k, k + BATCH_CHUNK_SIZE);
+          const { clause, binds } = buildInClause(chunk, { tenantId: getTenantId() });
+          await connection.execute(
+            `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id IN (${clause})`,
+            binds,
+            { autoCommit: true }
+          );
+        }
 
         // Record relationship
         const insertBinds = genes.map((g) => ({
@@ -794,16 +796,20 @@ export class GenomeService {
       await setSessionContext(connection);
 
       let count = 0;
-      // ⚡ Bolt Optimization: Batch retirement update using executeMany instead of executing queries in a loop.
+      // ⚡ Bolt Optimization: Batch retirement update using IN clause instead of executeMany to reduce DB overhead.
       if (geneIds.length > 0) {
-        const binds = geneIds.map((id) => ({ id, tenantId: getTenantId() }));
-        const result = await connection.executeMany(
-          `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
-           WHERE id = :id AND status != 'retired' AND tenant_id = :tenantId`,
-          binds as any,
-          { autoCommit: true },
-        );
-        count = result.rowsAffected || 0;
+        const BATCH_CHUNK_SIZE = 900;
+        for (let k = 0; k < geneIds.length; k += BATCH_CHUNK_SIZE) {
+          const chunk = geneIds.slice(k, k + BATCH_CHUNK_SIZE);
+          const { clause, binds } = buildInClause(chunk, { tenantId: getTenantId() });
+          const result = await connection.execute(
+            `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
+             WHERE status != 'retired' AND tenant_id = :tenantId AND id IN (${clause})`,
+            binds,
+            { autoCommit: true },
+          );
+          count += result.rowsAffected || 0;
+        }
       }
 
       logger.info(`[Genome] Retired ${count} genes`);
