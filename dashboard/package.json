@@ -23,6 +23,9 @@
     "tailwind-merge": "^2.3.0",
     "three": "^0.185.1"
   },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.5"
+  },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
