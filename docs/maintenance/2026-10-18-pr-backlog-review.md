@@ -4,6 +4,8 @@ Reviewed all 62 open PRs against main at `fa92d680`. Useful changes are preserve
 
 Dependency installation now uses one pnpm workspace lockfile. Routine minor/patch Dependabot updates are grouped, and the duplicate dashboard npm lockfile is removed. Security updates include a newer patched SDK than the original SDK PR proposed.
 
+A production-only install also reproduced missing SQLite drivers because both runtime packages were classified as development dependencies. They now ship as production dependencies, and CI opens the default database and verifies its vector extension after removing development dependencies.
+
 “Preserved” means the relevant implementation or package update is included, with corrections where required; unrelated dependency drift and bot journals are omitted. “Closed” means its changes are redundant or are deliberately declined for the stated reason.
 
 | Source PR | Outcome | Review decision |

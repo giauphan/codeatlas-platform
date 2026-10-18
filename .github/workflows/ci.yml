@@ -76,6 +76,28 @@ jobs:
         working-directory: dashboard
         run: pnpm test
 
+      - name: Install production dependencies only
+        run: pnpm install --frozen-lockfile --prod
+
+      - name: Verify production SQLite and vector startup
+        env:
+          CODEATLAS_DB_TYPE: sqlite
+          CODEATLAS_SQLITE_PATH: ':memory:'
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { createDatabaseAdapter } from './dist/src/database/factory.js';
+          const db = createDatabaseAdapter();
+          try {
+            await db.connect();
+            await db.initializeSchema();
+            const rows = await db.query('SELECT vec_version() AS version');
+            assert.equal(typeof rows[0]?.version, 'string');
+          } finally {
+            await db.disconnect();
+          }
+          NODE
+
   sqlite:
     name: SQLite + sqlite-vec
     runs-on: ubuntu-latest
