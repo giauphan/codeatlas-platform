@@ -300,6 +300,7 @@ export function DreamMemoryView() {
           {(startDate || endDate) && (
             <button
               aria-label="Clear date filters"
+              title="Clear date filters"
               onClick={() => {
                 setStartDate('');
                 setEndDate('');
