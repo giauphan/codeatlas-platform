@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Root platform — pnpm
+  # One pnpm workspace lockfile covers the platform and dashboard.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -23,21 +23,17 @@ updates:
       mcp:
         patterns:
           - "@modelcontextprotocol/*"
-
-  # Dashboard — pnpm
-  - package-ecosystem: "npm"
-    directory: "/dashboard"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "giauphan"
-    labels:
-      - "dependencies"
-      - "dashboard"
-    commit-message:
-      prefix: "chore(deps-dashboard)"
+      routine-updates:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "typescript"
+          - "tsx"
+          - "@types/*"
+          - "@modelcontextprotocol/*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
