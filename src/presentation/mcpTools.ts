@@ -214,28 +214,30 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
       let links = loaded.analysis.graph.links;
 
-      if (relationship && relationship !== "all") {
-        links = links.filter((l) => l.type === relationship);
-      }
-      if (source) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.source) || l.source;
-          return label.toLowerCase().includes(source.toLowerCase());
-        });
-      }
-      if (target) {
-        links = links.filter((l) => {
-          const label = nodeMap.get(l.target) || l.target;
-          return label.toLowerCase().includes(target.toLowerCase());
-        });
-      }
+      // Filter and deduplicate together to avoid intermediate arrays on large graphs.
+      const filterRelationship = relationship && relationship !== "all" ? relationship : null;
+      const filterSource = source ? source.toLowerCase() : null;
+      const filterTarget = target ? target.toLowerCase() : null;
 
-      // Deduplicate links
       const linkDedup = new Set<string>();
+
       links = links.filter((l) => {
+        if (filterRelationship && l.type !== filterRelationship) return false;
+
+        if (filterSource) {
+          const label = nodeMap.get(l.source) || l.source;
+          if (!label.toLowerCase().includes(filterSource)) return false;
+        }
+
+        if (filterTarget) {
+          const label = nodeMap.get(l.target) || l.target;
+          if (!label.toLowerCase().includes(filterTarget)) return false;
+        }
+
         const key = l.source + '|' + l.target + '|' + l.type;
         if (linkDedup.has(key)) return false;
         linkDedup.add(key);
+
         return true;
       });
 
@@ -1239,6 +1241,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const inDegree = new Map<string, number>();
       const callsToMap = new Map<string, string[]>();
       const calledByMap = new Map<string, string[]>();
+      const outgoingEdgesMap = new Map<string, string[]>();
 
       for (const node of traceNodes) {
         inDegree.set(node.id, 0);
@@ -1253,6 +1256,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         const toArr = callsToMap.get(link.source) ?? [];
         toArr.push(targetName);
         callsToMap.set(link.source, toArr);
+
+        const outgoing = outgoingEdgesMap.get(link.source) ?? [];
+        outgoing.push(link.target);
+        outgoingEdgesMap.set(link.source, outgoing);
 
         const byArr = calledByMap.get(link.target) ?? [];
         byArr.push(sourceName);
@@ -1287,13 +1294,11 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           });
         }
 
-        for (const link of dedupLinks) {
-          if (link.source === current) {
-            const newDeg = (inDegree.get(link.target) || 1) - 1;
-            inDegree.set(link.target, newDeg);
-            if (newDeg <= 0 && !ordered.has(link.target)) {
-              queue.push(link.target);
-            }
+        for (const targetId of outgoingEdgesMap.get(current) ?? []) {
+          const newDeg = (inDegree.get(targetId) || 1) - 1;
+          inDegree.set(targetId, newDeg);
+          if (newDeg <= 0 && !ordered.has(targetId)) {
+            queue.push(targetId);
           }
         }
       }

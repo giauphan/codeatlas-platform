@@ -24,7 +24,7 @@ describe('WikiView Component', () => {
     });
   });
 
-  afterEach(() => { localStorage.clear(); });
+  afterEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
 
   it('saves and selects a configuration profile to localStorage', async () => {
     const user = userEvent.setup();
@@ -123,4 +123,63 @@ describe('WikiView Component', () => {
       }
     });
   });
+
+  it.each([false, true])('preserves saved presets unless deletion is confirmed (%s)', async (confirmed) => {
+    const profiles = [
+      { id: 'first', name: 'First preset', provider: 'mock', model: 'default', apiKey: '', baseUrl: '' },
+      { id: 'second', name: 'Second preset', provider: 'mock', model: 'default', apiKey: '', baseUrl: '' },
+    ];
+    localStorage.setItem('ca_wiki_saved_profiles', JSON.stringify(profiles));
+    localStorage.setItem('ca_wiki_active_profile_id', 'first');
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(confirmed);
+    const user = userEvent.setup();
+    render(<WikiView projects={[{ name: 'test-project', dir: '/test' }]} selectedProjectDir="/test" />);
+
+    await user.click(screen.getByText(/Rebuild Wiki/i));
+    const presetSelect = screen.getByRole('combobox', { name: /Load Saved Preset/i });
+    const deleteButton = screen.getByRole('button', { name: /Delete selected preset/i });
+    await user.click(deleteButton);
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    if (confirmed) {
+      expect(presetSelect).toHaveValue('');
+      expect(screen.queryByRole('option', { name: 'First preset' })).not.toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Second preset' })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(JSON.parse(localStorage.getItem('ca_wiki_saved_profiles')!)).toEqual([profiles[1]]);
+        expect(localStorage.getItem('ca_wiki_active_profile_id')).toBe('');
+      });
+    } else {
+      expect(presetSelect).toHaveValue('first');
+      expect(screen.getByRole('option', { name: 'First preset' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Second preset' })).toBeInTheDocument();
+      expect(JSON.parse(localStorage.getItem('ca_wiki_saved_profiles')!)).toEqual(profiles);
+    }
+  });
+
+  it('shows query progress in the submit button until the answer arrives', async () => {
+    let finishQuery!: (response: ReturnType<typeof mockQueryResponse>) => void;
+    const pendingQuery = new Promise<ReturnType<typeof mockQueryResponse>>(resolve => { finishQuery = resolve; });
+    (global.fetch as Mock).mockImplementation(async (url: string) => {
+      if (url.includes('/tree')) return mockTreeResponse();
+      if (url.includes('/query')) return pendingQuery;
+      return { ok: true, json: async () => ({}) };
+    });
+    const user = userEvent.setup();
+    render(<WikiView projects={[{ name: 'test-project', dir: '/test' }]} selectedProjectDir="/test" />);
+    await user.type(screen.getByPlaceholderText(/Ask a question/i), 'How does this work?');
+    const submitButton = screen.getByRole('button', { name: 'Submit query' });
+    await user.click(submitButton);
+
+    await waitFor(() => {
+      expect(submitButton).toBeDisabled();
+      expect(submitButton.querySelector('.animate-spin')).not.toBeNull();
+    });
+    finishQuery(mockQueryResponse());
+    await waitFor(() => {
+      expect(screen.getByText('mock answer')).toBeInTheDocument();
+      expect(submitButton.querySelector('.animate-spin')).toBeNull();
+    });
+  });
+
 });

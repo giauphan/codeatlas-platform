@@ -10,7 +10,7 @@ import * as url from "url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 
 // Wire up adapters: MCP tools, REST routes, A2A, Genome.
-import { server } from "./presentation/mcpServer.js";
+import { server, createMcpServer } from "./presentation/mcpServer.js";
 import { app, startHttpServer } from "./presentation/httpServer.js";
 
 // Domain services: memory, security scanner, consolidation.
@@ -73,8 +73,9 @@ async function main() {
     await startHttpServer(port);
   } else {
     // Stdio Mode - for local use (e.g. Claude Desktop)
+    const stdioServer = createMcpServer(await checkAuth(process.env.CODEATLAS_API_KEY));
     const transport = new StdioServerTransport();
-    await server.connect(transport);
+    await stdioServer.connect(transport);
     logger.info("CodeAtlas MCP server running on stdio");
   }
 }
@@ -93,7 +94,10 @@ const isMain = (process.argv[1] && (
 );
 
 if (isMain) {
-  main().catch((err: unknown) => logger.error(err));
+  main().catch((err: unknown) => {
+    logger.error(err);
+    process.exitCode = 1;
+  });
 }
 
 // Re-export core modules/helpers to maintain compatibility with test suite
