@@ -281,9 +281,7 @@ export class ConsolidationEngine {
         }
       }
 
-      // ⚡ Bolt Optimization: Batch database deletes outside the project loop
-      // to resolve sequential per-project query latency bottleneck where many small IN queries were generated
-      // instead of a few chunked queries when removing duplicates across multiple projects.
+      // Share bounded deletes across projects while keeping similarity comparisons isolated.
       if (allToRemove.size > 0) {
         const ids = Array.from(allToRemove);
         const BATCH_DELETE_CHUNK_SIZE = 900;
