@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -90,5 +91,34 @@ test('MCP server without a validated session rejects tool execution', async () =
     await server.close();
     if (originalAutoLoad === undefined) delete process.env.MEMORY_AUTO_LOAD;
     else process.env.MEMORY_AUTO_LOAD = originalAutoLoad;
+  }
+});
+
+test('stdio startup without credentials exits with a failure status', async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'codeatlas-stdio-no-auth-'));
+  try {
+    const result = spawnSync(process.execPath, [
+      '--import', import.meta.resolve('tsx'), fileURLToPath(new URL('../../src/index.ts', import.meta.url)),
+    ], {
+      cwd: workspace,
+      env: {
+        PATH: process.env.PATH || '',
+        CODEATLAS_API_KEY: '',
+        CODEATLAS_PROJECT_DIRS: workspace,
+        CODEATLAS_SQLITE_PATH: path.join(workspace, 'pipeline.db'),
+        CODEATLAS_DB_TYPE: 'sqlite',
+        CODEATLAS_USE_FIRESTORE: 'false',
+        GOOGLE_APPLICATION_CREDENTIALS: '',
+        MEMORY_AUTO_LOAD: 'false',
+        PORT: '',
+      },
+      encoding: 'utf8',
+      timeout: 15_000,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /API Key is required/);
+  } finally {
+    await fs.rm(workspace, { recursive: true, force: true });
   }
 });

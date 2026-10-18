@@ -94,7 +94,10 @@ const isMain = (process.argv[1] && (
 );
 
 if (isMain) {
-  main().catch((err: unknown) => logger.error(err));
+  main().catch((err: unknown) => {
+    logger.error(err);
+    process.exitCode = 1;
+  });
 }
 
 // Re-export core modules/helpers to maintain compatibility with test suite
