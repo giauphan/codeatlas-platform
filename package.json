@@ -79,7 +79,7 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "p-limit": "^7.3.1",
-    "py-ast": "^1.9.0",
+    "py-ast": "^2.0.0",
     "sqlite-vec": "0.1.9",
     "zod": "^4.5.4"
   }
