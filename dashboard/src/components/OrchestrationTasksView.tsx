@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Network, Search, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBranch, Lightbulb, XCircle, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth'; // Reusing auth headers utility
@@ -66,15 +66,20 @@ export function OrchestrationTasksView() {
     }
   };
 
-  const filteredTasks = tasks.filter(task => {
-    const matchesSearch = searchQuery.trim() === '' ||
-                          task.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          task.orchestrationTaskId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          task.developerAgentId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          task.leaderAgentId.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesState = filterState === 'all' || task.state === filterState;
-    return matchesSearch && matchesState;
-  });
+  const filteredTasks = useMemo(() => {
+    const trimmedQuery = searchQuery.trim();
+    const lowerQuery = searchQuery.toLowerCase();
+
+    return tasks.filter(task => {
+      const matchesSearch = trimmedQuery === '' ||
+                            task.description.toLowerCase().includes(lowerQuery) ||
+                            task.orchestrationTaskId.toLowerCase().includes(lowerQuery) ||
+                            task.developerAgentId?.toLowerCase().includes(lowerQuery) ||
+                            task.leaderAgentId.toLowerCase().includes(lowerQuery);
+      const matchesState = filterState === 'all' || task.state === filterState;
+      return matchesSearch && matchesState;
+    });
+  }, [tasks, searchQuery, filterState]);
 
   const availableStates: (OrchestrationState | 'all')[] = ['all', 'created', 'assigned', 'implemented', 'fixes_needed', 'approved'];
 
