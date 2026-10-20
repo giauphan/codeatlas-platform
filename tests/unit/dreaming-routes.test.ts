@@ -77,7 +77,18 @@ const mockCheckAuth = mock.fn();
 const mockLogActivity = mock.fn();
 const mockLoadAnalysis = mock.fn();
 const mockSaveDreamMemory = mock.fn();
+const mockSaveDreamMemoryWithAck = mock.fn();
+const mockAcceptCapture = mock.fn();
 const mockQueryDreamMemories = mock.fn();
+const mockQueryDreamMemoriesWithStatus = mock.fn(async (...args: unknown[]) => {
+  const memories = await mockQueryDreamMemories(...args);
+  return {
+    memories,
+    retrieval_status: memories.length > 0 ? 'ok' : 'empty',
+    candidate_count: memories.length,
+    returned_count: memories.length,
+  };
+});
 const mockSummarizeConversation = mock.fn();
 
 // Mock authService
@@ -88,10 +99,15 @@ safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 const dreamingServiceMock = {
   DreamingService: {
     saveDreamMemory: mockSaveDreamMemory,
+    saveDreamMemoryWithAck: mockSaveDreamMemoryWithAck,
     queryDreamMemories: mockQueryDreamMemories,
+    queryDreamMemoriesWithStatus: mockQueryDreamMemoriesWithStatus,
   },
 };
 safeMockModule(path.join(srcDir, 'services/dreamingService.js'), dreamingServiceMock);
+safeMockModule(path.join(srcDir, 'services/dreamCaptureStore.js'), {
+  DreamCaptureStore: { accept: mockAcceptCapture },
+});
 
 safeMockModule(path.join(srcDir, 'services/llmService.js'), {
   summarizeConversationForDreams: mockSummarizeConversation,
@@ -197,7 +213,10 @@ describe('Dreaming Routes', () => {
     mockLogActivity.mock.resetCalls();
     mockLoadAnalysis.mock.resetCalls();
     mockSaveDreamMemory.mock.resetCalls();
+    mockSaveDreamMemoryWithAck.mock.resetCalls();
+    mockAcceptCapture.mock.resetCalls();
     mockQueryDreamMemories.mock.resetCalls();
+    mockQueryDreamMemoriesWithStatus.mock.resetCalls();
     mockSummarizeConversation.mock.resetCalls();
     mockAuthStore.getStore.mock.resetCalls();
     mockAuthStore.run.mock.resetCalls();
@@ -211,10 +230,88 @@ describe('Dreaming Routes', () => {
 
   // ── POST /api/dreams/save ──────────────────────────────────────────
   describe('POST /api/dreams/save', () => {
+    test('returns a typed stored acknowledgement and forwards the idempotency key', async () => {
+      mockSaveDreamMemoryWithAck.mock.mockImplementation(async () => ({
+        status: 'stored',
+        persisted: true,
+        id: 'memory-typed-1',
+      }));
+      const content = 'Node.js uses event loop for async I/O and this sentence is long enough.';
+
+      const res = await fetch(`${baseUrl}/api/dreams/save?apiKey=valid-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'event-123', 'X-Request-ID': 'trace-test-1' },
+        body: JSON.stringify({ memory_type: 'KNOWLEDGE', content, project: 'typed-project' }),
+      });
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.equal(body.status, 'stored');
+      assert.equal(body.persisted, true);
+      assert.equal(body.success, true);
+      assert.equal(body.id, 'memory-typed-1');
+      assert.equal(body.memory_id, 'memory-typed-1');
+      assert.equal(body.request_id, 'trace-test-1');
+      assert.equal(res.headers.get('x-request-id'), 'trace-test-1');
+      const args = mockSaveDreamMemoryWithAck.mock.calls.at(-1)?.arguments[0] as Record<string, unknown>;
+      assert.strictEqual(args.project, 'typed-project');
+      assert.strictEqual(args.content, content);
+      assert.strictEqual(args.idempotencyKey, 'event-123');
+      const logArgs = mockLogActivity.mock.calls.at(-1)?.arguments[2] as Record<string, unknown>;
+      assert.strictEqual(logArgs.content, undefined);
+      assert.strictEqual(logArgs.content_length, content.length);
+    });
+
+    test('does not claim persistence or expose an id for filtered content', async () => {
+      mockSaveDreamMemoryWithAck.mock.mockImplementation(async () => ({
+        status: 'filtered',
+        persisted: false,
+        reason_code: 'noise_blocked',
+      }));
+
+      const res = await fetch(`${baseUrl}/api/dreams/save?apiKey=valid-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memory_type: 'KNOWLEDGE', content: 'filtered content' }),
+      });
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.equal(body.status, 'filtered');
+      assert.equal(body.persisted, false);
+      assert.equal(body.success, true);
+      assert.equal(body.reason_code, 'noise_blocked');
+      assert.equal(body.id, undefined);
+      assert.equal(body.memory_id, undefined);
+    });
+
+    test('rejects idempotency key reuse with different content', async () => {
+      mockSaveDreamMemoryWithAck.mock.mockImplementation(async () => ({
+        status: 'rejected',
+        persisted: false,
+        reason_code: 'idempotency_key_reused',
+      }));
+
+      const res = await fetch(`${baseUrl}/api/dreams/save?apiKey=valid-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'event-123' },
+        body: JSON.stringify({ memory_type: 'KNOWLEDGE', content: 'different content for same event key' }),
+      });
+
+      assert.strictEqual(res.status, 409);
+      const body = await res.json() as Record<string, unknown>;
+      assert.equal(body.status, 'rejected');
+      assert.equal(body.persisted, false);
+      assert.equal(body.success, false);
+      assert.equal(body.reason_code, 'idempotency_key_reused');
+      assert.equal(body.id, undefined);
+      assert.equal(body.memory_id, undefined);
+    });
+
     test('with valid inputs returns 200 + id', async () => {
-      mockSaveDreamMemory.mock.mockImplementation(async () =>
-        'proj_KNOWLEDGE_sess_1234567890',
-      );
+      mockSaveDreamMemoryWithAck.mock.mockImplementation(async () => ({
+        status: 'stored', persisted: true, id: 'proj_KNOWLEDGE_sess_1234567890',
+      }));
 
       const res = await fetch(`${baseUrl}/api/dreams/save?apiKey=valid-key`, {
         method: 'POST',
@@ -230,18 +327,21 @@ describe('Dreaming Routes', () => {
 
       assert.strictEqual(res.status, 200);
       const body = await res.json() as Record<string, unknown>;
-      assert.strictEqual(body.success, true);
+      assert.strictEqual(body.status, 'stored');
+      assert.strictEqual(body.persisted, true);
       assert.strictEqual(body.id, 'proj_KNOWLEDGE_sess_1234567890');
-      assert.strictEqual(body.memory_type, 'KNOWLEDGE');
+      assert.strictEqual(body.memory_id, 'proj_KNOWLEDGE_sess_1234567890');
+      assert.strictEqual(body.success, true);
+      assert.ok(typeof body.request_id === 'string');
 
       // Verify service was called with correct params
-      assert.strictEqual(mockSaveDreamMemory.mock.calls.length, 1);
-      const args = mockSaveDreamMemory.mock.calls[0].arguments;
-      assert.strictEqual(args[0], 'test-project'); // project
-      assert.strictEqual(args[1], 'sess-123'); // sessionId
-      assert.strictEqual(args[2], 'KNOWLEDGE'); // memoryType
-      assert.strictEqual(args[3], 'Node.js uses event loop for async I/O'); // content
-      assert.strictEqual(args[4], 7); // importance
+      assert.strictEqual(mockSaveDreamMemoryWithAck.mock.calls.length, 1);
+      const args = mockSaveDreamMemoryWithAck.mock.calls[0].arguments[0] as Record<string, unknown>;
+      assert.strictEqual(args.project, 'test-project');
+      assert.strictEqual(args.sessionId, 'sess-123');
+      assert.strictEqual(args.memoryType, 'KNOWLEDGE');
+      assert.strictEqual(args.content, 'Node.js uses event loop for async I/O');
+      assert.strictEqual(args.importance, 7);
     });
 
     test('with wrong apiKey returns 401', async () => {
@@ -260,7 +360,10 @@ describe('Dreaming Routes', () => {
 
       assert.strictEqual(res.status, 401);
       const body = await res.json() as Record<string, unknown>;
-      assert.ok((body.error as string).includes('API key'));
+      assert.equal(body.status, 'error');
+      assert.equal(body.persisted, false);
+      assert.equal(body.success, false);
+      assert.equal(body.reason_code, 'authentication_failed');
     });
 
     test('with invalid memory_type returns 400', async () => {
@@ -275,7 +378,11 @@ describe('Dreaming Routes', () => {
 
       assert.strictEqual(res.status, 400);
       const body = await res.json() as Record<string, unknown>;
-      assert.ok((body.error as string).includes('memory_type'));
+      assert.equal(body.status, 'rejected');
+      assert.equal(body.persisted, false);
+      assert.equal(body.success, false);
+      assert.equal(body.reason_code, 'invalid_memory_type');
+      assert.equal(body.request_id, res.headers.get('x-request-id'));
     });
 
     test('with missing content returns 400', async () => {
@@ -289,11 +396,15 @@ describe('Dreaming Routes', () => {
 
       assert.strictEqual(res.status, 400);
       const body = await res.json() as Record<string, unknown>;
-      assert.ok((body.error as string).includes('content'));
+      assert.equal(body.status, 'rejected');
+      assert.equal(body.persisted, false);
+      assert.equal(body.success, false);
+      assert.equal(body.reason_code, 'invalid_content');
+      assert.equal(body.request_id, res.headers.get('x-request-id'));
     });
 
     test('with optional fields omitted defaults to importance=5 and session_id=unknown', async () => {
-      mockSaveDreamMemory.mock.mockImplementation(async () => 'id-1');
+      mockSaveDreamMemoryWithAck.mock.mockImplementation(async () => ({ status: 'stored', persisted: true, id: 'id-1' }));
 
       const res = await fetch(`${baseUrl}/api/dreams/save?apiKey=valid-key`, {
         method: 'POST',
@@ -307,18 +418,18 @@ describe('Dreaming Routes', () => {
       assert.strictEqual(res.status, 200);
 
       // Verify defaults were used
-      assert.strictEqual(mockSaveDreamMemory.mock.calls.length, 1);
-      const args = mockSaveDreamMemory.mock.calls[0].arguments;
-      assert.strictEqual(args[1], 'unknown'); // default session_id
-      assert.strictEqual(args[4], 5); // default importance
-      assert.strictEqual(args[0], 'global'); // default project
+      assert.strictEqual(mockSaveDreamMemoryWithAck.mock.calls.length, 1);
+      const args = mockSaveDreamMemoryWithAck.mock.calls[0].arguments[0] as Record<string, unknown>;
+      assert.strictEqual(args.sessionId, 'unknown');
+      assert.strictEqual(args.importance, 5);
+      assert.strictEqual(args.project, 'global');
     });
 
     test('with project that loads analysis uses resolved projectName', async () => {
       mockLoadAnalysis.mock.mockImplementation(async () => ({
         projectName: 'resolved-project-name',
       }));
-      mockSaveDreamMemory.mock.mockImplementation(async () => 'id-2');
+      mockSaveDreamMemoryWithAck.mock.mockImplementation(async () => ({ status: 'stored', persisted: true, id: 'id-2' }));
 
       const res = await fetch(`${baseUrl}/api/dreams/save?apiKey=valid-key`, {
         method: 'POST',
@@ -333,14 +444,12 @@ describe('Dreaming Routes', () => {
       assert.strictEqual(res.status, 200);
 
       // Should have used resolved project name
-      const args = mockSaveDreamMemory.mock.calls[0].arguments;
-      assert.strictEqual(args[0], 'resolved-project-name');
+      const args = mockSaveDreamMemoryWithAck.mock.calls[0].arguments[0] as Record<string, unknown>;
+      assert.strictEqual(args.project, 'resolved-project-name');
     });
 
     test('with DB error returns 500', async () => {
-      mockSaveDreamMemory.mock.mockImplementation(async () => {
-        throw new Error('ORA-00001: unique constraint violation');
-      });
+      mockSaveDreamMemoryWithAck.mock.mockImplementation(async () => ({ status: 'error', persisted: false, reason_code: 'save_failed' }));
 
       const res = await fetch(`${baseUrl}/api/dreams/save?apiKey=valid-key`, {
         method: 'POST',
@@ -353,7 +462,53 @@ describe('Dreaming Routes', () => {
 
       assert.strictEqual(res.status, 500);
       const body = await res.json() as Record<string, unknown>;
-      assert.ok((body.error as string).includes('ORA-00001'));
+      assert.equal(body.status, 'error');
+      assert.equal(body.persisted, false);
+      assert.equal(body.success, false);
+      assert.equal(body.reason_code, 'save_failed');
+    });
+  });
+
+  describe('GET /api/admin/dreams/diagnostics', () => {
+    test('returns aggregate counters only to an admin', async () => {
+      mockAuthStore.getStore.mock.mockImplementation(() => ({
+        uid: 'admin-user',
+        role: 'admin',
+        tier: 'enterprise',
+      }));
+
+      const res = await fetch(`${baseUrl}/api/admin/dreams/diagnostics`);
+
+      assert.strictEqual(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.ok(body.counters && typeof body.counters === 'object');
+      const counters = body.counters as Record<string, unknown>;
+      const requiredCounters = [
+        'stored', 'filtered', 'duplicate', 'failed', 'queried', 'retrieved', 'injected', 'cron',
+        'events_stored', 'events_duplicate', 'events_filtered', 'events_failed',
+        'capture_received', 'capture_stored', 'capture_filtered', 'capture_duplicate', 'capture_failed',
+        'reconciliation_runs', 'reconciliation_processed', 'reconciliation_filtered', 'reconciliation_failed',
+        'reconciliation_events', 'reconciliation_duration_ms_total', 'reconciliation_duration_ms_max',
+        'reconciliation_lag_ms_latest', 'reconciliation_lag_ms_max',
+        'retrieval_empty', 'retrieval_no_match', 'retrieval_filtered', 'retrieval_error',
+        'scheduler_success', 'scheduler_failure', 'scheduler_lease_lost',
+        'scheduler_duration_ms_total', 'scheduler_duration_ms_max',
+      ];
+      assert.ok(requiredCounters.every(key => Object.hasOwn(counters, key)));
+      assert.ok(Object.values(counters).every(value => typeof value === 'number' && Number.isFinite(value)));
+      assert.doesNotMatch(JSON.stringify(body), /content|transcript|session|tenant|project|event_id|authorization|token/i);
+    });
+
+    test('denies diagnostics to non-admins', async () => {
+      mockAuthStore.getStore.mock.mockImplementation(() => ({
+        uid: 'test-user',
+        role: 'user',
+        tier: 'enterprise',
+      }));
+
+      const res = await fetch(`${baseUrl}/api/admin/dreams/diagnostics`);
+
+      assert.strictEqual(res.status, 403);
     });
   });
 
@@ -395,6 +550,19 @@ describe('Dreaming Routes', () => {
         (body.memories as Record<string, unknown>[])[0].memory_type,
         'KNOWLEDGE',
       );
+      const logArgs = mockLogActivity.mock.calls.at(-1)?.arguments[2] as Record<string, unknown>;
+      assert.equal(logArgs.query, undefined);
+      assert.equal(logArgs.query_length, 'how does node work'.length);
+    });
+
+    test('forwards canonical identity audit metadata without changing project scope', async () => {
+      mockQueryDreamMemories.mock.mockImplementation(async () => []);
+      const res = await fetch(`${baseUrl}/api/dreams/query?apiKey=valid-key&project_id=canonical-id&project=legacy-name&display_name=Friendly%20Project&workspace_path=%2Fwork%2Frepos%2Fproject-one`);
+      assert.equal(res.status, 200);
+      const args = mockQueryDreamMemoriesWithStatus.mock.calls.at(-1)?.arguments ?? [];
+      assert.equal(args[10], 'canonical-id');
+      assert.equal(args[11], 'Friendly Project');
+      assert.equal(args[12], '/work/repos/project-one');
     });
 
     test('respects limit param', async () => {
@@ -473,7 +641,8 @@ describe('Dreaming Routes', () => {
 
       assert.strictEqual(res.status, 500);
       const body = await res.json() as Record<string, unknown>;
-      assert.ok((body.error as string).includes('ORA-00942'));
+      assert.equal(body.error, 'Query failed');
+      assert.equal(body.retrieval_status, 'backend_error');
     });
 
     test('with empty results returns empty array and count 0', async () => {
@@ -569,11 +738,76 @@ describe('Dreaming Routes', () => {
 
       assert.strictEqual(res.status, 500);
       const body = await res.json() as Record<string, unknown>;
-      assert.ok((body.error as string).includes('database is locked'));
+      assert.equal(body.error, 'Query failed');
+      assert.equal(body.retrieval_status, 'backend_error');
     });
   });
 
   describe('POST /api/dreams/ingest-session', () => {
+    test('durably acknowledges a normalized event with its event id and no fake memory ids', async () => {
+      mockAcceptCapture.mock.mockImplementation(async () => ({
+        success: true,
+        status: 'stored',
+        persisted: true,
+        acknowledged: true,
+        event_id: 'evt-123',
+        memory_ids: [],
+      }));
+      const res = await fetch(`${baseUrl}/api/dreams/ingest-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': 'valid-key' },
+        body: JSON.stringify({
+          event_id: 'evt-123',
+          session_id: 'session-1',
+          actor_role: 'USER',
+          project_id: 'project-id',
+          project: 'display-project',
+          display_name: 'Friendly Project',
+          workspace_path: '/work/repos/project-one',
+          content: 'A bounded normalized event segment.',
+          checkpoint: { kind: 'progress' },
+        }),
+      });
+      const body = await res.json() as Record<string, unknown>;
+
+      assert.equal(res.status, 200);
+      assert.equal(body.status, 'stored');
+      assert.equal(body.persisted, true);
+      assert.equal(body.acknowledged, true);
+      assert.equal(body.event_id, 'evt-123');
+      assert.deepEqual(body.memory_ids, []);
+      assert.equal(mockAcceptCapture.mock.callCount(), 1);
+      const input = mockAcceptCapture.mock.calls[0].arguments[0] as Record<string, unknown>;
+      assert.equal(input.eventId, 'evt-123');
+      assert.equal(input.actorRole, 'USER');
+      assert.equal(input.projectId, 'project-id');
+      assert.equal(input.displayName, 'Friendly Project');
+      assert.equal(input.workspacePath, '/work/repos/project-one');
+      assert.deepEqual(input.checkpoint, { kind: 'progress' });
+    });
+
+    test('does not acknowledge a malformed event and retains legacy transcript flow without event_id', async () => {
+      const invalid = await fetch(`${baseUrl}/api/dreams/ingest-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': 'valid-key' },
+        body: JSON.stringify({ event_id: 'evt-123', content: 'missing session and project' }),
+      });
+      const invalidBody = await invalid.json() as Record<string, unknown>;
+      assert.equal(invalid.status, 400);
+      assert.equal(invalidBody.acknowledged, false);
+      assert.equal(mockAcceptCapture.mock.callCount(), 0);
+
+      mockSummarizeConversation.mock.mockImplementation(async () => []);
+      const legacy = await fetch(`${baseUrl}/api/dreams/ingest-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': 'valid-key' },
+        body: JSON.stringify({ content: 'legacy transcript content' }),
+      });
+      assert.equal(legacy.status, 200);
+      assert.equal((await legacy.json() as Record<string, unknown>).dreamsExtracted, 0);
+      assert.equal(mockAcceptCapture.mock.callCount(), 0);
+    });
+
     test('successfully ingests transcripts and filters noise-blocked saves', async () => {
       mockSummarizeConversation.mock.mockImplementation(async () => [
         { memoryType: 'KNOWLEDGE', content: 'Node is fast', importance: 7 },
@@ -652,4 +886,5 @@ describe('Dreaming Routes', () => {
       assert.strictEqual(body.dreamsExtracted, 0);
     });
   });
+
 });

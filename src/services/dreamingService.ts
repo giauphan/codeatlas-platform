@@ -6,6 +6,40 @@ import { createDatabaseAdapter } from "../database/factory.js";
 import { buildInClause } from "../database/utils.js";
 import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 import { countMatching } from "../utils/array.js";
+import { DreamDiagnostics } from "./dreamDiagnostics.js";
+import { DreamProjectIdentityService } from "./dreamProjectIdentityService.js";
+import { redactMemoryText, validateGroundedCandidates, type StructuredMemory, type ExtractionSourceEvent } from "./structuredMemoryExtractor.js";
+
+async function writeSaveReceipt(
+  db: ReturnType<typeof createDatabaseAdapter>,
+  tenantId: string,
+  project: string,
+  idempotencyKey: string,
+  requestHash: string,
+  status: "stored" | "duplicate" | "filtered",
+  memoryId?: string,
+): Promise<DreamSaveAcknowledgement> {
+  await db.execute(
+    `INSERT INTO dream_save_receipts (tenant_id, project, idempotency_key, request_hash, status, memory_id)
+     VALUES (:tenantId, :project, :idempotencyKey, :requestHash, :status, :memoryId)
+     ON CONFLICT DO NOTHING`,
+    { tenantId, project, idempotencyKey, requestHash, status, memoryId: memoryId ?? null },
+  );
+  const rows = await db.query<{ request_hash: string; status: string; memory_id: string | null }>(
+    `SELECT request_hash, status, memory_id FROM dream_save_receipts
+     WHERE tenant_id = :tenantId AND project = :project AND idempotency_key = :idempotencyKey LIMIT 1`,
+    { tenantId, project, idempotencyKey },
+  );
+  if (!rows.length) return { status: "error", persisted: false, reason_code: "receipt_missing" };
+  if (rows[0].request_hash !== requestHash) return { status: "rejected", persisted: false, reason_code: "idempotency_key_reused" };
+  const storedStatus = rows[0].status;
+  if (storedStatus === "filtered") return { status: "filtered", persisted: false, reason_code: "noise_blocked" };
+  return {
+    status: status === "stored" && storedStatus === "stored" ? "stored" : "duplicate",
+    persisted: Boolean(rows[0].memory_id),
+    ...(rows[0].memory_id ? { id: rows[0].memory_id } : {}),
+  };
+}
 
 /**
  * Stop words for noise gate — English + Vietnamese.
@@ -45,6 +79,7 @@ export interface DreamMemory {
   id: string;
   sessionId: string;
   project: string;
+  projectId?: string;
   provider?: string;
   memoryType: DreamMemoryType;
   content: string;
@@ -62,6 +97,34 @@ export interface DreamMemory {
   accessCount?: number;
   lastAccessedAt?: string;
   version?: number;
+}
+
+export type DreamSaveStatus = "stored" | "duplicate" | "filtered" | "rejected" | "error";
+
+export interface DreamSaveAcknowledgement {
+  status: DreamSaveStatus;
+  persisted: boolean;
+  id?: string;
+  reason_code?: string;
+}
+
+export interface DreamSaveInput {
+  project: string;
+  projectId?: string;
+  displayName?: string;
+  workspacePath?: string;
+  projectAliases?: string[];
+  sessionId: string;
+  memoryType: DreamMemoryType;
+  content: string;
+  importance: number;
+  aiModel?: string;
+  scope?: string;
+  tags?: string[];
+  relatedIds?: string[];
+  idempotencyKey?: string;
+  /** Internal evidence-validated extraction path; never copied from API input. */
+  structuredEvidence?: { memory: StructuredMemory; events: ExtractionSourceEvent[] };
 }
 
 /**
@@ -246,96 +309,279 @@ export class DreamingService {
     aiModel?: string,
     scope?: string,
     tags?: string[],
-    relatedIds?: string[]
+    relatedIds?: string[],
+    idempotencyKey?: string
   ): Promise<string> {
-    // Noise gate: reject low-quality, low-value dreams before spending embedding cost
-    const noiseCheck = DreamingService.checkNoise(memoryType, content, importance);
-    if (noiseCheck.isNoise) {
-      logger.warn(`[Dreaming] Noise gate blocked dream: ${noiseCheck.reason} (type=${memoryType} imp=${importance})`);
+    const result = await DreamingService.saveDreamMemoryWithAck({
+      project,
+      sessionId,
+      memoryType,
+      content,
+      importance,
+      aiModel,
+      scope,
+      tags,
+      relatedIds,
+      idempotencyKey,
+    });
+    if (result.id) return result.id;
+    if (result.status === "filtered") return "__noise_blocked__";
+    throw new Error(result.reason_code || "Dream memory save failed");
+  }
 
-      // Log to noise filtering file for debugging
-      const fs = await import('node:fs');
-      const logEntry = `[${new Date().toISOString()}] BLOCKED: ${memoryType} (imp=${importance}) - ${noiseCheck.reason}: ${content.slice(0, 100)}\n`;
-      try {
-        await fs.promises.appendFile('/tmp/noise_filtering.log', logEntry);
-      } catch (err) {
-        logger.error(`[Dreaming] Failed to write noise log: ${err}`);
+  static async saveDreamMemoryWithAck(input: DreamSaveInput): Promise<DreamSaveAcknowledgement> {
+    // Enforce the privacy boundary for direct API/MCP callers as well as hooks.
+    // The embedding provider never receives the original credential values.
+    input = { ...input, content: redactMemoryText(input.content) };
+    const tenantId = authStorage.getStore()!.uid;
+    const projectId = input.projectId?.trim() || input.project;
+    const contentHash = crypto.createHash("sha256").update(input.content).digest("hex");
+    const requestHash = crypto.createHash("sha256").update(JSON.stringify({
+      projectId,
+      sessionId: input.sessionId,
+      memoryType: input.memoryType,
+      content: input.content,
+      importance: input.importance,
+      aiModel: input.aiModel ?? null,
+      scope: input.scope ?? null,
+      tags: input.tags ?? null,
+      relatedIds: input.relatedIds ?? null,
+    })).digest("hex");
+    const db = createDatabaseAdapter();
+    let legacyProjectAliases: string[] = [];
+
+    try {
+      if (input.projectId) {
+        const identity = await DreamProjectIdentityService.register({
+          projectId,
+          displayName: input.displayName ?? input.project,
+          aliases: input.projectAliases,
+          workspacePath: input.workspacePath ?? input.projectAliases?.find((alias) => alias.includes("/")),
+        });
+        legacyProjectAliases = identity.aliases;
       }
-      // Return a sentinel so callers know it was filtered, not an error
-      return '__noise_blocked__';
-    }
+      if (input.idempotencyKey !== undefined && (!input.idempotencyKey.trim() || input.idempotencyKey.length > 255)) {
+        const result: DreamSaveAcknowledgement = {
+          status: "rejected",
+          persisted: false,
+          reason_code: "invalid_idempotency_key",
+        };
+        DreamDiagnostics.recordSave(result.status);
+        return result;
+      }
 
-    // Generate embedding BEFORE acquiring a database connection
-    const embeddingVector = await generateEmbedding(content, 'passage');
-    // Content hash for dedup — same content always produces same hash
-    const contentHash = crypto.createHash('sha256').update(content).digest('hex');
+      if (input.idempotencyKey) {
+        const existingReceipt = await db.query<{ request_hash: string; status: string; memory_id: string | null }>(
+          `SELECT request_hash, status, memory_id FROM dream_save_receipts
+           WHERE tenant_id = :tenantId AND project = :project AND idempotency_key = :idempotencyKey LIMIT 1`,
+          { tenantId, project: projectId, idempotencyKey: input.idempotencyKey },
+        );
+        if (existingReceipt.length > 0) {
+          const result: DreamSaveAcknowledgement = existingReceipt[0].request_hash !== requestHash
+            ? { status: "rejected", persisted: false, reason_code: "idempotency_key_reused" }
+            : existingReceipt[0].status === "filtered"
+              ? { status: "filtered", persisted: false, reason_code: "noise_blocked" }
+              : { status: "duplicate", persisted: Boolean(existingReceipt[0].memory_id), ...(existingReceipt[0].memory_id ? { id: existingReceipt[0].memory_id } : {}) };
+          DreamDiagnostics.recordSave(result.status);
+          return result;
+        }
+        const existingByKey = await db.query<{ id: string; request_hash: string }>(
+          `SELECT id, request_hash FROM ai_dreaming_memory
+           WHERE tenant_id = :tenantId AND (project_id = :projectId OR (project_id IS NULL AND project = :project)) AND idempotency_key = :idempotencyKey LIMIT 1`,
+          { tenantId, projectId, project: input.project, idempotencyKey: input.idempotencyKey },
+        );
+        if (existingByKey.length > 0) {
+          const samePayload = existingByKey[0].request_hash === requestHash;
+          const result: DreamSaveAcknowledgement = samePayload
+            ? await writeSaveReceipt(db, tenantId, projectId, input.idempotencyKey, requestHash, "duplicate", existingByKey[0].id)
+            : { status: "rejected", persisted: false, reason_code: "idempotency_key_reused" };
+          DreamDiagnostics.recordSave(result.status);
+          return result;
+        }
+      }
+
+      const structured = input.structuredEvidence;
+      const grounded = structured && structured.memory.content === input.content && structured.memory.memoryType === input.memoryType &&
+        validateGroundedCandidates([structured.memory], structured.events).length === 1;
+      if (structured && !grounded) return { status: 'rejected', persisted: false, reason_code: 'unsupported_evidence' };
+      // Structured records already passed semantic/evidence validation. Preserve
+      // short task outcomes and long decision caveats; keep the legacy gate for
+      // direct saves so compatibility does not weaken that boundary.
+      const noiseCheck = grounded
+        ? { isNoise: input.content.trim().length < 20 || input.content.length > 8000 || checkNoiseBlocklist(input.content).isNoise, reason: 'invalid_structured_memory' }
+        : DreamingService.checkNoise(input.memoryType, input.content, input.importance);
+      if (noiseCheck.isNoise) {
+        logger.warn(`[Dreaming] Noise gate blocked dream: ${noiseCheck.reason} (type=${input.memoryType} imp=${input.importance})`);
+        const result = input.idempotencyKey
+          ? await writeSaveReceipt(db, tenantId, projectId, input.idempotencyKey, requestHash, "filtered")
+          : { status: "filtered" as const, persisted: false, reason_code: "noise_blocked" };
+        DreamDiagnostics.recordSave(result.status);
+        return result;
+      }
+
+      if (DreamingService._hasContentHashColumn) {
+        const legacyAliasFilter = legacyProjectAliases.length > 0
+          ? ` OR (project_id IS NULL AND project IN (${legacyProjectAliases.map((_, index) => `:legacyProject${index}`).join(", ")}))`
+          : "";
+        const contentBinds: Record<string, unknown> = { tenantId, projectId, project: input.project, memoryType: input.memoryType, contentHash };
+        legacyProjectAliases.forEach((alias, index) => { contentBinds[`legacyProject${index}`] = alias; });
+        const existingByContent = await db.query<{ id: string }>(
+          `SELECT id FROM ai_dreaming_memory
+           WHERE tenant_id = :tenantId AND memory_type = :memoryType AND content_hash = :contentHash
+             AND (project_id = :projectId OR (project_id IS NULL AND project = :project)${legacyAliasFilter}) LIMIT 1`,
+          contentBinds,
+        );
+        if (existingByContent.length > 0) {
+          const result: DreamSaveAcknowledgement = input.idempotencyKey
+            ? await writeSaveReceipt(db, tenantId, projectId, input.idempotencyKey, requestHash, "duplicate", existingByContent[0].id)
+            : { status: "duplicate", persisted: true, id: existingByContent[0].id };
+          DreamDiagnostics.recordSave(result.status);
+          return result;
+        }
+      }
+
+      const { id: proposedId, inserted } = await DreamingService.persistDreamMemory(input, tenantId, contentHash, requestHash, projectId);
+      if (!inserted && input.idempotencyKey) {
+        const existingByKey = await db.query<{ id: string; request_hash: string }>(
+          `SELECT id, request_hash FROM ai_dreaming_memory
+           WHERE tenant_id = :tenantId AND (project_id = :projectId OR (project_id IS NULL AND project = :project)) AND idempotency_key = :idempotencyKey LIMIT 1`,
+          { tenantId, projectId, project: input.project, idempotencyKey: input.idempotencyKey },
+        );
+        if (existingByKey.length > 0) {
+          const samePayload = existingByKey[0].request_hash === requestHash;
+          const result: DreamSaveAcknowledgement = samePayload
+            ? { status: "duplicate", persisted: true, id: existingByKey[0].id }
+            : { status: "rejected", persisted: false, reason_code: "idempotency_key_reused" };
+          DreamDiagnostics.recordSave(result.status);
+          return result;
+        }
+      }
+      const savedRows = DreamingService._hasContentHashColumn
+        ? await db.query<{ id: string }>(
+          `SELECT id FROM ai_dreaming_memory
+           WHERE tenant_id = :tenantId AND memory_type = :memoryType AND content_hash = :contentHash
+             AND (project_id = :projectId OR (project_id IS NULL AND project = :project)) LIMIT 1`,
+          { tenantId, projectId, project: input.project, memoryType: input.memoryType, contentHash },
+        )
+        : input.idempotencyKey
+          ? await db.query<{ id: string }>(
+            `SELECT id FROM ai_dreaming_memory
+             WHERE tenant_id = :tenantId AND (project_id = :projectId OR (project_id IS NULL AND project = :project)) AND idempotency_key = :idempotencyKey LIMIT 1`,
+            { tenantId, projectId, project: input.project, idempotencyKey: input.idempotencyKey },
+          )
+          : [];
+      if (!inserted && savedRows.length === 0) {
+        const result: DreamSaveAcknowledgement = { status: "error", persisted: false, reason_code: "save_conflict" };
+        DreamDiagnostics.recordSave(result.status);
+        return result;
+      }
+      const result: DreamSaveAcknowledgement = input.idempotencyKey
+        ? await writeSaveReceipt(db, tenantId, projectId, input.idempotencyKey, requestHash, inserted ? "stored" : "duplicate", savedRows[0]?.id ?? proposedId)
+        : { status: inserted ? "stored" : "duplicate", persisted: true, id: savedRows[0]?.id ?? proposedId };
+      DreamDiagnostics.recordSave(result.status);
+      return result;
+    } catch {
+      if (input.idempotencyKey) {
+        try {
+          const receipt = await db.query<{ request_hash: string; status: string; memory_id: string | null }>(
+            `SELECT request_hash, status, memory_id FROM dream_save_receipts
+             WHERE tenant_id = :tenantId AND project = :project AND idempotency_key = :idempotencyKey LIMIT 1`,
+            { tenantId, project: projectId, idempotencyKey: input.idempotencyKey },
+          );
+          if (receipt.length > 0) {
+            const result: DreamSaveAcknowledgement = receipt[0].request_hash !== requestHash
+              ? { status: "rejected", persisted: false, reason_code: "idempotency_key_reused" }
+              : receipt[0].status === "filtered"
+                ? { status: "filtered", persisted: false, reason_code: "noise_blocked" }
+                : { status: "duplicate", persisted: Boolean(receipt[0].memory_id), ...(receipt[0].memory_id ? { id: receipt[0].memory_id } : {}) };
+            DreamDiagnostics.recordSave(result.status);
+            return result;
+          }
+          const existing = await db.query<{ id: string; request_hash: string }>(
+          `SELECT id, request_hash FROM ai_dreaming_memory
+             WHERE tenant_id = :tenantId AND (project_id = :projectId OR (project_id IS NULL AND project = :project)) AND idempotency_key = :idempotencyKey LIMIT 1`,
+            { tenantId, projectId, project: input.project, idempotencyKey: input.idempotencyKey },
+          );
+          if (existing.length > 0) {
+            const samePayload = existing[0].request_hash === requestHash;
+            const result: DreamSaveAcknowledgement = samePayload
+              ? { status: "duplicate", persisted: true, id: existing[0].id }
+              : { status: "rejected", persisted: false, reason_code: "idempotency_key_reused" };
+            DreamDiagnostics.recordSave(result.status);
+            return result;
+          }
+        } catch {
+          // The generic error outcome below is intentionally content-free.
+        }
+      }
+      logger.error("[Dreaming] Error saving dream memory");
+      const result: DreamSaveAcknowledgement = { status: "error", persisted: false, reason_code: "save_failed" };
+      DreamDiagnostics.recordSave(result.status);
+      return result;
+    }
+  }
+
+  private static async persistDreamMemory(input: DreamSaveInput, tenantId: string, contentHash: string, requestHash: string, projectId: string): Promise<{ id: string; inserted: boolean }> {
+    // Generate embedding before the write path acquires a database connection.
+    const embeddingVector = await generateEmbedding(input.content, 'passage');
 
     const db = createDatabaseAdapter();
-    const tenantId = authStorage.getStore()!.uid;
-    const id = `${project}_${memoryType}_${sessionId}_${Date.now()}`;
-    const initialConfidence = DreamingService.calcInitialConfidence(memoryType, importance);
-    const tagsJson = tags ? JSON.stringify(tags) : null;
-    const relatedIdsJson = relatedIds ? JSON.stringify(relatedIds) : null;
+    const id = `${input.project}_${input.memoryType}_${input.sessionId}_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
+    const initialConfidence = DreamingService.calcInitialConfidence(input.memoryType, input.importance);
+    const tagsJson = input.tags ? JSON.stringify(input.tags) : null;
+    const relatedIdsJson = input.relatedIds ? JSON.stringify(input.relatedIds) : null;
     try {
       if (DreamingService._hasContentHashColumn && DreamingService._hasLifecycleColumns) {
           const sql = `
             INSERT INTO ai_dreaming_memory (
-              id, session_id, project, provider, memory_type, content, embedding, importance, content_hash, confidence, status, evidence_count, access_count, version, tenant_id, scope, tags, related_ids
+              id, session_id, project, project_id, provider, memory_type, content, embedding, importance, content_hash, idempotency_key, request_hash, confidence, status, evidence_count, access_count, version, tenant_id, scope, tags, related_ids
             ) VALUES (
-              :id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :contentHash, :initialConfidence, 'active', 1, 0, 1, :tenantId, :scope, :tagsJson, :relatedIdsJson
+              :id, :sessionId, :project, :projectId, :provider, :memoryType, :content, :embedding, :importance, :contentHash, :idempotencyKey, :requestHash, :initialConfidence, 'active', 1, 0, 1, :tenantId, :scope, :tagsJson, :relatedIdsJson
             )
-            ON CONFLICT(project, memory_type, content_hash, tenant_id) DO UPDATE SET
-              embedding      = EXCLUDED.embedding,
-              importance     = CASE WHEN ai_dreaming_memory.importance > EXCLUDED.importance THEN ai_dreaming_memory.importance ELSE EXCLUDED.importance END,
-              content        = EXCLUDED.content,
-              session_id     = EXCLUDED.session_id,
-              provider       = EXCLUDED.provider,
-              id             = EXCLUDED.id,
-              confidence     = CASE WHEN ai_dreaming_memory.confidence > EXCLUDED.confidence THEN ai_dreaming_memory.confidence ELSE EXCLUDED.confidence END,
-              evidence_count = ai_dreaming_memory.evidence_count + 1,
-              scope          = COALESCE(EXCLUDED.scope, ai_dreaming_memory.scope),
-              tags           = COALESCE(EXCLUDED.tags, ai_dreaming_memory.tags),
-              related_ids    = COALESCE(EXCLUDED.related_ids, ai_dreaming_memory.related_ids)
+            ON CONFLICT DO NOTHING
           `;
 
-          await db.execute(sql, {
+          const inserted = await db.execute(sql, {
             id,
-            sessionId,
-            project,
-            provider: aiModel ?? null,
-            memoryType,
-            content,
+            sessionId: input.sessionId,
+            project: input.project,
+            projectId,
+            provider: input.aiModel ?? null,
+            memoryType: input.memoryType,
+            content: input.content,
             contentHash,
+            idempotencyKey: input.idempotencyKey ?? null,
+            requestHash,
             embedding: embeddingVector ? new Uint8Array(new Float32Array(embeddingVector).buffer) : null,
-            importance,
+            importance: input.importance,
             initialConfidence,
             tenantId,
-            scope: scope ?? null,
+            scope: input.scope ?? null,
             tagsJson,
             relatedIdsJson
           });
+          return { id, inserted: inserted.rowsAffected > 0 };
       } else {
         // Fallback: simple INSERT when content_hash column is missing
         const cols = DreamingService._hasLifecycleColumns
-          ? 'id, session_id, project, provider, memory_type, content, embedding, importance, confidence, status, evidence_count, access_count, version, tenant_id, scope, tags, related_ids'
-          : 'id, session_id, project, provider, memory_type, content, embedding, importance, tenant_id, scope, tags, related_ids';
+          ? 'id, session_id, project, project_id, provider, memory_type, content, embedding, importance, idempotency_key, request_hash, confidence, status, evidence_count, access_count, version, tenant_id, scope, tags, related_ids'
+          : 'id, session_id, project, project_id, provider, memory_type, content, embedding, importance, idempotency_key, request_hash, tenant_id, scope, tags, related_ids';
         const vals = DreamingService._hasLifecycleColumns
-          ? ':id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :initialConfidence, \'active\', 1, 0, 1, :tenantId, :scope, :tagsJson, :relatedIdsJson'
-          : ':id, :sessionId, :project, :provider, :memoryType, :content, :embedding, :importance, :tenantId, :scope, :tagsJson, :relatedIdsJson';
+          ? ':id, :sessionId, :project, :projectId, :provider, :memoryType, :content, :embedding, :importance, :idempotencyKey, :requestHash, :initialConfidence, \'active\', 1, 0, 1, :tenantId, :scope, :tagsJson, :relatedIdsJson'
+          : ':id, :sessionId, :project, :projectId, :provider, :memoryType, :content, :embedding, :importance, :idempotencyKey, :requestHash, :tenantId, :scope, :tagsJson, :relatedIdsJson';
         const binds = DreamingService._hasLifecycleColumns
-          ? { id, sessionId, project, provider: aiModel ?? null, memoryType, content, embedding: embeddingVector ? new Uint8Array(new Float32Array(embeddingVector).buffer) : null, importance, initialConfidence, tenantId, scope: scope ?? null, tagsJson, relatedIdsJson }
-          : { id, sessionId, project, provider: aiModel ?? null, memoryType, content, embedding: embeddingVector ? new Uint8Array(new Float32Array(embeddingVector).buffer) : null, importance, tenantId, scope: scope ?? null, tagsJson, relatedIdsJson };
+          ? { id, sessionId: input.sessionId, project: input.project, projectId, provider: input.aiModel ?? null, memoryType: input.memoryType, content: input.content, embedding: embeddingVector ? new Uint8Array(new Float32Array(embeddingVector).buffer) : null, importance: input.importance, idempotencyKey: input.idempotencyKey ?? null, requestHash, initialConfidence, tenantId, scope: input.scope ?? null, tagsJson, relatedIdsJson }
+          : { id, sessionId: input.sessionId, project: input.project, projectId, provider: input.aiModel ?? null, memoryType: input.memoryType, content: input.content, embedding: embeddingVector ? new Uint8Array(new Float32Array(embeddingVector).buffer) : null, importance: input.importance, idempotencyKey: input.idempotencyKey ?? null, requestHash, tenantId, scope: input.scope ?? null, tagsJson, relatedIdsJson };
 
-        await db.execute(
-          `INSERT INTO ai_dreaming_memory (${cols}) VALUES (${vals})`,
+        const inserted = await db.execute(
+          `INSERT INTO ai_dreaming_memory (${cols}) VALUES (${vals}) ON CONFLICT DO NOTHING`,
           binds
         );
+        return { id, inserted: inserted.rowsAffected > 0 };
       }
 
-      logger.info(`[Dreaming] Upserted dream memory: ${id}`);
-      return id;
     } catch (err) {
-      logger.error("[Dreaming] Error saving dream memory:", err instanceof Error ? err.message : String(err));
+      logger.error("[Dreaming] Error saving dream memory");
       throw err;
     }
   }
@@ -355,85 +601,136 @@ export class DreamingService {
     startDate?: Date,
     endDate?: Date,
     scope?: string,
-    tags?: string[]
+    tags?: string[],
+    projectId?: string,
   ) {
-    const queryVector = await generateEmbedding(queryText, 'query');
+    return (await DreamingService.queryDreamMemoriesWithStatus(
+      project, queryText, limit, offset, memoryType, provider, startDate, endDate, scope, tags, projectId,
+    )).memories;
+  }
 
-    const tenantId = authStorage.getStore()!.uid;
-    let vectorSearchIds: string[] = [];
-    let vectorScores: Record<string, number> = {};
-
-    if (queryVector) {
-      const db = createDatabaseAdapter();
-      // Request limit + offset since we will paginate in memory after db search
-      const searchResults = await db.searchVector('ai_dreaming_memory', queryVector, limit + offset, tenantId);
-      vectorSearchIds = searchResults.map(r => r.id);
-      searchResults.forEach(r => { vectorScores[r.id] = r.score; });
-      if (vectorSearchIds.length === 0) {
-        return [];
-      }
+  static async queryDreamMemoriesWithStatus(
+    project: string = '',
+    queryText: string,
+    limit: number = 10,
+    offset: number = 0,
+    memoryType?: string,
+    provider?: string,
+    startDate?: Date,
+    endDate?: Date,
+    scope?: string,
+    tags?: string[],
+    projectId?: string,
+    displayName?: string,
+    workspacePath?: string,
+  ) {
+    let queryVector: number[] | null = null;
+    queryText = redactMemoryText(queryText);
+    try {
+      queryVector = await generateEmbedding(queryText, 'query');
+    } catch {
+      logger.warn("[Dreaming] Query embedding unavailable; using lexical fallback");
     }
 
-    {
-      const db = createDatabaseAdapter();
+    const tenantId = authStorage.getStore()!.uid;
+    const db = createDatabaseAdapter();
+    let projectAliases: string[] = [];
+    if (projectId) {
+      // A read cannot claim caller-supplied aliases. Only mappings registered
+      // during an authenticated write or explicit migration authorize dual read.
+      projectAliases = await DreamProjectIdentityService.getAliases(projectId);
+    }
+    let vectorSearchIds: string[] = [];
+    let vectorScores: Record<string, number> = {};
+      const filters: string[] = [];
+      const binds: Record<string, unknown> = { tenantId };
+      if (projectId) {
+        const aliases = projectAliases.map((_, index) => `:projectAlias${index}`);
+        filters.push(`(project_id = :projectId OR (project_id IS NULL AND project IN (${aliases.length ? aliases.join(", ") : ":projectId"})))`);
+        binds.projectId = projectId;
+        projectAliases.forEach((alias, index) => { binds[`projectAlias${index}`] = alias; });
+      } else if (project) {
+        filters.push("project = :project");
+        binds.project = project;
+      }
+      if (provider) { filters.push("provider = :provider"); binds.provider = provider; }
+      if (startDate) { filters.push("created_at >= :startDate"); binds.startDate = startDate; }
+      if (endDate) { filters.push("created_at <= :endDate"); binds.endDate = endDate; }
+      if (scope) {
+        filters.push("(scope = :scopeExact OR scope LIKE :scopeLike)");
+        binds.scopeExact = scope;
+        binds.scopeLike = `${scope}/%`;
+      }
+      if (tags?.length) {
+        filters.push(`(${tags.map((_, index) => `tags LIKE :tagLike${index}`).join(" OR ")})`);
+        tags.forEach((tag, index) => { binds[`tagLike${index}`] = `%"${tag}"%`; });
+      }
+      const types = memoryType?.split(",").map((type) => type.trim().toUpperCase()).filter(Boolean) ?? [];
+      if (types.length) {
+        filters.push(`memory_type IN (${types.map((_, index) => `:memoryType${index}`).join(", ")})`);
+        types.forEach((type, index) => { binds[`memoryType${index}`] = type; });
+      }
+      filters.push("(status IS NULL OR status = 'active')");
+      const filterSql = filters.map((filter) => `AND ${filter}`).join(" ");
 
-        const projectFilter = project ? 'AND project = :project' : '';
-        const providerFilter = provider ? 'AND provider = :provider' : '';
-        const startDateFilter = startDate ? 'AND created_at >= :startDate' : '';
-        const endDateFilter = endDate ? 'AND created_at <= :endDate' : '';
-        let scopeFilter = '';
-        if (scope) scopeFilter = 'AND (scope = :scopeExact OR scope LIKE :scopeLike)';
-
-        let tagsFilter = '';
-        if (tags && tags.length > 0) {
-          const tagsConditions = tags.map((_, idx) => `tags LIKE :tag_like_${idx}`);
-          tagsFilter = `AND (${tagsConditions.join(' OR ')})`;
+      if (queryVector) {
+        try {
+        const searchResults = await db.searchVectorScoped(
+          "ai_dreaming_memory",
+          queryVector,
+          limit + offset,
+          tenantId,
+          filters.join(" AND ") || "1 = 1",
+          Object.fromEntries(Object.entries(binds).filter(([key]) => key !== "tenantId")),
+        );
+        vectorSearchIds = searchResults.map((result) => result.id);
+        searchResults.forEach((result) => { vectorScores[result.id] = result.score; });
+        if (vectorSearchIds.length === 0) {
+          // Existing rows without embeddings (or an unavailable vector index)
+          // remain retrievable through their lexical evidence.
+          queryVector = null;
         }
-
-        let typeFilter = '';
-        const binds: Record<string, unknown> = { tenantId };
-
-        if (project) binds.project = project;
-        if (provider) binds.provider = provider;
-        if (startDate) binds.startDate = startDate;
-        if (endDate) binds.endDate = endDate;
-        if (scope) { binds.scopeExact = scope; binds.scopeLike = `${scope}/%`; }
-        if (tags && tags.length > 0) {
-          tags.forEach((tag, idx) => { binds[`tag_like_${idx}`] = `%"${tag}"%`; });
+        } catch {
+          logger.warn("[Dreaming] Vector index unavailable; using scoped lexical fallback");
+          queryVector = null;
         }
-        if (queryVector) {
-          const idBinds = vectorSearchIds.map((_, i) => `:vecId${i}`).join(', ');
-          typeFilter += ` AND id IN (${idBinds})`;
-          vectorSearchIds.forEach((id, i) => { binds[`vecId${i}`] = id; });
-        }
-        if (memoryType) {
-          const types = memoryType.split(',').map(t => t.trim().toUpperCase()).filter(t => t);
-          if (types.length > 0) {
-            const typeBinds = types.map((_, i) => `:type${i}`).join(', ');
-            typeFilter += ` AND memory_type IN (${typeBinds})`;
-            types.forEach((type, i) => { binds[`type${i}`] = type; });
-          }
-        }
+      }
 
-        const statusFilter = `AND (status IS NULL OR status IN ('active', 'superseded'))`;
-        const selectCols = 'id, session_id, project, provider, memory_type, content, importance, created_at, confidence, status, evidence_count, access_count, version, scope, tags, related_ids';
+      let idFilter = "";
+      if (queryVector) {
+        idFilter = `AND id IN (${vectorSearchIds.map((_, index) => `:vecId${index}`).join(", ")})`;
+        vectorSearchIds.forEach((id, index) => { binds[`vecId${index}`] = id; });
+      } else if (queryText.trim()) {
+        const lexicalTerms = [...new Set(queryText.toLowerCase().match(/[\p{L}\p{N}_./:#-]{3,}/gu) ?? [])].slice(0, 5);
+        if (lexicalTerms.length) {
+          const alternatives = lexicalTerms.map((_, index) => `lower(content) LIKE :lexicalTerm${index}`);
+          filters.push(`(${alternatives.join(" OR ")})`);
+          lexicalTerms.forEach((term, index) => { binds[`lexicalTerm${index}`] = `%${term}%`; });
+        } else {
+          filters.push("1 = 0");
+        }
+      }
+      const finalFilterSql = filters.map((filter) => `AND ${filter}`).join(" ");
+        const selectCols = 'id, session_id, project, project_id, provider, memory_type, content, importance, created_at, confidence, status, evidence_count, access_count, version, scope, tags, related_ids';
 
         let sql: string;
         if (!queryVector) {
           binds.limit = limit;
           binds.offset = offset;
+          const lexicalOrder = queryText.trim() ? "CASE WHEN lower(content) LIKE :lexicalExact THEN 0 ELSE 1 END, " : "";
+          if (queryText.trim()) binds.lexicalExact = `%${queryText.trim().toLowerCase()}%`;
           sql = `
             SELECT ${selectCols}
             FROM ai_dreaming_memory
-            WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter} ${statusFilter} ${startDateFilter} ${endDateFilter} ${scopeFilter} ${tagsFilter}
-            ORDER BY created_at DESC
+            WHERE tenant_id = :tenantId ${finalFilterSql}
+            ORDER BY ${lexicalOrder} created_at DESC
             LIMIT :limit OFFSET :offset
           `;
         } else {
           sql = `
             SELECT ${selectCols}
             FROM ai_dreaming_memory
-            WHERE tenant_id = :tenantId ${projectFilter} ${providerFilter} ${typeFilter} ${statusFilter} ${startDateFilter} ${endDateFilter} ${scopeFilter} ${tagsFilter}
+            WHERE tenant_id = :tenantId ${filterSql} ${idFilter}
           `;
         }
 
@@ -501,12 +798,28 @@ export class DreamingService {
           processedRows = relevant.slice(offset, offset + limit).map(item => item.row);
         }
 
-        const cleanRows = DreamingService.filterNoiseRows(processedRows);
+        const cleanRows = DreamingService.filterNoiseRows(processedRows).map(row => Array.isArray(row)
+          ? row.map((value, index) => index === 5 && typeof value === 'string' ? redactMemoryText(value) : value)
+          : {
+            ...row,
+            ...(typeof row.content === 'string' ? { content: redactMemoryText(row.content) } : {}),
+            ...(typeof row.CONTENT === 'string' ? { CONTENT: redactMemoryText(row.CONTENT) } : {}),
+          });
         if (cleanRows.length !== processedRows.length) {
           logger.info(`[Dreaming] Inject-gate filtered ${processedRows.length - cleanRows.length} noisy dream(s)`);
         }
-        return cleanRows;
-    }
+        let retrievalStatus = cleanRows.length > 0 ? "ok" : rows.length > 0 ? "filtered" : queryText.trim() ? "no_match" : "empty";
+        if (!rows.length && queryText.trim()) {
+          const inventory = await db.query<{ count: number }>(
+            `SELECT COUNT(*) AS count FROM ai_dreaming_memory WHERE tenant_id = :tenantId ${filterSql}`, binds);
+          if (Number(inventory[0]?.count || 0) === 0) retrievalStatus = "empty";
+        }
+        return {
+          memories: cleanRows,
+          retrieval_status: retrievalStatus,
+          candidate_count: rows.length,
+          returned_count: cleanRows.length,
+        };
   }
 
   /**

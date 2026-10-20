@@ -133,6 +133,8 @@ sync_system_memory(changeDescription: "Concise description of the implemented ch
 
 ## 7. Verification Required Before Completion
 
+Run tests through `npm test` or `node scripts/run-tests-isolated.mjs <test-file>` so they use a disposable HOME and SQLite database. Tests that exercise the adapter's default database path must create a private HOME and database, and must never use an operator's `~/.codeatlas/codeatlas.db`.
+
 Run the checks relevant to the change:
 
 1. Targeted unit or integration tests.
