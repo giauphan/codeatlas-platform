@@ -116,10 +116,11 @@ test('configured model extraction persists grounded SQLite memories, retrieval, 
     // Re-open the same pending checkpoint from its durable provider receipt.
     // The configured model endpoint is not called again, and memory IDs stay stable.
     await adapter.execute("UPDATE dream_capture_events SET status = 'pending', memory_ids_json = '[]' WHERE tenant_id = :tenant AND project_id = :projectId AND event_id = :markerId", { tenant: tenant.uid, projectId, markerId });
+    const requestsBeforeReplay = providerRequests;
     const replay = await authStorage.run(tenant, () => MemoryIngestionService.processPending({ useModel: true }));
     assert.equal(replay.success, true);
     assert.deepEqual(replay.memory_ids, saved.memory_ids);
-    assert.equal(providerRequests, 1, 'the receipt replay must not call the provider again');
+    assert.equal(providerRequests, requestsBeforeReplay, 'the receipt replay must not call the provider again');
   } finally {
     globalThis.fetch = originalFetch;
     if (previousProcessingFlag === undefined) delete process.env.CODEATLAS_MEMORY_PROCESSING_ENABLED;

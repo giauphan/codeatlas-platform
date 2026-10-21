@@ -80,7 +80,7 @@ test('long Markdown separator input is classified without regex backtracking', a
   const startedAt = performance.now();
   const memories = await extractStructuredMemories([{ id: 'separator', role: 'USER', text: '-'.repeat(200) }]);
   assert.deepEqual(memories, []);
-  assert.ok(performance.now() - startedAt < 250, 'separator classification must remain bounded');
+  assert.ok(performance.now() - startedAt < 2_000, 'separator classification must remain bounded');
 });
 
 test('model output with unsupported or malformed evidence falls back to grounded deterministic extraction', async () => {

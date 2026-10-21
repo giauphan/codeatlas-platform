@@ -1,8 +1,8 @@
 /**
  * Opt-in synthetic quality telemetry baseline for the memory pipeline.
  *
- * Run directly with:
- *   node --experimental-test-module-mocks --test-concurrency=1 --import tsx --test tests/cross-repo/memory-quality-telemetry.acceptance.ts
+ * Run in an isolated HOME with:
+ *   node scripts/run-tests-isolated.mjs tests/cross-repo/memory-quality-telemetry.acceptance.ts
  *
  * Uses real capture, SQLite persistence, deterministic extraction, retrieval,
  * checkpoint restoration, and startup-context services. Embeddings are
