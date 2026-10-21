@@ -31,11 +31,13 @@ test('live Claude acceptance requires a derived canonical project and its exact 
 test('each fresh Claude invocation is capped at one dollar and session two has no tools', () => {
   const first = buildClaudeArgs({ model: 'haiku', settingsPath: '/tmp/private/settings.json', tools: 'Bash', prompt: 'first prompt' });
   const second = buildClaudeArgs({ model: 'haiku', settingsPath: '/tmp/private/settings.json', tools: '', prompt: 'second prompt' });
+  const debug = buildClaudeArgs({ model: 'haiku', settingsPath: '/tmp/private/settings.json', tools: 'Bash', prompt: 'debug prompt', debug: true });
   assert.equal(CLAUDE_SESSION_BUDGET_USD, '1.00');
   assert.equal(first[first.indexOf('--max-budget-usd') + 1], '1.00');
   assert.ok(first.includes('--allowedTools'));
   assert.equal(second[second.indexOf('--max-budget-usd') + 1], '1.00');
   assert.equal(second.includes('--allowedTools'), false);
+  assert.ok(debug.includes('--debug=hooks,mcp'));
 });
 
 test('Claude acceptance API calls close idle sockets before provider sessions run', () => {

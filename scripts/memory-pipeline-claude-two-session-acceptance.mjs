@@ -32,11 +32,12 @@ export function validateClaudeAcceptanceInput(input = {}) {
   return { targetUrl: SELECTED_API, projectDir: input.projectDir, projectId: input.projectId, sqlitePath: input.sqlitePath };
 }
 
-export function buildClaudeArgs({ model, settingsPath, tools, prompt }) {
+export function buildClaudeArgs({ model, settingsPath, tools, prompt, debug = false }) {
   return [
     '--print', '--model', model, '--max-budget-usd', CLAUDE_SESSION_BUDGET_USD,
     '--output-format', 'json', '--setting-sources', '', '--settings', settingsPath,
     '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--disable-slash-commands',
+    ...(debug ? ['--debug=hooks,mcp'] : []),
     '--tools', tools, ...(tools ? ['--allowedTools', 'Bash(node *)'] : []), '--', prompt,
   ];
 }
@@ -162,7 +163,7 @@ function runClaude({ prompt, tools, settingsPath, env }) {
       CODEATLAS_CONTEXT_CACHE_DIR: path.join(env.HOME, '.codeatlas', 'context-cache'),
       ...env.providerEnv,
     };
-    const child = spawn('claude', buildClaudeArgs({ model: env.providerModel, settingsPath, tools, prompt }), {
+    const child = spawn('claude', buildClaudeArgs({ model: env.providerModel, settingsPath, tools, prompt, debug: env.debug === true }), {
       cwd: env.CODEATLAS_CLAUDE_ACCEPTANCE_PROJECT_DIR, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -180,7 +181,10 @@ function runClaude({ prompt, tools, settingsPath, env }) {
       if (stdoutBytes <= 2 * 1024 * 1024) stdout += String(chunk);
       else child.kill('SIGKILL');
     });
-    child.stderr.on('data', chunk => { stderrBytes += Buffer.byteLength(chunk); });
+    child.stderr.on('data', chunk => {
+      stderrBytes += Buffer.byteLength(chunk);
+      if (env.debug === true) process.stderr.write(chunk);
+    });
     const timeout = setTimeout(() => {
       child.kill('SIGKILL');
       const error = new Error('Claude session timed out.');
@@ -291,12 +295,13 @@ async function main() {
       CODEATLAS_CLAUDE_ACCEPTANCE_PROJECT_DIR: projectDir,
       providerEnv: provider.providerEnv,
       providerModel: provider.model,
+      debug: process.env.CODEATLAS_CLAUDE_ACCEPTANCE_DEBUG === '1',
     };
     stage = 'compiled_cli_validation';
     runQuiet(process.execPath, [verifyPath], { cwd: mcpRepository, env: { PATH: process.env.PATH || '/usr/bin:/bin', HOME: privateHome }, timeout: 30_000 });
     runQuiet(process.execPath, [installerPath, settingsPath], { cwd: mcpRepository, env: { PATH: process.env.PATH || '/usr/bin:/bin', HOME: privateHome }, timeout: 15_000 });
     validateInstalledHooks(settingsPath, cliPath);
-    result.checks = { target_guard_passed: true, derived_project_matches: true, read_only_db_preflight: true, isolated_hooks_installed: true, operator_settings_used: false };
+    result.checks = { target_guard_passed: true, derived_project_matches: true, read_only_db_preflight: true, isolated_hooks_installed: true, operator_settings_used: false, claude_debug_enabled: privateEnv.debug };
 
     stage = 'target_health';
     const healthStarted = performance.now();
