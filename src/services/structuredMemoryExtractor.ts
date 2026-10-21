@@ -194,8 +194,8 @@ function explicitArchitectureChoice(text: string): boolean {
 function reportedImplementationProgress(text: string): boolean {
   return /^(?:i|we|the team|our team)\s+(?:(?:have|has)\s+)?(?:implemented|configured|migrated|updated|enabled|disabled|modified|refactored|rolled out|added|removed|changed|replaced|fixed|finished|completed)\b/iu.test(text.trim()) ||
     /^(?:tôi|chúng tôi|nhóm)\s+(?:đã\s+)?(?:triển khai|cấu hình|di chuyển|cập nhật|bật|tắt|thêm|xóa|đổi|sửa|hoàn tất|hoàn thành|đã xong)\b/iu.test(text.trim()) ||
-    /^(?:the\s+)?[\p{L}\p{N}_-]+(?:[\s-]+[\p{L}\p{N}_-]+){0,5}\s+(?:now|currently|already)\s+(?:supports?|accepts?|validates?|returns?|handles?|routes?|stores?|uses?|includes?|allows?)/iu.test(text.trim()) ||
-    /^(?:phần\s+)?[\p{L}\p{N}_-]+(?:[\s-]+[\p{L}\p{N}_-]+){0,7}\s+(?:(?:hiện|đã)\s+)(?:hỗ trợ|chấp nhận|kiểm tra|trả về|xử lý|lưu|đọc|ghi)\b/iu.test(text.trim());
+    /^(?:the\s+)?[\p{L}\p{N}_]+(?:[\s-]+[\p{L}\p{N}_]+){0,7}\s+(?:now|currently|already)\s+(?:supports?|accepts?|validates?|returns?|handles?|routes?|stores?|uses?|includes?|allows?)/iu.test(text.trim()) ||
+    /^(?:phần\s+)?[\p{L}\p{N}_]+(?:[\s-]+[\p{L}\p{N}_]+){0,9}\s+(?:(?:hiện|đã)\s+)(?:hỗ trợ|chấp nhận|kiểm tra|trả về|xử lý|lưu|đọc|ghi)\b/iu.test(text.trim());
 }
 
 function directBehaviorChoice(text: string): boolean {

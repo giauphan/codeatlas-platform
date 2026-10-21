@@ -76,6 +76,13 @@ test('private-key redaction handles complete and malformed PEM markers without r
   assert.equal(redactMemoryText(malformed), malformed);
 });
 
+test('long Markdown separator input is classified without regex backtracking', async () => {
+  const startedAt = performance.now();
+  const memories = await extractStructuredMemories([{ id: 'separator', role: 'USER', text: '-'.repeat(200) }]);
+  assert.deepEqual(memories, []);
+  assert.ok(performance.now() - startedAt < 250, 'separator classification must remain bounded');
+});
+
 test('model output with unsupported or malformed evidence falls back to grounded deterministic extraction', async () => {
   const memories = await extractStructuredMemories([{ id: 'safe-source', role: 'USER', text: 'Decision: preserve tenant isolation before vector candidate selection because other projects must not crowd out this project.' }], {
     checkpoint: true,
