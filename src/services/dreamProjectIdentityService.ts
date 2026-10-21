@@ -17,7 +17,9 @@ export interface DreamProjectIdentityResult {
 function normalizeAlias(value: string): string {
   const trimmed = value.trim().replace(/\\/g, "/");
   if (trimmed.length <= 1) return trimmed;
-  return trimmed.replace(/\/+$/, "");
+  let end = trimmed.length;
+  while (end > 1 && trimmed.charCodeAt(end - 1) === 47) end--;
+  return trimmed.slice(0, end);
 }
 
 export class DreamProjectIdentityService {

@@ -52,10 +52,46 @@ export function isSensitiveMemoryFieldName(key: string): boolean {
   return /(?:api[_-]?key|(?:aws[_-]?)?secret[_-]?access[_-]?key|(?:aws[_-]?)?session[_-]?token|access[_-]?token|refresh[_-]?token|password|secret|authorization|credential)/i.test(key);
 }
 
+function isPrivateKeyLabel(value: string): boolean {
+  if (!value.endsWith('PRIVATE KEY')) return false;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code !== 32 && (code < 65 || code > 90)) return false;
+  }
+  return true;
+}
+
+/** Redact complete PEM private-key blocks without a backtracking regex on untrusted text. */
+function redactPrivateKeyBlocks(value: string): string {
+  const beginPrefix = '-----BEGIN ';
+  const endPrefix = '-----END ';
+  let output = '';
+  let cursor = 0;
+  let scan = 0;
+  while (scan < value.length) {
+    const begin = value.indexOf(beginPrefix, scan);
+    if (begin < 0) break;
+    const beginLabelEnd = value.indexOf('-----', begin + beginPrefix.length);
+    if (beginLabelEnd < 0 || !isPrivateKeyLabel(value.slice(begin + beginPrefix.length, beginLabelEnd))) {
+      scan = begin + 1;
+      continue;
+    }
+    const end = value.indexOf(endPrefix, beginLabelEnd + 5);
+    const endLabelEnd = end < 0 ? -1 : value.indexOf('-----', end + endPrefix.length);
+    if (endLabelEnd < 0 || !isPrivateKeyLabel(value.slice(end + endPrefix.length, endLabelEnd))) {
+      scan = begin + 1;
+      continue;
+    }
+    output += value.slice(cursor, begin) + '[REDACTED_PRIVATE_KEY]';
+    cursor = endLabelEnd + 5;
+    scan = cursor;
+  }
+  return output ? output + value.slice(cursor) : value;
+}
+
 /** Redact before persistence, evidence construction, or provider submission. */
 export function redactMemoryText(value: string): string {
-  return value
-    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[REDACTED_PRIVATE_KEY]')
+  return redactPrivateKeyBlocks(value)
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:)[^@\s/]+(@)/gi, '$1[REDACTED]$2')
     .replace(/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|aws[_-]?secret[_-]?access[_-]?key|aws[_-]?session[_-]?token|password|secret|authorization)["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)/gi, (_match, prefix: string) => `${prefix.replace(/["']/g, '').replace(/\s*[:=]\s*$/, '')}=[REDACTED]`)
     .replace(/\bBearer\s+(?:value\s+)?[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [REDACTED]')

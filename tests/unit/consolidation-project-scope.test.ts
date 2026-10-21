@@ -112,14 +112,19 @@ test('canonical scheduled consolidation leaves same-alias and unowned rows untou
   assert.ok(selectedMemories.filter((row) => row.status === 'active')
     .every((row) => Math.abs(row.confidence - 0.7) < 0.000001));
 
-  const concepts = await adapter.query<{ id: string; project_id: string | null; confidence: number }>(
-    `SELECT id, project_id, confidence FROM codeatlas_concepts WHERE tenant_id = :tenantId`,
+  const concepts = await adapter.query<{ id: string; project_id: string | null; confidence: number; evidence_count: number; source_ids: string }>(
+    `SELECT id, project_id, confidence, evidence_count, source_ids FROM codeatlas_concepts WHERE tenant_id = :tenantId`,
     { tenantId },
   );
   assert.equal(concepts.find((row) => row.id === 'selected-concept')?.confidence, 0.5 + 0.49 * (1 - Math.exp(-0.2 * 20)));
   assert.equal(concepts.find((row) => row.id === 'other-concept')?.confidence, 0.1);
   assert.equal(concepts.find((row) => row.id === 'ambiguous-concept')?.confidence, 0.1);
   assert.equal(concepts.filter((row) => row.project_id === projectId).length, 2);
+  const extractedConcept = concepts.find((row) => row.project_id === projectId && row.id !== 'selected-concept');
+  assert.equal(extractedConcept?.evidence_count, 3, 'merged memories must not inflate concept evidence');
+  assert.deepEqual(JSON.parse(extractedConcept?.source_ids || '[]'), [
+    'selected-duplicate-a', 'selected-opposite', 'selected-orthogonal',
+  ]);
   assert.equal(concepts.filter((row) => row.project_id === 'other-canonical-project').length, 1);
   assert.equal(concepts.filter((row) => row.project_id === null).length, 1);
 });

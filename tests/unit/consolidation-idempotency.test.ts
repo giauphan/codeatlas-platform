@@ -157,10 +157,13 @@ test('a stale consolidation worker cannot mutate rows after another worker recla
   release();
 
   const report = await staleRun;
-  const rows = await originalQuery<{ id: string }>(
-    `SELECT id FROM ai_dreaming_memory WHERE id IN ('duplicate-a', 'duplicate-b')`,
+  const rows = await originalQuery<{ id: string; status: string }>(
+    `SELECT id, status FROM ai_dreaming_memory WHERE id IN ('duplicate-a', 'duplicate-b') ORDER BY id`,
   );
   assert.equal(report.status, 'failed');
-  assert.equal(rows.length, 2, 'atomic mutation fence must block stale delete');
+  assert.deepEqual(rows, [
+    { id: 'duplicate-a', status: 'active' },
+    { id: 'duplicate-b', status: 'active' },
+  ], 'atomic mutation fence must block stale merged-status update');
   assert.equal(await ledger.completeRun(first, { success: true }, new Date(Date.now() + 3000).toISOString()), false);
 });

@@ -389,7 +389,7 @@ export class ConsolidationEngine {
       const sql = `
         SELECT id, content, embedding, importance, memory_type, project
         FROM ai_dreaming_memory
-        WHERE ${conditions.join(' AND ')}
+        WHERE ${conditions.join(' AND ')} AND (status IS NULL OR status = 'active')
       `;
 
       const rows = await db.query<any[]>(sql, binds);

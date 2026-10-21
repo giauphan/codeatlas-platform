@@ -68,7 +68,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "@types/compression": "^1.8.1",
     "@typescript-eslint/typescript-estree": "^8.0.0",
     "better-sqlite3": "^11.3.0",

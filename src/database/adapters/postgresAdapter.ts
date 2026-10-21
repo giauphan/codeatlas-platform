@@ -70,6 +70,48 @@ export class PostgresAdapter implements IDatabaseAdapter {
   private pool: PgPool | null = null;
   private connectPromise: Promise<void> | null = null;
 
+  /** Upgrade the two durable-memory uniqueness indexes only when their
+   * definition differs. Rebuilding them on every process start blocks saves. */
+  private async ensureDreamMemoryUniqueIndexes(): Promise<void> {
+    const result = await this.pool!.query(
+      `SELECT indexname, indexdef FROM pg_indexes
+       WHERE schemaname = current_schema()
+         AND tablename = 'ai_dreaming_memory'
+         AND indexname IN ('ux_dreaming_dedup', 'ux_dreaming_idempotency', 'ux_dreaming_project_id_hash')`,
+    );
+    const definitions = new Map(
+      (result.rows as Array<{ indexname: string; indexdef: string }>).map((row) => [row.indexname, row.indexdef.replace(/\s+/g, '').toLowerCase()]),
+    );
+    const isExpected = (name: string, fragments: string[]): boolean => {
+      const definition = definitions.get(name);
+      return !!definition && fragments.every((fragment) => definition.includes(fragment));
+    };
+    const targets = [
+      {
+        name: 'ux_dreaming_dedup',
+        fragments: ['uniqueindexux_dreaming_dedup', 'tenant_id,coalesce(project_id,project),memory_type,content_hash', 'where(content_hashisnotnull)'],
+        sql: `CREATE UNIQUE INDEX ux_dreaming_dedup
+          ON ai_dreaming_memory(tenant_id, COALESCE(project_id, project), memory_type, content_hash)
+          WHERE content_hash IS NOT NULL`,
+      },
+      {
+        name: 'ux_dreaming_idempotency',
+        fragments: ['uniqueindexux_dreaming_idempotency', 'tenant_id,coalesce(project_id,project),idempotency_key', 'where(idempotency_keyisnotnull)'],
+        sql: `CREATE UNIQUE INDEX ux_dreaming_idempotency
+          ON ai_dreaming_memory(tenant_id, COALESCE(project_id, project), idempotency_key)
+          WHERE idempotency_key IS NOT NULL`,
+      },
+    ];
+    for (const target of targets) {
+      if (isExpected(target.name, target.fragments)) continue;
+      await this.pool!.query(`DROP INDEX IF EXISTS ${target.name}`);
+      await this.pool!.query(target.sql);
+    }
+    if (definitions.has('ux_dreaming_project_id_hash')) {
+      await this.pool!.query('DROP INDEX IF EXISTS ux_dreaming_project_id_hash');
+    }
+  }
+
   async connect(): Promise<void> {
     if (this.pool) return;
     if (this.connectPromise) return this.connectPromise;
@@ -257,16 +299,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
       ALTER TABLE ai_dreaming_memory ADD COLUMN IF NOT EXISTS version INT DEFAULT 1;
       ALTER TABLE ai_dreaming_memory ADD COLUMN IF NOT EXISTS related_ids TEXT;
       ALTER TABLE ai_dreaming_memory DROP CONSTRAINT IF EXISTS ai_dreaming_memory_project_memory_type_content_hash_tenant_id_key;
-      DROP INDEX IF EXISTS ux_dreaming_dedup;
-      DROP INDEX IF EXISTS ux_dreaming_project_id_hash;
-      DROP INDEX IF EXISTS ux_dreaming_idempotency;
-      CREATE UNIQUE INDEX ux_dreaming_dedup
-        ON ai_dreaming_memory(tenant_id, COALESCE(project_id, project), memory_type, content_hash)
-        WHERE content_hash IS NOT NULL;
-      CREATE UNIQUE INDEX ux_dreaming_idempotency
-        ON ai_dreaming_memory(tenant_id, COALESCE(project_id, project), idempotency_key)
-        WHERE idempotency_key IS NOT NULL;
     `);
+    await this.ensureDreamMemoryUniqueIndexes();
     await this.pool!.query(`
       CREATE TABLE IF NOT EXISTS dream_project_aliases (
         tenant_id VARCHAR(255) NOT NULL,

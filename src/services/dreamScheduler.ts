@@ -412,10 +412,8 @@ export class DreamScheduler {
         return;
       }
       heartbeatTimer = setTimeout(() => void renew(), heartbeatMs);
-      heartbeatTimer.unref?.();
     };
     heartbeatTimer = setTimeout(() => void renew(), heartbeatMs);
-    heartbeatTimer.unref?.();
 
     try {
       const response = await this.options.executeJob(claim, controller.signal);
