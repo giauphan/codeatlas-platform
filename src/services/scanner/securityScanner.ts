@@ -11,6 +11,78 @@ export interface SecurityFinding {
   project?: string;
 }
 
+// ⚡ Bolt Optimization: Hoisted static configurations to module scope to prevent re-initialization
+// and converted exact-match arrays to Sets to improve O(N) array lookups to O(1) hash map lookups.
+const unsafeFuncs = new Set([
+  "eval",
+  "exec",
+  "system",
+  "child_process",
+  "spawn",
+  "shell_exec",
+]);
+
+const dbKeywords = [
+  "db",
+  "database",
+  "repository",
+  "model",
+  "oracle",
+  "postgres",
+  "mysql",
+  "sqlite",
+  "sql",
+  "connection",
+  "pool",
+  "transaction",
+];
+
+const nonSecretSubstrings = new Set([
+  "expired",
+  "count",
+  "length",
+  "type",
+  "url",
+  "path",
+  "status",
+  "valid",
+  "error",
+  "failed",
+  "success",
+  "check",
+  "verify",
+  "duration",
+  "limit",
+  "payload",
+  "header",
+  "name",
+  "id",
+  "store",
+  "storage",
+  "service",
+  "provider",
+  "client",
+]);
+
+const EXTRACT_WORDS_SLASH_REGEX = /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/;
+const EXTRACT_WORDS_NO_SLASH_REGEX = /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/;
+
+// Helper to extract words from a camelCase, snake_case, or kebab-case string
+const extractWords = (text: string, includeSlash: boolean = false): string[] => {
+  const regex = includeSlash ? EXTRACT_WORDS_SLASH_REGEX : EXTRACT_WORDS_NO_SLASH_REGEX;
+  return text.split(regex).map((p) => p.toLowerCase());
+};
+
+const TEST_MOCK_REGEX = /\/(tests?|__tests__|mocks?|scratch|diagnostic)\/|\.(test|spec)\./;
+
+// Helper to identify test, mock or diagnostic files
+const isTestOrMockFile = (filePath: string): boolean => {
+  const fp = filePath.toLowerCase().replace(/\\/g, "/");
+  return TEST_MOCK_REGEX.test(fp);
+};
+
+const SQL_INJECTION_REGEX = /query|execute|select|insert|update|delete|drop|alter/;
+
 export class SecurityScanner {
   /**
    * Scan an analyzed project for security vulnerabilities
@@ -30,85 +102,12 @@ export class SecurityScanner {
       linkMap.get(link.target)!.add(link.source);
     });
 
-    const unsafeFuncs = [
-      "eval",
-      "exec",
-      "system",
-      "child_process",
-      "spawn",
-      "shell_exec",
-    ];
-    const dbKeywords = [
-      "db",
-      "database",
-      "repository",
-      "model",
-      "oracle",
-      "postgres",
-      "mysql",
-      "sqlite",
-      "sql",
-      "connection",
-      "pool",
-      "transaction",
-    ];
-
-    // Helper to extract words from a camelCase, snake_case, or kebab-case string
-    const extractWords = (text: string, includeSlash: boolean = false): string[] => {
-      const regex = includeSlash
-        ? /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/
-        : /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/;
-      return text.split(regex).map((p) => p.toLowerCase());
-    };
-
-    // Helper to identify test, mock or diagnostic files
-    const isTestOrMockFile = (filePath: string): boolean => {
-      const fp = filePath.toLowerCase().replace(/\\/g, "/");
-      return (
-        fp.includes("/tests/") ||
-        fp.includes("/test/") ||
-        fp.includes("/__tests__/") ||
-        fp.includes(".test.") ||
-        fp.includes(".spec.") ||
-        fp.includes("/mocks/") ||
-        fp.includes("/mock/") ||
-        fp.includes("/scratch/") ||
-        fp.includes("/diagnostic/")
-      );
-    };
-
     // Helper to detect if a variable name represents a real security secret/token/password
     const isSecretVariable = (label: string): boolean => {
       const parts = extractWords(label);
-      const nonSecretSubstrings = [
-        "expired",
-        "count",
-        "length",
-        "type",
-        "url",
-        "path",
-        "status",
-        "valid",
-        "error",
-        "failed",
-        "success",
-        "check",
-        "verify",
-        "duration",
-        "limit",
-        "payload",
-        "header",
-        "name",
-        "id",
-        "store",
-        "storage",
-        "service",
-        "provider",
-        "client",
-      ];
 
       // If the label contains any non-secret metadata word, skip it to prevent false positives
-      if (parts.some((part) => nonSecretSubstrings.includes(part))) {
+      if (parts.some((part) => nonSecretSubstrings.has(part))) {
         return false;
       }
 
@@ -212,7 +211,7 @@ export class SecurityScanner {
 
       // 2. Detect Unsafe Functions (eval, exec, etc.)
       else if (node.type === "function") {
-        if (unsafeFuncs.includes(labelLower)) {
+        if (unsafeFuncs.has(labelLower)) {
           findings.push({
             severity: "CRITICAL",
             type: "UNSAFE_FUNCTION",
@@ -224,10 +223,7 @@ export class SecurityScanner {
 
         // 3. Detect Potential SQL Injection
         if (
-          (node.label.includes("Query") || node.label.includes("execute") ||
-           labelLower.includes("select") || labelLower.includes("insert") ||
-           labelLower.includes("update") || labelLower.includes("delete") ||
-           labelLower.includes("drop") || labelLower.includes("alter")) &&
+          SQL_INJECTION_REGEX.test(labelLower) &&
           node.label !== "execute" &&
           !node.label.endsWith("UseCase") &&
           isSqlRelated(node)
