@@ -24,6 +24,25 @@ test('runtime canary refuses to run without explicit opt-in before doing target 
   assert.doesNotMatch(child.stderr, /api[_-]?key|https?:\/\/|token/i);
 });
 
+test('runtime canary debug mode emits a sanitized failure summary', () => {
+  const child = spawnSync(process.execPath, [script], {
+    encoding: 'utf8',
+    env: { PATH: process.env.PATH || '/usr/bin:/bin', HOME: '/tmp', CODEATLAS_MEMORY_PIPELINE_DEBUG: '1' },
+    timeout: 5_000,
+  });
+  assert.equal(child.status, 2);
+  const lines = child.stderr.trim().split('\n');
+  assert.equal(lines.length, 2);
+  assert.deepEqual(JSON.parse(lines[1]), {
+    debug: true,
+    status: 'failed',
+    stage: 'opt_in',
+    elapsed_ms: 0,
+    failure_category: 'canary_step_error',
+  });
+  assert.doesNotMatch(lines[1], /api[_-]?key|https?:\/\/|token/i);
+});
+
 test('runtime canary accepts only the selected loopback endpoint and exact project identity', () => {
   const valid = validateRuntimeCanaryInput({
     optIn: '1',

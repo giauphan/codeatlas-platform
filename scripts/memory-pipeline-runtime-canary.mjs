@@ -14,6 +14,26 @@ const MAX_HOOK_BUDGET_MS = 60_000;
 
 function fail(message) { throw new Error(message); }
 
+function debugEnabled(env) {
+  return env.CODEATLAS_MEMORY_PIPELINE_DEBUG === '1';
+}
+
+export function buildRuntimeCanaryDebugSummary(report) {
+  const failure = report?.failure || {};
+  const summary = {
+    debug: true,
+    status: report?.status === 'passed' ? 'passed' : 'failed',
+    stage: typeof report?.failed_stage === 'string' ? report.failed_stage : 'complete',
+    elapsed_ms: Number.isSafeInteger(report?.elapsed_ms) ? report.elapsed_ms : 0,
+  };
+  if (typeof failure.category === 'string') summary.failure_category = failure.category;
+  if (Number.isSafeInteger(failure.http_status)) summary.http_status = failure.http_status;
+  if (typeof failure.native_error_code === 'string') summary.native_error_code = failure.native_error_code;
+  if (typeof failure.native_signal === 'string') summary.native_signal = failure.native_signal;
+  if (Number.isSafeInteger(failure.native_exit_status)) summary.native_exit_status = failure.native_exit_status;
+  return summary;
+}
+
 export function validateRuntimeCanaryInput(input = {}) {
   if (input.optIn !== '1') fail('Refusing live writes: set CODEATLAS_MEMORY_RUNTIME_CANARY=1 for explicit opt-in.');
   let target;
@@ -435,7 +455,9 @@ async function runCanary(env) {
     report.finished_at = new Date().toISOString();
     report.elapsed_ms = Math.round(performance.now() - started);
     reportPathFromEnv(env, report, resultPath);
-    throw new Error(`Runtime canary failed at ${stage}; safe result report written.`);
+    const canaryError = new Error(`Runtime canary failed at ${stage}; safe result report written.`);
+    canaryError.report = report;
+    throw canaryError;
   } finally {
     db.close();
     if (privateRoot) rmSync(privateRoot, { recursive: true, force: true });
@@ -453,6 +475,12 @@ function fsMkdtemp() {
 async function main() {
   if (process.env.CODEATLAS_MEMORY_RUNTIME_CANARY !== '1') {
     console.error('Refusing live writes: explicit opt-in is required.');
+    if (debugEnabled(process.env)) {
+      console.error(JSON.stringify(buildRuntimeCanaryDebugSummary({
+        status: 'failed', failed_stage: 'opt_in', elapsed_ms: 0,
+        failure: { category: 'canary_step_error' },
+      })));
+    }
     process.exitCode = 2;
     return;
   }
@@ -464,6 +492,9 @@ async function main() {
       ? error.message
       : 'Runtime canary preflight or execution failed; no sensitive details were emitted.';
     console.error(safeMessage);
+    if (debugEnabled(process.env) && error?.report) {
+      console.error(JSON.stringify(buildRuntimeCanaryDebugSummary(error.report)));
+    }
     process.exitCode = 1;
   }
 }
