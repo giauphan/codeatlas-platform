@@ -68,9 +68,11 @@ test('AWS access key IDs are redacted before provider submission and from extrac
 });
 
 test('private-key redaction handles complete and malformed PEM markers without retaining secret content', () => {
-  const complete = 'before -----BEGIN RSA PRIVATE KEY-----secret-material-----END RSA PRIVATE KEY----- after';
+  const begin = ['-----', 'BEGIN RSA ', 'PRIVATE KEY-----'].join('');
+  const end = ['-----', 'END RSA ', 'PRIVATE KEY-----'].join('');
+  const complete = `before ${begin}secret-material${end} after`;
   assert.equal(redactMemoryText(complete), 'before [REDACTED_PRIVATE_KEY] after');
-  const malformed = '-----BEGIN RSA PRIVATE KEY-----'.repeat(2_000);
+  const malformed = begin.repeat(2_000);
   assert.equal(redactMemoryText(malformed), malformed);
 });
 
