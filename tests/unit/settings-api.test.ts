@@ -56,9 +56,12 @@ describe('Settings API - Firestore Quota / Fallback resilience', () => {
   });
 
   after(async () => {
-    process.env.CODEATLAS_API_KEY = origApiKey;
-    process.env.CODEATLAS_PROJECT_DIR = origProjectDir;
-    process.env.CODEATLAS_MULTI_TENANT = origMultiTenant;
+    if (origApiKey === undefined) delete process.env.CODEATLAS_API_KEY;
+    else process.env.CODEATLAS_API_KEY = origApiKey;
+    if (origProjectDir === undefined) delete process.env.CODEATLAS_PROJECT_DIR;
+    else process.env.CODEATLAS_PROJECT_DIR = origProjectDir;
+    if (origMultiTenant === undefined) delete process.env.CODEATLAS_MULTI_TENANT;
+    else process.env.CODEATLAS_MULTI_TENANT = origMultiTenant;
     if (server) {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

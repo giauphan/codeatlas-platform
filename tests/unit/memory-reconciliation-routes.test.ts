@@ -190,3 +190,13 @@ test('Stop source ACK stays pending for model-capable reconciliation after earli
   const markerStatus = await db.query<{ status: string }>("SELECT status FROM dream_capture_events WHERE tenant_id = :tenant AND project_id = 'canonical' AND event_id = 'checkpoint-marker'", { tenant: tenant.uid });
   assert.equal(markerStatus[0]?.status === 'pending', false);
 });
+
+test('reconciliation endpoint rate-limits repeated authenticated requests', async () => {
+  const statuses: number[] = [];
+  for (let request = 0; request < 40; request++) {
+    const response = await fetch(`${url}/api/dreams/reconcile-pending`, { method: 'POST', headers, body: '{}' });
+    statuses.push(response.status);
+    await response.text();
+  }
+  assert.ok(statuses.includes(429), `expected a rate-limited response, received: ${statuses.join(',')}`);
+});

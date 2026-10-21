@@ -379,6 +379,13 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         reason TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
+      DELETE FROM dream_project_alias_audit
+       WHERE id NOT IN (
+         SELECT MIN(id) FROM dream_project_alias_audit
+         GROUP BY tenant_id, alias, requested_project_id, existing_project_id
+       );
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_dream_project_alias_audit_collision
+        ON dream_project_alias_audit(tenant_id, alias, requested_project_id, existing_project_id);
 
       CREATE TABLE IF NOT EXISTS tenants (
         id TEXT PRIMARY KEY,

@@ -13,8 +13,15 @@ import { DreamPipelineService } from "../services/dreamPipelineService.js";
 import { DreamDiagnostics } from "../services/dreamDiagnostics.js";
 import { DreamCaptureStore } from "../services/dreamCaptureStore.js";
 import { MemoryIngestionService } from "../services/memoryIngestionService.js";
+import rateLimit from "express-rate-limit";
 
 const VALID_MEMORY_TYPES = ["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN", "SESSION_SUMMARY"] as const;
+const reconcileRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function executionAuth(tenantId: unknown) {
   const auth = authStorage.getStore()!;
@@ -436,7 +443,7 @@ export function registerDreamingRoutes(app: express.Application): void {
     }
   });
 
-  app.post('/api/dreams/reconcile-pending', authMiddleware, async (req, res) => {
+  app.post('/api/dreams/reconcile-pending', reconcileRateLimiter, authMiddleware, async (req, res) => {
     try {
       const body = (req.body || {}) as Record<string, unknown>;
       const auth = executionAuth(body.tenant_id);

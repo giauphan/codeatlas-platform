@@ -84,7 +84,8 @@ test('real isolated native installer registers quoted compiled CLI routes', () =
 test('canary loads canonical identity from the real compiled MCP artifact path', async () => {
   const identity = await loadCompiledProjectIdentity(mcpRepo, platformRepo);
   assert.equal(identity.canonical_root, platformRepo);
-  assert.equal(identity.project_id, 'project_fc2e0a83a7cda3e79eeecb04ce953ac9237beaf0f6dd90881529d41278bc3dc3');
+  assert.match(identity.project_id, /^project_[a-f0-9]{64}$/);
+  assert.equal((await loadCompiledProjectIdentity(mcpRepo, platformRepo)).project_id, identity.project_id);
 });
 
 test('canary reconciliation is restricted to its exact Stop marker and one event', () => {

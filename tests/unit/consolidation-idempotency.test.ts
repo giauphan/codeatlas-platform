@@ -69,6 +69,43 @@ test('replaying score_dreams at the same scheduled instant produces the same con
   assert.equal(second, first);
 });
 
+test('dedup marks referenced duplicates merged instead of deleting durable receipt and evidence targets', async () => {
+  for (const [id, importance] of [['dedup-keep', 8], ['dedup-merged', 5]] as const) {
+    await adapter.execute(
+      `INSERT INTO ai_dreaming_memory (id, project, project_id, provider, memory_type, content, embedding, importance, tenant_id)
+       VALUES (:id, 'project-a', 'project-a', 'test', 'KNOWLEDGE', :content, :embedding, :importance, :tenantId)`,
+      { id, content: `evidence ${id}`, embedding, importance, tenantId: auth.uid },
+    );
+  }
+  await adapter.execute(
+    `INSERT INTO dream_save_receipts (tenant_id, project, idempotency_key, request_hash, status, memory_id)
+     VALUES (:tenantId, 'project-a', 'dedup-replay', 'request-hash', 'stored', 'dedup-merged')`,
+    { tenantId: auth.uid },
+  );
+  await adapter.execute(
+    `INSERT INTO dream_memory_evidence (tenant_id, project_id, memory_id, source_event_id, evidence_hash, session_id, actor_role, span, occurred_at)
+     VALUES (:tenantId, 'project-a', 'dedup-merged', 'event-a', 'evidence-hash', 'session-a', 'USER', 'quoted evidence', :occurredAt)`,
+    { tenantId: auth.uid, occurredAt: new Date().toISOString() },
+  );
+
+  const engine = new ConsolidationEngine();
+  const report = await authStorage.run(auth, () => engine.run({ projectId: 'project-a', operations: ['dedup'] }));
+
+  assert.equal(report.dreamsMerged, 1);
+  assert.deepEqual(await adapter.query<{ id: string; status: string }>(
+    `SELECT id, status FROM ai_dreaming_memory WHERE id IN ('dedup-keep', 'dedup-merged') ORDER BY id`,
+  ), [
+    { id: 'dedup-keep', status: 'active' },
+    { id: 'dedup-merged', status: 'merged' },
+  ]);
+  assert.deepEqual(await adapter.query<{ memory_id: string }>(
+    `SELECT memory_id FROM dream_save_receipts WHERE idempotency_key = 'dedup-replay'`,
+  ), [{ memory_id: 'dedup-merged' }]);
+  assert.deepEqual(await adapter.query<{ memory_id: string }>(
+    `SELECT memory_id FROM dream_memory_evidence WHERE source_event_id = 'event-a'`,
+  ), [{ memory_id: 'dedup-merged' }]);
+});
+
 test('a stale consolidation worker cannot mutate rows after another worker reclaims its lease', async () => {
   for (const id of ['duplicate-a', 'duplicate-b']) {
     await adapter.execute(

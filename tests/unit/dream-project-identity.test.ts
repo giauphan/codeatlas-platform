@@ -31,6 +31,12 @@ test('registers tenant-scoped aliases exactly without merging same-basename repo
     workspacePath: '/work/beta/service',
     aliases: ['service'],
   }));
+  await authStorage.run(tenant, () => DreamProjectIdentityService.register({
+    projectId: 'git-common-hash-b',
+    displayName: 'service',
+    workspacePath: '/work/beta/service',
+    aliases: ['service'],
+  }));
 
   assert.deepEqual(first.collisions, []);
   assert.deepEqual(second.collisions, [{ alias: 'service', existingProjectId: 'git-common-hash-a' }]);

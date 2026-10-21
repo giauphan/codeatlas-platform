@@ -1291,6 +1291,17 @@ async function runDreamSchedulerTick(port: number): Promise<void> {
   }
 }
 
+export function createSchedulerTickRunner(runTick: () => Promise<void>): () => void {
+  let schedulerTickRunning = false;
+  return () => {
+    if (schedulerTickRunning) return;
+    schedulerTickRunning = true;
+    void runTick()
+      .catch((error: unknown) => logger.error('[DreamCron] Scheduler tick failed', error instanceof Error ? error.message : String(error)))
+      .finally(() => { schedulerTickRunning = false; });
+  };
+}
+
 export function startHttpServer(port: number, retries = 5): Promise<void> {
   mountSecondBrainRoutes(app);
   mountConsolidationRoutes(app);
@@ -1317,9 +1328,7 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
             logger.warn(`[DreamCron] Scheduler disabled: CODEATLAS_API_KEY is not configured`);
           }
 
-          const runSchedulerTick = () => {
-            void runDreamSchedulerTick(port);
-          };
+          const runSchedulerTick = createSchedulerTickRunner(() => runDreamSchedulerTick(port));
           runSchedulerTick();
           schedulerTimer = setInterval(runSchedulerTick, 60 * 1000);
           schedulerTimer.unref();

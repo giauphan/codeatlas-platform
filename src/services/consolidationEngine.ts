@@ -278,7 +278,7 @@ export class ConsolidationEngine {
       const sql = `
         SELECT id, content, embedding, importance, memory_type, project
         FROM ai_dreaming_memory
-        WHERE ${conditions.join(' AND ')}
+        WHERE ${conditions.join(' AND ')} AND (status IS NULL OR status = 'active')
       `;
 
       const rows = await db.query<any[]>(sql, binds);
@@ -315,7 +315,7 @@ export class ConsolidationEngine {
       }
 
       let merged = 0;
-      const allToRemove = new Set<string>();
+      const mergedMemoryIds = new Set<string>();
 
       for (const [, group] of byProject) {
         // Track deletions within the project group to skip processed items
@@ -337,7 +337,7 @@ export class ConsolidationEngine {
               const removeIdx = keepIdx === i ? j : i;
               const idToRemove = keepIdx === i ? itemJ.id : itemI.id;
               groupToRemove.add(idToRemove);
-              allToRemove.add(idToRemove);
+              mergedMemoryIds.add(idToRemove);
 
               // If the outer element 'i' is removed, break the inner loop early.
               if (removeIdx === i) break;
@@ -346,27 +346,30 @@ export class ConsolidationEngine {
         }
       }
 
-      // Share bounded deletes across projects while keeping similarity comparisons isolated.
-      if (allToRemove.size > 0) {
-        const ids = Array.from(allToRemove);
+      // Preserve durable receipt and evidence targets. A replay can legitimately
+      // reference a deduplicated source memory, so mark it merged rather than
+      // deleting the row and creating a dangling durable reference.
+      if (mergedMemoryIds.size > 0) {
+        const ids = Array.from(mergedMemoryIds);
         const BATCH_DELETE_CHUNK_SIZE = 900;
         for (let k = 0; k < ids.length; k += BATCH_DELETE_CHUNK_SIZE) {
           try {
             const chunk = ids.slice(k, k + BATCH_DELETE_CHUNK_SIZE);
             const { clause, binds } = buildInClause(chunk, { tenantId });
             const result = await db.execute(
-              `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId${projectId ? ' AND project_id = :projectId' : project ? ' AND project = :project' : ''} AND ${this.fencePredicate()}`,
+              `UPDATE ai_dreaming_memory SET status = 'merged', updated_at = CURRENT_TIMESTAMP
+               WHERE id IN (${clause}) AND tenant_id = :tenantId AND (status IS NULL OR status = 'active')${projectId ? ' AND project_id = :projectId' : project ? ' AND project = :project' : ''} AND ${this.fencePredicate()}`,
               { ...(binds as Record<string, unknown>), ...(projectId ? { projectId } : project ? { project } : {}), ...this.fenceParameters() }
             );
             merged += result.rowsAffected || 0;
           } catch (err) {
-            logger.warn(`[Consolidation] Dedup: Failed to delete chunk`, { chunkStart: k, error: err instanceof Error ? err.message : String(err) });
+            logger.warn(`[Consolidation] Dedup: Failed to mark duplicate chunk merged`, { chunkStart: k, error: err instanceof Error ? err.message : String(err) });
           }
         }
       }
 
       report!.dreamsMerged = merged;
-      logger.info(`[Consolidation] Dedup: removed ${merged} duplicate dreams`);
+      logger.info(`[Consolidation] Dedup: marked ${merged} duplicate dreams merged`);
   }
 
   /**

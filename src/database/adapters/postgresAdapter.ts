@@ -289,6 +289,15 @@ export class PostgresAdapter implements IDatabaseAdapter {
         reason TEXT NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
+      DELETE FROM dream_project_alias_audit duplicate
+       USING dream_project_alias_audit retained
+       WHERE duplicate.id > retained.id
+         AND duplicate.tenant_id = retained.tenant_id
+         AND duplicate.alias = retained.alias
+         AND duplicate.requested_project_id = retained.requested_project_id
+         AND duplicate.existing_project_id = retained.existing_project_id;
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_dream_project_alias_audit_collision
+        ON dream_project_alias_audit(tenant_id, alias, requested_project_id, existing_project_id);
     `);
     await this.pool!.query(`
       CREATE TABLE IF NOT EXISTS dream_memory_provenance (

@@ -105,8 +105,11 @@ test('canonical scheduled consolidation leaves same-alias and unowned rows untou
   assert.equal(memories.filter((row) => row.project_id === null).length, 2);
   assert.ok(memories.filter((row) => row.project_id === 'other-canonical-project' || row.project_id === null)
     .every((row) => row.confidence === 0.2 && row.status === 'active'));
-  assert.equal(memories.filter((row) => row.project_id === projectId).length, 3);
-  assert.ok(memories.filter((row) => row.project_id === projectId)
+  const selectedMemories = memories.filter((row) => row.project_id === projectId);
+  assert.equal(selectedMemories.length, 4);
+  assert.equal(selectedMemories.filter((row) => row.status === 'active').length, 3);
+  assert.equal(selectedMemories.filter((row) => row.status === 'merged').length, 1);
+  assert.ok(selectedMemories.filter((row) => row.status === 'active')
     .every((row) => Math.abs(row.confidence - 0.7) < 0.000001));
 
   const concepts = await adapter.query<{ id: string; project_id: string | null; confidence: number }>(

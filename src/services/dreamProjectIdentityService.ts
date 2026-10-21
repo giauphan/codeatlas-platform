@@ -52,7 +52,8 @@ export class DreamProjectIdentityService {
         collisions.push({ alias, existingProjectId: existing[0].project_id });
         await db.execute(
           `INSERT INTO dream_project_alias_audit (tenant_id, alias, requested_project_id, existing_project_id, reason)
-           VALUES (:tenantId, :alias, :requestedProjectId, :existingProjectId, 'alias_collision')`,
+           VALUES (:tenantId, :alias, :requestedProjectId, :existingProjectId, 'alias_collision')
+           ON CONFLICT (tenant_id, alias, requested_project_id, existing_project_id) DO NOTHING`,
           { tenantId: auth.uid, alias, requestedProjectId: projectId, existingProjectId: existing[0].project_id },
         );
         continue;
