@@ -43,8 +43,9 @@ import { a2aOrchestrationService } from "../services/a2aOrchestrationService.js"
 import { indexingService } from "../services/indexingService.js";
 import { logger } from "../utils/logger.js";
 import * as crypto from "crypto";
-import { matchesCron } from "../utils/cron.js";
 import { loadSettings } from "./cronSettingsRoute.js";
+import { DreamDiagnostics } from "../services/dreamDiagnostics.js";
+import { DreamRunLedger, DreamScheduler } from "../services/dreamScheduler.js";
 
 // Wrapper object to allow clean mocking of Firebase services in testing environments
 export const firebaseClient = {
@@ -1228,6 +1229,79 @@ app.get("/api/docs/memory-setup", authMiddleware, localRateLimiter, (req, res) =
 /**
  * Start the HTTP/SSE Express server on a specified port with retry on EADDRINUSE
  */
+async function runDreamSchedulerTick(port: number): Promise<void> {
+  const internalApiKey = process.env.CODEATLAS_API_KEY;
+  if (!internalApiKey) return;
+  try {
+    const auth = await checkAuth(internalApiKey);
+    const settings = await loadSettings();
+    const scheduler = new DreamScheduler({
+      ledger: new DreamRunLedger(createDatabaseAdapter()),
+      ownerId: `http-${process.pid}-${crypto.randomUUID()}`,
+      executeJob: async (claim, leaseSignal) => {
+        const reconciliation = claim.jobType === "reconciliation";
+        const url = reconciliation
+          ? `http://127.0.0.1:${port}/api/dreams/reconcile-pending`
+          : `http://127.0.0.1:${port}/api/dreams/generate-daily-dreams`;
+        const controller = new AbortController();
+        const abortOnLeaseLoss = () => controller.abort(leaseSignal.reason || new Error("scheduler lease lost"));
+        if (leaseSignal.aborted) abortOnLeaseLoss();
+        else leaseSignal.addEventListener("abort", abortOnLeaseLoss, { once: true });
+        const timeout = setTimeout(() => controller.abort(), 90_000);
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-api-key": internalApiKey },
+            body: JSON.stringify({
+              project: settings.project || claim.project || undefined,
+              ...(settings.project_id ? { project_id: settings.project_id } : reconciliation ? { project_id: claim.project || undefined } : {}),
+              tenant_id: claim.tenantId,
+              ...(reconciliation ? {} : { provider: settings.dreams_provider }),
+              run_id: claim.runId,
+              scheduled_for: claim.scheduledFor,
+              job_key: claim.jobKey,
+              owner_token: claim.ownerToken,
+              fencing_token: claim.fencingToken,
+            }),
+            signal: controller.signal,
+          });
+          const body: unknown = await response.json().catch(() => ({}));
+          return { httpStatus: response.status, body };
+        } finally {
+          clearTimeout(timeout);
+          leaseSignal.removeEventListener("abort", abortOnLeaseLoss);
+        }
+      },
+    });
+    const results = [];
+    for (const tenantId of await new DreamRunLedger(createDatabaseAdapter()).tenantScopes(auth, settings.tenant_id)) {
+      results.push(...await scheduler.tick({ ...settings, tenant_id: tenantId }, new Date()));
+    }
+    for (const result of results) {
+      if (result.state === "skipped") continue;
+      DreamDiagnostics.recordCron();
+      if (result.state === "completed") {
+        logger.info(`[DreamCron] COMPLETED job=${result.jobType} scheduled_for=${result.scheduledFor}`);
+      } else {
+        logger.warn(`[DreamCron] ${result.state.toUpperCase()} job=${result.jobType} scheduled_for=${result.scheduledFor}`);
+      }
+    }
+  } catch (err) {
+    logger.error("[DreamCron] Scheduler tick failed", err instanceof Error ? err.message : String(err));
+  }
+}
+
+export function createSchedulerTickRunner(runTick: () => Promise<void>): () => void {
+  let schedulerTickRunning = false;
+  return () => {
+    if (schedulerTickRunning) return;
+    schedulerTickRunning = true;
+    void runTick()
+      .catch((error: unknown) => logger.error('[DreamCron] Scheduler tick failed', error instanceof Error ? error.message : String(error)))
+      .finally(() => { schedulerTickRunning = false; });
+  };
+}
+
 export function startHttpServer(port: number, retries = 5): Promise<void> {
   mountSecondBrainRoutes(app);
   mountConsolidationRoutes(app);
@@ -1236,57 +1310,7 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
   mountHeartbeatRoutes(app);
   mountCronSettingsRoutes(app);
 
-  // --- Daily Dream Generation Scheduler ---
-  let lastDreamRunDate: string | null = null;
-  let isDreamPipelineRunning = false;
-  const CRON_CHECK_INTERVAL_MS = 60 * 1000;
-
-  setInterval(async () => {
-    const now = new Date();
-    const settings = await loadSettings();
-
-    if (settings.dreams_enabled && matchesCron(settings.dreams_schedule, now)) {
-      const today = now.toISOString().split('T')[0];
-      if (lastDreamRunDate === today) {
-        return;
-      }
-
-      if (isDreamPipelineRunning) {
-        logger.warn(`[DreamCron] [${now.toISOString()}] Pipeline already RUNNING, skipping overlapping run for date ${today}.`);
-        return;
-      }
-
-      isDreamPipelineRunning = true;
-      const cronStartTime = Date.now();
-      logger.info(`[DreamCron] [${now.toISOString()}] Pipeline RUNNING: Triggering daily dream generation for provider="${settings.dreams_provider || 'all'}" on date ${today}`);
-      try {
-        const internalApiKey = process.env.CODEATLAS_API_KEY;
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (internalApiKey) {
-          headers['x-api-key'] = internalApiKey;
-        }
-        const response = await fetch(`http://localhost:${port}/api/dreams/generate-daily-dreams`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ provider: settings.dreams_provider }),
-        });
-
-        const elapsedMs = Date.now() - cronStartTime;
-        if (response.ok) {
-          const body: any = await response.json().catch(() => ({}));
-          logger.info(`[DreamCron] [${new Date().toISOString()}] Pipeline COMPLETED in ${elapsedMs}ms (server reported duration: ${body.durationMs ?? elapsedMs}ms) for date ${today}.`);
-          lastDreamRunDate = today;
-        } else {
-          logger.error(`[DreamCron] [${new Date().toISOString()}] Pipeline FAILED after ${elapsedMs}ms for ${response.url}: ${response.status} - ${response.statusText}`);
-        }
-      } catch (err) {
-        const elapsedMs = Date.now() - cronStartTime;
-        logger.error(`[DreamCron] [${new Date().toISOString()}] Pipeline error after ${elapsedMs}ms:`, err);
-      } finally {
-        isDreamPipelineRunning = false;
-      }
-    }
-  }, CRON_CHECK_INTERVAL_MS);
+  let schedulerTimer: NodeJS.Timeout | undefined;
 
   return new Promise((resolve, reject) => {
     function attempt(remaining: number) {
@@ -1300,8 +1324,14 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
           if (process.env.CODEATLAS_API_KEY) {
             logger.info(`- Security: API Key enabled`);
           } else {
-            logger.info(`- Security: DISABLED (Set CODEATLAS_API_KEY to enable)`);
+            logger.info(`- Authenticated HTTP operations require a configured API key`);
+            logger.warn(`[DreamCron] Scheduler disabled: CODEATLAS_API_KEY is not configured`);
           }
+
+          const runSchedulerTick = createSchedulerTickRunner(() => runDreamSchedulerTick(port));
+          runSchedulerTick();
+          schedulerTimer = setInterval(runSchedulerTick, 60 * 1000);
+          schedulerTimer.unref();
 
           // Define shutdown handler
           let isShuttingDown = false;
@@ -1309,6 +1339,7 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
             if (isShuttingDown) return;
             isShuttingDown = true;
             logger.info(`${signal} received: Closing HTTP server...`);
+            if (schedulerTimer) clearInterval(schedulerTimer);
 
             type ModernServer = Server & { closeIdleConnections?: () => void, closeAllConnections?: () => void };
             const mServer = server as ModernServer;

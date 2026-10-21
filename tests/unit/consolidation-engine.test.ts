@@ -81,6 +81,7 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     process.env.CODEATLAS_DB_TYPE = 'sqlite';
     mockDbAdapter.query.mock.resetCalls();
     mockDbAdapter.execute.mock.resetCalls();
+    mockDbAdapter.executeMany.mock.resetCalls();
   });
 
   afterEach(() => {
@@ -89,6 +90,20 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     } else {
       process.env.CODEATLAS_DB_TYPE = origDbType;
     }
+  });
+
+  test('empty consolidation reports zero source work without claiming transcript ingestion', async () => {
+    mockDbAdapter.query.mock.mockImplementation(async () => []);
+    const report = await consolidationEngine.runJob({
+      project: 'empty-project', provider: 'generic',
+      operations: ['dedup', 'extract_concepts', 'score', 'score_dreams'],
+    });
+    assert.equal(report.status, 'completed');
+    assert.equal(report.dreamsProcessed, 0);
+    assert.equal(report.dreamsMerged, 0);
+    assert.equal(report.conceptsCreated, 0);
+    assert.deepEqual(report.errors, []);
+    assert.equal('transcriptsProcessed' in report, false);
   });
 
   test('scoreConcepts uses datetime("now") for updated_at in SQLite mode', async () => {
@@ -103,7 +118,7 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
     assert.ok(sql.includes("datetime('now')"), 'SQL should use datetime("now") for SQLite');
   });
 
-  test('scoreDreams uses julianday for time decay in SQLite mode', async () => {
+  test('scoreDreams recomputes confidence from stable source values for retry safety', async () => {
     const report = {
       startTime: new Date().toISOString(),
       endTime: '',
@@ -116,18 +131,20 @@ describe('ConsolidationEngine (SQLite dialect expressions)', () => {
       invalidEmbeddingsSkipped: 0,
     };
 
-    await (consolidationEngine as any).scoreDreams('test-proj', undefined, report);
+    mockDbAdapter.query.mock.mockImplementation(async (sql: string) => {
+      if (sql.includes('SELECT id, memory_type, importance')) return [{
+        id: 'dream-1', memory_type: 'KNOWLEDGE', importance: 7, confidence: 0.7,
+        created_at: '2026-10-01T00:00:00.000Z', last_accessed_at: null, evidence_count: 2, access_count: 0,
+      }];
+      return [];
+    });
+    await (consolidationEngine as any).scoreDreams('test-proj', undefined, undefined, report, '2026-10-19T09:00:00.000Z');
 
-    assert.ok(mockDbAdapter.execute.mock.calls.length > 0);
-    const decaySql = mockDbAdapter.execute.mock.calls[0].arguments[0] as string;
-    assert.ok(decaySql.includes("julianday('now')"), 'Decay SQL should use julianday("now") for SQLite');
-    assert.ok(decaySql.includes('MAX(0.05'), 'SQLite decay must use scalar MAX, not GREATEST');
-    assert.ok(!decaySql.includes('GREATEST('), 'SQLite does not provide GREATEST');
-
-    const boostSql = mockDbAdapter.execute.mock.calls[1].arguments[0] as string;
-    const accessSql = mockDbAdapter.execute.mock.calls[2].arguments[0] as string;
-    assert.ok(boostSql.includes('MIN(0.99, MAX(0.05'), 'SQLite evidence boost must use MIN/MAX');
-    assert.ok(accessSql.includes('MIN(0.99, MAX(0.05'), 'SQLite access bonus must use MIN/MAX');
+    assert.equal(mockDbAdapter.executeMany.mock.calls.length, 1);
+    const sql = mockDbAdapter.executeMany.mock.calls[0].arguments[0] as string;
+    const values = mockDbAdapter.executeMany.mock.calls[0].arguments[1] as Array<{ confidence: number }>;
+    assert.ok(sql.includes("WHERE id = :id AND tenant_id = :tenantId AND status = 'active' AND project = :project"));
+    assert.ok(values[0].confidence > 0.05 && values[0].confidence < 0.99);
   });
 
   test('getNormalizedVector correctly normalizes and handles zero-norm vectors', () => {

@@ -1,0 +1,1663 @@
+{
+  "schemaVersion": 1,
+  "datasetVersion": 2,
+  "description": "Synthetic bilingual extraction cases; credential strings are fake redaction sentinels.",
+  "caseCount": 62,
+  "splitCounts": {
+    "development": 40,
+    "holdout": 22
+  },
+  "cases": [
+    {
+      "id": "dec-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "decision",
+      "transcript": "[USER]\nWe decided to keep PostgreSQL optional while SQLite remains the default for local development.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "PostgreSQL optional",
+          "evidence": {
+            "sourceEventId": "dec-en-01:event-01",
+            "span": "PostgreSQL optional"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "dec-en-01:event-01",
+          "role": "USER",
+          "text": "We decided to keep PostgreSQL optional while SQLite remains the default for local development."
+        }
+      ]
+    },
+    {
+      "id": "dec-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "decision",
+      "transcript": "[USER]\nThe API will use idempotency keys for retries so duplicate hook delivery cannot create duplicate memories.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "idempotency keys",
+          "evidence": {
+            "sourceEventId": "dec-en-02:event-01",
+            "span": "idempotency keys"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "dec-en-02:event-01",
+          "role": "USER",
+          "text": "The API will use idempotency keys for retries so duplicate hook delivery cannot create duplicate memories."
+        }
+      ]
+    },
+    {
+      "id": "dec-en-03",
+      "split": "development",
+      "locale": "en",
+      "dimension": "decision",
+      "transcript": "[USER]\nWe chose tenant_id plus project_id as the scope boundary for memory retrieval.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "tenant_id plus project_id",
+          "evidence": {
+            "sourceEventId": "dec-en-03:event-01",
+            "span": "tenant_id plus project_id"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "dec-en-03:event-01",
+          "role": "USER",
+          "text": "We chose tenant_id plus project_id as the scope boundary for memory retrieval."
+        }
+      ]
+    },
+    {
+      "id": "dec-en-04",
+      "split": "development",
+      "locale": "en",
+      "dimension": "decision",
+      "transcript": "[USER]\nDecision: keep MCP transport on stdio for desktop clients and expose REST for hook integration.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "MCP transport on stdio",
+          "evidence": {
+            "sourceEventId": "dec-en-04:event-01",
+            "span": "MCP transport on stdio"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "dec-en-04:event-01",
+          "role": "USER",
+          "text": "Decision: keep MCP transport on stdio for desktop clients and expose REST for hook integration."
+        }
+      ]
+    },
+    {
+      "id": "dec-vi-01",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "decision",
+      "transcript": "[USER]\nChúng ta quyết định dùng SQLite làm cơ sở dữ liệu mặc định cho môi trường phát triển cục bộ.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "SQLite làm cơ sở dữ liệu mặc định",
+          "evidence": {
+            "sourceEventId": "dec-vi-01:event-01",
+            "span": "SQLite làm cơ sở dữ liệu mặc định"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "dec-vi-01:event-01",
+          "role": "USER",
+          "text": "Chúng ta quyết định dùng SQLite làm cơ sở dữ liệu mặc định cho môi trường phát triển cục bộ."
+        }
+      ]
+    },
+    {
+      "id": "dec-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "decision",
+      "transcript": "[USER]\nQuyết định: mỗi dự án có project_id riêng và dữ liệu phải được lọc theo tenant_id trước khi truy xuất.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "project_id riêng",
+          "evidence": {
+            "sourceEventId": "dec-vi-02:event-01",
+            "span": "project_id riêng"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "dec-vi-02:event-01",
+          "role": "USER",
+          "text": "Quyết định: mỗi dự án có project_id riêng và dữ liệu phải được lọc theo tenant_id trước khi truy xuất."
+        }
+      ]
+    },
+    {
+      "id": "fact-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "verified_fact",
+      "transcript": "[USER]\nThe save route returns the persisted memory ID after the database write completes.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "persisted memory ID",
+          "evidence": {
+            "sourceEventId": "fact-en-01:event-01",
+            "span": "persisted memory ID"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fact-en-01:event-01",
+          "role": "USER",
+          "text": "The save route returns the persisted memory ID after the database write completes."
+        }
+      ]
+    },
+    {
+      "id": "fact-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "verified_fact",
+      "transcript": "[USER]\nThe SQLite adapter stores embeddings as float32 blobs and checks byte length before vector search.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "float32 blobs",
+          "evidence": {
+            "sourceEventId": "fact-en-02:event-01",
+            "span": "float32 blobs"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fact-en-02:event-01",
+          "role": "USER",
+          "text": "The SQLite adapter stores embeddings as float32 blobs and checks byte length before vector search."
+        }
+      ]
+    },
+    {
+      "id": "fact-en-03",
+      "split": "development",
+      "locale": "en",
+      "dimension": "verified_fact",
+      "transcript": "[USER]\nThe SessionStart hook invokes brain-context with the project directory from the hook payload.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "SessionStart hook",
+          "evidence": {
+            "sourceEventId": "fact-en-03:event-01",
+            "span": "SessionStart hook"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fact-en-03:event-01",
+          "role": "USER",
+          "text": "The SessionStart hook invokes brain-context with the project directory from the hook payload."
+        }
+      ]
+    },
+    {
+      "id": "fact-vi-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "verified_fact",
+      "transcript": "[USER]\nBộ kiểm thử đang chạy tuần tự với tùy chọn test-concurrency=1.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "test-concurrency=1",
+          "evidence": {
+            "sourceEventId": "fact-vi-01:event-01",
+            "span": "test-concurrency=1"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fact-vi-01:event-01",
+          "role": "USER",
+          "text": "Bộ kiểm thử đang chạy tuần tự với tùy chọn test-concurrency=1."
+        }
+      ]
+    },
+    {
+      "id": "fact-en-04",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "verified_fact",
+      "transcript": "[USER]\nThe hook client sends its credential in the x-api-key request header.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "x-api-key request header",
+          "evidence": {
+            "sourceEventId": "fact-en-04:event-01",
+            "span": "x-api-key request header"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fact-en-04:event-01",
+          "role": "USER",
+          "text": "The hook client sends its credential in the x-api-key request header."
+        }
+      ]
+    },
+    {
+      "id": "fact-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "verified_fact",
+      "transcript": "[USER]\nBản ghi memory có các trường session_id, project, memory_type và created_at.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "session_id, project",
+          "evidence": {
+            "sourceEventId": "fact-vi-02:event-01",
+            "span": "session_id, project"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fact-vi-02:event-01",
+          "role": "USER",
+          "text": "Bản ghi memory có các trường session_id, project, memory_type và created_at."
+        }
+      ]
+    },
+    {
+      "id": "err-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "error_and_fix",
+      "transcript": "[USER]\nThe 401 error occurred because the test client omitted the x-api-key header.\n\n---\n\n[ASSISTANT]\nThe client should add the x-api-key header and rerun the request.\n\n---\n\n[USER]\nThe test output confirms the client now sends the x-api-key header and the request returned 200.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "401 error",
+          "evidence": {
+            "sourceEventId": "err-en-01:event-01",
+            "span": "401 error"
+          },
+          "certainty": "reported"
+        },
+        {
+          "kind": "FIX",
+          "contains": "client now sends the x-api-key header",
+          "evidence": {
+            "sourceEventId": "err-en-01:event-03",
+            "span": "client now sends the x-api-key header"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "err-en-01:event-01",
+          "role": "USER",
+          "text": "The 401 error occurred because the test client omitted the x-api-key header."
+        },
+        {
+          "id": "err-en-01:event-02",
+          "role": "ASSISTANT",
+          "text": "The client should add the x-api-key header and rerun the request."
+        },
+        {
+          "id": "err-en-01:event-03",
+          "role": "USER",
+          "text": "The test output confirms the client now sends the x-api-key header and the request returned 200."
+        }
+      ]
+    },
+    {
+      "id": "err-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "error",
+      "transcript": "[USER]\nA regression caused the ninth transcript message to be skipped by a rolling-window cursor.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "ninth transcript message",
+          "evidence": {
+            "sourceEventId": "err-en-02:event-01",
+            "span": "ninth transcript message"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "err-en-02:event-01",
+          "role": "USER",
+          "text": "A regression caused the ninth transcript message to be skipped by a rolling-window cursor."
+        }
+      ]
+    },
+    {
+      "id": "err-en-03",
+      "split": "development",
+      "locale": "en",
+      "dimension": "error",
+      "transcript": "[USER]\nThe SQLite migration failed because the unique index was created before duplicate rows were removed.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "unique index",
+          "evidence": {
+            "sourceEventId": "err-en-03:event-01",
+            "span": "unique index"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "err-en-03:event-01",
+          "role": "USER",
+          "text": "The SQLite migration failed because the unique index was created before duplicate rows were removed."
+        }
+      ]
+    },
+    {
+      "id": "err-vi-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "error",
+      "transcript": "[USER]\nLỗi truy xuất xảy ra vì bộ lọc project được áp dụng sau khi truy vấn vector đã giới hạn top-K toàn tenant.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "bộ lọc project",
+          "evidence": {
+            "sourceEventId": "err-vi-01:event-01",
+            "span": "bộ lọc project"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "err-vi-01:event-01",
+          "role": "USER",
+          "text": "Lỗi truy xuất xảy ra vì bộ lọc project được áp dụng sau khi truy vấn vector đã giới hạn top-K toàn tenant."
+        }
+      ]
+    },
+    {
+      "id": "err-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "error",
+      "transcript": "[USER]\nBản dựng bị lỗi vì TypeScript không tìm thấy kiểu của better-sqlite3.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "better-sqlite3",
+          "evidence": {
+            "sourceEventId": "err-vi-02:event-01",
+            "span": "better-sqlite3"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "err-vi-02:event-01",
+          "role": "USER",
+          "text": "Bản dựng bị lỗi vì TypeScript không tìm thấy kiểu của better-sqlite3."
+        }
+      ]
+    },
+    {
+      "id": "err-en-04",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "error",
+      "transcript": "[USER]\nThe migration failed because two rows shared the same project and content hash.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "content hash",
+          "evidence": {
+            "sourceEventId": "err-en-04:event-01",
+            "span": "content hash"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "err-en-04:event-01",
+          "role": "USER",
+          "text": "The migration failed because two rows shared the same project and content hash."
+        }
+      ]
+    },
+    {
+      "id": "fix-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "fix",
+      "transcript": "[USER]\nWe fixed the retry bug by preserving the cursor until the server confirms the batch was stored.",
+      "expect": [
+        {
+          "kind": "FIX",
+          "contains": "preserving the cursor",
+          "evidence": {
+            "sourceEventId": "fix-en-01:event-01",
+            "span": "preserving the cursor"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fix-en-01:event-01",
+          "role": "USER",
+          "text": "We fixed the retry bug by preserving the cursor until the server confirms the batch was stored."
+        }
+      ]
+    },
+    {
+      "id": "fix-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "fix",
+      "transcript": "[USER]\nThe project alias issue was fixed by resolving the canonical repository root before saving.",
+      "expect": [
+        {
+          "kind": "FIX",
+          "contains": "canonical repository root",
+          "evidence": {
+            "sourceEventId": "fix-en-02:event-01",
+            "span": "canonical repository root"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fix-en-02:event-01",
+          "role": "USER",
+          "text": "The project alias issue was fixed by resolving the canonical repository root before saving."
+        }
+      ]
+    },
+    {
+      "id": "fix-en-03",
+      "split": "development",
+      "locale": "en",
+      "dimension": "fix",
+      "transcript": "[USER]\nWe replaced the global top-K query with a project-filtered candidate query.",
+      "expect": [
+        {
+          "kind": "FIX",
+          "contains": "project-filtered candidate query",
+          "evidence": {
+            "sourceEventId": "fix-en-03:event-01",
+            "span": "project-filtered candidate query"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fix-en-03:event-01",
+          "role": "USER",
+          "text": "We replaced the global top-K query with a project-filtered candidate query."
+        }
+      ]
+    },
+    {
+      "id": "fix-vi-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "fix",
+      "transcript": "[USER]\nChúng tôi đã sửa lỗi bằng cách chỉ đánh dấu sự kiện sau khi máy chủ xác nhận đã lưu.",
+      "expect": [
+        {
+          "kind": "FIX",
+          "contains": "máy chủ xác nhận đã lưu",
+          "evidence": {
+            "sourceEventId": "fix-vi-01:event-01",
+            "span": "máy chủ xác nhận đã lưu"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fix-vi-01:event-01",
+          "role": "USER",
+          "text": "Chúng tôi đã sửa lỗi bằng cách chỉ đánh dấu sự kiện sau khi máy chủ xác nhận đã lưu."
+        }
+      ]
+    },
+    {
+      "id": "fix-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "fix",
+      "transcript": "[USER]\nĐã khắc phục lỗi bằng cách chuẩn hóa đường dẫn worktree trước khi tạo project_id.",
+      "expect": [
+        {
+          "kind": "FIX",
+          "contains": "chuẩn hóa đường dẫn worktree",
+          "evidence": {
+            "sourceEventId": "fix-vi-02:event-01",
+            "span": "chuẩn hóa đường dẫn worktree"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fix-vi-02:event-01",
+          "role": "USER",
+          "text": "Đã khắc phục lỗi bằng cách chuẩn hóa đường dẫn worktree trước khi tạo project_id."
+        }
+      ]
+    },
+    {
+      "id": "fix-en-04",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "fix",
+      "transcript": "[USER]\nWe corrected the parser by reading tool_response.stdout from PostToolUse events.",
+      "expect": [
+        {
+          "kind": "FIX",
+          "contains": "tool_response.stdout",
+          "evidence": {
+            "sourceEventId": "fix-en-04:event-01",
+            "span": "tool_response.stdout"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "fix-en-04:event-01",
+          "role": "USER",
+          "text": "We corrected the parser by reading tool_response.stdout from PostToolUse events."
+        }
+      ]
+    },
+    {
+      "id": "pref-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "preference",
+      "transcript": "[USER]\nI prefer concise startup context with source IDs and a short next-actions list.",
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "concise startup context",
+          "evidence": {
+            "sourceEventId": "pref-en-01:event-01",
+            "span": "concise startup context"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "pref-en-01:event-01",
+          "role": "USER",
+          "text": "I prefer concise startup context with source IDs and a short next-actions list."
+        }
+      ]
+    },
+    {
+      "id": "pref-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "preference",
+      "transcript": "[USER]\nPlease keep the implementation in TypeScript and use the existing Node test runner.",
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "Node test runner",
+          "evidence": {
+            "sourceEventId": "pref-en-02:event-01",
+            "span": "Node test runner"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "pref-en-02:event-01",
+          "role": "USER",
+          "text": "Please keep the implementation in TypeScript and use the existing Node test runner."
+        }
+      ]
+    },
+    {
+      "id": "pref-en-03",
+      "split": "development",
+      "locale": "en",
+      "dimension": "preference",
+      "transcript": "[USER]\nFor integration tests, I want database files under a disposable temporary directory.",
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "disposable temporary directory",
+          "evidence": {
+            "sourceEventId": "pref-en-03:event-01",
+            "span": "disposable temporary directory"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "pref-en-03:event-01",
+          "role": "USER",
+          "text": "For integration tests, I want database files under a disposable temporary directory."
+        }
+      ]
+    },
+    {
+      "id": "pref-vi-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "preference",
+      "transcript": "[USER]\nTôi muốn câu trả lời ngắn gọn, nêu rõ kết quả kiểm thử và lỗi còn lại.",
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "ngắn gọn",
+          "evidence": {
+            "sourceEventId": "pref-vi-01:event-01",
+            "span": "ngắn gọn"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "pref-vi-01:event-01",
+          "role": "USER",
+          "text": "Tôi muốn câu trả lời ngắn gọn, nêu rõ kết quả kiểm thử và lỗi còn lại."
+        }
+      ]
+    },
+    {
+      "id": "pref-change-01",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "preference_supersession",
+      "transcript": "[USER]\nEarlier I asked for PostgreSQL-only examples. That preference changed: use SQLite-first examples, while mentioning PostgreSQL only when relevant.",
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "SQLite-first examples",
+          "evidence": {
+            "sourceEventId": "pref-change-01:event-01",
+            "span": "SQLite-first examples"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [
+        "PostgreSQL-only examples"
+      ],
+      "sourceEvents": [
+        {
+          "id": "pref-change-01:event-01",
+          "role": "USER",
+          "text": "Earlier I asked for PostgreSQL-only examples. That preference changed: use SQLite-first examples, while mentioning PostgreSQL only when relevant."
+        }
+      ]
+    },
+    {
+      "id": "pref-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "preference",
+      "transcript": "[USER]\nTôi ưu tiên dùng SQLite trong kiểm thử cục bộ và không gọi dịch vụ bên ngoài.",
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "SQLite trong kiểm thử cục bộ",
+          "evidence": {
+            "sourceEventId": "pref-vi-02:event-01",
+            "span": "SQLite trong kiểm thử cục bộ"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "pref-vi-02:event-01",
+          "role": "USER",
+          "text": "Tôi ưu tiên dùng SQLite trong kiểm thử cục bộ và không gọi dịch vụ bên ngoài."
+        }
+      ]
+    },
+    {
+      "id": "progress-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "task_progress",
+      "transcript": "[USER]\nThe capture endpoint and SQLite persistence are complete. Remaining work is same-project retrieval and startup injection.",
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "SQLite persistence are complete",
+          "evidence": {
+            "sourceEventId": "progress-en-01:event-01",
+            "span": "SQLite persistence are complete"
+          },
+          "certainty": "reported"
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "startup injection",
+          "evidence": {
+            "sourceEventId": "progress-en-01:event-01",
+            "span": "startup injection"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "progress-en-01:event-01",
+          "role": "USER",
+          "text": "The capture endpoint and SQLite persistence are complete. Remaining work is same-project retrieval and startup injection."
+        }
+      ]
+    },
+    {
+      "id": "progress-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "task_progress",
+      "transcript": "[USER]\nWe finished the project-scoped query test. Next, add a replay test for duplicate PostToolUse delivery.",
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "project-scoped query test",
+          "evidence": {
+            "sourceEventId": "progress-en-02:event-01",
+            "span": "project-scoped query test"
+          },
+          "certainty": "reported"
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "Next, add a replay test",
+          "evidence": {
+            "sourceEventId": "progress-en-02:event-01",
+            "span": "Next, add a replay test for duplicate PostToolUse delivery"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "progress-en-02:event-01",
+          "role": "USER",
+          "text": "We finished the project-scoped query test. Next, add a replay test for duplicate PostToolUse delivery."
+        }
+      ]
+    },
+    {
+      "id": "progress-vi-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "task_progress",
+      "transcript": "[USER]\nĐã hoàn thành lưu checkpoint vào SQLite. Việc tiếp theo là xác nhận checkpoint được nạp khi bắt đầu phiên mới.",
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "lưu checkpoint vào SQLite",
+          "evidence": {
+            "sourceEventId": "progress-vi-01:event-01",
+            "span": "lưu checkpoint vào SQLite"
+          },
+          "certainty": "reported"
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "bắt đầu phiên mới",
+          "evidence": {
+            "sourceEventId": "progress-vi-01:event-01",
+            "span": "bắt đầu phiên mới"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "progress-vi-01:event-01",
+          "role": "USER",
+          "text": "Đã hoàn thành lưu checkpoint vào SQLite. Việc tiếp theo là xác nhận checkpoint được nạp khi bắt đầu phiên mới."
+        }
+      ]
+    },
+    {
+      "id": "progress-vi-02",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "task_progress",
+      "transcript": "[USER]\nPhần xử lý lỗi 401 đã xong, nhưng kiểm thử timeout vẫn chưa được viết.",
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "kiểm thử timeout",
+          "evidence": {
+            "sourceEventId": "progress-vi-02:event-01",
+            "span": "kiểm thử timeout"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "progress-vi-02:event-01",
+          "role": "USER",
+          "text": "Phần xử lý lỗi 401 đã xong, nhưng kiểm thử timeout vẫn chưa được viết."
+        }
+      ]
+    },
+    {
+      "id": "progress-en-03",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "task_progress",
+      "transcript": "[USER]\nThe API save path is done, but failure-event capture is still blocked on the PostToolUseFailure fixture.",
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "failure-event capture",
+          "evidence": {
+            "sourceEventId": "progress-en-03:event-01",
+            "span": "failure-event capture"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "progress-en-03:event-01",
+          "role": "USER",
+          "text": "The API save path is done, but failure-event capture is still blocked on the PostToolUseFailure fixture."
+        }
+      ]
+    },
+    {
+      "id": "open-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "open_question",
+      "transcript": "[USER]\nOpen question: should migration retain old project aliases for one release or rewrite them after collision checks?",
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "retain old project aliases",
+          "evidence": {
+            "sourceEventId": "open-en-01:event-01",
+            "span": "retain old project aliases"
+          },
+          "certainty": "uncertain"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "open-en-01:event-01",
+          "role": "USER",
+          "text": "Open question: should migration retain old project aliases for one release or rewrite them after collision checks?"
+        }
+      ]
+    },
+    {
+      "id": "open-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "open_question",
+      "transcript": "[USER]\nWe still need to decide whether the checkpoint API returns the latest session or latest verified checkpoint per project.",
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "latest verified checkpoint",
+          "evidence": {
+            "sourceEventId": "open-en-02:event-01",
+            "span": "latest verified checkpoint"
+          },
+          "certainty": "uncertain"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "open-en-02:event-01",
+          "role": "USER",
+          "text": "We still need to decide whether the checkpoint API returns the latest session or latest verified checkpoint per project."
+        }
+      ]
+    },
+    {
+      "id": "open-vi-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "open_question",
+      "transcript": "[USER]\nCâu hỏi còn mở: cần giữ checkpoint cũ trong bao lâu trước khi áp dụng chính sách lưu trữ?",
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "chính sách lưu trữ",
+          "evidence": {
+            "sourceEventId": "open-vi-01:event-01",
+            "span": "chính sách lưu trữ"
+          },
+          "certainty": "uncertain"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "open-vi-01:event-01",
+          "role": "USER",
+          "text": "Câu hỏi còn mở: cần giữ checkpoint cũ trong bao lâu trước khi áp dụng chính sách lưu trữ?"
+        }
+      ]
+    },
+    {
+      "id": "open-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "open_question",
+      "transcript": "[USER]\nChưa thống nhất liệu có nên tạo bản ghi mới khi nội dung chỉ thay đổi khoảng trắng.",
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "thay đổi khoảng trắng",
+          "evidence": {
+            "sourceEventId": "open-vi-02:event-01",
+            "span": "thay đổi khoảng trắng"
+          },
+          "certainty": "uncertain"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "open-vi-02:event-01",
+          "role": "USER",
+          "text": "Chưa thống nhất liệu có nên tạo bản ghi mới khi nội dung chỉ thay đổi khoảng trắng."
+        }
+      ]
+    },
+    {
+      "id": "open-en-03",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "open_question",
+      "transcript": "[USER]\nAn unresolved question is whether empty retrieval should report EMPTY_MEMORY or NO_MATCH.",
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "EMPTY_MEMORY or NO_MATCH",
+          "evidence": {
+            "sourceEventId": "open-en-03:event-01",
+            "span": "EMPTY_MEMORY or NO_MATCH"
+          },
+          "certainty": "uncertain"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "open-en-03:event-01",
+          "role": "USER",
+          "text": "An unresolved question is whether empty retrieval should report EMPTY_MEMORY or NO_MATCH."
+        }
+      ]
+    },
+    {
+      "id": "neg-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "negation",
+      "transcript": "[USER]\nDo not retry non-idempotent writes after a timeout because the server may already have committed them.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "Do not retry non-idempotent writes",
+          "evidence": {
+            "sourceEventId": "neg-en-01:event-01",
+            "span": "Do not retry non-idempotent writes"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "Automatically retry non-idempotent writes"
+      ],
+      "sourceEvents": [
+        {
+          "id": "neg-en-01:event-01",
+          "role": "USER",
+          "text": "Do not retry non-idempotent writes after a timeout because the server may already have committed them."
+        }
+      ]
+    },
+    {
+      "id": "neg-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "negation",
+      "transcript": "[USER]\nThe bootstrap hook must never execute commands copied from historical memory.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "never execute commands",
+          "evidence": {
+            "sourceEventId": "neg-en-02:event-01",
+            "span": "never execute commands"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "execute historical commands"
+      ],
+      "sourceEvents": [
+        {
+          "id": "neg-en-02:event-01",
+          "role": "USER",
+          "text": "The bootstrap hook must never execute commands copied from historical memory."
+        }
+      ]
+    },
+    {
+      "id": "neg-vi-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "negation",
+      "transcript": "[USER]\nKhông được đưa API key vào log hoặc nội dung memory.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "Không được đưa API key",
+          "evidence": {
+            "sourceEventId": "neg-vi-01:event-01",
+            "span": "Không được đưa API key"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "put the API key into logs"
+      ],
+      "sourceEvents": [
+        {
+          "id": "neg-vi-01:event-01",
+          "role": "USER",
+          "text": "Không được đưa API key vào log hoặc nội dung memory."
+        }
+      ]
+    },
+    {
+      "id": "contradiction-en-01",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "contradiction",
+      "transcript": "[USER]\nThe old setting said retries were unlimited. We superseded it: retry at most three times with exponential backoff.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "retry at most three times",
+          "evidence": {
+            "sourceEventId": "contradiction-en-01:event-01",
+            "span": "retry at most three times"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [
+        "retries were unlimited"
+      ],
+      "sourceEvents": [
+        {
+          "id": "contradiction-en-01:event-01",
+          "role": "USER",
+          "text": "The old setting said retries were unlimited. We superseded it: retry at most three times with exponential backoff."
+        }
+      ]
+    },
+    {
+      "id": "contradiction-vi-01",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "contradiction",
+      "transcript": "[USER]\nQuyết định cũ yêu cầu ghi toàn bộ transcript. Quyết định mới thay thế: chỉ lưu bằng chứng đã chọn và metadata tối thiểu.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "chỉ lưu bằng chứng đã chọn",
+          "evidence": {
+            "sourceEventId": "contradiction-vi-01:event-01",
+            "span": "chỉ lưu bằng chứng đã chọn"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [
+        "ghi toàn bộ transcript"
+      ],
+      "sourceEvents": [
+        {
+          "id": "contradiction-vi-01:event-01",
+          "role": "USER",
+          "text": "Quyết định cũ yêu cầu ghi toàn bộ transcript. Quyết định mới thay thế: chỉ lưu bằng chứng đã chọn và metadata tối thiểu."
+        }
+      ]
+    },
+    {
+      "id": "neg-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "negation",
+      "transcript": "[USER]\nKhông tự động coi lời assistant là sự thật nếu chưa có kết quả công cụ xác nhận.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "chưa có kết quả công cụ xác nhận",
+          "evidence": {
+            "sourceEventId": "neg-vi-02:event-01",
+            "span": "chưa có kết quả công cụ xác nhận"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "assistant là sự thật"
+      ],
+      "sourceEvents": [
+        {
+          "id": "neg-vi-02:event-01",
+          "role": "USER",
+          "text": "Không tự động coi lời assistant là sự thật nếu chưa có kết quả công cụ xác nhận."
+        }
+      ]
+    },
+    {
+      "id": "unverified-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "unverified_assistant",
+      "transcript": "[USER]\nDid deployment include the schema migration?\n\n---\n\n[ASSISTANT]\nI have not checked the deployment logs, so I cannot confirm that the migration ran.",
+      "expect": [],
+      "mustNotContain": [
+        "migration ran"
+      ],
+      "sourceEvents": [
+        {
+          "id": "unverified-en-01:event-01",
+          "role": "USER",
+          "text": "Did deployment include the schema migration?"
+        },
+        {
+          "id": "unverified-en-01:event-02",
+          "role": "ASSISTANT",
+          "text": "I have not checked the deployment logs, so I cannot confirm that the migration ran."
+        }
+      ]
+    },
+    {
+      "id": "unverified-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "unverified_assistant",
+      "transcript": "[USER]\nThe tests have not been run yet.\n\n---\n\n[ASSISTANT]\nThe implementation should pass all 165 tests.",
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "tests have not been run yet",
+          "evidence": {
+            "sourceEventId": "unverified-en-02:event-01",
+            "span": "The tests have not been run yet."
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "pass all 165 tests"
+      ],
+      "sourceEvents": [
+        {
+          "id": "unverified-en-02:event-01",
+          "role": "USER",
+          "text": "The tests have not been run yet."
+        },
+        {
+          "id": "unverified-en-02:event-02",
+          "role": "ASSISTANT",
+          "text": "The implementation should pass all 165 tests."
+        }
+      ]
+    },
+    {
+      "id": "unverified-vi-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "unverified_assistant",
+      "transcript": "[USER]\nChưa có log triển khai để xác nhận migration.\n\n---\n\n[ASSISTANT]\nTôi đoán migration có thể đã chạy thành công, nhưng chưa kiểm tra log.",
+      "expect": [],
+      "mustNotContain": [
+        "đã chạy thành công"
+      ],
+      "sourceEvents": [
+        {
+          "id": "unverified-vi-01:event-01",
+          "role": "USER",
+          "text": "Chưa có log triển khai để xác nhận migration."
+        },
+        {
+          "id": "unverified-vi-01:event-02",
+          "role": "ASSISTANT",
+          "text": "Tôi đoán migration có thể đã chạy thành công, nhưng chưa kiểm tra log."
+        }
+      ]
+    },
+    {
+      "id": "unverified-en-03",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "unverified_assistant",
+      "transcript": "[USER]\nThere is no command output attached for this claim.\n\n---\n\n[ASSISTANT]\nThe API is definitely healthy and every memory was persisted.",
+      "expect": [],
+      "mustNotContain": [
+        "definitely healthy",
+        "every memory was persisted"
+      ],
+      "sourceEvents": [
+        {
+          "id": "unverified-en-03:event-01",
+          "role": "USER",
+          "text": "There is no command output attached for this claim."
+        },
+        {
+          "id": "unverified-en-03:event-02",
+          "role": "ASSISTANT",
+          "text": "The API is definitely healthy and every memory was persisted."
+        }
+      ]
+    },
+    {
+      "id": "noise-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "noise",
+      "transcript": "[USER]\nWe chatted about weekend plans and a new coffee shop near the station.",
+      "expect": [],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "noise-en-01:event-01",
+          "role": "USER",
+          "text": "We chatted about weekend plans and a new coffee shop near the station."
+        }
+      ]
+    },
+    {
+      "id": "noise-vi-01",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "noise",
+      "transcript": "[USER]\nHôm nay chúng ta nói chuyện về món ăn và bộ phim cuối tuần.",
+      "expect": [],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "noise-vi-01:event-01",
+          "role": "USER",
+          "text": "Hôm nay chúng ta nói chuyện về món ăn và bộ phim cuối tuần."
+        }
+      ]
+    },
+    {
+      "id": "noise-en-02",
+      "split": "development",
+      "locale": "en",
+      "dimension": "noise",
+      "transcript": "[USER]\nThat was a pleasant lunch; the meeting room has comfortable chairs.",
+      "expect": [],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "noise-en-02:event-01",
+          "role": "USER",
+          "text": "That was a pleasant lunch; the meeting room has comfortable chairs."
+        }
+      ]
+    },
+    {
+      "id": "noise-en-03",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "noise",
+      "transcript": "[USER]\nThe playlist had a cheerful song and everyone enjoyed the short break.",
+      "expect": [],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "noise-en-03:event-01",
+          "role": "USER",
+          "text": "The playlist had a cheerful song and everyone enjoyed the short break."
+        }
+      ]
+    },
+    {
+      "id": "secret-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "sensitive_token",
+      "transcript": "[USER]\nThe API request failed because synthetic token sk-test-DO-NOT-STORE-0001 was rejected by the service.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "API request failed",
+          "evidence": {
+            "sourceEventId": "secret-en-01:event-01",
+            "span": "API request failed"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "sk-test-DO-NOT-STORE-0001"
+      ],
+      "sourceEvents": [
+        {
+          "id": "secret-en-01:event-01",
+          "role": "USER",
+          "text": "The API request failed because synthetic token sk-test-DO-NOT-STORE-0001 was rejected by the service."
+        }
+      ]
+    },
+    {
+      "id": "secret-en-02",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "sensitive_token",
+      "transcript": "[USER]\nThe authentication error came from fake bearer value test_bearer_DO_NOT_PERSIST_42 and the request was refused.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "authentication error",
+          "evidence": {
+            "sourceEventId": "secret-en-02:event-01",
+            "span": "authentication error"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "test_bearer_DO_NOT_PERSIST_42"
+      ],
+      "sourceEvents": [
+        {
+          "id": "secret-en-02:event-01",
+          "role": "USER",
+          "text": "The authentication error came from fake bearer value test_bearer_DO_NOT_PERSIST_42 and the request was refused."
+        }
+      ]
+    },
+    {
+      "id": "decision-long-en-01",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "long_decision_with_caveat",
+      "transcript": "[USER]\nThe test report confirms the migration and compatibility checks completed successfully.\n\n---\n\n[USER]\nWe decided to preserve the existing API response fields during the first rollout because downstream clients may still depend on the legacy shape, even though the new status field is more precise and easier to audit. The transition should remain reversible, and we must keep the old parser available until telemetry shows that every supported client handles the new acknowledgement; otherwise a partial deployment could make successful writes appear to fail.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "partial deployment could make successful writes appear to fail",
+          "evidence": {
+            "sourceEventId": "decision-long-en-01:event-02",
+            "span": "partial deployment could make successful writes appear to fail"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "decision-long-en-01:event-01",
+          "role": "USER",
+          "text": "The test report confirms the migration and compatibility checks completed successfully."
+        },
+        {
+          "id": "decision-long-en-01:event-02",
+          "role": "USER",
+          "text": "We decided to preserve the existing API response fields during the first rollout because downstream clients may still depend on the legacy shape, even though the new status field is more precise and easier to audit. The transition should remain reversible, and we must keep the old parser available until telemetry shows that every supported client handles the new acknowledgement; otherwise a partial deployment could make successful writes appear to fail."
+        }
+      ]
+    },
+    {
+      "id": "mixed-vi-en-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "mixed_language_engineering",
+      "transcript": "[USER]\nQuyết định dùng project_id làm canonical identity, còn tenant_id phải được kiểm tra trước vector search vì global top-K có thể loại bỏ kết quả của project hiện tại.",
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "project_id làm canonical identity",
+          "evidence": {
+            "sourceEventId": "mixed-vi-en-01:event-01",
+            "span": "project_id làm canonical identity"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "mixed-vi-en-01:event-01",
+          "role": "USER",
+          "text": "Quyết định dùng project_id làm canonical identity, còn tenant_id phải được kiểm tra trước vector search vì global top-K có thể loại bỏ kết quả của project hiện tại."
+        }
+      ]
+    },
+    {
+      "id": "dedup-en-01",
+      "split": "development",
+      "locale": "en",
+      "dimension": "duplicate_memory_evidence",
+      "transcript": "[USER]\nI prefer project-scoped retrieval because it avoids cross-project memory leakage.\n\n---\n\n[ASSISTANT]\nI prefer project-scoped retrieval because it avoids cross-project memory leakage.",
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "project-scoped retrieval",
+          "evidence": {
+            "sourceEventId": "dedup-en-01:event-01",
+            "span": "project-scoped retrieval"
+          },
+          "certainty": "explicit"
+        }
+      ],
+      "mustNotContain": [],
+      "sourceEvents": [
+        {
+          "id": "dedup-en-01:event-01",
+          "role": "USER",
+          "text": "I prefer project-scoped retrieval because it avoids cross-project memory leakage."
+        },
+        {
+          "id": "dedup-en-01:event-02",
+          "role": "ASSISTANT",
+          "text": "I prefer project-scoped retrieval because it avoids cross-project memory leakage."
+        }
+      ]
+    },
+    {
+      "id": "secret-vi-01",
+      "split": "development",
+      "locale": "vi",
+      "dimension": "sensitive_token",
+      "transcript": "[USER]\nThe API request error xuất hiện khi bearer value api_test_DO_NOT_SAVE_73 bị từ chối; phải xóa token trước khi lưu memory.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "API request error",
+          "evidence": {
+            "sourceEventId": "secret-vi-01:event-01",
+            "span": "API request error"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "api_test_DO_NOT_SAVE_73"
+      ],
+      "sourceEvents": [
+        {
+          "id": "secret-vi-01:event-01",
+          "role": "USER",
+          "text": "The API request error xuất hiện khi bearer value api_test_DO_NOT_SAVE_73 bị từ chối; phải xóa token trước khi lưu memory."
+        }
+      ]
+    },
+    {
+      "id": "secret-password-01",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "sensitive_token",
+      "transcript": "[USER]\nThe authentication error was caused by the synthetic password pass-test-DO-NOT-KEEP, which must be redacted before storing the lesson.",
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "authentication error",
+          "evidence": {
+            "sourceEventId": "secret-password-01:event-01",
+            "span": "authentication error"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "pass-test-DO-NOT-KEEP"
+      ],
+      "sourceEvents": [
+        {
+          "id": "secret-password-01:event-01",
+          "role": "USER",
+          "text": "The authentication error was caused by the synthetic password pass-test-DO-NOT-KEEP, which must be redacted before storing the lesson."
+        }
+      ]
+    },
+    {
+      "id": "neg-en-03",
+      "split": "development",
+      "locale": "en",
+      "dimension": "negation",
+      "transcript": "[USER]\nNever store a complete transcript when a short evidence span and source event ID are sufficient for the memory record.",
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "Never store a complete transcript",
+          "evidence": {
+            "sourceEventId": "neg-en-03:event-01",
+            "span": "Never store a complete transcript"
+          },
+          "certainty": "reported"
+        }
+      ],
+      "mustNotContain": [
+        "Always store a complete transcript"
+      ],
+      "sourceEvents": [
+        {
+          "id": "neg-en-03:event-01",
+          "role": "USER",
+          "text": "Never store a complete transcript when a short evidence span and source event ID are sufficient for the memory record."
+        }
+      ]
+    }
+  ]
+}

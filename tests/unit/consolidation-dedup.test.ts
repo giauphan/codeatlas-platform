@@ -16,7 +16,8 @@ beforeEach(async () => {
   await adapter.connect();
   await adapter.execute(`CREATE TABLE ai_dreaming_memory (
     id TEXT PRIMARY KEY, content TEXT, embedding BLOB, importance REAL,
-    memory_type TEXT, project TEXT, tenant_id TEXT, provider TEXT
+    memory_type TEXT, project TEXT, tenant_id TEXT, provider TEXT,
+    status TEXT NOT NULL DEFAULT 'active', updated_at TEXT
   )`);
 });
 afterEach(async () => {
@@ -47,16 +48,19 @@ test('deduplication batches across projects while preserving project and tenant 
   assert.equal(report.dreamsProcessed, 9);
   assert.equal(report.dreamsMerged, 3);
   assert.equal(report.invalidEmbeddingsSkipped, 1);
-  assert.deepEqual(await adapter.query('SELECT id FROM ai_dreaming_memory ORDER BY id'), [
-    { id: 'a-high' }, { id: 'b-high' }, { id: 'c-high' }, { id: 'invalid' },
-    { id: 'other-tenant' }, { id: 'singleton-1' }, { id: 'singleton-2' },
+  assert.deepEqual(await adapter.query('SELECT id, status FROM ai_dreaming_memory ORDER BY id'), [
+    { id: 'a-high', status: 'active' }, { id: 'a-low', status: 'merged' },
+    { id: 'b-high', status: 'active' }, { id: 'b-low', status: 'merged' },
+    { id: 'c-high', status: 'active' }, { id: 'c-low', status: 'merged' },
+    { id: 'invalid', status: 'active' }, { id: 'other-tenant', status: 'active' },
+    { id: 'singleton-1', status: 'active' }, { id: 'singleton-2', status: 'active' },
   ]);
-  const deletes = execute.mock.calls.filter(call => call.arguments[0].startsWith('DELETE'));
-  assert.equal(deletes.length, 1, 'small project batches should share one DELETE');
-  assert.equal((deletes[0].arguments[1] as Record<string, unknown>).tenantId, auth.uid);
+  const updates = execute.mock.calls.filter(call => call.arguments[0].startsWith('UPDATE ai_dreaming_memory'));
+  assert.equal(updates.length, 1, 'small project batches should share one status update');
+  assert.equal((updates[0].arguments[1] as Record<string, unknown>).tenantId, auth.uid);
 });
 
-test('deduplication bounds each DELETE to 900 IDs across many projects', async () => {
+test('deduplication bounds each merged-status update to 900 IDs across many projects', async () => {
   const rows = Array.from({ length: 901 }, (_, i) => [
     { id: `${i}-high`, project: `p${i}`, importance: 0.9 },
     { id: `${i}-low`, project: `p${i}`, importance: 0.1 },
@@ -66,9 +70,9 @@ test('deduplication bounds each DELETE to 900 IDs across many projects', async (
   const report = await authStorage.run(auth, () => new ConsolidationEngine().run({ operations: ['dedup'] }));
 
   assert.equal(report.dreamsMerged, 901);
-  assert.deepEqual(await adapter.query('SELECT COUNT(*) AS remaining FROM ai_dreaming_memory'), [{ remaining: 901 }]);
-  const deletes = execute.mock.calls.filter(call => call.arguments[0].startsWith('DELETE'));
-  assert.equal(deletes.length, 2);
-  assert.deepEqual(deletes.map(call => Object.keys(call.arguments[1]!).filter(key => key.startsWith('id')).length), [900, 1]);
-  for (const call of deletes) assert.equal((call.arguments[1] as Record<string, unknown>).tenantId, auth.uid);
+  assert.deepEqual(await adapter.query('SELECT COUNT(*) AS total, SUM(status = \'merged\') AS merged FROM ai_dreaming_memory'), [{ total: 1802, merged: 901 }]);
+  const updates = execute.mock.calls.filter(call => call.arguments[0].startsWith('UPDATE ai_dreaming_memory'));
+  assert.equal(updates.length, 2);
+  assert.deepEqual(updates.map(call => Object.keys(call.arguments[1]!).filter(key => key.startsWith('id')).length), [900, 1]);
+  for (const call of updates) assert.equal((call.arguments[1] as Record<string, unknown>).tenantId, auth.uid);
 });

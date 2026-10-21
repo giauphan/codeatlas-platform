@@ -104,7 +104,7 @@ describe('SQLiteAdapter', () => {
         :importance, :contentHash, :initialConfidence, 'active', 1, 0, 1,
         :tenantId, :scope, :tagsJson, :relatedIdsJson
       )
-      ON CONFLICT(project, memory_type, content_hash, tenant_id) DO UPDATE SET
+      ON CONFLICT(tenant_id, COALESCE(project_id, project), memory_type, content_hash) WHERE content_hash IS NOT NULL DO UPDATE SET
         embedding = :embedding,
         content   = :content
     `;

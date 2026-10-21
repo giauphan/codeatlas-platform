@@ -164,6 +164,8 @@ Full tool reference: [`docs/architecture/mcp.md`](docs/architecture/mcp.md).
 | [API examples](docs/API_EXAMPLES.md) | curl flows, MCP configs, REST endpoints |
 | [Architecture overview](docs/architecture/overview.md) | Layers, services, integrations |
 | [MCP architecture](docs/architecture/mcp.md) | Tool registration, transports, request flow |
+| [Memory pipeline runbook](docs/MEMORY_PIPELINE_RUNBOOK.md) | Capture, acknowledgement, extraction, recovery, retention, and rollout checks |
+| [Memory pipeline results](docs/MEMORY_PIPELINE_REMEDIATION_RESULTS.md) | Verification evidence, quality measurements, and remaining release gates |
 | [Quick setup](docs/QUICK_SETUP.md) | Legacy condensed guide |
 
 ## Known limitations

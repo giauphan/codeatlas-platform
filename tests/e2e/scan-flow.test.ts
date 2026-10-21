@@ -2,6 +2,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import http from 'http';
 import { spawn } from 'child_process';
 import type { Express } from 'express';
@@ -10,24 +11,25 @@ describe('MCP Auto-Scan & Database Sync Integration', () => {
   let app: Express;
   let server: http.Server;
   let port: number;
-  const testProjectDir = path.join(process.cwd(), 'tests', 'mock_index_project');
+  const testProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codeatlas-scan-flow-client-'));
+  const serverProjectsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codeatlas-scan-flow-server-'));
+  const expectedServerProjectDir = path.join(serverProjectsRoot, 'admin', 'mock_index_project');
   const apiKeyValue = 'test-integration-api-key';
 
   // Backup env variables
   const origApiKey = process.env.CODEATLAS_API_KEY;
   const origMultiTenant = process.env.CODEATLAS_MULTI_TENANT;
   const origProjectsRoot = process.env.CODEATLAS_PROJECTS_ROOT;
+  const origProjectDir = process.env.CODEATLAS_PROJECT_DIR;
 
   before(async () => {
+    process.env.CODEATLAS_API_KEY = apiKeyValue;
+    process.env.CODEATLAS_MULTI_TENANT = 'true';
+    process.env.CODEATLAS_PROJECTS_ROOT = serverProjectsRoot;
     const mod = await import('../../src/presentation/httpServer.js');
     app = mod.app;
-    process.env.CODEATLAS_API_KEY = apiKeyValue;
-    process.env.CODEATLAS_MULTI_TENANT = 'false'; // single tenant mode for simpler pathing
     
-    // Create mock client project directory
-    if (fs.existsSync(testProjectDir)) {
-      fs.rmSync(testProjectDir, { recursive: true, force: true });
-    }
+    // Create the mock client workspace in a disposable OS temp directory.
     fs.mkdirSync(path.join(testProjectDir, '.codeatlas'), { recursive: true });
     fs.writeFileSync(path.join(testProjectDir, 'index.ts'), 'export function hello() { console.log("hello world integration test"); }');
 
@@ -47,20 +49,16 @@ describe('MCP Auto-Scan & Database Sync Integration', () => {
     process.env.CODEATLAS_API_KEY = origApiKey;
     process.env.CODEATLAS_MULTI_TENANT = origMultiTenant;
     process.env.CODEATLAS_PROJECTS_ROOT = origProjectsRoot;
+    process.env.CODEATLAS_PROJECT_DIR = origProjectDir;
 
     // Stop local server
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
     });
 
-    // Clean up test directories
-    if (fs.existsSync(testProjectDir)) {
-      fs.rmSync(testProjectDir, { recursive: true, force: true });
-    }
-    const syncDir = path.join(process.cwd(), 'projects', 'mock_index_project');
-    if (fs.existsSync(syncDir)) {
-      fs.rmSync(syncDir, { recursive: true, force: true });
-    }
+    // Test writes stay inside these per-run temp roots.
+    fs.rmSync(testProjectDir, { recursive: true, force: true });
+    fs.rmSync(serverProjectsRoot, { recursive: true, force: true });
   });
 
   test('should accept sync payload from API call and store local analysis', async () => {
@@ -99,7 +97,7 @@ describe('MCP Auto-Scan & Database Sync Integration', () => {
     assert.strictEqual(body.success, true);
     
     // Verify file is correctly written to disk on server-side
-    const expectedFilePath = path.join(process.cwd(), 'projects', 'mock_index_project', '.codeatlas', 'analysis.json');
+    const expectedFilePath = path.join(expectedServerProjectDir, '.codeatlas', 'analysis.json');
     assert.ok(fs.existsSync(expectedFilePath), 'Server should write analysis file to disk');
     
     const savedContent = JSON.parse(fs.readFileSync(expectedFilePath, 'utf-8'));
@@ -139,7 +137,7 @@ describe('MCP Auto-Scan & Database Sync Integration', () => {
     });
 
     // Wait for the sync to complete and server to receive and save the telemetry file
-    const serverSyncPath = path.join(process.cwd(), 'projects', 'mock_index_project', '.codeatlas', 'analysis.json');
+    const serverSyncPath = path.join(expectedServerProjectDir, '.codeatlas', 'analysis.json');
     
     const success = await new Promise<boolean>((resolve) => {
       const startTime = Date.now();

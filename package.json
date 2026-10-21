@@ -42,9 +42,14 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/src/index.js",
     "dev": "tsx watch src/index.ts",
-    "test": "node --experimental-test-module-mocks --test-concurrency=1 --import tsx --test 'tests/**/*.test.ts'",
+    "test": "node scripts/run-tests-isolated.mjs",
+    "test:memory-quality": "RUN_MEMORY_EXTRACTION_HOLDOUT=1 RUN_MEMORY_EXTRACTION_INDEPENDENT=1 RUN_MEMORY_EXTRACTION_RELEASE=1 RUN_MEMORY_EXTRACTION_FINAL=1 node --experimental-test-module-mocks --import tsx --test tests/evaluation/memory-extraction.test.ts tests/unit/structured-memory-extraction.test.ts",
+    "test:memory-quality:model": "RUN_MODEL_MEMORY_QUALITY=1 node --experimental-test-module-mocks --import tsx --test tests/evaluation/model-memory-quality.acceptance.ts",
+    "test:memory-quality:model:final": "CODEATLAS_MEMORY_QUALITY_CORPUS=final-unseen RUN_MODEL_MEMORY_QUALITY=1 node --experimental-test-module-mocks --import tsx --test tests/evaluation/model-memory-quality.acceptance.ts",
     "db-init": "tsx scripts/db-init.ts",
-    "db-seed": "tsx scripts/db-seed.ts"
+    "db-seed": "tsx scripts/db-seed.ts",
+    "test:memory-pipeline": "node --import tsx --test tests/cross-repo/compiled-memory-pipeline.acceptance.ts",
+    "test:memory-pipeline:model": "RUN_MODEL_MEMORY_PIPELINE=1 node --experimental-test-module-mocks --import tsx --test tests/cross-repo/model-memory-pipeline.acceptance.ts"
   },
   "overrides": {
     "uuid": "11.1.1",
@@ -63,7 +68,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "@types/compression": "^1.8.1",
     "@typescript-eslint/typescript-estree": "^8.0.0",
     "better-sqlite3": "^11.3.0",

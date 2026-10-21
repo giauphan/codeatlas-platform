@@ -9,9 +9,14 @@ import crypto from 'node:crypto';
 // Setup shared sqlite path
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codeatlas-test-'));
 const tempDbPath = path.join(tempDir, 'test.db');
+const tempProjectsRoot = path.join(tempDir, 'projects');
+const originalMultiTenant = process.env.CODEATLAS_MULTI_TENANT;
+const originalProjectsRoot = process.env.CODEATLAS_PROJECTS_ROOT;
 process.env.CODEATLAS_SQLITE_PATH = tempDbPath;
 process.env.CODEATLAS_USE_FIRESTORE = 'false';
 process.env.API_KEY_PEPPER = 'test-pepper';
+process.env.CODEATLAS_MULTI_TENANT = 'true';
+process.env.CODEATLAS_PROJECTS_ROOT = tempProjectsRoot;
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 const { SQLiteAdapter } = await import(path.join(srcDir, 'database/adapters/sqliteAdapter.js'));
@@ -22,6 +27,7 @@ describe('HTTP Server Local-First (Firestore-Free Mode)', () => {
   let port: number;
   let baseUrl: string;
   let memoryAdapter: InstanceType<typeof SQLiteAdapter>;
+  let syncedProjectDir: string | undefined;
 
   const PEPPER = process.env.API_KEY_PEPPER || 'codeatlas-api-key-pepper-v1';
   const apiKey = 'test-local-api-key';
@@ -54,6 +60,8 @@ describe('HTTP Server Local-First (Firestore-Free Mode)', () => {
   });
 
   after(async () => {
+    process.env.CODEATLAS_MULTI_TENANT = originalMultiTenant;
+    process.env.CODEATLAS_PROJECTS_ROOT = originalProjectsRoot;
     if (server) {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
@@ -85,6 +93,13 @@ describe('HTTP Server Local-First (Firestore-Free Mode)', () => {
     assert.strictEqual(res.status, 200);
     const body = await res.json();
     assert.strictEqual(body.success, true);
+    assert.equal(typeof body.projectDir, 'string');
+    syncedProjectDir = path.resolve(process.cwd(), body.projectDir);
+    const relativeToTempRoot = path.relative(tempProjectsRoot, syncedProjectDir);
+    assert.ok(
+      relativeToTempRoot && !relativeToTempRoot.startsWith(`..${path.sep}`) && !path.isAbsolute(relativeToTempRoot),
+      `project sync must stay under the disposable tenant root (returned path: ${body.projectDir})`,
+    );
 
     const rows = await memoryAdapter.query<{ id: string; name: string }>(
       `SELECT id, name FROM projects WHERE name = 'demo-local-project'`
@@ -122,7 +137,9 @@ describe('HTTP Server Local-First (Firestore-Free Mode)', () => {
   });
 
   test('DELETE /api/projects cleans up local project without Firestore errors', async () => {
-    const res = await fetch(`${baseUrl}/api/projects?projectDir=projects/demo-local-project`, {
+    assert.ok(syncedProjectDir, 'project sync must provide a disposable project path first');
+    assert.ok(fs.existsSync(path.join(syncedProjectDir, '.codeatlas', 'analysis.json')));
+    const res = await fetch(`${baseUrl}/api/projects?projectDir=${encodeURIComponent(syncedProjectDir)}`, {
       method: 'DELETE',
       headers: {
         'x-api-key': apiKey,
@@ -132,5 +149,6 @@ describe('HTTP Server Local-First (Firestore-Free Mode)', () => {
     const body = await res.json();
     assert.strictEqual(res.status, 200, "Expected 200 but got " + res.status + ". Body: " + JSON.stringify(body));
     assert.strictEqual(body.success, true);
+    assert.equal(fs.existsSync(path.join(syncedProjectDir, '.codeatlas')), false);
   });
 });

@@ -1,0 +1,907 @@
+{
+  "version": 1,
+  "splitCounts": {
+    "holdout": 24
+  },
+  "fixtures": [
+    {
+      "id": "holdout-en-01",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "assistant-only unsupported completion",
+      "transcript": "[ASSISTANT]\nI finished migrating the billing worker to Rust and verified every production job.\n\n---\n\n[USER]\nThanks, I will review the patch tomorrow.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-01:event-01",
+          "role": "ASSISTANT",
+          "text": "I finished migrating the billing worker to Rust and verified every production job."
+        },
+        {
+          "id": "holdout-en-01:event-02",
+          "role": "USER",
+          "text": "Thanks, I will review the patch tomorrow."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": [
+        "migrating the billing worker to Rust"
+      ]
+    },
+    {
+      "id": "holdout-en-02",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "assistant-only invented preference",
+      "transcript": "[ASSISTANT]\nYou prefer tabs, so I updated the formatter and pushed the change.\n\n---\n\n[USER]\nI have not looked at the formatter settings yet.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-02:event-01",
+          "role": "ASSISTANT",
+          "text": "You prefer tabs, so I updated the formatter and pushed the change."
+        },
+        {
+          "id": "holdout-en-02:event-02",
+          "role": "USER",
+          "text": "I have not looked at the formatter settings yet."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": [
+        "prefer tabs"
+      ]
+    },
+    {
+      "id": "holdout-en-03",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "sensitive preference",
+      "transcript": "[USER]\nFor this repository, please use pnpm commands in examples because that is what our CI runs.\n\n---\n\n[USER]\nFor a redaction check only, this synthetic GitHub-shaped token is ghp_0123456789abcdef0123456789abcdef0123; do not retain or repeat it.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-03:event-01",
+          "role": "USER",
+          "text": "For this repository, please use pnpm commands in examples because that is what our CI runs."
+        },
+        {
+          "id": "holdout-en-03:event-02",
+          "role": "USER",
+          "text": "For a redaction check only, this synthetic GitHub-shaped token is ghp_0123456789abcdef0123456789abcdef0123; do not retain or repeat it."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "use pnpm commands in examples",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-03:event-01",
+            "span": "For this repository, please use pnpm commands in examples because that is what our CI runs."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "ghp_0123456789abcdef0123456789abcdef0123"
+      ]
+    },
+    {
+      "id": "holdout-en-04",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "sensitive preference",
+      "transcript": "[USER]\nWhen showing deployment examples, use the staging environment and leave production untouched.\n\n---\n\n[USER]\nSynthetic AWS-shaped credential for the redaction check: AKIAIOSFODNN7EXAMPLE; it is fake and must not be stored or echoed.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-04:event-01",
+          "role": "USER",
+          "text": "When showing deployment examples, use the staging environment and leave production untouched."
+        },
+        {
+          "id": "holdout-en-04:event-02",
+          "role": "USER",
+          "text": "Synthetic AWS-shaped credential for the redaction check: AKIAIOSFODNN7EXAMPLE; it is fake and must not be stored or echoed."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "use the staging environment",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-04:event-01",
+            "span": "When showing deployment examples, use the staging environment and leave production untouched."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "AKIAIOSFODNN7EXAMPLE"
+      ]
+    },
+    {
+      "id": "holdout-en-05",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "architecture decision with caveat",
+      "transcript": "[USER]\nWe chose a modular monolith for the first release because the team is small and the domain boundaries are still changing; keep billing and identity behind separate interfaces so we can extract them later if deployment pressure justifies it, but do not split services before we have measured a real bottleneck.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-05:event-01",
+          "role": "USER",
+          "text": "We chose a modular monolith for the first release because the team is small and the domain boundaries are still changing; keep billing and identity behind separate interfaces so we can extract them later if deployment pressure justifies it, but do not split services before we have measured a real bottleneck."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "modular monolith for the first release",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-05:event-01",
+            "span": "We chose a modular monolith for the first release because the team is small and the domain boundaries are still changing; keep billing and identity behind separate interfaces so we can extract them later if deployment pressure justifies it, but do not split services before we have measured a real bottleneck."
+          }
+        },
+        {
+          "kind": "DECISION",
+          "contains": "do not split services before we have measured a real bottleneck",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-05:event-01",
+            "span": "We chose a modular monolith for the first release because the team is small and the domain boundaries are still changing; keep billing and identity behind separate interfaces so we can extract them later if deployment pressure justifies it, but do not split services before we have measured a real bottleneck."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-en-06",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "architecture decision with caveat",
+      "transcript": "[USER]\nLet us keep PostgreSQL as the source of truth and publish domain events through the transactional outbox, because it avoids a dual-write race and fits our existing operations; consumers may lag and must be idempotent, and this decision assumes the event volume stays within the database capacity we have measured so far.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-06:event-01",
+          "role": "USER",
+          "text": "Let us keep PostgreSQL as the source of truth and publish domain events through the transactional outbox, because it avoids a dual-write race and fits our existing operations; consumers may lag and must be idempotent, and this decision assumes the event volume stays within the database capacity we have measured so far."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "PostgreSQL as the source of truth",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-06:event-01",
+            "span": "Let us keep PostgreSQL as the source of truth and publish domain events through the transactional outbox, because it avoids a dual-write race and fits our existing operations; consumers may lag and must be idempotent, and this decision assumes the event volume stays within the database capacity we have measured so far."
+          }
+        },
+        {
+          "kind": "DECISION",
+          "contains": "consumers may lag and must be idempotent",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-06:event-01",
+            "span": "Let us keep PostgreSQL as the source of truth and publish domain events through the transactional outbox, because it avoids a dual-write race and fits our existing operations; consumers may lag and must be idempotent, and this decision assumes the event volume stays within the database capacity we have measured so far."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-en-07",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "engineering facts and preference",
+      "transcript": "[USER]\nThe API router is in packages/server/src/http/router.ts.\n\n---\n\n[USER]\nPlease keep route handlers thin and put validation in the shared schema package.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-07:event-01",
+          "role": "USER",
+          "text": "The API router is in packages/server/src/http/router.ts."
+        },
+        {
+          "id": "holdout-en-07:event-02",
+          "role": "USER",
+          "text": "Please keep route handlers thin and put validation in the shared schema package."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "packages/server/src/http/router.ts",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-en-07:event-01",
+            "span": "The API router is in packages/server/src/http/router.ts."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "keep route handlers thin",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-07:event-02",
+            "span": "Please keep route handlers thin and put validation in the shared schema package."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-en-08",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "tool failure and verified fix",
+      "transcript": "[TOOL]\nCI output: pnpm test --filter api failed because packages/api/src/auth.ts imported parseSession from the old path.\n\n---\n\n[USER]\nI changed the import to @app/session and reran pnpm test --filter api; it passed.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-08:event-01",
+          "role": "TOOL",
+          "text": "CI output: pnpm test --filter api failed because packages/api/src/auth.ts imported parseSession from the old path."
+        },
+        {
+          "id": "holdout-en-08:event-02",
+          "role": "USER",
+          "text": "I changed the import to @app/session and reran pnpm test --filter api; it passed."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "imported parseSession from the old path",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-en-08:event-01",
+            "span": "CI output: pnpm test --filter api failed because packages/api/src/auth.ts imported parseSession from the old path."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "changed the import to @app/session",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-en-08:event-02",
+            "span": "I changed the import to @app/session and reran pnpm test --filter api; it passed."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "pnpm test --filter api; it passed",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-en-08:event-02",
+            "span": "I changed the import to @app/session and reran pnpm test --filter api; it passed."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-en-09",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "changed user preference",
+      "transcript": "[USER]\nI used to want every PR squashed, but starting with the next release please preserve individual commits when they explain separate fixes.\n\n---\n\n[USER]\nFor the release already in progress, squash its PRs as originally planned.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-09:event-01",
+          "role": "USER",
+          "text": "I used to want every PR squashed, but starting with the next release please preserve individual commits when they explain separate fixes."
+        },
+        {
+          "id": "holdout-en-09:event-02",
+          "role": "USER",
+          "text": "For the release already in progress, squash its PRs as originally planned."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "preserve individual commits",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-09:event-01",
+            "span": "I used to want every PR squashed, but starting with the next release please preserve individual commits when they explain separate fixes."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "squash its PRs as originally planned",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-09:event-02",
+            "span": "For the release already in progress, squash its PRs as originally planned."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-en-10",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "partial work and next action",
+      "transcript": "[USER]\nI updated the retry policy in src/jobs/retry.ts, but I have not added the regression test yet.\n\n---\n\n[USER]\nNext, add a test for the third-attempt timeout before changing the backoff values.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-10:event-01",
+          "role": "USER",
+          "text": "I updated the retry policy in src/jobs/retry.ts, but I have not added the regression test yet."
+        },
+        {
+          "id": "holdout-en-10:event-02",
+          "role": "USER",
+          "text": "Next, add a test for the third-attempt timeout before changing the backoff values."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "updated the retry policy in src/jobs/retry.ts",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-en-10:event-01",
+            "span": "I updated the retry policy in src/jobs/retry.ts, but I have not added the regression test yet."
+          }
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "have not added the regression test yet",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-en-10:event-01",
+            "span": "I updated the retry policy in src/jobs/retry.ts, but I have not added the regression test yet."
+          }
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "add a test for the third-attempt timeout",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-10:event-02",
+            "span": "Next, add a test for the third-attempt timeout before changing the backoff values."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-en-11",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "open question and constraint",
+      "transcript": "[USER]\nDo we still support Node 18 in the CLI? I could not find the compatibility policy.\n\n---\n\n[USER]\nWhatever the answer, keep the package compatible with the current LTS until the release owner confirms the support window.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-11:event-01",
+          "role": "USER",
+          "text": "Do we still support Node 18 in the CLI? I could not find the compatibility policy."
+        },
+        {
+          "id": "holdout-en-11:event-02",
+          "role": "USER",
+          "text": "Whatever the answer, keep the package compatible with the current LTS until the release owner confirms the support window."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "Do we still support Node 18 in the CLI?",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "holdout-en-11:event-01",
+            "span": "Do we still support Node 18 in the CLI? I could not find the compatibility policy."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "keep the package compatible with the current LTS",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-11:event-02",
+            "span": "Whatever the answer, keep the package compatible with the current LTS until the release owner confirms the support window."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-en-12",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "negative constraint and reported fact",
+      "transcript": "[USER]\nThe cache is optional; do not make startup fail when Redis is unavailable.\n\n---\n\n[TOOL]\nLocal trace shows the worker retries Redis connection three times, then starts without the cache.",
+      "sourceEvents": [
+        {
+          "id": "holdout-en-12:event-01",
+          "role": "USER",
+          "text": "The cache is optional; do not make startup fail when Redis is unavailable."
+        },
+        {
+          "id": "holdout-en-12:event-02",
+          "role": "TOOL",
+          "text": "Local trace shows the worker retries Redis connection three times, then starts without the cache."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "do not make startup fail when Redis is unavailable",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-en-12:event-01",
+            "span": "The cache is optional; do not make startup fail when Redis is unavailable."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "worker retries Redis connection three times, then starts without the cache",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-en-12:event-02",
+            "span": "Local trace shows the worker retries Redis connection three times, then starts without the cache."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-01",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "assistant-only unsupported completion",
+      "transcript": "[ASSISTANT]\nTôi đã hoàn tất chuyển dịch vụ thanh toán sang Rust và triển khai lên production.\n\n---\n\n[USER]\nTôi sẽ xem lại bản vá vào ngày mai.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-01:event-01",
+          "role": "ASSISTANT",
+          "text": "Tôi đã hoàn tất chuyển dịch vụ thanh toán sang Rust và triển khai lên production."
+        },
+        {
+          "id": "holdout-vi-01:event-02",
+          "role": "USER",
+          "text": "Tôi sẽ xem lại bản vá vào ngày mai."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": [
+        "hoàn tất chuyển dịch vụ thanh toán sang Rust"
+      ]
+    },
+    {
+      "id": "holdout-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "assistant-only invented preference",
+      "transcript": "[ASSISTANT]\nBạn thích dùng tab nên tôi đã đổi cấu hình formatter cho bạn.\n\n---\n\n[USER]\nTôi chưa kiểm tra cấu hình formatter.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-02:event-01",
+          "role": "ASSISTANT",
+          "text": "Bạn thích dùng tab nên tôi đã đổi cấu hình formatter cho bạn."
+        },
+        {
+          "id": "holdout-vi-02:event-02",
+          "role": "USER",
+          "text": "Tôi chưa kiểm tra cấu hình formatter."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": [
+        "thích dùng tab"
+      ]
+    },
+    {
+      "id": "holdout-vi-03",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "architecture decision and rationale",
+      "transcript": "[USER]\nNhóm chọn modular monolith cho bản đầu vì nhóm còn nhỏ và ranh giới nghiệp vụ vẫn đang thay đổi.\n\n---\n\n[USER]\nGiữ billing và identity sau các interface riêng để sau này có thể tách nếu có số liệu cho thấy cần thiết.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-03:event-01",
+          "role": "USER",
+          "text": "Nhóm chọn modular monolith cho bản đầu vì nhóm còn nhỏ và ranh giới nghiệp vụ vẫn đang thay đổi."
+        },
+        {
+          "id": "holdout-vi-03:event-02",
+          "role": "USER",
+          "text": "Giữ billing và identity sau các interface riêng để sau này có thể tách nếu có số liệu cho thấy cần thiết."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "modular monolith cho bản đầu",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-03:event-01",
+            "span": "Nhóm chọn modular monolith cho bản đầu vì nhóm còn nhỏ và ranh giới nghiệp vụ vẫn đang thay đổi."
+          }
+        },
+        {
+          "kind": "DECISION",
+          "contains": "giữ billing và identity sau các interface riêng",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-03:event-02",
+            "span": "Giữ billing và identity sau các interface riêng để sau này có thể tách nếu có số liệu cho thấy cần thiết."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-04",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "engineering facts and preference",
+      "transcript": "[USER]\nRouter của API nằm ở apps/api/src/http/router.ts.\n\n---\n\n[USER]\nTrong ví dụ, hãy dùng pnpm vì CI của repo này chạy bằng pnpm.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-04:event-01",
+          "role": "USER",
+          "text": "Router của API nằm ở apps/api/src/http/router.ts."
+        },
+        {
+          "id": "holdout-vi-04:event-02",
+          "role": "USER",
+          "text": "Trong ví dụ, hãy dùng pnpm vì CI của repo này chạy bằng pnpm."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "apps/api/src/http/router.ts",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-vi-04:event-01",
+            "span": "Router của API nằm ở apps/api/src/http/router.ts."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "dùng pnpm",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-04:event-02",
+            "span": "Trong ví dụ, hãy dùng pnpm vì CI của repo này chạy bằng pnpm."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-05",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "tool failure and verified fix",
+      "transcript": "[TOOL]\nLệnh pnpm test --filter worker thất bại: jobs/queue.ts import RetryPolicy từ đường dẫn cũ.\n\n---\n\n[USER]\nTôi sửa import sang @core/retry rồi chạy lại pnpm test --filter worker; lần chạy lại đã pass.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-05:event-01",
+          "role": "TOOL",
+          "text": "Lệnh pnpm test --filter worker thất bại: jobs/queue.ts import RetryPolicy từ đường dẫn cũ."
+        },
+        {
+          "id": "holdout-vi-05:event-02",
+          "role": "USER",
+          "text": "Tôi sửa import sang @core/retry rồi chạy lại pnpm test --filter worker; lần chạy lại đã pass."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "import RetryPolicy từ đường dẫn cũ",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-vi-05:event-01",
+            "span": "Lệnh pnpm test --filter worker thất bại: jobs/queue.ts import RetryPolicy từ đường dẫn cũ."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "sửa import sang @core/retry",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-vi-05:event-02",
+            "span": "Tôi sửa import sang @core/retry rồi chạy lại pnpm test --filter worker; lần chạy lại đã pass."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "pnpm test --filter worker; lần chạy lại đã pass",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-vi-05:event-02",
+            "span": "Tôi sửa import sang @core/retry rồi chạy lại pnpm test --filter worker; lần chạy lại đã pass."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-06",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "changed user preference",
+      "transcript": "[USER]\nTrước đây tôi muốn gom mọi commit khi merge, nhưng từ release kế tiếp hãy giữ riêng các commit mô tả những sửa lỗi khác nhau.\n\n---\n\n[USER]\nVới release đang chạy, vẫn squash PR như kế hoạch ban đầu.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-06:event-01",
+          "role": "USER",
+          "text": "Trước đây tôi muốn gom mọi commit khi merge, nhưng từ release kế tiếp hãy giữ riêng các commit mô tả những sửa lỗi khác nhau."
+        },
+        {
+          "id": "holdout-vi-06:event-02",
+          "role": "USER",
+          "text": "Với release đang chạy, vẫn squash PR như kế hoạch ban đầu."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "giữ riêng các commit mô tả những sửa lỗi khác nhau",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-06:event-01",
+            "span": "Trước đây tôi muốn gom mọi commit khi merge, nhưng từ release kế tiếp hãy giữ riêng các commit mô tả những sửa lỗi khác nhau."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "squash PR như kế hoạch ban đầu",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-06:event-02",
+            "span": "Với release đang chạy, vẫn squash PR như kế hoạch ban đầu."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-07",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "partial work and next action",
+      "transcript": "[USER]\nTôi đã cập nhật chính sách retry trong src/worker/retry.ts nhưng chưa thêm regression test.\n\n---\n\n[USER]\nBước tiếp theo là thêm test cho timeout ở lần thử thứ ba trước khi chỉnh backoff.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-07:event-01",
+          "role": "USER",
+          "text": "Tôi đã cập nhật chính sách retry trong src/worker/retry.ts nhưng chưa thêm regression test."
+        },
+        {
+          "id": "holdout-vi-07:event-02",
+          "role": "USER",
+          "text": "Bước tiếp theo là thêm test cho timeout ở lần thử thứ ba trước khi chỉnh backoff."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "đã cập nhật chính sách retry trong src/worker/retry.ts",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-vi-07:event-01",
+            "span": "Tôi đã cập nhật chính sách retry trong src/worker/retry.ts nhưng chưa thêm regression test."
+          }
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "chưa thêm regression test",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-vi-07:event-01",
+            "span": "Tôi đã cập nhật chính sách retry trong src/worker/retry.ts nhưng chưa thêm regression test."
+          }
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "thêm test cho timeout ở lần thử thứ ba",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-07:event-02",
+            "span": "Bước tiếp theo là thêm test cho timeout ở lần thử thứ ba trước khi chỉnh backoff."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-08",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "open question and constraint",
+      "transcript": "[USER]\nCLI còn hỗ trợ Node 18 không? Tôi không tìm thấy chính sách tương thích.\n\n---\n\n[USER]\nDù câu trả lời là gì, hãy giữ package tương thích với LTS hiện tại cho đến khi release owner xác nhận thời hạn hỗ trợ.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-08:event-01",
+          "role": "USER",
+          "text": "CLI còn hỗ trợ Node 18 không? Tôi không tìm thấy chính sách tương thích."
+        },
+        {
+          "id": "holdout-vi-08:event-02",
+          "role": "USER",
+          "text": "Dù câu trả lời là gì, hãy giữ package tương thích với LTS hiện tại cho đến khi release owner xác nhận thời hạn hỗ trợ."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "CLI còn hỗ trợ Node 18 không?",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "holdout-vi-08:event-01",
+            "span": "CLI còn hỗ trợ Node 18 không? Tôi không tìm thấy chính sách tương thích."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "giữ package tương thích với LTS hiện tại",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-08:event-02",
+            "span": "Dù câu trả lời là gì, hãy giữ package tương thích với LTS hiện tại cho đến khi release owner xác nhận thời hạn hỗ trợ."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-09",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "negation and reported fact",
+      "transcript": "[USER]\nRedis cache là tùy chọn; đừng làm ứng dụng lỗi khởi động khi Redis không khả dụng.\n\n---\n\n[TOOL]\nLog chạy local cho thấy worker thử kết nối Redis ba lần rồi vẫn khởi động mà không có cache.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-09:event-01",
+          "role": "USER",
+          "text": "Redis cache là tùy chọn; đừng làm ứng dụng lỗi khởi động khi Redis không khả dụng."
+        },
+        {
+          "id": "holdout-vi-09:event-02",
+          "role": "TOOL",
+          "text": "Log chạy local cho thấy worker thử kết nối Redis ba lần rồi vẫn khởi động mà không có cache."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "đừng làm ứng dụng lỗi khởi động khi Redis không khả dụng",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-09:event-01",
+            "span": "Redis cache là tùy chọn; đừng làm ứng dụng lỗi khởi động khi Redis không khả dụng."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "worker thử kết nối Redis ba lần rồi vẫn khởi động mà không có cache",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-vi-09:event-02",
+            "span": "Log chạy local cho thấy worker thử kết nối Redis ba lần rồi vẫn khởi động mà không có cache."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-10",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "database choice and rationale",
+      "transcript": "[USER]\nChúng ta chọn PostgreSQL làm nguồn dữ liệu chuẩn và dùng transactional outbox để phát domain event vì cách này tránh lỗi dual-write; consumer phải idempotent vì có thể nhận sự kiện trễ.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-10:event-01",
+          "role": "USER",
+          "text": "Chúng ta chọn PostgreSQL làm nguồn dữ liệu chuẩn và dùng transactional outbox để phát domain event vì cách này tránh lỗi dual-write; consumer phải idempotent vì có thể nhận sự kiện trễ."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "PostgreSQL làm nguồn dữ liệu chuẩn",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-10:event-01",
+            "span": "Chúng ta chọn PostgreSQL làm nguồn dữ liệu chuẩn và dùng transactional outbox để phát domain event vì cách này tránh lỗi dual-write; consumer phải idempotent vì có thể nhận sự kiện trễ."
+          }
+        },
+        {
+          "kind": "DECISION",
+          "contains": "consumer phải idempotent vì có thể nhận sự kiện trễ",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-10:event-01",
+            "span": "Chúng ta chọn PostgreSQL làm nguồn dữ liệu chuẩn và dùng transactional outbox để phát domain event vì cách này tránh lỗi dual-write; consumer phải idempotent vì có thể nhận sự kiện trễ."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-11",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "reported fact and preference",
+      "transcript": "[USER]\nEndpoint health check được khai báo trong services/gateway/src/health.ts.\n\n---\n\n[USER]\nĐừng thêm thư viện logging mới; hãy dùng logger chung của workspace.",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-11:event-01",
+          "role": "USER",
+          "text": "Endpoint health check được khai báo trong services/gateway/src/health.ts."
+        },
+        {
+          "id": "holdout-vi-11:event-02",
+          "role": "USER",
+          "text": "Đừng thêm thư viện logging mới; hãy dùng logger chung của workspace."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "services/gateway/src/health.ts",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-vi-11:event-01",
+            "span": "Endpoint health check được khai báo trong services/gateway/src/health.ts."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "dùng logger chung của workspace",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "holdout-vi-11:event-02",
+            "span": "Đừng thêm thư viện logging mới; hãy dùng logger chung của workspace."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "holdout-vi-12",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "partial state and question",
+      "transcript": "[USER]\nTôi đã sửa lỗi pagination ở src/db/listRecords.ts, nhưng chưa xác nhận truy vấn có dùng index mới không.\n\n---\n\n[USER]\nCó thể kiểm tra query plan ở staging trước khi bật cờ này không?",
+      "sourceEvents": [
+        {
+          "id": "holdout-vi-12:event-01",
+          "role": "USER",
+          "text": "Tôi đã sửa lỗi pagination ở src/db/listRecords.ts, nhưng chưa xác nhận truy vấn có dùng index mới không."
+        },
+        {
+          "id": "holdout-vi-12:event-02",
+          "role": "USER",
+          "text": "Có thể kiểm tra query plan ở staging trước khi bật cờ này không?"
+        }
+      ],
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "đã sửa lỗi pagination ở src/db/listRecords.ts",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "holdout-vi-12:event-01",
+            "span": "Tôi đã sửa lỗi pagination ở src/db/listRecords.ts, nhưng chưa xác nhận truy vấn có dùng index mới không."
+          }
+        },
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "Có thể kiểm tra query plan ở staging trước khi bật cờ này không?",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "holdout-vi-12:event-02",
+            "span": "Có thể kiểm tra query plan ở staging trước khi bật cờ này không?"
+          }
+        }
+      ],
+      "mustNotContain": []
+    }
+  ]
+}

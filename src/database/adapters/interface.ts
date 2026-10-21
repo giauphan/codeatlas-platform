@@ -12,6 +12,7 @@ export interface IDatabaseAdapter {
 
   // Vector search
   searchVector(table: string, embedding: number[], limit: number, tenantId: string, filterBinds?: Record<string, unknown>): Promise<VectorSearchResult[]>;
+  searchVectorScoped(table: string, embedding: number[], limit: number, tenantId: string, whereClause: string, filterBinds?: Record<string, unknown>): Promise<VectorSearchResult[]>;
 
   // Schema migration
   initializeSchema(): Promise<void>;
