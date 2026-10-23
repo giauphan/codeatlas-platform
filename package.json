@@ -53,7 +53,8 @@
   },
   "overrides": {
     "uuid": "11.1.1",
-    "fast-uri": ">=3.1.8"
+    "fast-uri": ">=3.1.8",
+    "body-parser": "^1.20.9"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
@@ -76,7 +77,7 @@
     "compression": "^1.8.2",
     "cors": "2.8.5",
     "dotenv": "^17.4.2",
-    "express": "^4.19.2",
+    "express": "^5.3.0",
     "express-rate-limit": "^8.6.0",
     "firebase-admin": "^14.3.0",
     "glob": "^10.3.10",
@@ -86,6 +87,14 @@
     "p-limit": "^7.3.1",
     "py-ast": "^1.9.0",
     "sqlite-vec": "0.1.9",
-    "zod": "^4.5.4"
+    "zod": "^4.6.7"
+  },
+  "pnpm": {
+    "overrides": {
+      "uuid": "11.1.1",
+      "fast-uri": ">=3.1.8",
+      "body-parser": "^1.20.9",
+      "@grpc/grpc-js": ">=1.13.6"
+    }
   }
 }
