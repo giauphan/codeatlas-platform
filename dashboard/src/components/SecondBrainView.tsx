@@ -122,7 +122,7 @@ export function SecondBrainView() {
           style={{
             padding: '0.75rem 1.5rem', background: 'linear-gradient(135deg, #00f0ff, #7c3aed)',
             border: 'none', borderRadius: '12px', color: '#fff', fontWeight: 700, fontSize: '0.9rem',
-            cursor: consolidating ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+            cursor: consolidating ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
             opacity: consolidating ? 0.6 : 1,
           }}
         >
@@ -209,7 +209,7 @@ export function SecondBrainView() {
               style={{
                 padding: '0.75rem 1.5rem', background: 'rgba(0,240,255,0.1)',
                 border: '1px solid var(--primary-neon)', borderRadius: '12px', color: 'var(--primary-neon)', fontWeight: 700, fontSize: '0.9rem',
-                cursor: consolidating ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                cursor: consolidating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
                 opacity: consolidating ? 0.6 : 1,
               }}
             >
