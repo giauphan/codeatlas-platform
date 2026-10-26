@@ -14,6 +14,25 @@ const EXT_COLORS: Record<string, string> = {
   ".swift": "#f05138", ".kt": "#7f52ff",
 };
 
+// ⚡ Bolt: Hoist static arrays to module scope as Sets for O(1) lookup in AST scanners
+const IGNORED_CALL_NAMES = new Set(["if", "while", "for", "switch", "catch", "then", "return", "throw", "console", "typeof"]);
+
+// ⚡ Bolt: Hoist regexes to module scope to prevent reallocation in inner parser loops
+const TS_IMPORT_REGEX = /import\s+(?:\{[^}]*\}\s+from\s+)?["']([^"']+)["']|from\s+["']([^"']+)["']/;
+const TS_CLASS_REGEX = /(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/;
+const TS_FUNC_REGEX = /(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(/;
+const TS_CALL_REGEX = /(\w+)\(/g;
+
+const PY_IMPORT_REGEX = /(?:from\s+(\S+)\s+)?import\s+(.+)/;
+const PY_CLASS_REGEX = /^\s*class\s+(\w+)/;
+const PY_DEF_REGEX = /^\s*def\s+(\w+)\s*\(/;
+
+const GO_FUNC_REGEX = /^\s*func\s+(?:\(\w+\s+\*?\w+\)\s+)?(\w+)\s*\(/;
+const GO_STRUCT_REGEX = /^\s*type\s+(\w+)\s+struct/;
+
+const PHP_CLASS_REGEX = /^\s*(?:abstract\s+)?class\s+(\w+)/i;
+const PHP_FUNC_REGEX = /^\s*(?:public|private|protected|static)?\s*function\s+(\w+)\s*\(/i;
+
 // Types matching the parser output
 export interface GraphNode {
   id: string;
@@ -397,30 +416,30 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const importMatch = line.match(/import\s+(?:\{[^}]*\}\s+from\s+)?["']([^"']+)["']|from\s+["']([^"']+)["']/);
+      const importMatch = line.match(TS_IMPORT_REGEX);
       if (importMatch) {
         const target = importMatch[1] || importMatch[2];
         if (target.startsWith(".") || target.startsWith("/")) {
           links.push({ source: moduleId, target: `module:${this.resolveImportPath(relPath, target)}`, type: "import" });
         }
       }
-      const classMatch = line.match(/(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/);
+      const classMatch = line.match(TS_CLASS_REGEX);
       if (classMatch) {
         const classId = `class:${moduleId}:${classMatch[1]}`;
         nodes.push({ id: classId, label: classMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
         links.push({ source: moduleId, target: classId, type: "contains" });
       }
-      const funcMatch = line.match(/(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(/);
+      const funcMatch = line.match(TS_FUNC_REGEX);
       if (funcMatch) {
         const funcId = `function:${moduleId}:${funcMatch[1]}`;
         nodes.push({ id: funcId, label: funcMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });
         links.push({ source: moduleId, target: funcId, type: "contains" });
       }
-      const callMatch = line.match(/(\w+)\(/g);
+      const callMatch = line.match(TS_CALL_REGEX);
       if (callMatch) {
         for (const call of callMatch) {
           const callName = call.slice(0, -1);
-          if (["if", "while", "for", "switch", "catch", "then", "return", "throw", "console", "typeof"].includes(callName)) continue;
+          if (IGNORED_CALL_NAMES.has(callName)) continue;
           links.push({ source: moduleId, target: `function:module:${relPath}:${callName}`, type: "call" });
         }
       }
@@ -432,18 +451,18 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const importMatch = line.match(/(?:from\s+(\S+)\s+)?import\s+(.+)/);
+      const importMatch = line.match(PY_IMPORT_REGEX);
       if (importMatch) {
         const target = importMatch[1] || importMatch[2].split(",")[0].trim();
         if (target.startsWith(".")) links.push({ source: moduleId, target: `module:${this.resolveImportPath(relPath, target.replace(/\./g, "/"))}`, type: "import" });
       }
-      const classMatch = line.match(/^\s*class\s+(\w+)/);
+      const classMatch = line.match(PY_CLASS_REGEX);
       if (classMatch) {
         const classId = `class:${moduleId}:${classMatch[1]}`;
         nodes.push({ id: classId, label: classMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
         links.push({ source: moduleId, target: classId, type: "contains" });
       }
-      const defMatch = line.match(/^\s*def\s+(\w+)\s*\(/);
+      const defMatch = line.match(PY_DEF_REGEX);
       if (defMatch && defMatch[1] !== "__init__") {
         const funcId = `function:${moduleId}:${defMatch[1]}`;
         nodes.push({ id: funcId, label: defMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });
@@ -457,13 +476,13 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const funcMatch = line.match(/^\s*func\s+(?:\(\w+\s+\*?\w+\)\s+)?(\w+)\s*\(/);
+      const funcMatch = line.match(GO_FUNC_REGEX);
       if (funcMatch && funcMatch[1][0] >= 'A' && funcMatch[1][0] <= 'Z') {
         const funcId = `function:${moduleId}:${funcMatch[1]}`;
         nodes.push({ id: funcId, label: funcMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });
         links.push({ source: moduleId, target: funcId, type: "contains" });
       }
-      const structMatch = line.match(/^\s*type\s+(\w+)\s+struct/);
+      const structMatch = line.match(GO_STRUCT_REGEX);
       if (structMatch) {
         const classId = `class:${moduleId}:${structMatch[1]}`;
         nodes.push({ id: classId, label: structMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
@@ -477,13 +496,13 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const classMatch = line.match(/^\s*(?:abstract\s+)?class\s+(\w+)/i);
+      const classMatch = line.match(PHP_CLASS_REGEX);
       if (classMatch) {
         const classId = `class:${moduleId}:${classMatch[1]}`;
         nodes.push({ id: classId, label: classMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
         links.push({ source: moduleId, target: classId, type: "contains" });
       }
-      const funcMatch = line.match(/^\s*(?:public|private|protected|static)?\s*function\s+(\w+)\s*\(/i);
+      const funcMatch = line.match(PHP_FUNC_REGEX);
       if (funcMatch) {
         const funcId = `function:${moduleId}:${funcMatch[1]}`;
         nodes.push({ id: funcId, label: funcMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });
