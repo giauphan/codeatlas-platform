@@ -274,6 +274,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         {/* Delete */}
         {selectedProjectDir && onDeleteProject && (
           <button
+            type="button"
             aria-label="Delete project"
             className={FOCUS_RING_CLASS}
             onClick={() => {
