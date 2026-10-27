@@ -72,11 +72,12 @@
     "@types/compression": "^1.8.1",
     "@typescript-eslint/typescript-estree": "^8.0.0",
     "better-sqlite3": "^11.3.0",
+    "body-parser": "^1.20.9",
     "chokidar": "^5.0.0",
     "compression": "^1.8.2",
     "cors": "2.8.5",
     "dotenv": "^17.4.2",
-    "express": "^4.19.2",
+    "express": "^4.20.0",
     "express-rate-limit": "^8.6.0",
     "firebase-admin": "^14.3.0",
     "glob": "^10.3.10",
@@ -86,6 +87,6 @@
     "p-limit": "^7.3.1",
     "py-ast": "^1.9.0",
     "sqlite-vec": "0.1.9",
-    "zod": "^4.5.4"
+    "zod": "^4.6.7"
   }
 }
