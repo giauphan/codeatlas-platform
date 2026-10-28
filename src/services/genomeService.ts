@@ -531,12 +531,9 @@ export class GenomeService {
       // Mark source genes as merged
       // ⚡ Bolt Optimization: Batch updates and inserts instead of querying inside loop (avoids N+1 DB roundtrips)
       if (genes.length > 0) {
-        const updateBinds = genes.map((g) => ({
-          id: String(g[0]),
-          tenantId: getTenantId(),
-        }));
-        await connection.executeMany(
-          `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
+        const { clause: inClause, binds: updateBinds } = buildInClause(genes.map(g => String(g[0])), { tenantId: getTenantId() });
+        await connection.execute(
+          `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
           updateBinds as any,
           { autoCommit: true },
         );
@@ -796,10 +793,10 @@ export class GenomeService {
       let count = 0;
       // ⚡ Bolt Optimization: Batch retirement update using executeMany instead of executing queries in a loop.
       if (geneIds.length > 0) {
-        const binds = geneIds.map((id) => ({ id, tenantId: getTenantId() }));
-        const result = await connection.executeMany(
+        const { clause: inClause, binds } = buildInClause(geneIds, { tenantId: getTenantId() });
+        const result = await connection.execute(
           `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
-           WHERE id = :id AND status != 'retired' AND tenant_id = :tenantId`,
+           WHERE id IN (${inClause}) AND status != 'retired' AND tenant_id = :tenantId`,
           binds as any,
           { autoCommit: true },
         );
