@@ -328,13 +328,13 @@ describe("GenomeService", () => {
     test("combines 2 genes into one and marks sources as merged", async () => {
       mockConnection.executeMany.mock.mockImplementation(
         async (sql: string) => {
-          if (sql.includes("UPDATE codeatlas_genome SET status"))
-            return { rowsAffected: 1 };
           if (sql.includes("INSERT INTO gene_relationships"))
             return { rowsAffected: 1 };
         },
       );
       mockConnection.execute.mock.mockImplementation(async (sql: string) => {
+        if (sql.includes("UPDATE codeatlas_genome SET status"))
+          return { rowsAffected: 1 };
         if (sql.includes("SELECT id, version FROM codeatlas_genome"))
           return { rows: [] };
         return {
@@ -460,7 +460,7 @@ describe("GenomeService", () => {
   // ── retireGenes ────────────────────────────────────────────────────
   describe("retireGenes()", () => {
     test("retires genes and returns count", async () => {
-      mockConnection.executeMany.mock.mockImplementation(async () => ({
+      mockConnection.execute.mock.mockImplementation(async () => ({
         rowsAffected: 2,
       }));
 
