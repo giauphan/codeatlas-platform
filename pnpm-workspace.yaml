@@ -17,8 +17,9 @@ overrides:
   uuid: "11.1.1"
   qs: "^6.16.0"
   "@babel/core": "^7.29.6"
-  body-parser: "^1.20.6"
+  body-parser: ">=1.20.9"
   # Keep the SDK URI parser on a patched release until upstream resolves it.
   fast-uri: "^3.1.8"
   hono: "^4.13.5"
   source-map-js: "^1.2.2"
+  re2js: "^2.9.1"
