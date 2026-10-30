@@ -7,3 +7,7 @@
 ## 2026-09-23 - Independent Connection Pools for Fire-and-Forget
 **Learning:** When attempting to make database updates non-blocking (fire-and-forget) to fix "Write on Read" bottlenecks, reusing the main request's database connection is unsafe. The surrounding code will often close or return the connection to the pool while the async background task is still running, leading to race conditions and "Connection closed" errors.
 **Action:** When implementing fire-and-forget updates in services, explicitly acquire a new background connection (`initPool().then(pool => pool.getConnection())`), capture synchronous context (like `tenantId`) to prevent async state loss, and handle errors/cleanup in a standalone promise chain that ends with `.finally(() => bgConn.close())`.
+
+## 2026-10-29 - O(1) IN clauses vs executeMany overhead
+**Learning:** Sequential batch operations using `executeMany` incur high DB and engine overhead. Consolidating updates for multiple known IDs into a single `IN` clause operation offers immense speedups, particularly during bulk deletions or retirements.
+**Action:** When updating or deleting rows with an array of specific entity IDs (such as in `retireGenes`), build a dynamic SQL `IN` clause using the `buildInClause` utility and execute a single statement via `execute()`, circumventing sequential processing limits entirely.
