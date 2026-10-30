@@ -794,13 +794,13 @@ export class GenomeService {
       await setSessionContext(connection);
 
       let count = 0;
-      // ⚡ Bolt Optimization: Batch retirement update using executeMany instead of executing queries in a loop.
+      // ⚡ Bolt Optimization: Replace executeMany with single IN clause query to prevent massive database overhead when updating multiple rows.
       if (geneIds.length > 0) {
-        const binds = geneIds.map((id) => ({ id, tenantId: getTenantId() }));
-        const result = await connection.executeMany(
+        const { clause, binds } = buildInClause(geneIds, { tenantId: getTenantId() });
+        const result = await connection.execute(
           `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
-           WHERE id = :id AND status != 'retired' AND tenant_id = :tenantId`,
-          binds as any,
+           WHERE id IN (${clause}) AND status != 'retired' AND tenant_id = :tenantId`,
+          binds,
           { autoCommit: true },
         );
         count = result.rowsAffected || 0;
