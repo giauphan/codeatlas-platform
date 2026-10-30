@@ -100,7 +100,7 @@ export function OrchestrationTasksView() {
           style={{
             padding: '0.75rem 1.5rem', background: 'linear-gradient(135deg, #00f0ff, #7c3aed)',
             border: 'none', borderRadius: '12px', color: '#fff', fontWeight: 700, fontSize: '0.9rem',
-            cursor: loading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+            cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
             opacity: loading ? 0.6 : 1,
           }}
         >
@@ -126,6 +126,7 @@ export function OrchestrationTasksView() {
           {availableStates.map(state => (
             <button
               key={state}
+              type="button"
               onClick={() => setFilterState(state)}
               aria-pressed={filterState === state}
               className={FOCUS_RING_CLASS}
