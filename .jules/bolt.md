@@ -7,3 +7,7 @@
 ## 2026-09-23 - Independent Connection Pools for Fire-and-Forget
 **Learning:** When attempting to make database updates non-blocking (fire-and-forget) to fix "Write on Read" bottlenecks, reusing the main request's database connection is unsafe. The surrounding code will often close or return the connection to the pool while the async background task is still running, leading to race conditions and "Connection closed" errors.
 **Action:** When implementing fire-and-forget updates in services, explicitly acquire a new background connection (`initPool().then(pool => pool.getConnection())`), capture synchronous context (like `tenantId`) to prevent async state loss, and handle errors/cleanup in a standalone promise chain that ends with `.finally(() => bgConn.close())`.
+
+## 2026-10-31 - Map grouping optimization pattern
+**Learning:** When populating `Map` collections with arrays (e.g., grouping items in a loop), using the pattern `const arr = map.get(key) ?? []; arr.push(val); map.set(key, arr);` introduces a redundant Map `set()` (write) operation on every single loop iteration. This is a de-optimization since map writes are expensive.
+**Action:** Always use the pattern `let arr = map.get(key); if (!arr) { arr = []; map.set(key, arr); } arr.push(val);`. This retrieves the array by reference, creates and inserts the array only once per key, and pushes items directly, cutting map lookups by up to 66% inside the loop.

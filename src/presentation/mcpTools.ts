@@ -399,8 +399,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const byFile = new Map<string, typeof matches>();
       for (const n of matches) {
         const fp = n.filePath || "unknown";
-        if (!byFile.has(fp)) byFile.set(fp, []);
-        byFile.get(fp)!.push(n);
+        // ⚡ Bolt: Optimize map population to avoid redundant Map writes
+        let arr = byFile.get(fp);
+        if (!arr) {
+          arr = [];
+          byFile.set(fp, arr);
+        }
+        arr.push(n);
       }
 
       let filesEntries = Array.from(byFile.entries());
@@ -1040,8 +1045,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const byFile = new Map<string, Array<{ name: string; type: string; isSeed: boolean; line: number | null }>>();
       for (const node of traceNodes) {
         const filePath = node.filePath || "external";
-        if (!byFile.has(filePath)) byFile.set(filePath, []);
-        byFile.get(filePath)!.push({
+        // ⚡ Bolt: Optimize map population to avoid redundant Map writes
+        let arr = byFile.get(filePath);
+        if (!arr) {
+          arr = [];
+          byFile.set(filePath, arr);
+        }
+        arr.push({
           name: node.label,
           type: node.type,
           isSeed: seedNodes.has(node.id),
