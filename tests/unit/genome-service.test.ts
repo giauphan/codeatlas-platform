@@ -460,7 +460,7 @@ describe("GenomeService", () => {
   // ── retireGenes ────────────────────────────────────────────────────
   describe("retireGenes()", () => {
     test("retires genes and returns count", async () => {
-      mockConnection.executeMany.mock.mockImplementation(async () => ({
+      mockConnection.execute.mock.mockImplementation(async () => ({
         rowsAffected: 2,
       }));
 
