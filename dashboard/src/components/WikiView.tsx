@@ -733,6 +733,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
               type="text"
               value={queryInput}
               onChange={(e) => setQueryInput(e.target.value)}
+              aria-label="Ask a question"
               placeholder="Ask a question..."
               className={FOCUS_RING_CLASS}
               style={{
@@ -879,10 +880,11 @@ export const WikiView: React.FC<WikiViewProps> = ({
               {genProvider !== 'mock' && (
                 <>
                   <div>
-                    <label style={modalLabelStyle}>
+                    <label htmlFor="gen-model" style={modalLabelStyle}>
                       Model Name
                     </label>
                     <input
+                      id="gen-model"
                       type="text"
                       value={genModel}
                       onChange={(e) => setGenModel(e.target.value)}
@@ -893,10 +895,11 @@ export const WikiView: React.FC<WikiViewProps> = ({
                   </div>
 
                   <div>
-                    <label style={modalLabelStyle}>
+                    <label htmlFor="gen-api-key" style={modalLabelStyle}>
                       API Key (Optional if already configured)
                     </label>
                     <input
+                      id="gen-api-key"
                       type="password"
                       value={genApiKey}
                       onChange={(e) => setGenApiKey(e.target.value)}
@@ -907,10 +910,11 @@ export const WikiView: React.FC<WikiViewProps> = ({
                   </div>
 
                   <div>
-                    <label style={modalLabelStyle}>
+                    <label htmlFor="gen-base-url" style={modalLabelStyle}>
                       Custom API Endpoint (Base URL)
                     </label>
                     <input
+                      id="gen-base-url"
                       type="text"
                       value={genBaseUrl}
                       onChange={(e) => setGenBaseUrl(e.target.value)}
@@ -925,11 +929,12 @@ export const WikiView: React.FC<WikiViewProps> = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                 {/* Save Preset Section */}
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                  <label htmlFor="preset-name" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
                     Save Current Config as Preset
                   </label>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input
+                      id="preset-name"
                       type="text"
                       value={profileNameInput}
                       onChange={e => setProfileNameInput(e.target.value)}

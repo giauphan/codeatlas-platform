@@ -14,6 +14,8 @@ const EXT_COLORS: Record<string, string> = {
   ".swift": "#f05138", ".kt": "#7f52ff",
 };
 
+const IGNORED_CALLS = new Set(["if", "while", "for", "switch", "catch", "then", "return", "throw", "console", "typeof"]);
+
 // Types matching the parser output
 export interface GraphNode {
   id: string;
@@ -420,7 +422,8 @@ export class IndexingService {
       if (callMatch) {
         for (const call of callMatch) {
           const callName = call.slice(0, -1);
-          if (["if", "while", "for", "switch", "catch", "then", "return", "throw", "console", "typeof"].includes(callName)) continue;
+          // ⚡ Bolt Optimization: Replace O(N) array includes with O(1) Set lookup
+          if (IGNORED_CALLS.has(callName)) continue;
           links.push({ source: moduleId, target: `function:module:${relPath}:${callName}`, type: "call" });
         }
       }
