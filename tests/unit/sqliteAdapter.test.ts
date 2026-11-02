@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const srcDir = path.resolve(import.meta.dirname, '../../src');
 const { SQLiteAdapter } = await import(path.join(srcDir, 'database/adapters/sqliteAdapter.js'));
+const { logger } = await import(path.join(srcDir, 'utils/logger.js'));
 
 describe('SQLiteAdapter', () => {
   let adapter: InstanceType<typeof SQLiteAdapter>;
@@ -26,6 +27,27 @@ describe('SQLiteAdapter', () => {
 
     assert.strictEqual(hasId, true);
     assert.strictEqual(hasNonExistent, false);
+  });
+
+  test('disconnect preserves its promise-based API', () => {
+    assert.ok(adapter.disconnect() instanceof Promise);
+  });
+
+  test('disconnect rejects when error logging throws', async () => {
+    await adapter.connect();
+    const db = (adapter as unknown as { db: { close: () => void } }).db;
+    const originalClose = db.close;
+    db.close = () => { throw new Error('close failed'); };
+
+    const originalError = logger.error;
+    const loggingError = new Error('logger failed');
+    logger.error = () => { throw loggingError; };
+    try {
+      await assert.rejects(adapter.disconnect(), (error) => error === loggingError);
+    } finally {
+      logger.error = originalError;
+      originalClose.call(db);
+    }
   });
 
   test('execute, query, executeMany CRUD operations', async () => {

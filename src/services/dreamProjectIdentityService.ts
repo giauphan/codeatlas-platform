@@ -15,10 +15,10 @@ export interface DreamProjectIdentityResult {
 }
 
 function normalizeAlias(value: string): string {
-  const trimmed = value.trim().replace(/\\/g, "/");
+  const trimmed = value.trim().replaceAll("\\", "/");
   if (trimmed.length <= 1) return trimmed;
   let end = trimmed.length;
-  while (end > 1 && trimmed.charCodeAt(end - 1) === 47) end--;
+  while (end > 1 && trimmed.codePointAt(end - 1) === 47) end--;
   return trimmed.slice(0, end);
 }
 

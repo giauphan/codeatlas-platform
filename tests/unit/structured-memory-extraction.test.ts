@@ -749,3 +749,22 @@ test('a user-reported encountered error with its cause is retained as a mistake'
   assert.equal(memories[0].content, text);
   assert.equal(memories[0].evidence[0].span, text);
 });
+
+test('tool connection-string detection handles long malformed credentials promptly', async () => {
+  const text = `connection string postgres://user:${':'.repeat(40_000)}!`;
+  const start = performance.now();
+  await extractStructuredMemories([{ id: 'long-connection', role: 'TOOL', text }]);
+  assert.ok(performance.now() - start < 1_000, 'connection string detection must remain linear');
+});
+
+test('tool connection strings containing credentials are not persisted as failures', async () => {
+  for (const text of [
+    'outcome: failed connection string postgres://user:password@host',
+    'outcome: failed connection string custom://:user:password@host',
+  ]) {
+    const results = await extractStructuredMemories([{ id: 'connection', role: 'TOOL', text }]);
+    assert.deepEqual(results, []);
+  }
+  const withoutCredentials = await extractStructuredMemories([{ id: 'connection-safe', role: 'TOOL', text: 'outcome: failed connection string postgres://host/database' }]);
+  assert.ok(withoutCredentials.some(result => result.kind === 'MISTAKE'));
+});

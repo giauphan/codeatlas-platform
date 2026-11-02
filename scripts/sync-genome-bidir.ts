@@ -23,6 +23,10 @@ const API_BASE = process.argv[3] || process.env.CODEATLAS_API_URL || "https://at
 const MODE = (process.argv[4] || "upload");
 const DEMO = !keyArg || keyArg === "demo";
 
+function safeLogValue(value: unknown): string {
+  return String(value).replace(/[\r\n\u2028\u2029]/g, " ").slice(0, 500);
+}
+
 export function getApiBase(
   value: string,
   allowPrivate = process.env.CODEATLAS_ALLOW_PRIVATE_API_URL === "1",
@@ -121,8 +125,8 @@ async function upload(apiCall) {
       });
       const data = await res.json();
       if (data.success) { console.log("OK"); count++; }
-      else { console.log("FAIL: " + (data.error || res.status)); }
-    } catch (e) { console.log("FAIL: " + e.message); }
+      else { console.log("FAIL: " + safeLogValue(data.error || res.status)); }
+    } catch (e) { console.log("FAIL: " + safeLogValue(e instanceof Error ? e.message : e)); }
   }
   return count;
 }
@@ -137,7 +141,7 @@ async function download(apiCall) {
   const data = await res.json();
   const genes = data.genes || [];
   if (!Array.isArray(genes)) throw new Error('Invalid genome response: genes must be an array');
-  console.log("  Found " + genes.length + " skill genes");
+  console.log("  Found " + Number(genes.length) + " skill genes");
   let count = 0;
 
   for (const gene of genes) {
@@ -188,7 +192,7 @@ async function main() {
   const apiCall = createApiCall(getApiBase(API_BASE), DEMO ? "" : keyArg);
   console.log("Bidirectional Skill <-> Genome Sync");
   console.log("Mode: " + MODE + (DEMO ? " (DEMO)" : ""));
-  console.log("API: " + API_BASE + "\n");
+  console.log("API: " + safeLogValue(API_BASE) + "\n");
 
   let up = 0, down = 0;
   if (MODE === "upload" || MODE === "bidir") up = await upload(apiCall);

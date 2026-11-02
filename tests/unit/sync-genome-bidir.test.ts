@@ -72,3 +72,30 @@ test('malformed remote gene collections cannot inject log lines', async (t) => {
   assert.notEqual(code, 0);
   assert.doesNotMatch(output, /FORGED LOG ENTRY/);
 });
+
+test('remote upload errors cannot inject log lines', async (t) => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ success: false, error: 'remote failure\nFORGED LOG ENTRY' }));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const origin = `http://127.0.0.1:${address.port}`;
+  const { spawn } = await import('node:child_process');
+  const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/sync-genome-bidir.ts', 'synthetic-key', origin, 'upload'], {
+    env: { ...process.env, CODEATLAS_API_URL: origin, CODEATLAS_ALLOW_PRIVATE_API_URL: '1', HOME: '/nonexistent-codeatlas-home' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  child.stdout.setEncoding('utf8').on('data', chunk => { output += chunk; });
+  child.stderr.setEncoding('utf8').on('data', chunk => { output += chunk; });
+  const code = await new Promise<number | null>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', resolve);
+  });
+  assert.equal(code, 0);
+  assert.doesNotMatch(output, /\nFORGED LOG ENTRY/);
+  assert.match(output, /remote failure FORGED LOG ENTRY/);
+});

@@ -15,7 +15,7 @@ const OBFUSCATION_KEY = `codeatlas::${globalThis.location?.origin ?? 'app'}`;
 const xorCipher = (input: string): string => {
   let out = '';
   for (let i = 0; i < input.length; i++) {
-    out += String.fromCharCode(
+    out += String.fromCodePoint(
       input.charCodeAt(i) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length),
     );
   }

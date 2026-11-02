@@ -55,7 +55,7 @@ export function isSensitiveMemoryFieldName(key: string): boolean {
 function isPrivateKeyLabel(value: string): boolean {
   if (!value.endsWith('PRIVATE KEY')) return false;
   for (let index = 0; index < value.length; index++) {
-    const code = value.charCodeAt(index);
+    const code = value.codePointAt(index)!;
     if (code !== 32 && (code < 65 || code > 90)) return false;
   }
   return true;
@@ -224,6 +224,35 @@ function explicitFixOutcome(text: string): boolean {
   return directCorrection || (replacement && verified) || (readPerRecord && verified);
 }
 
+// Check credentials without repeatedly rescanning long malformed URL strings.
+function hasCredentialConnectionString(text: string): boolean {
+  let lineStart = 0;
+  while (lineStart <= text.length) {
+    const newline = text.indexOf('\n', lineStart);
+    const lineEnd = newline === -1 ? text.length : newline;
+    const marker = /\bconnection string\b/iu.exec(text.slice(lineStart, lineEnd));
+    if (marker) {
+      let searchFrom = lineStart + marker.index + marker[0].length;
+      while (searchFrom < lineEnd) {
+        const scheme = text.indexOf('://', searchFrom);
+        if (scheme === -1 || scheme + 3 > lineEnd) break;
+        const start = scheme + 3;
+        let separator = -1;
+        let cursor = start;
+        while (cursor < text.length && text[cursor] !== '/' && text[cursor] !== '@') {
+          if (text[cursor] === ':' && cursor > start && separator === -1) separator = cursor;
+          cursor++;
+        }
+        if (text[cursor] === '@' && separator !== -1 && separator < cursor - 1) return true;
+        searchFrom = start;
+      }
+    }
+    if (newline === -1) break;
+    lineStart = newline + 1;
+  }
+  return false;
+}
+
 function classify(text: string, role: SourceRole): { kind: MemoryKind; certainty: MemoryCertainty; confidence: number } | null {
   const normalized = text.trim();
   const lower = normalized.toLocaleLowerCase();
@@ -241,7 +270,7 @@ function classify(text: string, role: SourceRole): { kind: MemoryKind; certainty
   if (role === 'USER' && explicitFixOutcome(normalized)) return { kind: 'FIX', certainty: 'reported', confidence: 0.82 };
   if (role === 'USER' && reportedImplementationProgress(normalized)) return { kind: 'TASK_STATUS', certainty: 'reported', confidence: 0.82 };
   if (role === 'TOOL') {
-    if (/\bconnection string\b[^\n]*:\/\/[^/@]+:[^/@]+@/iu.test(normalized)) return null;
+    if (hasCredentialConnectionString(normalized)) return null;
     const explicitFailure = /\boutcome\s*:\s*failed\b|\bexit_code\s*=\s*[1-9]\d*\b/i.test(lower);
     if (explicitFailure) return { kind: 'MISTAKE', certainty: 'reported', confidence: 0.84 };
     const explicitSuccess = /\bexit_code\s*=\s*0\b/i.test(lower);
