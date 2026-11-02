@@ -300,7 +300,7 @@ export class IndexingService {
 
   /** Check if path matches any gitignore-style pattern, anchored to a specific base dir */
   private matchesIgnorePattern(relPath: string, patterns: string[]): boolean {
-    const normalized = relPath.replace(/\\/g, "/");
+    const normalized = relPath.replaceAll("\\", "/");
     const parts = normalized.split("/");
 
     for (const pat of patterns) {
@@ -312,7 +312,7 @@ export class IndexingService {
           compiled = { skip: true };
           this.patternCache.set(pat, compiled);
         } else {
-          const p = pat.replace(/\\/g, "/");
+          const p = pat.replaceAll("\\", "/");
           const dirOnly = p.endsWith("/");
           const cleanPat = dirOnly ? p.slice(0, -1) : p;
 
@@ -362,7 +362,7 @@ export class IndexingService {
 
     // Also treat rootPatterns as flat exclusions by bare name
     for (const pat of rootPatterns) {
-      const clean = pat.replace(/\\/g, "/").replace(/\/$/, "");
+      const clean = pat.replaceAll("\\", "/").replace(/\/$/, "");
       if (!clean.includes("/") && !clean.includes("*") && !clean.includes("?")) {
         excluded.add(clean);
       }
@@ -450,7 +450,7 @@ export class IndexingService {
       const importMatch = line.match(PY_IMPORT_REGEX);
       if (importMatch) {
         const target = importMatch[1] || importMatch[2].split(",")[0].trim();
-        if (target.startsWith(".")) links.push({ source: moduleId, target: `module:${this.resolveImportPath(relPath, target.replace(/\./g, "/"))}`, type: "import" });
+        if (target.startsWith(".")) links.push({ source: moduleId, target: `module:${this.resolveImportPath(relPath, target.replaceAll(".", "/"))}`, type: "import" });
       }
       const classMatch = line.match(PY_CLASS_REGEX);
       if (classMatch) {
@@ -517,7 +517,7 @@ export class IndexingService {
       const resolved = path.resolve("/", dir, importTarget);
       return resolved.slice(1) + ".ts";
     }
-    return importTarget.replace(/[\/.]/g, "_") + ".ts";
+    return importTarget.replaceAll("/", "_").replaceAll(".", "_") + ".ts";
   }
 
   private detectCircularDeps(nodes: GraphNode[], links: GraphLink[]): number {

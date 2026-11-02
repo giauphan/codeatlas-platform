@@ -27,7 +27,9 @@ function normalizeIp(ip: string | undefined): string {
   return ip.replace(/^::ffff:/, '');
 }
 
-const DEFAULT_AUTH_RATE_LIMIT_ALLOW_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+// Keep sign-in rate limiting enabled for loopback requests too. Reverse proxies
+// and local callers can otherwise make a public request appear to come from localhost.
+const DEFAULT_AUTH_RATE_LIMIT_ALLOW_IPS: string[] = [];
 const AUTH_RATE_LIMIT_ALLOW_IPS = (process.env.CODEATLAS_AUTH_RATE_LIMIT_ALLOW_IPS || '')
   .split(',')
   .map(s => s.trim())
