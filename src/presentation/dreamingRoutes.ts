@@ -225,7 +225,7 @@ export function registerDreamingRoutes(app: express.Application): void {
       const parseDate = (d?: string): Date | undefined => {
         if (!d) return undefined;
         const parsed = new Date(d);
-        if (isNaN(parsed.getTime())) return undefined;
+        if (Number.isNaN(parsed.getTime())) return undefined;
         return parsed;
       };
       const startDate = parseDate(startDateRaw);
@@ -242,12 +242,12 @@ export function registerDreamingRoutes(app: express.Application): void {
         } catch {}
       }
 
-      const limit = limitRaw ? parseInt(limitRaw, 10) : 10;
-      if (isNaN(limit) || limit < 1 || limit > 100) {
+      const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 10;
+      if (Number.isNaN(limit) || limit < 1 || limit > 100) {
         return res.status(400).json({ error: "limit must be a number between 1 and 100" });
       }
-      const offset = offsetRaw ? parseInt(offsetRaw, 10) : 0;
-      if (isNaN(offset) || offset < 0) {
+      const offset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
+      if (Number.isNaN(offset) || offset < 0) {
         return res.status(400).json({ error: "offset must be a non-negative number" });
       }
 

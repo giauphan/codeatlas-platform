@@ -28,7 +28,7 @@ function formatPgQuery(sql: string, params: Record<string, unknown> | unknown[])
   const paramNames: string[] = [];
 
   const pgSql = sql.replace(NAMED_PLACEHOLDER, (full) => {
-    if (full.startsWith('$') && !isNaN(parseInt(full.slice(1), 10))) {
+    if (full.startsWith('$') && !Number.isNaN(Number.parseInt(full.slice(1), 10))) {
       return full;
     }
     const name = full.slice(1);
@@ -136,7 +136,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
           user: process.env.POSTGRES_USER || "postgres",
           password: process.env.POSTGRES_PASSWORD || "postgres",
           host: process.env.POSTGRES_HOST || "localhost",
-          port: parseInt(process.env.POSTGRES_PORT || "5432", 10),
+          port: Number.parseInt(process.env.POSTGRES_PORT || "5432", 10),
           database: process.env.POSTGRES_DB || "codeatlas",
           max: 10,
           idleTimeoutMillis: 30000,

@@ -198,7 +198,7 @@ export function MemoryTreeView() {
 
   useEffect(() => { fetchMemories(); }, [fetchMemories]);
 
-  const projects = useMemo(() => Array.from(new Set(memories.map(memory => memory.project || 'Global'))).sort(), [memories]);
+  const projects = useMemo(() => Array.from(new Set(memories.map(memory => memory.project || 'Global'))).sort((a, b) => a.localeCompare(b)), [memories]);
   const displayedMemories = useMemo(() => selectedProject ? memories.filter(memory => (memory.project || 'Global') === selectedProject) : memories, [memories, selectedProject]);
   const tree = useMemo(() => groupMemories(displayedMemories), [displayedMemories]);
   const typeCounts = useMemo(() => displayedMemories.reduce<Record<string, number>>((counts, memory) => {

@@ -25,9 +25,12 @@ export const DocumentationView: React.FC = () => {
     : window.location.origin;
 
   const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedText(id);
-    setTimeout(() => setCopiedText(null), 2000);
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiedText(id);
+      setTimeout(() => setCopiedText(null), 2000);
+    }).catch((error: unknown) => {
+      console.error('Failed to copy documentation text:', error);
+    });
   };
 
   const renderCopyButton = (text: string, id: string) => (

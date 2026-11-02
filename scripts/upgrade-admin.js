@@ -41,4 +41,4 @@ async function upgradeUser(email) {
   }
 }
 
-upgradeUser(email);
+await upgradeUser(email);

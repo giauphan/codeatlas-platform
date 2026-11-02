@@ -3,7 +3,10 @@
  * If not configured, the app runs in API-key-only mode.
  */
 import { initializeApp } from "firebase/app";
+import type { FirebaseApp } from "firebase/app";
+import type { Auth } from "firebase/auth";
 import { getAuth } from "firebase/auth";
+import type { Firestore } from "firebase/firestore";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -16,22 +19,26 @@ const firebaseConfig = {
 };
 
 // Only initialize Firebase if we have a real API key (not a dummy/placeholder)
-const isRealKey = firebaseConfig.apiKey &&
+const isRealKey = Boolean(firebaseConfig.apiKey) &&
   !firebaseConfig.apiKey.startsWith('dummy') &&
   !firebaseConfig.apiKey.startsWith('placeholder');
 
-let app: any, auth: any, db: any;
-if (!isRealKey) {
-  console.warn("[Firebase] VITE_FIREBASE_API_KEY not set — Firebase disabled, API key mode only");
-} else {
+const initializeFirebase = (): { app?: FirebaseApp; auth?: Auth; db?: Firestore } => {
+  if (!isRealKey) {
+    console.warn("[Firebase] VITE_FIREBASE_API_KEY not set — Firebase disabled, API key mode only");
+    return {};
+  }
+
   try {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
+    const app = initializeApp(firebaseConfig);
+    return { app, auth: getAuth(app), db: getFirestore(app) };
   } catch {
     console.warn("[Firebase] init failed — Firebase disabled");
+    return {};
   }
-}
+};
+
+const { app, auth, db } = initializeFirebase();
 
 export { auth, db };
 export default app;

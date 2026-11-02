@@ -58,6 +58,8 @@ const rateLimits = new Map<string, { timestamps: number[]; lastAccess: number }>
 const limitRequests = 120; // Max 120 requests
 const limitWindowMs = 60000; // Per 1 minute
 const RATE_LIMITER_TTL_MS = 5 * 60 * 1000; // Evict idle entries after 5 minutes
+const RATE_LIMITER_CLEANUP_INTERVAL = 100;
+let rateLimiterRequestsSinceCleanup = 0;
 
 export const localRateLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const auth = authStorage.getStore();
@@ -85,8 +87,9 @@ export const localRateLimiter = (req: express.Request, res: express.Response, ne
   activeTimestamps.push(now);
   rateLimits.set(tenantId, { timestamps: activeTimestamps, lastAccess: now });
 
-  // Periodic TTL-based eviction (run ~1% of requests)
-  if (Math.random() < 0.01) {
+  // Run TTL eviction on a fixed cadence so cleanup does not depend on insecure randomness.
+  if (++rateLimiterRequestsSinceCleanup >= RATE_LIMITER_CLEANUP_INTERVAL) {
+    rateLimiterRequestsSinceCleanup = 0;
     const cutoff = now - RATE_LIMITER_TTL_MS;
     for (const [key, val] of rateLimits) {
       if (val.lastAccess < cutoff) {
@@ -99,14 +102,14 @@ export const localRateLimiter = (req: express.Request, res: express.Response, ne
 };
 
 // Task queue to serialize/control concurrency of heavy operations
-class TaskQueue {
+export class TaskQueue {
   private queue: (() => Promise<any>)[] = [];
   private activeCount = 0;
   private maxConcurrency = 1; // Process at most 1 heavy sync task concurrently to prevent connection pool exhaustion
   private static readonly MAX_QUEUED = 50;
   private static readonly TASK_TIMEOUT_MS = 5 * 60 * 1000;
 
-  constructor(maxConcurrency: number = 1) {
+  constructor(maxConcurrency: number = 1, private readonly taskTimeoutMs: number = TaskQueue.TASK_TIMEOUT_MS) {
     this.maxConcurrency = maxConcurrency;
   }
 
@@ -137,16 +140,25 @@ class TaskQueue {
     if (task) {
       this.activeCount++;
       // Safety timeout: if task hangs for 5 min, unblock the queue
-      const timeoutId = setTimeout(() => {
-        logger.error("[TaskQueue] Task timed out — unblocking queue");
-        this.activeCount--;
-        this.next();
-      }, TaskQueue.TASK_TIMEOUT_MS);
-      task().finally(() => {
+      let slotReleased = false;
+      const releaseSlot = () => {
+        if (slotReleased) return;
+        slotReleased = true;
         clearTimeout(timeoutId);
         this.activeCount--;
         this.next();
-      });
+      };
+      const timeoutId = setTimeout(() => {
+        logger.error("[TaskQueue] Task timed out — unblocking queue");
+        releaseSlot();
+      }, this.taskTimeoutMs);
+      void Promise.resolve().then(task).then(
+        releaseSlot,
+        (err: unknown) => {
+          logger.error("[TaskQueue] Task failed:", err);
+          releaseSlot();
+        },
+      );
     }
   }
 }
@@ -953,7 +965,7 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
             if (analysis.graph?.nodes && analysis.graph?.links) {
               const nodes = analysis.graph.nodes;
               const links = analysis.graph.links;
-              Promise.resolve().then(async () => {
+              void Promise.resolve().then(async () => {
                 try {
                   await authStorage.run(auth, async () => {
                     logger.info(`[Sync API] Async syncing Knowledge Graph for ${cleanProjectName}...`);

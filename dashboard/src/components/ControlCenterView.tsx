@@ -48,18 +48,19 @@ export const ControlCenterView: React.FC<ControlCenterProps> = ({
   // Fetch current cron schedule on mount
   useEffect(() => {
     const fetchCronSettings = async () => {
-      const headers = await getAuthHeaders();
-      fetch('/api/settings/cron', { headers })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.dreams_schedule) {
-            setCronSchedule(data.dreams_schedule);
-            setCronEnabled(data.dreams_enabled !== false);
-          }
-        })
-        .catch(() => {});
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch('/api/settings/cron', { headers });
+        const data = response.ok ? await response.json() : null;
+        if (data?.dreams_schedule) {
+          setCronSchedule(data.dreams_schedule);
+          setCronEnabled(data.dreams_enabled !== false);
+        }
+      } catch {
+        // Cron settings are optional; keep the current defaults if loading fails.
+      }
     };
-    fetchCronSettings();
+    void fetchCronSettings();
   }, []);
 
   const saveCron = async () => {
@@ -191,7 +192,7 @@ const freqLabels: Record<string, string> = {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <label id="cron-enabled-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Enabled</label>
+                  <span id="cron-enabled-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Enabled</span>
                   <button role="switch" aria-checked={cronEnabled} aria-labelledby="cron-enabled-label" onClick={() => setCronEnabled(!cronEnabled)}
                     className={FOCUS_RING_CLASS}
                     style={{

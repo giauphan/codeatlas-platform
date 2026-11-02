@@ -807,12 +807,12 @@ export const WikiView: React.FC<WikiViewProps> = ({
               </div>
 
               <div style={{ padding: '0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                <label htmlFor="gen-profile" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
                   Load Saved Preset
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <select
-                    aria-label="Load Saved Preset"
+                    id="gen-profile"
                     value={activeProfileId}
                     onChange={(e) => {
                       const id = e.target.value;
@@ -852,11 +852,11 @@ export const WikiView: React.FC<WikiViewProps> = ({
               </div>
 
               <div>
-                <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                <label htmlFor="gen-provider" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
                   LLM Provider
                 </label>
                 <select
-                  aria-label="LLM Provider"
+                  id="gen-provider"
                   value={genProvider}
                   onChange={(e) => setGenProvider(e.target.value)}
                   className={FOCUS_RING_CLASS}

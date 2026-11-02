@@ -55,7 +55,7 @@ if (!apps || apps.length === 0) {
 
 // Start server
 async function main() {
-  const port = process.env.PORT ? parseInt(process.env.PORT) : null;
+  const port = process.env.PORT ? Number.parseInt(process.env.PORT) : null;
 
   // Index all local git repos on startup
   await indexingService.init();

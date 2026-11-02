@@ -321,7 +321,9 @@ async function main() {
   }
 
   // 4. Save cache
-  cache.processedSessions = Array.from(processed).sort();
+  cache.processedSessions = Array.from(processed).sort((a, b) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
   writeCache(cache);
 
   console.log(`\n${"=".repeat(60)}`);

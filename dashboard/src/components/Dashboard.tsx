@@ -144,7 +144,7 @@ export const Dashboard: React.FC = () => {
           // ignore
         }
       }
-      fetchIndexingSettings(selectedProjectDir);
+      void fetchIndexingSettings(selectedProjectDir);
     }
   }, [selectedProjectDir]);
 
@@ -287,9 +287,9 @@ export const Dashboard: React.FC = () => {
             const defaultDir = data[0].dir;
             setSelectedProjectDir(defaultDir);
             safeSessionStorageSetItem('ca_selected_project_dir', defaultDir);
-            fetchAnalysis(defaultDir);
+            void fetchAnalysis(defaultDir);
           } else {
-            fetchAnalysis(currentDir);
+            void fetchAnalysis(currentDir);
           }
         } else {
           // No projects found, clear selection and analysis
@@ -355,7 +355,9 @@ export const Dashboard: React.FC = () => {
         }
       }
     };
-    loadAnalysisFromDB();
+    void loadAnalysisFromDB().catch((err: unknown) => {
+      console.error('Failed to load cached analysis:', err);
+    });
   }, []);
 
   useEffect(() => {
@@ -366,7 +368,7 @@ export const Dashboard: React.FC = () => {
   const handleProjectChange = (dir: string) => {
     setSelectedProjectDir(dir);
     safeSessionStorageSetItem('ca_selected_project_dir', dir);
-    fetchAnalysis(dir);
+    void fetchAnalysis(dir);
   };
 
   const handleDeleteProject = async (dir: string) => {
@@ -462,9 +464,12 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleCopyClick = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(text);
-    setTimeout(() => setCopiedId(null), 2000);
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(text);
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch((err: unknown) => {
+      console.error('Failed to copy text:', err);
+    });
   };
 
   const renderCurrentView = () => {

@@ -142,7 +142,9 @@ export class MemoryIngestionService {
           const sources = batch.filter(source => memory.evidence.some(item => item.sourceEventId === source.eventId));
           if (!sources.length) throw new Error('Missing source evidence');
           const source = sources[0];
-          const key = digest(`${EXTRACTOR_VERSION}\0${sources.map(item => item.eventId).sort().join('\0')}\0${memory.kind}\0${memory.content}`);
+          const key = digest(`${EXTRACTOR_VERSION}\0${sources.map(item => item.eventId).sort((left, right) =>
+            left < right ? -1 : left > right ? 1 : 0,
+          ).join('\0')}\0${memory.kind}\0${memory.content}`);
           const ack = await DreamingService.saveDreamMemoryWithAck({
             project: event.project, projectId, displayName: event.displayName, workspacePath: event.workspacePath,
             sessionId: source.sessionId, memoryType: memory.memoryType, content: memory.content, importance: memory.importance,

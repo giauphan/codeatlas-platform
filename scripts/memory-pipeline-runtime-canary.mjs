@@ -343,7 +343,9 @@ async function runCanary(env) {
     const userEventId = derivedEventId(projectId, sessionId, userUuid);
     const cursor = Buffer.byteLength(transcriptText);
     const checkpointId = checkpointEventId(projectId, sessionId, 'Stop', cursor);
-    const checkpointIds = [toolEventId, userEventId, checkpointId].sort();
+    const checkpointIds = [toolEventId, userEventId, checkpointId].sort((a, b) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    );
     const stopStarted = performance.now();
     runNativeHook({ cli, route: 'brain-save', projectDir, env: childEnv, timeoutMs: budgetMs, event: {
       hook_event_name: 'Stop', session_id: sessionId, cwd: projectDir, transcript_path: transcriptPath,
