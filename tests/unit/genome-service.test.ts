@@ -195,6 +195,7 @@ function mockGeneRow(
 describe("GenomeService", () => {
   beforeEach(() => {
     mockConnection.execute.mock.resetCalls();
+    mockConnection.executeMany.mock.resetCalls();
     mockConnection.close.mock.resetCalls();
     mockGenerateEmbedding.mock.resetCalls();
     mockInitPool.mock.resetCalls();
@@ -361,6 +362,66 @@ describe("GenomeService", () => {
         (err: Error) => err.message.includes("at least 2"),
       );
     });
+
+    test("rejects a partial source set before creating or updating genes", async () => {
+      mockConnection.execute.mock.mockImplementation(async (sql: string) => {
+        if (sql.includes("SELECT id, name, description, problem")) {
+          return { rows: [mockGeneRow("source-a"), mockGeneRow("source-b")] };
+        }
+        throw new Error("unexpected write");
+      });
+      await assert.rejects(
+        () => GenomeService.mergeGenes(["source-a", "source-b", "missing"], "Combined", "test-project"),
+        /Not all genes found/,
+      );
+      assert.equal(mockConnection.executeMany.mock.callCount(), 0);
+    });
+
+    test("preserves object-row IDs in merged updates and relationships", async () => {
+      mockConnection.execute.mock.mockImplementation(async (sql: string) => {
+        if (sql.includes("SELECT id, name, description, problem")) {
+          return { rows: [mockGeneRow("source-a"), mockGeneRow("source-b")] };
+        }
+        return { rows: [], rowsAffected: 1 };
+      });
+      mockConnection.executeMany.mock.mockImplementation(async () => ({ rowsAffected: 2 }));
+
+      await GenomeService.mergeGenes(["source-a", "source-b"], "Combined", "test-project");
+
+      const update = mockConnection.execute.mock.calls.find(c =>
+        String(c.arguments[0]).includes("SET status = 'merged'"));
+      assert.ok(update, "source genes must be updated in a bounded IN batch");
+      assert.deepEqual(update.arguments[1], { tenantId: "test-user", id0: "source-a", id1: "source-b" });
+      const relationships = mockConnection.executeMany.mock.calls.find(c =>
+        String(c.arguments[0]).includes("INSERT INTO gene_relationships"));
+      assert.ok(relationships);
+      const binds = relationships.arguments[1] as Array<{ src: string }>;
+      assert.deepEqual(binds.map(b => b.src), ["source-a", "source-b"]);
+    });
+
+    test("bounds source reads as well as updates when merging a large batch", async () => {
+      const ids = Array.from({ length: 1801 }, (_, i) => `source-${i}`);
+      const selected: string[] = [];
+      const updated: string[] = [];
+      mockConnection.execute.mock.mockImplementation(async (sql: string, binds: Record<string, unknown>) => {
+        if (sql.includes("SELECT id, name, description, problem") || sql.includes("SET status = 'merged'")) {
+          assert.match(sql, /tenant_id = :tenantId/);
+          assert.equal(binds.tenantId, "test-user");
+          assert.ok(Object.keys(binds).length <= 901, "reads and writes must both stay within the parameter budget");
+          const batch = Object.entries(binds).filter(([key]) => key !== "tenantId").map(([, id]) => String(id));
+          if (sql.startsWith("SELECT")) {
+            selected.push(...batch);
+            return { rows: batch.map(id => mockGeneRow(id)), rowsAffected: 0 };
+          }
+          updated.push(...batch);
+        }
+        return { rows: [], rowsAffected: 1 };
+      });
+      mockConnection.executeMany.mock.mockImplementation(async () => ({ rowsAffected: ids.length }));
+      await GenomeService.mergeGenes([...ids, ids[0]], "Combined", "test-project");
+      assert.deepEqual(selected, ids);
+      assert.deepEqual(updated, ids);
+    });
   });
 
   // ── splitGene ──────────────────────────────────────────────────────
@@ -459,8 +520,26 @@ describe("GenomeService", () => {
 
   // ── retireGenes ────────────────────────────────────────────────────
   describe("retireGenes()", () => {
+    test("bounds retirement batches and sums affected rows with tenant isolation", async () => {
+      const seen: string[] = [];
+      mockConnection.execute.mock.mockImplementation(async (sql: string, binds: Record<string, unknown>) => {
+        assert.match(sql, /tenant_id = :tenantId/);
+        assert.match(sql, /status != 'retired'/);
+        assert.equal(binds.tenantId, "test-user");
+        assert.ok(Object.keys(binds).length <= 901, "keep below the SQL parameter budget");
+        const ids = Object.entries(binds).filter(([key]) => key !== "tenantId").map(([, id]) => String(id));
+        seen.push(...ids);
+        return { rowsAffected: ids.length };
+      });
+      const ids = Array.from({ length: 1801 }, (_, i) => `gene-${i}`);
+      assert.equal(await GenomeService.retireGenes(ids), 1801);
+      assert.deepEqual(seen, ids);
+      assert.equal(mockConnection.execute.mock.callCount(), 3);
+      assert.equal(mockConnection.executeMany.mock.callCount(), 0);
+    });
+
     test("retires genes and returns count", async () => {
-      mockConnection.executeMany.mock.mockImplementation(async () => ({
+      mockConnection.execute.mock.mockImplementation(async () => ({
         rowsAffected: 2,
       }));
 

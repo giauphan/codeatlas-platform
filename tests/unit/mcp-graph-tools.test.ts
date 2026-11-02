@@ -75,6 +75,33 @@ beforeEach(() => {
 });
 
 describe('MCP graph queries', () => {
+  test('system diagrams filter endpoints, scope and duplicate links without mutating cached graphs', async () => {
+    const graph: GraphData = {
+      nodes: [
+        { id: 'a', label: 'A', type: 'module', filePath: 'a.ts' },
+        { id: 'b', label: 'B', type: 'module', filePath: 'b.ts' },
+        { id: 'fn', label: 'Run', type: 'function', filePath: 'a.ts' },
+      ],
+      links: [
+        { source: 'a', target: 'b', type: 'import' },
+        { source: 'a', target: 'b', type: 'import' },
+        { source: 'a', target: 'b', type: 'call' },
+        { source: 'a', target: 'fn', type: 'contains' },
+        { source: 'a', target: 'missing', type: 'import' },
+      ],
+    };
+    setGraph(graph);
+    const modules = await callTool('generate_system_flow', { scope: 'modules-only' });
+    assert.equal(modules.nodeCount, 2);
+    assert.equal(modules.linkCount, 1);
+    const full = await callTool('generate_system_flow', { scope: 'full' });
+    assert.equal(full.nodeCount, 3);
+    assert.equal(full.linkCount, 3);
+    assert.equal((await callTool('generate_system_flow', { scope: 'modules-only', maxNodes: 1 })).linkCount, 0);
+    assert.equal(graph.links.length, 5);
+    assert.equal(graph.nodes.length, 3);
+  });
+
   test('dependency filters match known labels and fall back to unresolved or empty labels', async () => {
     assert.deepEqual((await callTool('get_dependencies', { source: 'ALPHA', target: 'beta' })).dependencies, [
       { source: 'Alpha', target: 'Beta', type: 'call' },
