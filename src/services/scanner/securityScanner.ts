@@ -92,7 +92,7 @@ export class SecurityScanner {
 
     // Helper to identify test, mock or diagnostic files
     const isTestOrMockFile = (filePath: string): boolean => {
-      const fp = filePath.toLowerCase().replace(/\\/g, "/");
+      const fp = filePath.toLowerCase().replaceAll("\\", "/");
       return (
         fp.includes("/tests/") ||
         fp.includes("/test/") ||

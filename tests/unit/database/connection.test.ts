@@ -28,12 +28,21 @@ describe('Database Connection', async () => {
     test('initPool returns a pool-like object', async () => {
       const pool = await connectionModule.initPool();
       assert.ok(pool.getConnection);
-      const conn = await pool.getConnection();
+      const connectionPromise = pool.getConnection();
+      assert.ok(connectionPromise instanceof Promise);
+      const conn = await connectionPromise;
       assert.ok(conn.execute);
       assert.ok(conn.executeMany);
       assert.ok(conn.commit);
       assert.ok(conn.rollback);
       assert.ok(conn.close);
+      assert.ok(conn.commit() instanceof Promise);
+      assert.ok(conn.rollback() instanceof Promise);
+      assert.ok(conn.close() instanceof Promise);
+    });
+
+    test('setSessionContext rejects when auth context is missing', async () => {
+      await assert.rejects(connectionModule.setSessionContext(), /Auth context required/);
     });
   });
 });

@@ -110,16 +110,21 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     return this.connectPromise;
   }
 
-  async disconnect(): Promise<void> {
-    if (this.db) {
-      try {
-        this.db.close();
-      } catch (err) {
-        logger.error("Error closing SQLite connection:", err instanceof Error ? err.message : String(err));
-      } finally {
-        this.db = null;
-        this.connectPromise = null;
+  disconnect(): Promise<void> {
+    try {
+      if (this.db) {
+        try {
+          this.db.close();
+        } catch (err) {
+          logger.error("Error closing SQLite connection:", err instanceof Error ? err.message : String(err));
+        } finally {
+          this.db = null;
+          this.connectPromise = null;
+        }
       }
+      return Promise.resolve();
+    } catch (err) {
+      return Promise.reject(err);
     }
   }
 

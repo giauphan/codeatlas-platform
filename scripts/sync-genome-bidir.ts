@@ -23,6 +23,10 @@ const API_BASE = process.argv[3] || process.env.CODEATLAS_API_URL || "https://at
 const MODE = (process.argv[4] || "upload");
 const DEMO = !keyArg || keyArg === "demo";
 
+function safeLogValue(value: unknown): string {
+  return String(value).replace(/[\r\n\u2028\u2029]/g, " ").slice(0, 500);
+}
+
 export function getApiBase(
   value: string,
   allowPrivate = process.env.CODEATLAS_ALLOW_PRIVATE_API_URL === "1",
@@ -86,9 +90,7 @@ function slugify(name) {
 }
 
 // ── Upload ──────────────────────────────────────────────
-async function upload(apiCall) {
-  console.log("\nUpload: Local skills to Cloud Genome");
-
+function getLocalSkills() {
   const localSkills = [];
   if (fs.existsSync(SKILLS_DIR)) {
     for (const dir of fs.readdirSync(SKILLS_DIR)) {
@@ -101,28 +103,46 @@ async function upload(apiCall) {
       }
     }
   }
+  return localSkills;
+}
 
+async function uploadSkill(apiCall, [name, desc, cat]) {
+  process.stdout.write("  " + name + "... ");
+
+  if (DEMO) {
+    console.log("(would sync " + cat + ")");
+    return true;
+  }
+
+  try {
+    const res = await apiCall("/api/genome/gene", {
+      method: "POST",
+      body: JSON.stringify({
+        name, description: desc, problem: "Need " + name,
+        solution: desc, category: cat, project: "codeatlas-genome",
+        sourceType: "skill", confidence: 0.70,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      console.log("OK");
+      return true;
+    }
+    console.log("FAIL: " + safeLogValue(data.error || res.status));
+  } catch (e) {
+    console.log("FAIL: " + safeLogValue(e instanceof Error ? e.message : e));
+  }
+  return false;
+}
+
+async function upload(apiCall) {
+  console.log("\nUpload: Local skills to Cloud Genome");
+  const localSkills = getLocalSkills();
   const toUpload = localSkills.length > 0 ? localSkills : CORE_SKILLS;
   let count = 0;
-
-  for (const [name, desc, cat] of toUpload) {
-    process.stdout.write("  " + name + "... ");
-
-    if (DEMO) { console.log("(would sync " + cat + ")"); count++; continue; }
-
-    try {
-      const res = await apiCall("/api/genome/gene", {
-        method: "POST",
-        body: JSON.stringify({
-          name, description: desc, problem: "Need " + name,
-          solution: desc, category: cat, project: "codeatlas-genome",
-          sourceType: "skill", confidence: 0.70,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) { console.log("OK"); count++; }
-      else { console.log("FAIL: " + (data.error || res.status)); }
-    } catch (e) { console.log("FAIL: " + e.message); }
+  for (const skill of toUpload) {
+    // Serialize upserts to preserve output order and avoid racing gene version updates.
+    if (await uploadSkill(apiCall, skill)) count++;
   }
   return count;
 }
@@ -137,7 +157,7 @@ async function download(apiCall) {
   const data = await res.json();
   const genes = data.genes || [];
   if (!Array.isArray(genes)) throw new Error('Invalid genome response: genes must be an array');
-  console.log("  Found " + genes.length + " skill genes");
+  console.log("  Found " + Number(genes.length) + " skill genes");
   let count = 0;
 
   for (const gene of genes) {
@@ -188,7 +208,7 @@ async function main() {
   const apiCall = createApiCall(getApiBase(API_BASE), DEMO ? "" : keyArg);
   console.log("Bidirectional Skill <-> Genome Sync");
   console.log("Mode: " + MODE + (DEMO ? " (DEMO)" : ""));
-  console.log("API: " + API_BASE + "\n");
+  console.log("API: " + safeLogValue(API_BASE) + "\n");
 
   let up = 0, down = 0;
   if (MODE === "upload" || MODE === "bidir") up = await upload(apiCall);

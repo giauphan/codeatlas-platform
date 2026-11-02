@@ -54,6 +54,14 @@ export interface AdapterConnection {
 
 const READ_QUERY = /^\s*(?:WITH|SELECT)\b/i;
 
+function promiseFromSync<T>(operation: () => T): Promise<T> {
+  try {
+    return Promise.resolve(operation());
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
 function wrapAdapter(db: IDatabaseAdapter): AdapterConnection {
   return {
     async execute<T = unknown>(sql: string, binds = {}, _opts = {}) {
@@ -68,14 +76,17 @@ function wrapAdapter(db: IDatabaseAdapter): AdapterConnection {
       const res = await db.executeMany(sql, binds);
       return { rowsAffected: res.rowsAffected };
     },
-    async commit() {
+    commit() {
       // Adapters auto-commit each statement.
+      return Promise.resolve();
     },
-    async rollback() {
+    rollback() {
       // Adapters auto-commit each statement; no transaction to unwind.
+      return Promise.resolve();
     },
-    async close() {
+    close() {
       // The adapter owns the underlying pool/handle.
+      return Promise.resolve();
     },
   };
 }
@@ -86,7 +97,7 @@ function wrapAdapter(db: IDatabaseAdapter): AdapterConnection {
  */
 export async function initPool(): Promise<{ getConnection: () => Promise<AdapterConnection> }> {
   const db = await initAdapter();
-  return { getConnection: async () => wrapAdapter(db) };
+  return { getConnection: () => promiseFromSync(() => wrapAdapter(db)) };
 }
 
 /**
@@ -94,11 +105,13 @@ export async function initPool(): Promise<{ getConnection: () => Promise<Adapter
  * SQLite enforces tenant isolation through explicit tenant_id predicates,
  * so this only validates that an auth context is present.
  */
-export async function setSessionContext(_connection?: unknown): Promise<void> {
-  const auth = authStorage.getStore();
-  if (!auth) {
-    throw new Error("Auth context required — call within authStorage.run()");
-  }
+export function setSessionContext(_connection?: unknown): Promise<void> {
+  return promiseFromSync(() => {
+    const auth = authStorage.getStore();
+    if (!auth) {
+      throw new Error("Auth context required — call within authStorage.run()");
+    }
+  });
 }
 
 /**
