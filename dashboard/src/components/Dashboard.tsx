@@ -640,7 +640,7 @@ export const Dashboard: React.FC = () => {
         }
         .btn-neon-cyan:disabled {
           opacity: 0.6;
-          cursor: not-allowed;
+          cursor: wait;
           box-shadow: none;
         }
       `}</style>
