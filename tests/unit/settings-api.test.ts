@@ -2,22 +2,25 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import http from 'node:http';
 
 describe('Settings API - Firestore Quota / Fallback resilience', () => {
   let server: http.Server;
   let port: number;
-  const testProjectDir = path.join(process.cwd(), 'projects', 'mock_settings_project');
+  const tempProjectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codeatlas-settings-api-'));
+  const testProjectDir = path.join(tempProjectRoot, 'mock_settings_project');
   const apiKeyValue = 'super-secret-admin-key';
   const origApiKey = process.env.CODEATLAS_API_KEY;
+  const origProjectDir = process.env.CODEATLAS_PROJECT_DIR;
+  const origMultiTenant = process.env.CODEATLAS_MULTI_TENANT;
 
   before(async () => {
     process.env.CODEATLAS_API_KEY = apiKeyValue;
+    process.env.CODEATLAS_PROJECT_DIR = testProjectDir;
+    process.env.CODEATLAS_MULTI_TENANT = 'false';
 
-    // Create a mock client project directory inside projects/ with .codeatlas
-    if (fs.existsSync(testProjectDir)) {
-      fs.rmSync(testProjectDir, { recursive: true, force: true });
-    }
+    // Create the mock project under a disposable root, never inside the checkout.
     fs.mkdirSync(path.join(testProjectDir, '.codeatlas'), { recursive: true });
     // Write an analysis.json so it is recognized as a valid project directory
     fs.writeFileSync(path.join(testProjectDir, '.codeatlas', 'analysis.json'), JSON.stringify({}));
@@ -53,13 +56,16 @@ describe('Settings API - Firestore Quota / Fallback resilience', () => {
   });
 
   after(async () => {
-    process.env.CODEATLAS_API_KEY = origApiKey;
+    if (origApiKey === undefined) delete process.env.CODEATLAS_API_KEY;
+    else process.env.CODEATLAS_API_KEY = origApiKey;
+    if (origProjectDir === undefined) delete process.env.CODEATLAS_PROJECT_DIR;
+    else process.env.CODEATLAS_PROJECT_DIR = origProjectDir;
+    if (origMultiTenant === undefined) delete process.env.CODEATLAS_MULTI_TENANT;
+    else process.env.CODEATLAS_MULTI_TENANT = origMultiTenant;
     if (server) {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
-    if (fs.existsSync(testProjectDir)) {
-      fs.rmSync(testProjectDir, { recursive: true, force: true });
-    }
+    fs.rmSync(tempProjectRoot, { recursive: true, force: true });
   });
 
   test('GET /api/projects/settings should not return 500 when Firestore quota is exhausted (fallback to true)', async () => {

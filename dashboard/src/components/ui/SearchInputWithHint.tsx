@@ -6,9 +6,11 @@ import { FOCUS_RING_CLASS } from '../../lib/constants';
 interface BaseSearchInputWithHintProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onSearch: () => void;
+  onSearch?: () => void;
   placeholder?: string;
   ariaLabel?: string;
+  inputStyle?: React.CSSProperties;
+  wrapperStyle?: React.CSSProperties;
 }
 
 interface ClearableSearchProps extends BaseSearchInputWithHintProps {
@@ -47,7 +49,9 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   onClear,
   placeholder = "Search...",
   ariaLabel = "Search input",
-  hasClearButton = false
+  hasClearButton = false,
+  inputStyle,
+  wrapperStyle
 }) => {
   if (hasClearButton && !onClear) {
     const isDev = typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development';
@@ -59,8 +63,14 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   // If we expect a clear button AND there's text, we need extra room
   const showClearBtn = hasClearButton && value.length > 0;
 
+  // Calculate padding based on which elements are present on the right side
+  let paddingRight = '1rem';
+  if (onSearch && showClearBtn) paddingRight = '4.5rem';
+  else if (onSearch) paddingRight = '3.5rem';
+  else if (showClearBtn) paddingRight = '2.5rem';
+
   const styles = {
-    inputPaddingRight: showClearBtn ? '4.5rem' : '3.5rem',
+    inputPaddingRight: paddingRight,
     // Instead of changing layout properties like `right` or `margin` to shift the KbdHint when the
     // clear button appears, we use CSS `transform`. This forces the animation onto the GPU layer,
     // thereby completely avoiding costly browser layout recalculations and repaints (layout thrashing).
@@ -72,19 +82,19 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
   const hintId = React.useId ? React.useId() : React.useMemo(() => `search-kbd-hint-${Math.random().toString(36).slice(2, 9)}`, []);
 
   return (
-    <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
-      <Search size={18} className="search-input-icon" aria-hidden="true" focusable="false" />
+    <div style={{ flex: 1, minWidth: '280px', position: 'relative', ...wrapperStyle }}>
+      <Search size={18} className="search-input-icon" aria-hidden="true" focusable="false" style={{ zIndex: 1 }} />
       <input
         type="text"
         className={`search-input-field ${FOCUS_RING_CLASS}`}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        aria-describedby={hintId}
-        style={{ paddingRight: styles.inputPaddingRight }}
+        aria-describedby={onSearch ? hintId : undefined}
+        style={{ ...inputStyle, paddingRight: styles.inputPaddingRight }}
         value={value}
         onChange={onChange}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && onSearch) {
             e.preventDefault();
             if (value.trim()) {
               onSearch();
@@ -92,7 +102,7 @@ export const SearchInputWithHint: React.FC<SearchInputWithHintProps> = ({
           }
         }}
       />
-      <KbdHint id={hintId} icon="↵" text="Enter" top="0.85rem" right="1rem" transform={styles.kbdHintTransform} />
+      {onSearch && <KbdHint id={hintId} icon="↵" text="Enter" top="0.85rem" right="1rem" transform={styles.kbdHintTransform} />}
 
       {hasClearButton && value && onClear && (
         <button

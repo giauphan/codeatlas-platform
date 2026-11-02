@@ -53,7 +53,7 @@ still honored as legacy aliases for the two `EMBEDDING_*` variables.
 
 | Variable | Default | Description |
 |---|---|---|
-| `CODEATLAS_API_KEY` | unset | API key for `x-api-key` header auth. Optional for local dev. |
+| `CODEATLAS_API_KEY` | unset | API key for `x-api-key` header auth. Required for authenticated HTTP operations and the built-in scheduler; local code analysis can run without cloud scheduling. |
 | `A2A_MCP_TOKEN` | unset | Bearer token for outbound A2A MCP calls. |
 
 ## Cron / scheduler
@@ -61,6 +61,8 @@ still honored as legacy aliases for the two `EMBEDDING_*` variables.
 | Variable | Default | Description |
 |---|---|---|
 | `CRON_SETTINGS_PATH` | `~/.hermes/cron-settings.json` | Path to cron settings JSON file. |
+
+The settings file accepts `timezone` (IANA zone, default `UTC`), `dreams_schedule` and `dreams_enabled` for daily consolidation, and independent `reconciliation_schedule` and `reconciliation_enabled` fields. With scheduler credentials configured, reconciliation is enabled by default every five minutes (`*/5 * * * *`), including upgrades from legacy settings files; set `reconciliation_enabled: false` to opt out. When `CODEATLAS_API_KEY` is absent, the server emits an explicit scheduler-disabled diagnostic; it does not bypass authentication. Cron expressions use five fields and support numeric/name lists, ranges and steps. Day-of-month and weekday fields follow Cronie: if either begins with `*` (including `*/step`), both day conditions must match; otherwise restricted fields use OR matching. Missed work recovers the newest due UTC minute within a 24-hour window; retryable jobs use bounded exponential backoff and are recorded in the `dream_job_runs` table. Scheduled requests carry a fencing token. Consolidation checks the unexpired lease atomically in each mutation; reconciliation checks the lease before writes and uses idempotent receipts and evidence keys for replay safety. An admin scheduler discovers tenant scopes from pending events and existing memories; ordinary credentials schedule only their own tenant.
 
 ## Dashboard (Vite env vars)
 
@@ -76,3 +78,9 @@ Dashboard uses Vite — env vars must be prefixed with `VITE_`. Set these in `da
 | `VITE_FIREBASE_APP_ID` | Firebase app ID. |
 
 Without `VITE_FIREBASE_API_KEY`, the dashboard falls back to API-key-only mode (no Firebase auth UI).
+
+## Memory extraction and source retention
+
+Native event ingestion writes a redacted durable source receipt before extraction. `source_persisted` acknowledges that queue write; `memory_ids` and `extraction_status` describe the separate extraction outcome. `/api/dreams/reconcile-pending` retries pending events. Processed source bodies expire after seven days by default, while receipt hashes, cited evidence and materialized checkpoints remain. Set `CODEATLAS_MEMORY_SOURCE_RETENTION_DAYS` to 1–30 days. Pending source bodies are retained for retry.
+
+`CODEATLAS_MEMORY_PROCESSING_ENABLED=false` pauses extraction while keeping source receipts. `CODEATLAS_STRUCTURED_MEMORY_EXTRACTION=false` selects legacy classification/ranking for the legacy transcript summarization entrypoint while retaining mandatory redaction and evidence gates; it does not disable the native reconciliation worker. For optional model extraction at meaningful checkpoints, set `CODEATLAS_MEMORY_EXTRACTION_URL` to a full OpenAI-compatible chat completions URL and `CODEATLAS_MEMORY_EXTRACTION_MODEL`; `CODEATLAS_MEMORY_EXTRACTION_API_KEY` is optional. Timeout defaults to 15 seconds and is capped at 30 seconds by `CODEATLAS_MEMORY_EXTRACTION_TIMEOUT_MS`. Without configuration or on malformed provider output, deterministic extraction remains available. The supplied JEV `noul` scoring API is not a chat-completions extraction schema.

@@ -63,7 +63,7 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
                 style={{
                   width: '24px', height: '24px', border: '2px solid var(--primary-neon)', borderRadius: '6px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: isUpdatingSettings ? 'not-allowed' : 'pointer',
+                  cursor: isUpdatingSettings ? 'wait' : 'pointer',
                   opacity: isUpdatingSettings ? 0.6 : 1,
                   background: isIndexingEnabled ? 'var(--primary-neon)' : 'transparent',
                   padding: 0,

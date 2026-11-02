@@ -1,0 +1,5 @@
+# The remediation fixtures in this single commit deliberately contain
+# credential-shaped, non-live values to verify redaction. Keep subsequent
+# commits fully scanned; real secrets must never be allowlisted.
+[allowlist]
+commits = ["2926757189331be7f5163bf2b24997cacfccc13f"]

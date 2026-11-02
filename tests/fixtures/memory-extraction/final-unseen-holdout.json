@@ -1,0 +1,894 @@
+{
+  "version": 1,
+  "splitCounts": {
+    "holdout": 24
+  },
+  "fixtures": [
+    {
+      "id": "final-en-01",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "architecture-choice",
+      "transcript": "[USER]\nLet’s keep the import pipeline synchronous for this release; operators need a clear failure before the command exits.\n\n---\n\n[TOOL]\nThe current import command returns only after all rows are written, and it exits nonzero when validation fails.",
+      "sourceEvents": [
+        {
+          "id": "final-en-01:event-01",
+          "role": "USER",
+          "text": "Let’s keep the import pipeline synchronous for this release; operators need a clear failure before the command exits."
+        },
+        {
+          "id": "final-en-01:event-02",
+          "role": "TOOL",
+          "text": "The current import command returns only after all rows are written, and it exits nonzero when validation fails."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "Let’s keep the import pipeline synchronous for this release; operators need a clear failure before the command exits.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-en-01:event-01",
+            "span": "Let’s keep the import pipeline synchronous for this release; operators need a clear failure before the command exits."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "The current import command returns only after all rows are written, and it exits nonzero when validation fails.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-en-01:event-02",
+            "span": "The current import command returns only after all rows are written, and it exits nonzero when validation fails."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-02",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "personal-style",
+      "transcript": "[USER]\nFor review notes, please lead with the user-visible impact and put implementation details after it.\n\n---\n\n[USER]\nI prefer examples to use realistic names like `orders` and `customers`, rather than `foo` and `bar`.",
+      "sourceEvents": [
+        {
+          "id": "final-en-02:event-01",
+          "role": "USER",
+          "text": "For review notes, please lead with the user-visible impact and put implementation details after it."
+        },
+        {
+          "id": "final-en-02:event-02",
+          "role": "USER",
+          "text": "I prefer examples to use realistic names like `orders` and `customers`, rather than `foo` and `bar`."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "For review notes, please lead with the user-visible impact and put implementation details after it.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-en-02:event-01",
+            "span": "For review notes, please lead with the user-visible impact and put implementation details after it."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "I prefer examples to use realistic names like `orders` and `customers`, rather than `foo` and `bar`.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-en-02:event-02",
+            "span": "I prefer examples to use realistic names like `orders` and `customers`, rather than `foo` and `bar`."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-03",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "external-constraint",
+      "transcript": "[USER]\nThe partner gateway caps each request at 2 MiB, including headers, so our upload chunks must leave room for metadata.\n\n---\n\n[TOOL]\nThe staging gateway rejected the 2.3 MiB sample with HTTP 413 before the application handler ran.",
+      "sourceEvents": [
+        {
+          "id": "final-en-03:event-01",
+          "role": "USER",
+          "text": "The partner gateway caps each request at 2 MiB, including headers, so our upload chunks must leave room for metadata."
+        },
+        {
+          "id": "final-en-03:event-02",
+          "role": "TOOL",
+          "text": "The staging gateway rejected the 2.3 MiB sample with HTTP 413 before the application handler ran."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "The partner gateway caps each request at 2 MiB, including headers, so our upload chunks must leave room for metadata.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-en-03:event-01",
+            "span": "The partner gateway caps each request at 2 MiB, including headers, so our upload chunks must leave room for metadata."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "The staging gateway rejected the 2.3 MiB sample with HTTP 413 before the application handler ran.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-en-03:event-02",
+            "span": "The staging gateway rejected the 2.3 MiB sample with HTTP 413 before the application handler ran."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-04",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "failure-and-remedy",
+      "transcript": "[USER]\nThe retry loop kept replaying a request after the server had committed it, which created duplicate invoices.\n\n---\n\n[USER]\nI changed retries to require an idempotency key and verified a replay returns the original invoice ID without adding a second row.",
+      "sourceEvents": [
+        {
+          "id": "final-en-04:event-01",
+          "role": "USER",
+          "text": "The retry loop kept replaying a request after the server had committed it, which created duplicate invoices."
+        },
+        {
+          "id": "final-en-04:event-02",
+          "role": "USER",
+          "text": "I changed retries to require an idempotency key and verified a replay returns the original invoice ID without adding a second row."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "The retry loop kept replaying a request after the server had committed it, which created duplicate invoices.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-en-04:event-01",
+            "span": "The retry loop kept replaying a request after the server had committed it, which created duplicate invoices."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "I changed retries to require an idempotency key and verified a replay returns the original invoice ID without adding a second row.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-en-04:event-02",
+            "span": "I changed retries to require an idempotency key and verified a replay returns the original invoice ID without adding a second row."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-05",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "unresolved-design-question",
+      "transcript": "[USER]\nI have not decided whether archived projects should remain searchable; support wants them visible, but legal has not confirmed retention policy.\n\n---\n\n[USER]\nCould the search index exclude archived projects by default while still allowing an explicit includeArchived filter?",
+      "sourceEvents": [
+        {
+          "id": "final-en-05:event-01",
+          "role": "USER",
+          "text": "I have not decided whether archived projects should remain searchable; support wants them visible, but legal has not confirmed retention policy."
+        },
+        {
+          "id": "final-en-05:event-02",
+          "role": "USER",
+          "text": "Could the search index exclude archived projects by default while still allowing an explicit includeArchived filter?"
+        }
+      ],
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "I have not decided whether archived projects should remain searchable; support wants them visible, but legal has not confirmed retention policy.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "final-en-05:event-01",
+            "span": "I have not decided whether archived projects should remain searchable; support wants them visible, but legal has not confirmed retention policy."
+          }
+        },
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "Could the search index exclude archived projects by default while still allowing an explicit includeArchived filter?",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "final-en-05:event-02",
+            "span": "Could the search index exclude archived projects by default while still allowing an explicit includeArchived filter?"
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-06",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "progress-and-next-action",
+      "transcript": "[USER]\nThe settings endpoint now validates the locale field and returns a field-level error for unsupported values.\n\n---\n\n[USER]\nNext, add coverage for a missing locale and for a locale that is syntactically valid but not enabled.",
+      "sourceEvents": [
+        {
+          "id": "final-en-06:event-01",
+          "role": "USER",
+          "text": "The settings endpoint now validates the locale field and returns a field-level error for unsupported values."
+        },
+        {
+          "id": "final-en-06:event-02",
+          "role": "USER",
+          "text": "Next, add coverage for a missing locale and for a locale that is syntactically valid but not enabled."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "The settings endpoint now validates the locale field and returns a field-level error for unsupported values.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-en-06:event-01",
+            "span": "The settings endpoint now validates the locale field and returns a field-level error for unsupported values."
+          }
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "Next, add coverage for a missing locale and for a locale that is syntactically valid but not enabled.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-en-06:event-02",
+            "span": "Next, add coverage for a missing locale and for a locale that is syntactically valid but not enabled."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-07",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "long-caveated-constraint",
+      "transcript": "[USER]\nThe nightly export is consumed by two older finance jobs that parse columns by position, and the vendor has confirmed they cannot be upgraded before the quarter closes; we can append nullable columns after the existing fields, but moving or renaming a current column would silently mislabel payments, so preserve the first eleven columns exactly until the migration window opens.\n\n---\n\n[TOOL]\nThe export manifest lists eleven required columns in the same order as the production CSV.",
+      "sourceEvents": [
+        {
+          "id": "final-en-07:event-01",
+          "role": "USER",
+          "text": "The nightly export is consumed by two older finance jobs that parse columns by position, and the vendor has confirmed they cannot be upgraded before the quarter closes; we can append nullable columns after the existing fields, but moving or renaming a current column would silently mislabel payments, so preserve the first eleven columns exactly until the migration window opens."
+        },
+        {
+          "id": "final-en-07:event-02",
+          "role": "TOOL",
+          "text": "The export manifest lists eleven required columns in the same order as the production CSV."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "The nightly export is consumed by two older finance jobs that parse columns by position, and the vendor has confirmed they cannot be upgraded before the quarter closes; we can append nullable columns after the existing fields, but moving or renaming a current column would silently mislabel payments, so preserve the first eleven columns exactly until the migration window opens.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-en-07:event-01",
+            "span": "The nightly export is consumed by two older finance jobs that parse columns by position, and the vendor has confirmed they cannot be upgraded before the quarter closes; we can append nullable columns after the existing fields, but moving or renaming a current column would silently mislabel payments, so preserve the first eleven columns exactly until the migration window opens."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "The export manifest lists eleven required columns in the same order as the production CSV.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-en-07:event-02",
+            "span": "The export manifest lists eleven required columns in the same order as the production CSV."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-08",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "workflow-preference",
+      "transcript": "[USER]\nWhen you suggest a commit message, keep it under 72 characters and start with a verb.\n\n---\n\n[USER]\nFor local repro steps, assume I use pnpm and a Linux shell unless I say otherwise.",
+      "sourceEvents": [
+        {
+          "id": "final-en-08:event-01",
+          "role": "USER",
+          "text": "When you suggest a commit message, keep it under 72 characters and start with a verb."
+        },
+        {
+          "id": "final-en-08:event-02",
+          "role": "USER",
+          "text": "For local repro steps, assume I use pnpm and a Linux shell unless I say otherwise."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "When you suggest a commit message, keep it under 72 characters and start with a verb.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-en-08:event-01",
+            "span": "When you suggest a commit message, keep it under 72 characters and start with a verb."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "For local repro steps, assume I use pnpm and a Linux shell unless I say otherwise.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-en-08:event-02",
+            "span": "For local repro steps, assume I use pnpm and a Linux shell unless I say otherwise."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-09",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "runtime-policy",
+      "transcript": "[USER]\nFor webhook delivery, we should stop after eight attempts and then leave the event available for manual replay.\n\n---\n\n[USER]\nThe production queue currently retains failed events for fourteen days before purging them.",
+      "sourceEvents": [
+        {
+          "id": "final-en-09:event-01",
+          "role": "USER",
+          "text": "For webhook delivery, we should stop after eight attempts and then leave the event available for manual replay."
+        },
+        {
+          "id": "final-en-09:event-02",
+          "role": "USER",
+          "text": "The production queue currently retains failed events for fourteen days before purging them."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "For webhook delivery, we should stop after eight attempts and then leave the event available for manual replay.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-en-09:event-01",
+            "span": "For webhook delivery, we should stop after eight attempts and then leave the event available for manual replay."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "The production queue currently retains failed events for fourteen days before purging them.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-en-09:event-02",
+            "span": "The production queue currently retains failed events for fourteen days before purging them."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-10",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "uncertain-hypothesis",
+      "transcript": "[USER]\nWe do not have traces for the first timeout, so the cache may have been cold, but that is only a guess from the timing.\n\n---\n\n[USER]\nI still need to find out whether the timeout happened before or after the database transaction began.",
+      "sourceEvents": [
+        {
+          "id": "final-en-10:event-01",
+          "role": "USER",
+          "text": "We do not have traces for the first timeout, so the cache may have been cold, but that is only a guess from the timing."
+        },
+        {
+          "id": "final-en-10:event-02",
+          "role": "USER",
+          "text": "I still need to find out whether the timeout happened before or after the database transaction began."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "We do not have traces for the first timeout, so the cache may have been cold, but that is only a guess from the timing.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "final-en-10:event-01",
+            "span": "We do not have traces for the first timeout, so the cache may have been cold, but that is only a guess from the timing."
+          }
+        },
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "I still need to find out whether the timeout happened before or after the database transaction began.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "final-en-10:event-02",
+            "span": "I still need to find out whether the timeout happened before or after the database transaction began."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-01",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "kiến-trúc-lựa-chọn",
+      "transcript": "[USER]\nTrong đợt phát hành này, hãy giữ bước kiểm tra quyền đồng bộ trước khi ghi dữ liệu; nhóm vận hành cần biết lỗi ngay trong lần chạy đó.\n\n---\n\n[TOOL]\nLệnh hiện tại trả về mã khác không nếu người chạy không có quyền ghi vào kho đích.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-01:event-01",
+          "role": "USER",
+          "text": "Trong đợt phát hành này, hãy giữ bước kiểm tra quyền đồng bộ trước khi ghi dữ liệu; nhóm vận hành cần biết lỗi ngay trong lần chạy đó."
+        },
+        {
+          "id": "final-vi-01:event-02",
+          "role": "TOOL",
+          "text": "Lệnh hiện tại trả về mã khác không nếu người chạy không có quyền ghi vào kho đích."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "Trong đợt phát hành này, hãy giữ bước kiểm tra quyền đồng bộ trước khi ghi dữ liệu; nhóm vận hành cần biết lỗi ngay trong lần chạy đó.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-vi-01:event-01",
+            "span": "Trong đợt phát hành này, hãy giữ bước kiểm tra quyền đồng bộ trước khi ghi dữ liệu; nhóm vận hành cần biết lỗi ngay trong lần chạy đó."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "Lệnh hiện tại trả về mã khác không nếu người chạy không có quyền ghi vào kho đích.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-vi-01:event-02",
+            "span": "Lệnh hiện tại trả về mã khác không nếu người chạy không có quyền ghi vào kho đích."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "sở-thích-cá-nhân",
+      "transcript": "[USER]\nKhi viết ghi chú bàn giao, tôi muốn phần việc còn lại đứng trước phần đã hoàn tất.\n\n---\n\n[USER]\nTrong ví dụ SQL, hãy dùng tên bảng `phieu_thu` và `khach_hang` để tôi dễ liên hệ với hệ thống.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-02:event-01",
+          "role": "USER",
+          "text": "Khi viết ghi chú bàn giao, tôi muốn phần việc còn lại đứng trước phần đã hoàn tất."
+        },
+        {
+          "id": "final-vi-02:event-02",
+          "role": "USER",
+          "text": "Trong ví dụ SQL, hãy dùng tên bảng `phieu_thu` và `khach_hang` để tôi dễ liên hệ với hệ thống."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "Khi viết ghi chú bàn giao, tôi muốn phần việc còn lại đứng trước phần đã hoàn tất.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-vi-02:event-01",
+            "span": "Khi viết ghi chú bàn giao, tôi muốn phần việc còn lại đứng trước phần đã hoàn tất."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "Trong ví dụ SQL, hãy dùng tên bảng `phieu_thu` và `khach_hang` để tôi dễ liên hệ với hệ thống.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-vi-02:event-02",
+            "span": "Trong ví dụ SQL, hãy dùng tên bảng `phieu_thu` và `khach_hang` để tôi dễ liên hệ với hệ thống."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-03",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "ràng-buộc-bên-ngoài",
+      "transcript": "[USER]\nĐơn vị đối tác chỉ cho phép tối đa 40 yêu cầu mỗi phút trên mỗi tài khoản, kể cả yêu cầu thử lại, nên bộ đồng bộ phải tính chung toàn bộ lượt gọi.\n\n---\n\n[TOOL]\nPhản hồi từ máy chủ thử nghiệm có tiêu đề `Retry-After: 30` sau khi gửi yêu cầu thứ 41 trong cùng một phút.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-03:event-01",
+          "role": "USER",
+          "text": "Đơn vị đối tác chỉ cho phép tối đa 40 yêu cầu mỗi phút trên mỗi tài khoản, kể cả yêu cầu thử lại, nên bộ đồng bộ phải tính chung toàn bộ lượt gọi."
+        },
+        {
+          "id": "final-vi-03:event-02",
+          "role": "TOOL",
+          "text": "Phản hồi từ máy chủ thử nghiệm có tiêu đề `Retry-After: 30` sau khi gửi yêu cầu thứ 41 trong cùng một phút."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "Đơn vị đối tác chỉ cho phép tối đa 40 yêu cầu mỗi phút trên mỗi tài khoản, kể cả yêu cầu thử lại, nên bộ đồng bộ phải tính chung toàn bộ lượt gọi.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-vi-03:event-01",
+            "span": "Đơn vị đối tác chỉ cho phép tối đa 40 yêu cầu mỗi phút trên mỗi tài khoản, kể cả yêu cầu thử lại, nên bộ đồng bộ phải tính chung toàn bộ lượt gọi."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "Phản hồi từ máy chủ thử nghiệm có tiêu đề `Retry-After: 30` sau khi gửi yêu cầu thứ 41 trong cùng một phút.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-vi-03:event-02",
+            "span": "Phản hồi từ máy chủ thử nghiệm có tiêu đề `Retry-After: 30` sau khi gửi yêu cầu thứ 41 trong cùng một phút."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-04",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "lỗi-và-cách-sửa",
+      "transcript": "[USER]\nBản sửa tuần trước lấy nhầm mã chi nhánh từ cấu hình mặc định, khiến báo cáo của cửa hàng phụ được gắn vào cửa hàng chính.\n\n---\n\n[USER]\nTôi đã đọc mã chi nhánh từ từng bản ghi cửa hàng và đối chiếu ba báo cáo mẫu; cả ba hiện đều mang đúng mã.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-04:event-01",
+          "role": "USER",
+          "text": "Bản sửa tuần trước lấy nhầm mã chi nhánh từ cấu hình mặc định, khiến báo cáo của cửa hàng phụ được gắn vào cửa hàng chính."
+        },
+        {
+          "id": "final-vi-04:event-02",
+          "role": "USER",
+          "text": "Tôi đã đọc mã chi nhánh từ từng bản ghi cửa hàng và đối chiếu ba báo cáo mẫu; cả ba hiện đều mang đúng mã."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "Bản sửa tuần trước lấy nhầm mã chi nhánh từ cấu hình mặc định, khiến báo cáo của cửa hàng phụ được gắn vào cửa hàng chính.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-vi-04:event-01",
+            "span": "Bản sửa tuần trước lấy nhầm mã chi nhánh từ cấu hình mặc định, khiến báo cáo của cửa hàng phụ được gắn vào cửa hàng chính."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "Tôi đã đọc mã chi nhánh từ từng bản ghi cửa hàng và đối chiếu ba báo cáo mẫu; cả ba hiện đều mang đúng mã.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-vi-04:event-02",
+            "span": "Tôi đã đọc mã chi nhánh từ từng bản ghi cửa hàng và đối chiếu ba báo cáo mẫu; cả ba hiện đều mang đúng mã."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-05",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "câu-hỏi-chưa-ngã-ngũ",
+      "transcript": "[USER]\nTôi chưa rõ tài khoản bị khóa có được xem lịch sử tải xuống hay không; bộ phận pháp chế chưa trả lời về thời hạn lưu nhật ký.\n\n---\n\n[USER]\nLiệu có nên giữ nút tải xuống nhưng yêu cầu xác thực lại trước khi cung cấp tệp không?",
+      "sourceEvents": [
+        {
+          "id": "final-vi-05:event-01",
+          "role": "USER",
+          "text": "Tôi chưa rõ tài khoản bị khóa có được xem lịch sử tải xuống hay không; bộ phận pháp chế chưa trả lời về thời hạn lưu nhật ký."
+        },
+        {
+          "id": "final-vi-05:event-02",
+          "role": "USER",
+          "text": "Liệu có nên giữ nút tải xuống nhưng yêu cầu xác thực lại trước khi cung cấp tệp không?"
+        }
+      ],
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "Tôi chưa rõ tài khoản bị khóa có được xem lịch sử tải xuống hay không; bộ phận pháp chế chưa trả lời về thời hạn lưu nhật ký.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "final-vi-05:event-01",
+            "span": "Tôi chưa rõ tài khoản bị khóa có được xem lịch sử tải xuống hay không; bộ phận pháp chế chưa trả lời về thời hạn lưu nhật ký."
+          }
+        },
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "Liệu có nên giữ nút tải xuống nhưng yêu cầu xác thực lại trước khi cung cấp tệp không?",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "final-vi-05:event-02",
+            "span": "Liệu có nên giữ nút tải xuống nhưng yêu cầu xác thực lại trước khi cung cấp tệp không?"
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-06",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "tiến-độ-và-việc-tiếp-theo",
+      "transcript": "[USER]\nPhần nhập danh sách nhân viên đã hỗ trợ tệp UTF-8 có dấu phẩy trong dấu ngoặc kép và báo số dòng bị bỏ qua.\n\n---\n\n[USER]\nViệc tiếp theo là kiểm tra tệp rỗng và trường hợp một dòng có hai địa chỉ email.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-06:event-01",
+          "role": "USER",
+          "text": "Phần nhập danh sách nhân viên đã hỗ trợ tệp UTF-8 có dấu phẩy trong dấu ngoặc kép và báo số dòng bị bỏ qua."
+        },
+        {
+          "id": "final-vi-06:event-02",
+          "role": "USER",
+          "text": "Việc tiếp theo là kiểm tra tệp rỗng và trường hợp một dòng có hai địa chỉ email."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "Phần nhập danh sách nhân viên đã hỗ trợ tệp UTF-8 có dấu phẩy trong dấu ngoặc kép và báo số dòng bị bỏ qua.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-vi-06:event-01",
+            "span": "Phần nhập danh sách nhân viên đã hỗ trợ tệp UTF-8 có dấu phẩy trong dấu ngoặc kép và báo số dòng bị bỏ qua."
+          }
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "Việc tiếp theo là kiểm tra tệp rỗng và trường hợp một dòng có hai địa chỉ email.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-vi-06:event-02",
+            "span": "Việc tiếp theo là kiểm tra tệp rỗng và trường hợp một dòng có hai địa chỉ email."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-07",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "ràng-buộc-dài-có-ngoại-lệ",
+      "transcript": "[USER]\nBảng đối soát cuối tháng được gửi cho nhà cung cấp bằng một mẫu CSV cố định, và họ xác nhận chưa thể cập nhật phần mềm nhận tệp trong quý này; chúng ta được phép thêm ghi chú ở cuối mỗi dòng, nhưng không được đổi dấu thập phân, thứ tự cột hoặc mã tiền tệ vì hệ thống của họ sẽ âm thầm đọc sai số tiền, nên cần giữ nguyên định dạng hiện tại cho đến đợt chuyển đổi đã lên lịch.\n\n---\n\n[TOOL]\nTài liệu cấu hình xuất hiện đặt dấu thập phân là dấu chấm và tiền tệ mặc định là VND.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-07:event-01",
+          "role": "USER",
+          "text": "Bảng đối soát cuối tháng được gửi cho nhà cung cấp bằng một mẫu CSV cố định, và họ xác nhận chưa thể cập nhật phần mềm nhận tệp trong quý này; chúng ta được phép thêm ghi chú ở cuối mỗi dòng, nhưng không được đổi dấu thập phân, thứ tự cột hoặc mã tiền tệ vì hệ thống của họ sẽ âm thầm đọc sai số tiền, nên cần giữ nguyên định dạng hiện tại cho đến đợt chuyển đổi đã lên lịch."
+        },
+        {
+          "id": "final-vi-07:event-02",
+          "role": "TOOL",
+          "text": "Tài liệu cấu hình xuất hiện đặt dấu thập phân là dấu chấm và tiền tệ mặc định là VND."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "Bảng đối soát cuối tháng được gửi cho nhà cung cấp bằng một mẫu CSV cố định, và họ xác nhận chưa thể cập nhật phần mềm nhận tệp trong quý này; chúng ta được phép thêm ghi chú ở cuối mỗi dòng, nhưng không được đổi dấu thập phân, thứ tự cột hoặc mã tiền tệ vì hệ thống của họ sẽ âm thầm đọc sai số tiền, nên cần giữ nguyên định dạng hiện tại cho đến đợt chuyển đổi đã lên lịch.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-vi-07:event-01",
+            "span": "Bảng đối soát cuối tháng được gửi cho nhà cung cấp bằng một mẫu CSV cố định, và họ xác nhận chưa thể cập nhật phần mềm nhận tệp trong quý này; chúng ta được phép thêm ghi chú ở cuối mỗi dòng, nhưng không được đổi dấu thập phân, thứ tự cột hoặc mã tiền tệ vì hệ thống của họ sẽ âm thầm đọc sai số tiền, nên cần giữ nguyên định dạng hiện tại cho đến đợt chuyển đổi đã lên lịch."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "Tài liệu cấu hình xuất hiện đặt dấu thập phân là dấu chấm và tiền tệ mặc định là VND.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-vi-07:event-02",
+            "span": "Tài liệu cấu hình xuất hiện đặt dấu thập phân là dấu chấm và tiền tệ mặc định là VND."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-08",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "sở-thích-quy-trình",
+      "transcript": "[USER]\nKhi đề xuất tên nhánh, tôi thích dạng `fix/` hoặc `feature/` kèm mô tả ngắn bằng tiếng Anh.\n\n---\n\n[USER]\nNếu ghi hướng dẫn chạy thử, hãy nêu câu lệnh từ thư mục gốc của kho mã.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-08:event-01",
+          "role": "USER",
+          "text": "Khi đề xuất tên nhánh, tôi thích dạng `fix/` hoặc `feature/` kèm mô tả ngắn bằng tiếng Anh."
+        },
+        {
+          "id": "final-vi-08:event-02",
+          "role": "USER",
+          "text": "Nếu ghi hướng dẫn chạy thử, hãy nêu câu lệnh từ thư mục gốc của kho mã."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "Khi đề xuất tên nhánh, tôi thích dạng `fix/` hoặc `feature/` kèm mô tả ngắn bằng tiếng Anh.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-vi-08:event-01",
+            "span": "Khi đề xuất tên nhánh, tôi thích dạng `fix/` hoặc `feature/` kèm mô tả ngắn bằng tiếng Anh."
+          }
+        },
+        {
+          "kind": "PREFERENCE",
+          "contains": "Nếu ghi hướng dẫn chạy thử, hãy nêu câu lệnh từ thư mục gốc của kho mã.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-vi-08:event-02",
+            "span": "Nếu ghi hướng dẫn chạy thử, hãy nêu câu lệnh từ thư mục gốc của kho mã."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-09",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "quy-tắc-vận-hành",
+      "transcript": "[USER]\nVới thông báo thanh toán, chỉ gửi lại tối đa ba lần; sau đó chuyển sang hàng chờ xử lý thủ công.\n\n---\n\n[USER]\nHệ thống hiện xóa bản ghi webhook lỗi sau bảy ngày nếu chưa có người xử lý.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-09:event-01",
+          "role": "USER",
+          "text": "Với thông báo thanh toán, chỉ gửi lại tối đa ba lần; sau đó chuyển sang hàng chờ xử lý thủ công."
+        },
+        {
+          "id": "final-vi-09:event-02",
+          "role": "USER",
+          "text": "Hệ thống hiện xóa bản ghi webhook lỗi sau bảy ngày nếu chưa có người xử lý."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "Với thông báo thanh toán, chỉ gửi lại tối đa ba lần; sau đó chuyển sang hàng chờ xử lý thủ công.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "final-vi-09:event-01",
+            "span": "Với thông báo thanh toán, chỉ gửi lại tối đa ba lần; sau đó chuyển sang hàng chờ xử lý thủ công."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "Hệ thống hiện xóa bản ghi webhook lỗi sau bảy ngày nếu chưa có người xử lý.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "final-vi-09:event-02",
+            "span": "Hệ thống hiện xóa bản ghi webhook lỗi sau bảy ngày nếu chưa có người xử lý."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-10",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "giả-thuyết-chưa-xác-minh",
+      "transcript": "[USER]\nChưa có dấu vết mạng của lần lỗi đầu tiên; có thể DNS chậm, nhưng hiện giờ tôi chỉ suy đoán từ thời điểm phản hồi.\n\n---\n\n[USER]\nTôi chưa xác định được yêu cầu đã tới dịch vụ thanh toán hay dừng ở bộ cân bằng tải.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-10:event-01",
+          "role": "USER",
+          "text": "Chưa có dấu vết mạng của lần lỗi đầu tiên; có thể DNS chậm, nhưng hiện giờ tôi chỉ suy đoán từ thời điểm phản hồi."
+        },
+        {
+          "id": "final-vi-10:event-02",
+          "role": "USER",
+          "text": "Tôi chưa xác định được yêu cầu đã tới dịch vụ thanh toán hay dừng ở bộ cân bằng tải."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "Chưa có dấu vết mạng của lần lỗi đầu tiên; có thể DNS chậm, nhưng hiện giờ tôi chỉ suy đoán từ thời điểm phản hồi.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "final-vi-10:event-01",
+            "span": "Chưa có dấu vết mạng của lần lỗi đầu tiên; có thể DNS chậm, nhưng hiện giờ tôi chỉ suy đoán từ thời điểm phản hồi."
+          }
+        },
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "Tôi chưa xác định được yêu cầu đã tới dịch vụ thanh toán hay dừng ở bộ cân bằng tải.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "final-vi-10:event-02",
+            "span": "Tôi chưa xác định được yêu cầu đã tới dịch vụ thanh toán hay dừng ở bộ cân bằng tải."
+          }
+        }
+      ],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-13",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "smalltalk-no-memory",
+      "transcript": "[USER]\nHope your weekend is going well!\n\n---\n\n[ASSISTANT]\nThanks, you too!",
+      "sourceEvents": [
+        {
+          "id": "final-en-13:event-01",
+          "role": "USER",
+          "text": "Hope your weekend is going well!"
+        },
+        {
+          "id": "final-en-13:event-02",
+          "role": "ASSISTANT",
+          "text": "Thanks, you too!"
+        }
+      ],
+      "expect": [],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-en-14",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "unsupported-assurance-no-memory",
+      "transcript": "[ASSISTANT]\nI have completed the migration and verified every record, although no tool output or user report supports that claim.\n\n---\n\n[USER]\nPlease inspect the deployment report before recording any status.",
+      "sourceEvents": [
+        {
+          "id": "final-en-14:event-01",
+          "role": "ASSISTANT",
+          "text": "I have completed the migration and verified every record, although no tool output or user report supports that claim."
+        },
+        {
+          "id": "final-en-14:event-02",
+          "role": "USER",
+          "text": "Please inspect the deployment report before recording any status."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-13",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "review-promise-no-memory",
+      "transcript": "[ASSISTANT]\nTôi sẽ xem lại phần này sau cuộc họp nhé.\n\n---\n\n[USER]\nCảm ơn, vậy là đủ cho hôm nay.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-13:event-01",
+          "role": "ASSISTANT",
+          "text": "Tôi sẽ xem lại phần này sau cuộc họp nhé."
+        },
+        {
+          "id": "final-vi-13:event-02",
+          "role": "USER",
+          "text": "Cảm ơn, vậy là đủ cho hôm nay."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": []
+    },
+    {
+      "id": "final-vi-14",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "synthetic-secret-check-no-memory",
+      "transcript": "[USER]\nChuỗi giả lập để kiểm tra bộ lọc là api_test_final_secret_7f3a9c2d; đây không phải thông tin đăng nhập thật và cần bị loại khỏi bộ nhớ.\n\n---\n\n[ASSISTANT]\nĐã rõ, tôi sẽ không lưu chuỗi kiểm tra này.",
+      "sourceEvents": [
+        {
+          "id": "final-vi-14:event-01",
+          "role": "USER",
+          "text": "Chuỗi giả lập để kiểm tra bộ lọc là api_test_final_secret_7f3a9c2d; đây không phải thông tin đăng nhập thật và cần bị loại khỏi bộ nhớ."
+        },
+        {
+          "id": "final-vi-14:event-02",
+          "role": "ASSISTANT",
+          "text": "Đã rõ, tôi sẽ không lưu chuỗi kiểm tra này."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": [
+        "api_test_final_secret_7f3a9c2d"
+      ]
+    }
+  ]
+}
