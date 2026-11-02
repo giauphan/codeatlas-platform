@@ -33,7 +33,7 @@
     "@types/react-dom": "^18.2.0",
     "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^6.1.1",
-    "@vitest/ui": "5.0.0",
+    "@vitest/ui": "5.0.5",
     "jsdom": "^29.1.1",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
