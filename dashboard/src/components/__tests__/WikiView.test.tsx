@@ -36,15 +36,15 @@ describe('WikiView Component', () => {
     const providerSelect = screen.getByRole('combobox', { name: /LLM Provider/i });
     await user.selectOptions(providerSelect, 'openai-compatible');
 
-    const modelInput = screen.getByPlaceholderText(/claude-3-7-sonnet/i);
+    const modelInput = screen.getByRole('textbox', { name: 'Model Name' });
     await user.clear(modelInput);
     await user.type(modelInput, 'custom-llama-3');
 
-    const baseUrlInput = screen.getByPlaceholderText(/127\.0\.0\.1/i);
+    const baseUrlInput = screen.getByRole('textbox', { name: 'Custom API Endpoint (Base URL)' });
     await user.clear(baseUrlInput);
     await user.type(baseUrlInput, 'http://test-url.local/v1');
 
-    const configNameInput = screen.getByPlaceholderText(/e.g. My Claude Sub/i);
+    const configNameInput = screen.getByRole('textbox', { name: 'Save Current Config as Preset' });
     await user.type(configNameInput, 'My Local Profile');
 
     const saveBtn = screen.getByRole('button', { name: /Save/i });

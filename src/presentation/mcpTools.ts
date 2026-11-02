@@ -399,8 +399,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const byFile = new Map<string, typeof matches>();
       for (const n of matches) {
         const fp = n.filePath || "unknown";
-        if (!byFile.has(fp)) byFile.set(fp, []);
-        byFile.get(fp)!.push(n);
+        // ⚡ Bolt: Optimize map population to avoid redundant Map writes
+        let arr = byFile.get(fp);
+        if (!arr) {
+          arr = [];
+          byFile.set(fp, arr);
+        }
+        arr.push(n);
       }
 
       let filesEntries = Array.from(byFile.entries());
@@ -450,10 +455,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
       // Filter by scope
+      let linkTypeFilter: string | null = null;
       if (diagramScope === "modules-only") {
         nodes = nodes.filter((n) => n.type === "module" && (n.filePath || n.id.startsWith("external:")));
-        const nodeIds = new Set(nodes.map((n) => n.id));
-        links = links.filter((l) => nodeIds.has(l.source) && nodeIds.has(l.target) && l.type === "import");
+        linkTypeFilter = "import";
       } else if (diagramScope === "feature" && feature) {
         const q = feature.toLowerCase();
         const matchingNodes = new Set<string>();
@@ -467,8 +472,6 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           if (matchingNodes.has(l.target)) matchingNodes.add(l.source);
         });
         nodes = nodes.filter((n) => matchingNodes.has(n.id));
-        const nodeIds = new Set(nodes.map((n) => n.id));
-        links = links.filter((l) => nodeIds.has(l.source) && nodeIds.has(l.target));
       }
 
       // Truncate if too many nodes
@@ -483,16 +486,22 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       const truncatedNodeIds = new Set(nodes.map((n) => n.id));
-      links = links.filter((l) => truncatedNodeIds.has(l.source) && truncatedNodeIds.has(l.target));
 
-      // Remove duplicate links
+      // Combine multiple link filtering passes (node inclusion, deduplication, scope filtering) into a single pass
+      // This avoids O(N * passes) execution overhead on large graph arrays.
       const linkSet = new Set<string>();
-      links = links.filter((l) => {
+      const finalLinks = [];
+      for (const l of links) {
+        if (linkTypeFilter && l.type !== linkTypeFilter) continue;
+        if (!truncatedNodeIds.has(l.source) || !truncatedNodeIds.has(l.target)) continue;
+
         const key = `${l.source}|${l.target}|${l.type}`;
-        if (linkSet.has(key)) return false;
+        if (linkSet.has(key)) continue;
+
         linkSet.add(key);
-        return true;
-      });
+        finalLinks.push(l);
+      }
+      links = finalLinks;
 
       // Mermaid syntax generation for the feature flow — not a real diagram tool.
       const nodeIdMap = new Map<string, string>();
@@ -1040,8 +1049,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const byFile = new Map<string, Array<{ name: string; type: string; isSeed: boolean; line: number | null }>>();
       for (const node of traceNodes) {
         const filePath = node.filePath || "external";
-        if (!byFile.has(filePath)) byFile.set(filePath, []);
-        byFile.get(filePath)!.push({
+        // ⚡ Bolt: Optimize map population to avoid redundant Map writes
+        let arr = byFile.get(filePath);
+        if (!arr) {
+          arr = [];
+          byFile.set(filePath, arr);
+        }
+        arr.push({
           name: node.label,
           type: node.type,
           isSeed: seedNodes.has(node.id),
@@ -1214,17 +1228,22 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       const traceNodeIds = new Set(traceNodes.map((n) => n.id));
-      const traceLinks = links.filter(
-        (l) => traceNodeIds.has(l.source) && traceNodeIds.has(l.target) && l.type === "call"
-      );
 
+      // Combine traceLinks filtering and deduplication into a single loop pass
+      // This avoids O(N * passes) execution overhead on large graph arrays.
       const linkSet = new Set<string>();
-      const dedupLinks = traceLinks.filter((l) => {
+      const dedupLinks = [];
+      for (const l of links) {
+        if (!traceNodeIds.has(l.source) || !traceNodeIds.has(l.target) || l.type !== "call") continue;
+
         const key = `${l.source}|${l.target}`;
-        if (linkSet.has(key)) return false;
+        if (linkSet.has(key)) continue;
+
         linkSet.add(key);
-        return true;
-      });
+        dedupLinks.push(l);
+      }
+
+      const traceLinks = dedupLinks; // Maintain backwards compatibility for references below
 
       const hasIncoming = new Set<string>();
       for (const link of dedupLinks) {
