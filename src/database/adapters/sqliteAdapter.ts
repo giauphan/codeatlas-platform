@@ -175,6 +175,64 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     return this.query<VectorSearchResult>(sql, binds);
   }
 
+  async searchVectorScoped(table: string, embedding: number[], limit: number, tenantId: string, whereClause: string, filterBinds: Record<string, unknown> = {}): Promise<VectorSearchResult[]> {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) throw new Error("Invalid vector table name");
+    if (!this.db) await this.connect();
+    const blob = new Uint8Array(new Float32Array(embedding).buffer);
+    const sql = `
+      SELECT id, 1 - vec_distance_cosine(embedding, :dreamQueryVector) AS score
+      FROM ${table}
+      WHERE tenant_id = :dreamTenantId AND embedding IS NOT NULL
+        AND length(embedding) = :dreamExpectedBytes
+        AND (${whereClause})
+      ORDER BY vec_distance_cosine(embedding, :dreamQueryVector) ASC
+      LIMIT :dreamLimit
+    `;
+    return this.query<VectorSearchResult>(sql, {
+      ...filterBinds,
+      dreamQueryVector: blob,
+      dreamTenantId: tenantId,
+      dreamExpectedBytes: embedding.length * 4,
+      dreamLimit: limit,
+    });
+  }
+
+  /** SQLite cannot drop a table-level UNIQUE constraint. Rebuild only that
+   * table, in one transaction, retaining every column, row, user index/trigger
+   * and stable memory ID. Other memory tables and receipt references survive. */
+  private migrateDreamIdentityConstraints(): void {
+    const db = this.db!;
+    const record = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'ai_dreaming_memory'").all()[0] as { sql: string };
+    const legacyConstraint = /,\s*UNIQUE\s*\(\s*project\s*,\s*memory_type\s*,\s*content_hash\s*,\s*tenant_id\s*\)/gi;
+    const rebuiltDefinition = record.sql.replace(legacyConstraint, '');
+    const foreignKeys = Number((db.pragma('foreign_keys') as Array<{ foreign_keys: number }>)[0]?.foreign_keys || 0);
+    if (foreignKeys) db.pragma('foreign_keys = OFF');
+    try {
+      db.transaction(() => {
+        if (rebuiltDefinition !== record.sql) {
+          const objects = db.prepare("SELECT name, sql FROM sqlite_master WHERE tbl_name = 'ai_dreaming_memory' AND type IN ('index', 'trigger') AND sql IS NOT NULL").all() as Array<{ name: string; sql: string }>;
+          const definition = rebuiltDefinition.replace(/^CREATE TABLE(?: IF NOT EXISTS)?\s+[\"`\[]?ai_dreaming_memory[\"`\]]?/i, 'CREATE TABLE ai_dreaming_memory_identity_new');
+          if (definition === rebuiltDefinition) throw new Error('Unsupported memory identity migration schema');
+          const columns = (db.pragma('table_info(ai_dreaming_memory)') as Array<{ name: string }>).map(column => '"' + column.name.replaceAll('"', '""') + '"').join(', ');
+          db.exec(definition);
+          db.exec(`INSERT INTO ai_dreaming_memory_identity_new (${columns}) SELECT ${columns} FROM ai_dreaming_memory`);
+          db.exec('DROP TABLE ai_dreaming_memory');
+          db.exec('ALTER TABLE ai_dreaming_memory_identity_new RENAME TO ai_dreaming_memory');
+          for (const object of objects) {
+            if (!['ux_dreaming_dedup', 'ux_dreaming_project_id_hash', 'ux_dreaming_idempotency'].includes(object.name)) db.exec(object.sql);
+          }
+        }
+        db.exec(`DROP INDEX IF EXISTS ux_dreaming_dedup;
+          DROP INDEX IF EXISTS ux_dreaming_project_id_hash;
+          DROP INDEX IF EXISTS ux_dreaming_idempotency;
+          CREATE UNIQUE INDEX ux_dreaming_dedup ON ai_dreaming_memory(tenant_id, COALESCE(project_id, project), memory_type, content_hash) WHERE content_hash IS NOT NULL;
+          CREATE UNIQUE INDEX ux_dreaming_idempotency ON ai_dreaming_memory(tenant_id, COALESCE(project_id, project), idempotency_key) WHERE idempotency_key IS NOT NULL;`);
+      })();
+    } finally {
+      if (foreignKeys) db.pragma('foreign_keys = ON');
+    }
+  }
+
   async initializeSchema(): Promise<void> {
     if (!this.db) await this.connect();
 
@@ -183,10 +241,13 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         id TEXT PRIMARY KEY,
         session_id TEXT,
         project TEXT,
+        project_id TEXT,
         provider TEXT,
         memory_type TEXT,
         content TEXT,
         content_hash TEXT,
+        idempotency_key TEXT,
+        request_hash TEXT,
         importance REAL DEFAULT 0.5,
         confidence REAL DEFAULT 0.5,
         embedding BLOB,
@@ -201,21 +262,130 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         evidence_count INTEGER DEFAULT 0,
         version INTEGER DEFAULT 1,
         related_ids TEXT,
-        tenant_id TEXT NOT NULL,
-        UNIQUE (project, memory_type, content_hash, tenant_id)
+        tenant_id TEXT NOT NULL
       );
-      DELETE FROM ai_dreaming_memory
-      WHERE content_hash IS NOT NULL
-        AND rowid NOT IN (
-          SELECT MAX(rowid)
-          FROM ai_dreaming_memory
-          WHERE content_hash IS NOT NULL
-          GROUP BY project, memory_type, content_hash, tenant_id
-        );
-      CREATE UNIQUE INDEX IF NOT EXISTS ux_dreaming_dedup
-        ON ai_dreaming_memory(project, memory_type, content_hash, tenant_id);
       CREATE INDEX IF NOT EXISTS idx_dreaming_tenant_project ON ai_dreaming_memory(tenant_id, project);
       CREATE INDEX IF NOT EXISTS idx_dreaming_hash ON ai_dreaming_memory(content_hash);
+      CREATE TABLE IF NOT EXISTS dream_memory_provenance (
+        tenant_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        memory_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        certainty TEXT NOT NULL,
+        base_confidence REAL NOT NULL,
+        extractor_version TEXT NOT NULL,
+        topic_key TEXT,
+        occurred_at TEXT NOT NULL,
+        superseded_by TEXT,
+        PRIMARY KEY (tenant_id, project_id, memory_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_dream_provenance_topic ON dream_memory_provenance(tenant_id, project_id, topic_key, occurred_at);
+      CREATE TABLE IF NOT EXISTS dream_memory_evidence (
+        tenant_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        memory_id TEXT NOT NULL,
+        source_event_id TEXT NOT NULL,
+        evidence_hash TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        actor_role TEXT NOT NULL,
+        tool_name TEXT,
+        span TEXT NOT NULL,
+        source_spans_json TEXT,
+        occurred_at TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, project_id, memory_id, source_event_id, evidence_hash)
+      );
+      CREATE TABLE IF NOT EXISTS dream_capture_events (
+        tenant_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        project TEXT NOT NULL,
+        display_name TEXT,
+        workspace_path TEXT,
+        event_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        actor_role TEXT,
+        memory_type_hint TEXT,
+        tool_name TEXT,
+        request_hash TEXT NOT NULL,
+        content_redacted TEXT NOT NULL,
+        checkpoint_json TEXT,
+        occurred_at TEXT,
+        source_spans_json TEXT,
+        memory_ids_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'pending',
+        acknowledged_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        capture_sequence INTEGER,
+        PRIMARY KEY (tenant_id, project_id, event_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_dream_capture_pending
+        ON dream_capture_events(tenant_id, project_id, status, created_at, event_id);
+
+      CREATE TABLE IF NOT EXISTS dream_job_runs (
+        job_key TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        job_type TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        project TEXT NOT NULL DEFAULT '',
+        scheduled_for_utc TEXT NOT NULL,
+        timezone TEXT NOT NULL,
+        state TEXT NOT NULL,
+        owner_id TEXT,
+        owner_token TEXT,
+        fencing_token INTEGER NOT NULL DEFAULT 0,
+        lease_until TEXT,
+        attempt INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 5,
+        next_attempt_at TEXT,
+        operation_stats TEXT,
+        error_reason TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        started_at TEXT,
+        finished_at TEXT,
+        UNIQUE (job_type, tenant_id, project, scheduled_for_utc)
+      );
+      CREATE INDEX IF NOT EXISTS idx_dream_job_runs_retry
+        ON dream_job_runs(state, next_attempt_at, lease_until);
+
+      CREATE TABLE IF NOT EXISTS dream_save_receipts (
+        tenant_id TEXT NOT NULL,
+        project TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        memory_id TEXT,
+        acknowledged_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (tenant_id, project, idempotency_key)
+      );
+
+      CREATE TABLE IF NOT EXISTS dream_project_aliases (
+        tenant_id TEXT NOT NULL,
+        alias TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        display_name TEXT,
+        workspace_path TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (tenant_id, alias)
+      );
+      CREATE INDEX IF NOT EXISTS idx_dream_project_alias_identity
+        ON dream_project_aliases(tenant_id, project_id, alias);
+      CREATE TABLE IF NOT EXISTS dream_project_alias_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL,
+        alias TEXT NOT NULL,
+        requested_project_id TEXT NOT NULL,
+        existing_project_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      DELETE FROM dream_project_alias_audit
+       WHERE id NOT IN (
+         SELECT MIN(id) FROM dream_project_alias_audit
+         GROUP BY tenant_id, alias, requested_project_id, existing_project_id
+       );
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_dream_project_alias_audit_collision
+        ON dream_project_alias_audit(tenant_id, alias, requested_project_id, existing_project_id);
 
       CREATE TABLE IF NOT EXISTS tenants (
         id TEXT PRIMARY KEY,
@@ -374,6 +544,31 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         this.db!.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
       }
     };
+
+    addColumnIfMissing("ai_dreaming_memory", "idempotency_key", "TEXT");
+    addColumnIfMissing("ai_dreaming_memory", "request_hash", "TEXT");
+    addColumnIfMissing("ai_dreaming_memory", "project_id", "TEXT");
+    addColumnIfMissing("codeatlas_concepts", "project_id", "TEXT");
+    addColumnIfMissing("dream_capture_events", "actor_role", "TEXT");
+    addColumnIfMissing("dream_capture_events", "memory_type_hint", "TEXT");
+    addColumnIfMissing("dream_capture_events", "tool_name", "TEXT");
+    addColumnIfMissing("dream_capture_events", "display_name", "TEXT");
+    addColumnIfMissing("dream_capture_events", "workspace_path", "TEXT");
+    addColumnIfMissing("dream_capture_events", "capture_sequence", "INTEGER");
+    addColumnIfMissing("dream_capture_events", "memory_ids_json", "TEXT NOT NULL DEFAULT '[]'");
+    addColumnIfMissing("dream_capture_events", "acknowledged_at", "TEXT");
+    this.db!.exec(`
+      UPDATE dream_capture_events SET capture_sequence = rowid WHERE capture_sequence IS NULL;
+      CREATE TRIGGER IF NOT EXISTS dream_capture_assign_sequence
+      AFTER INSERT ON dream_capture_events
+      WHEN NEW.capture_sequence IS NULL
+      BEGIN
+        UPDATE dream_capture_events SET capture_sequence = NEW.rowid WHERE rowid = NEW.rowid;
+      END;
+      CREATE INDEX IF NOT EXISTS idx_dream_capture_session_sequence
+        ON dream_capture_events(tenant_id, project_id, session_id, capture_sequence);
+    `);
+    this.migrateDreamIdentityConstraints();
 
     let keyColumns = this.db!.pragma("table_info(keys)") as Array<{ name: string }>;
     if (keyColumns.some((entry) => entry.name === "key")) {

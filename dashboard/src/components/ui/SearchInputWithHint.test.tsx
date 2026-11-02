@@ -3,6 +3,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { SearchInputWithHint } from './SearchInputWithHint';
 
 describe('SearchInputWithHint', () => {
+  it('supports live filtering without advertising or intercepting Enter', () => {
+    const onClear = vi.fn();
+    render(<SearchInputWithHint value="query" onChange={vi.fn()} hasClearButton onClear={onClear} />);
+    expect(screen.queryByText(/Enter/)).not.toBeInTheDocument();
+    const input = screen.getByRole('textbox');
+    expect(input).not.toHaveAttribute('aria-describedby');
+    expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(onClear).toHaveBeenCalledOnce();
+  });
+
   it('renders input, placeholder, and kbd hint', () => {
     const onChange = vi.fn();
     const onSearch = vi.fn();

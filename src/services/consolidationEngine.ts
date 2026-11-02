@@ -8,7 +8,7 @@
  * Some helpers still accept positional indexes for backward compatibility.
  */
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbeddingsBatch } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
@@ -31,10 +31,27 @@ const SCORE_IDX = Object.freeze({
   ID: 0, PROJECT: 1, MEMORY_TYPE: 2, EMBEDDING: 3, CONFIDENCE: 4, CREATED_AT: 5
 });
 
+function parseSqlDate(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value !== 'string' || !value) return Number.NaN;
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value;
+  return Date.parse(normalized);
+}
+
 export interface ConsolidationJob {
   project?: string;
+  projectId?: string;
   provider?: string;
   operations: ("dedup" | "extract_concepts" | "score" | "score_dreams")[];
+  runId?: string;
+  runAt?: string;
+  runFence?: {
+    jobKey: string;
+    ownerToken: string;
+    fencingToken: number;
+  };
 }
 
 export interface ConsolidationReport {
@@ -54,6 +71,43 @@ export interface ConsolidationReport {
 }
 
 export class ConsolidationEngine {
+
+  private runFence: ConsolidationJob["runFence"];
+
+  private fenceParameters(): Record<string, unknown> {
+    if (!this.runFence) return {};
+    return {
+      fenceJobKey: this.runFence.jobKey,
+      fenceOwnerToken: this.runFence.ownerToken,
+      fenceVersion: this.runFence.fencingToken,
+      fenceNow: new Date().toISOString(),
+    };
+  }
+
+  private fencePredicate(): string {
+    if (!this.runFence) return "1 = 1";
+    const databaseNow = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase() === "postgres"
+      ? "CURRENT_TIMESTAMP"
+      : "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+    return `EXISTS (
+      SELECT 1 FROM dream_job_runs fence
+      WHERE fence.job_key = :fenceJobKey AND fence.owner_token = :fenceOwnerToken
+        AND fence.fencing_token = :fenceVersion AND fence.state = 'running'
+        AND fence.lease_until > ${databaseNow}
+    )`;
+  }
+
+  private async assertRunCurrent(): Promise<void> {
+    if (!this.runFence) return;
+    const db = createDatabaseAdapter();
+    const rows = await db.query<{ current: number }>(
+      `SELECT 1 AS current FROM dream_job_runs
+       WHERE job_key = :fenceJobKey AND owner_token = :fenceOwnerToken
+         AND fencing_token = :fenceVersion AND state = 'running' AND lease_until > :fenceNow`,
+      this.fenceParameters(),
+    );
+    if (rows.length !== 1) throw new Error("scheduled consolidation lease is no longer current");
+  }
 
   private getVal(row: any, index: number, keyStr: string): any {
     if (!row) return undefined;
@@ -148,8 +202,15 @@ export class ConsolidationEngine {
   async runJob(job: ConsolidationJob): Promise<ConsolidationReport> {
     const startTime = Date.now();
     const startedAt = new Date(startTime).toISOString();
+    const runId = typeof job.runId === "string" && /^[A-Za-z0-9._:-]{1,128}$/.test(job.runId)
+      ? job.runId
+      : randomUUID();
+    const runAt = typeof job.runAt === "string" && Number.isFinite(Date.parse(job.runAt))
+      ? new Date(job.runAt).toISOString()
+      : startedAt;
+    this.runFence = job.runFence;
     const report: ConsolidationReport = {
-      id: randomUUID(),
+      id: runId,
       jobType: job.operations.join("+"),
       status: "running",
       startedAt,
@@ -167,20 +228,22 @@ export class ConsolidationEngine {
     for (const op of job.operations) {
       const stepStart = Date.now();
       try {
+        await this.assertRunCurrent();
         switch (op) {
           case "dedup":
-            await this.deduplicateDreams(job.project, job.provider, report);
+            await this.deduplicateDreams(job.project, job.projectId, job.provider, report);
             break;
           case "extract_concepts":
-            await this.extractConcepts(job.project, job.provider, report);
+            await this.extractConcepts(job.project, job.projectId, job.provider, report);
             break;
           case "score":
-            await this.scoreConcepts(job.project, report);
+            await this.scoreConcepts(job.project, job.projectId, report);
             break;
           case "score_dreams":
-            await this.scoreDreams(job.project, job.provider, report);
+            await this.scoreDreams(job.project, job.projectId, job.provider, report, runAt);
             break;
         }
+        await this.assertRunCurrent();
         logger.info(`[Consolidation Pipeline] Step '${op}' completed in ${Date.now() - stepStart}ms (processed: ${report.dreamsProcessed}, merged: ${report.dreamsMerged}, concepts: ${report.conceptsCreated})`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -195,25 +258,27 @@ export class ConsolidationEngine {
     report.status = report.errors.length > 0 ? "failed" : "completed";
 
     logger.info(`[Consolidation Pipeline] [${report.completedAt}] Job ${report.id} ${report.status.toUpperCase()} in ${report.durationMs}ms. Merged: ${report.dreamsMerged}, Concepts: ${report.conceptsCreated}, Errors: ${report.errors.length}`);
+    this.runFence = undefined;
     return report;
   }
 
   /**
    * Find similar dreams within the same project and merge them.
    */
-  private async deduplicateDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
+  private async deduplicateDreams(project?: string, projectId?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
     const db = createDatabaseAdapter();
       const tenantId = authStorage.getStore()!.uid;
 
       const conditions: string[] = ['tenant_id = :tenantId'];
       const binds: Record<string, unknown> = { tenantId };
-      if (project) { conditions.push('project = :project'); binds.project = project; }
+      if (projectId) { conditions.push('project_id = :projectId'); binds.projectId = projectId; }
+      else if (project) { conditions.push('project = :project'); binds.project = project; }
       if (provider) { conditions.push('provider = :provider'); binds.provider = provider; }
 
       const sql = `
         SELECT id, content, embedding, importance, memory_type, project
         FROM ai_dreaming_memory
-        WHERE ${conditions.join(' AND ')}
+        WHERE ${conditions.join(' AND ')} AND (status IS NULL OR status = 'active')
       `;
 
       const rows = await db.query<any[]>(sql, binds);
@@ -250,7 +315,7 @@ export class ConsolidationEngine {
       }
 
       let merged = 0;
-      const allToRemove = new Set<string>();
+      const mergedMemoryIds = new Set<string>();
 
       for (const [, group] of byProject) {
         // Track deletions within the project group to skip processed items
@@ -272,7 +337,7 @@ export class ConsolidationEngine {
               const removeIdx = keepIdx === i ? j : i;
               const idToRemove = keepIdx === i ? itemJ.id : itemI.id;
               groupToRemove.add(idToRemove);
-              allToRemove.add(idToRemove);
+              mergedMemoryIds.add(idToRemove);
 
               // If the outer element 'i' is removed, break the inner loop early.
               if (removeIdx === i) break;
@@ -281,46 +346,50 @@ export class ConsolidationEngine {
         }
       }
 
-      // Share bounded deletes across projects while keeping similarity comparisons isolated.
-      if (allToRemove.size > 0) {
-        const ids = Array.from(allToRemove);
+      // Preserve durable receipt and evidence targets. A replay can legitimately
+      // reference a deduplicated source memory, so mark it merged rather than
+      // deleting the row and creating a dangling durable reference.
+      if (mergedMemoryIds.size > 0) {
+        const ids = Array.from(mergedMemoryIds);
         const BATCH_DELETE_CHUNK_SIZE = 900;
         for (let k = 0; k < ids.length; k += BATCH_DELETE_CHUNK_SIZE) {
           try {
             const chunk = ids.slice(k, k + BATCH_DELETE_CHUNK_SIZE);
             const { clause, binds } = buildInClause(chunk, { tenantId });
             const result = await db.execute(
-              `DELETE FROM ai_dreaming_memory WHERE id IN (${clause}) AND tenant_id = :tenantId`,
-              binds as Record<string, unknown>
+              `UPDATE ai_dreaming_memory SET status = 'merged', updated_at = CURRENT_TIMESTAMP
+               WHERE id IN (${clause}) AND tenant_id = :tenantId AND (status IS NULL OR status = 'active')${projectId ? ' AND project_id = :projectId' : project ? ' AND project = :project' : ''} AND ${this.fencePredicate()}`,
+              { ...(binds as Record<string, unknown>), ...(projectId ? { projectId } : project ? { project } : {}), ...this.fenceParameters() }
             );
             merged += result.rowsAffected || 0;
           } catch (err) {
-            logger.warn(`[Consolidation] Dedup: Failed to delete chunk`, { chunkStart: k, error: err instanceof Error ? err.message : String(err) });
+            logger.warn(`[Consolidation] Dedup: Failed to mark duplicate chunk merged`, { chunkStart: k, error: err instanceof Error ? err.message : String(err) });
           }
         }
       }
 
       report!.dreamsMerged = merged;
-      logger.info(`[Consolidation] Dedup: removed ${merged} duplicate dreams`);
+      logger.info(`[Consolidation] Dedup: marked ${merged} duplicate dreams merged`);
   }
 
   /**
    * Extract abstract concepts from dream clusters.
    * For each project, groups related dreams and generates concept entries.
    */
-  private async extractConcepts(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
+  private async extractConcepts(project?: string, projectId?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
     const db = createDatabaseAdapter();
       const tenantId = authStorage.getStore()!.uid;
 
       const conditions: string[] = ['tenant_id = :tenantId'];
       const binds: Record<string, unknown> = { tenantId };
-      if (project) { conditions.push('project = :project'); binds.project = project; }
+      if (projectId) { conditions.push('project_id = :projectId'); binds.projectId = projectId; }
+      else if (project) { conditions.push('project = :project'); binds.project = project; }
       if (provider) { conditions.push('provider = :provider'); binds.provider = provider; }
 
       const sql = `
         SELECT id, content, embedding, importance, memory_type, project
         FROM ai_dreaming_memory
-        WHERE ${conditions.join(' AND ')}
+        WHERE ${conditions.join(' AND ')} AND (status IS NULL OR status = 'active')
       `;
 
       const rows = await db.query<any[]>(sql, binds);
@@ -347,7 +416,7 @@ export class ConsolidationEngine {
       }
 
       let created = 0;
-      const newConcepts: { id: string; label: string; description: string; category: string; project: string; sourceIds: string; evidenceCount: number; tenantId: string; embedText: string }[] = [];
+      const newConcepts: { id: string; label: string; description: string; category: string; project: string; projectId?: string; sourceIds: string; evidenceCount: number; tenantId: string; embedText: string }[] = [];
 
       for (const [key, dreamCluster] of clusters) {
         if (dreamCluster.length < 2) continue; // need at least 2 to form a concept
@@ -355,18 +424,26 @@ export class ConsolidationEngine {
         const [proj, mtype] = key.split(':');
 
         // Extract concept title & description from cluster contents
-        const contents = dreamCluster.map(r => String(this.getVal(r, R_IDX.CONTENT, 'CONTENT')));
+        const orderedDreams = [...dreamCluster].sort((a, b) =>
+          String(this.getVal(a, R_IDX.ID, 'ID')).localeCompare(String(this.getVal(b, R_IDX.ID, 'ID'))),
+        );
+        const contents = orderedDreams.map(r => String(this.getVal(r, R_IDX.CONTENT, 'CONTENT')));
         const conceptLabel = `Pattern: ${mtype} in ${proj}`;
-        const conceptDesc = contents.slice(0, 5).join(' | '); // concatenate sample evidence
-        const sourceIds = JSON.stringify(dreamCluster.map(r => String(this.getVal(r, R_IDX.ID, 'ID'))));
-
-        const conceptId = randomUUID();
+        const conceptDesc = contents.slice(0, 5).join(' | ');
+        const canonicalSourceIds = orderedDreams.map(r => String(this.getVal(r, R_IDX.ID, 'ID')));
+        const sourceIds = JSON.stringify(canonicalSourceIds);
+        const conceptId = createHash('sha256')
+          .update(JSON.stringify(projectId
+            ? [tenantId, projectId, proj, mtype, canonicalSourceIds, conceptDesc]
+            : [tenantId, proj, mtype, canonicalSourceIds, conceptDesc]))
+          .digest('hex');
         newConcepts.push({
           id: conceptId,
           label: conceptLabel.slice(0, 255),
           description: conceptDesc,
           category: mtype,
           project: proj,
+          projectId,
           sourceIds,
           evidenceCount: dreamCluster.length,
           tenantId,
@@ -392,10 +469,12 @@ export class ConsolidationEngine {
               category: concept.category,
               embedding: new Uint8Array(new Float32Array(embedding).buffer),
               project: concept.project,
+              projectId: concept.projectId ?? null,
               confidence: 0.70,
               sourceIds: concept.sourceIds,
               evidenceCount: concept.evidenceCount,
               tenantId: concept.tenantId,
+              ...this.fenceParameters(),
             });
           } else {
              logger.warn(`[Consolidation] Missing or invalid embedding for concept ${concept.id}. Skipping.`);
@@ -406,11 +485,12 @@ export class ConsolidationEngine {
           const insertSql = `
             INSERT INTO codeatlas_concepts (
               id, label, description, category, embedding,
-              project, confidence, source_ids, evidence_count, tenant_id
-            ) VALUES (
+              project, project_id, confidence, source_ids, evidence_count, tenant_id
+            ) SELECT
               :id, :label, :description, :category, :embedding,
-              :project, :confidence, :sourceIds, :evidenceCount, :tenantId
-            )
+              :project, :projectId, :confidence, :sourceIds, :evidenceCount, :tenantId
+            WHERE ${this.fencePredicate()}
+            ON CONFLICT(id) DO NOTHING
           `;
           // Consolidation Engine Optimization: Batch update concepts using executeMany instead of
           // executing individual INSERT queries in a loop to prevent N+1 bottleneck.
@@ -426,14 +506,15 @@ export class ConsolidationEngine {
   /**
    * Score concepts based on evidence, recency, and access frequency.
    */
-  private async scoreConcepts(project?: string, report?: ConsolidationReport): Promise<void> {
+  private async scoreConcepts(project?: string, projectId?: string, report?: ConsolidationReport): Promise<void> {
     const db = createDatabaseAdapter();
       const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
       const tenantId = authStorage.getStore()!.uid;
 
       const conditions: string[] = ['tenant_id = :tenantId'];
       const binds: Record<string, unknown> = { tenantId };
-      if (project) { conditions.push('project = :project'); binds.project = project; }
+      if (projectId) { conditions.push('project_id = :projectId'); binds.projectId = projectId; }
+      else if (project) { conditions.push('project = :project'); binds.project = project; }
 
       const sql = `
         SELECT id, label, description, category, confidence, evidence_count, status
@@ -447,13 +528,11 @@ export class ConsolidationEngine {
       for (const row of rows) {
         const id = String(this.getVal(row, R_IDX.ID, 'ID'));
         const evidenceCount = Number(this.getVal(row, 5, 'EVIDENCE_COUNT') || 1);
+        const newConf = Math.min(0.99, 0.5 + 0.49 * (1 - Math.exp(-0.2 * evidenceCount)));
+
         const currentConf = Number(this.getVal(row, R_IDX.CONFIDENCE, 'CONFIDENCE') || 0.5);
-
-        // Bayesian confidence update: each piece of evidence increases confidence
-        const newConf = Math.min(0.99, currentConf + (1 - currentConf) * (1 - Math.exp(-0.2 * evidenceCount)));
-
-        if (Math.abs(newConf - currentConf) > 0.01) {
-          batchBinds.push({ conf: newConf, id, tenantId });
+        if (Math.abs(newConf - currentConf) > 0.000001) {
+          batchBinds.push({ conf: newConf, id, tenantId, ...(projectId ? { projectId } : project ? { project } : {}) });
         }
       }
 
@@ -463,9 +542,9 @@ export class ConsolidationEngine {
         const updateSql = `
           UPDATE codeatlas_concepts
           SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
-          WHERE id = :id AND tenant_id = :tenantId
+          WHERE id = :id AND tenant_id = :tenantId${projectId ? ' AND project_id = :projectId' : project ? ' AND project = :project' : ''} AND ${this.fencePredicate()}
         `;
-        await db.executeMany(updateSql, batchBinds);
+        await db.executeMany(updateSql, batchBinds.map((bind) => ({ ...bind, ...this.fenceParameters() })));
       }
 
       logger.info(`[Consolidation] Scored ${rows.length} concepts, updated ${batchBinds.length}`);
@@ -476,77 +555,66 @@ export class ConsolidationEngine {
    * - Phase 4: Archival of stale/low-importance dreams
    * - Phase 4: Supersession when a newer high-confidence dream overlaps an old one
    */
-  private async scoreDreams(project?: string, provider?: string, report?: ConsolidationReport): Promise<void> {
+  private async scoreDreams(project?: string, projectId?: string, provider?: string, report?: ConsolidationReport, runAt = new Date().toISOString()): Promise<void> {
     if (!DreamingService._hasLifecycleColumns) {
       logger.info("[Consolidation] Lifecycle columns missing — skipping dream scoring");
       return;
     }
     const db = createDatabaseAdapter();
-    const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
     const tenantId = authStorage.getStore()!.uid;
 
     const conditions: string[] = ['tenant_id = :v_tid'];
     const binds: Record<string, unknown> = { v_tid: tenantId };
-    if (project) { conditions.push('project = :project'); binds.project = project; }
+    if (projectId) { conditions.push('project_id = :projectId'); binds.projectId = projectId; }
+    else if (project) { conditions.push('project = :project'); binds.project = project; }
     if (provider) { conditions.push('provider = :provider'); binds.provider = provider; }
 
     const whereCond = conditions.join(' AND ');
 
-    // 1. Time decay
-    const decayExpr = dbType === "postgres"
-      ? `CASE
-          WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_accessed_at)) / 86400)
-          ELSE POWER(0.997, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) / 86400)
-         END`
-      : `CASE
-          WHEN last_accessed_at IS NOT NULL THEN POWER(0.995, CAST(julianday('now') - julianday(last_accessed_at) AS INTEGER))
-          ELSE POWER(0.997, CAST(julianday('now') - julianday(created_at) AS INTEGER))
-         END`;
-
-    // SQLite uses scalar MAX/MIN rather than PostgreSQL's GREATEST/LEAST.
-    const greatest = dbType === "postgres" ? "GREATEST" : "MAX";
-    const least = dbType === "postgres" ? "LEAST" : "MIN";
-
-    const decaySql = `
-      UPDATE ai_dreaming_memory
-      SET confidence = ${greatest}(0.05, confidence * ${decayExpr})
-      WHERE status = 'active' AND ${whereCond}
-    `;
-    await db.execute(decaySql, binds);
-
-    // POWER/LOG are available in SQLite builds with the math extension enabled;
-    // Postgres provides both natively.
-    const logExpr = "LOG(2, evidence_count + 1)";
-    const logExprAccess = "LOG(2, access_count + 1)";
-
-    // 2. Evidence boost
-    const boostSql = `
-      UPDATE ai_dreaming_memory
-      SET confidence = ${least}(0.99, ${greatest}(0.05,
-        confidence + 0.05 * ${logExpr}
-      ))
-      WHERE status = 'active' AND evidence_count > 1 AND ${whereCond}
-    `;
-    await db.execute(boostSql, binds);
-
-    // 3. Access bonus
-    const accessSql = `
-      UPDATE ai_dreaming_memory
-      SET confidence = ${least}(0.99, ${greatest}(0.05,
-        confidence + 0.02 * ${logExprAccess}
-      ))
-      WHERE status = 'active' AND access_count > 0 AND ${whereCond}
-    `;
-    await db.execute(accessSql, binds);
-
-    // 4. Archival of low confidence dreams
-    const archiveSql = `
-      UPDATE ai_dreaming_memory
-      SET status = 'archived'
-      WHERE status = 'active' AND confidence < 0.10 AND ${whereCond}
-    `;
-    const archiveRes = await db.execute(archiveSql, binds);
-    if (report) report.dreamsArchived = archiveRes.rowsAffected ?? 0;
+    // Confidence is recomputed from stable source values and the schedule instant.
+    // That makes a retry after the score write but before run completion idempotent.
+    const scoreRows = await db.query<any[]>(
+      `SELECT id, memory_type, importance, confidence, created_at, last_accessed_at, evidence_count, access_count
+       FROM ai_dreaming_memory WHERE status = 'active' AND ${whereCond}`,
+      binds,
+    );
+    const scoringTime = Date.parse(runAt);
+    const updates: Array<Record<string, unknown>> = [];
+    let archived = 0;
+    for (const row of scoreRows) {
+      const id = String(this.getVal(row, 0, 'ID'));
+      const memoryType = String(this.getVal(row, 1, 'MEMORY_TYPE') || 'KNOWLEDGE');
+      const importance = Number(this.getVal(row, 2, 'IMPORTANCE') || 5);
+      const current = Number(this.getVal(row, 3, 'CONFIDENCE') || 0.5);
+      const createdAt = String(this.getVal(row, 4, 'CREATED_AT') || runAt);
+      const lastAccessedAt = this.getVal(row, 5, 'LAST_ACCESSED_AT');
+      const evidenceCount = Math.max(0, Number(this.getVal(row, 6, 'EVIDENCE_COUNT') || 0));
+      const accessCount = Math.max(0, Number(this.getVal(row, 7, 'ACCESS_COUNT') || 0));
+      const referenceAt = parseSqlDate(lastAccessedAt ? String(lastAccessedAt) : createdAt);
+      const ageDays = Number.isFinite(referenceAt) && Number.isFinite(scoringTime)
+        ? Math.max(0, Math.floor((scoringTime - referenceAt) / 86_400_000))
+        : 0;
+      const decay = Math.pow(lastAccessedAt ? 0.995 : 0.997, ageDays);
+      const baseConfidence = typeof DreamingService.calcInitialConfidence === 'function'
+        ? DreamingService.calcInitialConfidence(memoryType as any, importance)
+        : current;
+      const evidenceBoost = evidenceCount > 1 ? 0.05 * Math.log2(evidenceCount + 1) : 0;
+      const accessBonus = accessCount > 0 ? 0.02 * Math.log2(accessCount + 1) : 0;
+      const confidence = Math.min(0.99, Math.max(0.05, baseConfidence * decay + evidenceBoost + accessBonus));
+      const status = confidence < 0.10 ? 'archived' : 'active';
+      if (status === 'archived') archived++;
+      if (Math.abs(confidence - current) > 0.000001 || status === 'archived') {
+        updates.push({ id, tenantId, confidence, status, ...(projectId ? { projectId } : project ? { project } : {}) });
+      }
+    }
+    if (updates.length) {
+      await db.executeMany(
+        `UPDATE ai_dreaming_memory SET confidence = :confidence, status = :status
+         WHERE id = :id AND tenant_id = :tenantId AND status = 'active'${projectId ? ' AND project_id = :projectId' : project ? ' AND project = :project' : ''} AND ${this.fencePredicate()}`,
+        updates.map((bind) => ({ ...bind, ...this.fenceParameters() })),
+      );
+    }
+    if (report) report.dreamsArchived = archived;
 
     // 5. Supersession: within same project+type, if newer dream has higher confidence and
     //    similar semantic content, mark the older one as superseded.
@@ -613,10 +681,10 @@ export class ConsolidationEngine {
         const BATCH_DELETE_CHUNK_SIZE = 900;
         for (let k = 0; k < ids.length; k += BATCH_DELETE_CHUNK_SIZE) {
           const chunk = ids.slice(k, k + BATCH_DELETE_CHUNK_SIZE);
-          const { clause, binds } = buildInClause(chunk, { tid: authStorage.getStore()!.uid });
+          const { clause, binds } = buildInClause(chunk, { tid: authStorage.getStore()!.uid, ...(projectId ? { projectId } : project ? { project } : {}) });
           const result = await db.execute(
-            `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid`,
-            binds as Record<string, unknown>
+            `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid${projectId ? ' AND project_id = :projectId' : project ? ' AND project = :project' : ''} AND ${this.fencePredicate()}`,
+            { ...(binds as Record<string, unknown>), ...this.fenceParameters() }
           );
           supersededCount += result.rowsAffected || 0;
         }

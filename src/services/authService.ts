@@ -33,7 +33,7 @@ export const logTelemetryUseCase = new LogTelemetryUseCase(activityLogger);
 /**
  * Security: Verify API Key or Firebase Bearer token
  */
-export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<{ tier: string; uid: string; keyId: string }> {
+export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<{ tier: string; uid: string; keyId: string; role?: string }> {
   const contextAuth = authStorage.getStore();
   if (contextAuth) {
     return contextAuth;
@@ -73,7 +73,8 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
   return {
     tier: result.tier,
     uid: result.uid,
-    keyId: result.keyId
+    keyId: result.keyId,
+    ...(apiKey !== undefined && rawAdminKey !== undefined && apiKey === rawAdminKey ? { role: 'admin' } : {}),
   };
 }
 
