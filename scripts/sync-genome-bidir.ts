@@ -141,6 +141,7 @@ async function upload(apiCall) {
   const toUpload = localSkills.length > 0 ? localSkills : CORE_SKILLS;
   let count = 0;
   for (const skill of toUpload) {
+    // Serialize upserts to preserve output order and avoid racing gene version updates.
     if (await uploadSkill(apiCall, skill)) count++;
   }
   return count;
