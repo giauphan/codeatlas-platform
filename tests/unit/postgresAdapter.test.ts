@@ -125,6 +125,37 @@ describe('PostgresAdapter', () => {
     assert.strictEqual(exists, true);
   });
 
+  test('initializeSchema preserves compliant durable-memory indexes without rebuilding them', async () => {
+    await adapter.connect();
+    mockPgPoolInstance.query.mock.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM pg_indexes')) {
+        return {
+          rows: [
+            {
+              indexname: 'ux_dreaming_dedup',
+              indexdef: 'CREATE UNIQUE INDEX ux_dreaming_dedup ON public.ai_dreaming_memory USING btree (tenant_id, COALESCE(project_id, project), memory_type, content_hash) WHERE (content_hash IS NOT NULL)',
+            },
+            {
+              indexname: 'ux_dreaming_idempotency',
+              indexdef: 'CREATE UNIQUE INDEX ux_dreaming_idempotency ON public.ai_dreaming_memory USING btree (tenant_id, COALESCE(project_id, project), idempotency_key) WHERE (idempotency_key IS NOT NULL)',
+            },
+          ],
+          rowCount: 2,
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await adapter.initializeSchema();
+
+    const calls = mockPgPoolInstance.query.mock.calls.map((call) => String(call.arguments[0]));
+    assert.ok(calls.some((sql) => sql.includes('FROM pg_indexes')));
+    assert.ok(!calls.some((sql) => sql.includes('DROP INDEX IF EXISTS ux_dreaming_dedup')));
+    assert.ok(!calls.some((sql) => sql.includes('DROP INDEX IF EXISTS ux_dreaming_idempotency')));
+    assert.ok(!calls.some((sql) => sql.includes('CREATE UNIQUE INDEX ux_dreaming_dedup')));
+    assert.ok(!calls.some((sql) => sql.includes('CREATE UNIQUE INDEX ux_dreaming_idempotency')));
+  });
+
   test('query and execute translate named parameters to PostgreSQL placeholders', async () => {
     await adapter.connect();
     mockPgPoolInstance.query.mock.mockImplementation(async () => ({ rows: [], rowCount: 1 }));

@@ -4,7 +4,7 @@ import { SQLiteAdapter } from '../../src/database/adapters/sqliteAdapter.js';
 
 describe('SQLiteAdapter boolean binding (sanitizeParam)', () => {
   test('array params: true -> 1, false -> 0', async () => {
-    const a = new SQLiteAdapter();
+    const a = new SQLiteAdapter(':memory:');
     await a.connect();
     await a.initializeSchema();
     await a.execute('DELETE FROM activity_log');
@@ -17,7 +17,7 @@ describe('SQLiteAdapter boolean binding (sanitizeParam)', () => {
   });
 
   test('named params: true -> 1, false -> 0', async () => {
-    const a = new SQLiteAdapter();
+    const a = new SQLiteAdapter(':memory:');
     await a.connect();
     await a.initializeSchema();
     await a.execute('DELETE FROM activity_log');
@@ -30,7 +30,7 @@ describe('SQLiteAdapter boolean binding (sanitizeParam)', () => {
   });
 
   test('activity_log success column stores integer not boolean string', async () => {
-    const a = new SQLiteAdapter();
+    const a = new SQLiteAdapter(':memory:');
     await a.connect();
     await a.initializeSchema();
     await a.execute('DELETE FROM activity_log');

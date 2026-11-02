@@ -1,0 +1,1138 @@
+{
+  "version": 2,
+  "splitCounts": {
+    "development": 0,
+    "holdout": 30
+  },
+  "cases": [
+    {
+      "id": "ind-en-01",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "architecture-decision-rationale",
+      "transcript": "[USER]\nFor the invoice importer, keep the idempotency ledger in the same PostgreSQL transaction as the invoice insert, because a separate Redis write could acknowledge work that the database later rolls back.\n\n---\n\n[ASSISTANT]\nUnderstood; I will use that boundary when sketching the importer.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-01:event-01",
+          "role": "USER",
+          "text": "For the invoice importer, keep the idempotency ledger in the same PostgreSQL transaction as the invoice insert, because a separate Redis write could acknowledge work that the database later rolls back."
+        },
+        {
+          "id": "ind-en-01:event-02",
+          "role": "ASSISTANT",
+          "text": "Understood; I will use that boundary when sketching the importer."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "For the invoice importer, keep the idempotency ledger in the same PostgreSQL transaction as the invoice insert, because a separate Redis write could acknowledge work that the database later rolls back.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-en-01:event-01",
+            "span": "For the invoice importer, keep the idempotency ledger in the same PostgreSQL transaction as the invoice insert, because a separate Redis write could acknowledge work that the database later rolls back."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "The invoice idempotency ledger is stored exclusively in Redis."
+      ]
+    },
+    {
+      "id": "ind-en-02",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "long-decision-caveat",
+      "transcript": "[USER]\nWe will route thumbnail jobs through the existing PostgreSQL outbox and let the image worker claim rows with FOR UPDATE SKIP LOCKED, because committing the image record and its work item together avoids orphaned uploads during restarts; however, this choice applies only to thumbnails under 20 MB, and video transcodes must remain on the isolated media queue until we have measured how their CPU spikes affect API latency.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-02:event-01",
+          "role": "USER",
+          "text": "We will route thumbnail jobs through the existing PostgreSQL outbox and let the image worker claim rows with FOR UPDATE SKIP LOCKED, because committing the image record and its work item together avoids orphaned uploads during restarts; however, this choice applies only to thumbnails under 20 MB, and video transcodes must remain on the isolated media queue until we have measured how their CPU spikes affect API latency."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "We will route thumbnail jobs through the existing PostgreSQL outbox and let the image worker claim rows with FOR UPDATE SKIP LOCKED, because committing the image record and its work item together avoids orphaned uploads during restarts; however, this choice applies only to thumbnails under 20 MB, and video transcodes must remain on the isolated media queue until we have measured how their CPU spikes affect API latency.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-en-02:event-01",
+            "span": "We will route thumbnail jobs through the existing PostgreSQL outbox and let the image worker claim rows with FOR UPDATE SKIP LOCKED, because committing the image record and its work item together avoids orphaned uploads during restarts; however, this choice applies only to thumbnails under 20 MB, and video transcodes must remain on the isolated media queue until we have measured how their CPU spikes affect API latency."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "All video transcodes have been moved into the PostgreSQL thumbnail outbox."
+      ]
+    },
+    {
+      "id": "ind-en-03",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "engineering-facts-tool-evidence",
+      "transcript": "[USER]\nWhat does the integration startup output say?\n\n---\n\n[TOOL]\nThe gateway listens on 127.0.0.1:4318 in the integration profile.\nThe health endpoint is /internal/ready and returns HTTP 503 until schemaVersion reaches 17.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-03:event-01",
+          "role": "USER",
+          "text": "What does the integration startup output say?"
+        },
+        {
+          "id": "ind-en-03:event-02",
+          "role": "TOOL",
+          "text": "The gateway listens on 127.0.0.1:4318 in the integration profile.\nThe health endpoint is /internal/ready and returns HTTP 503 until schemaVersion reaches 17."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "The gateway listens on 127.0.0.1:4318 in the integration profile.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-03:event-02",
+            "span": "The gateway listens on 127.0.0.1:4318 in the integration profile."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "The health endpoint is /internal/ready and returns HTTP 503 until schemaVersion reaches 17.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-03:event-02",
+            "span": "The health endpoint is /internal/ready and returns HTTP 503 until schemaVersion reaches 17."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "The integration gateway listens on port 8080."
+      ]
+    },
+    {
+      "id": "ind-en-04",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "tool-verified-error-and-fix",
+      "transcript": "[TOOL]\nThe cancellation test failed because PollCoordinator left one setInterval handle active after stop().\n\n---\n\n[ASSISTANT]\nI will clear the interval when stop is called.\n\n---\n\n[TOOL]\nAfter clearInterval(timer) was added to PollCoordinator.stop(), pnpm vitest run tests/poll-coordinator.test.ts passed all 9 tests and reported zero open handles.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-04:event-01",
+          "role": "TOOL",
+          "text": "The cancellation test failed because PollCoordinator left one setInterval handle active after stop()."
+        },
+        {
+          "id": "ind-en-04:event-02",
+          "role": "ASSISTANT",
+          "text": "I will clear the interval when stop is called."
+        },
+        {
+          "id": "ind-en-04:event-03",
+          "role": "TOOL",
+          "text": "After clearInterval(timer) was added to PollCoordinator.stop(), pnpm vitest run tests/poll-coordinator.test.ts passed all 9 tests and reported zero open handles."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "The cancellation test failed because PollCoordinator left one setInterval handle active after stop().",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-04:event-01",
+            "span": "The cancellation test failed because PollCoordinator left one setInterval handle active after stop()."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "After clearInterval(timer) was added to PollCoordinator.stop(), pnpm vitest run tests/poll-coordinator.test.ts passed all 9 tests and reported zero open handles.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-04:event-03",
+            "span": "After clearInterval(timer) was added to PollCoordinator.stop(), pnpm vitest run tests/poll-coordinator.test.ts passed all 9 tests and reported zero open handles."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "The cancellation test still leaks an interval after the patch."
+      ]
+    },
+    {
+      "id": "ind-en-05",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "active-preference-update",
+      "transcript": "[USER]\nFor performance reviews, I usually want the timing table first and the SQL query plan after it.\n\n---\n\n[ASSISTANT]\nOkay.\n\n---\n\n[USER]\nThat order made the index regression harder to spot. From now on, put the SQL query plan before the timing table in performance reviews, so I can check the access path first.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-05:event-01",
+          "role": "USER",
+          "text": "For performance reviews, I usually want the timing table first and the SQL query plan after it."
+        },
+        {
+          "id": "ind-en-05:event-02",
+          "role": "ASSISTANT",
+          "text": "Okay."
+        },
+        {
+          "id": "ind-en-05:event-03",
+          "role": "USER",
+          "text": "That order made the index regression harder to spot. From now on, put the SQL query plan before the timing table in performance reviews, so I can check the access path first."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "From now on, put the SQL query plan before the timing table in performance reviews, so I can check the access path first.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-en-05:event-03",
+            "span": "From now on, put the SQL query plan before the timing table in performance reviews, so I can check the access path first."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "The current review format requires the timing table before the SQL query plan."
+      ]
+    },
+    {
+      "id": "ind-en-06",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "partial-task-next-actions",
+      "transcript": "[USER]\nThe CSV parser and row-level validation are complete; resumable upload support is still unfinished.\nNext, persist the last accepted byte offset in UploadSessionRepository before adding the reconnect test.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-06:event-01",
+          "role": "USER",
+          "text": "The CSV parser and row-level validation are complete; resumable upload support is still unfinished.\nNext, persist the last accepted byte offset in UploadSessionRepository before adding the reconnect test."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "The CSV parser and row-level validation are complete; resumable upload support is still unfinished.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-06:event-01",
+            "span": "The CSV parser and row-level validation are complete; resumable upload support is still unfinished."
+          }
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "Next, persist the last accepted byte offset in UploadSessionRepository before adding the reconnect test.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-en-06:event-01",
+            "span": "Next, persist the last accepted byte offset in UploadSessionRepository before adding the reconnect test."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Resumable upload support and its reconnect test are complete."
+      ]
+    },
+    {
+      "id": "ind-en-07",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "open-question-uncertain",
+      "transcript": "[USER]\nWe still need to determine whether the proxy preserves the Last-Event-ID header during an HTTP/2 reconnect.\n\n---\n\n[ASSISTANT]\nI will inspect a packet capture once the staging proxy is available.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-07:event-01",
+          "role": "USER",
+          "text": "We still need to determine whether the proxy preserves the Last-Event-ID header during an HTTP/2 reconnect."
+        },
+        {
+          "id": "ind-en-07:event-02",
+          "role": "ASSISTANT",
+          "text": "I will inspect a packet capture once the staging proxy is available."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "We still need to determine whether the proxy preserves the Last-Event-ID header during an HTTP/2 reconnect.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "ind-en-07:event-01",
+            "span": "We still need to determine whether the proxy preserves the Last-Event-ID header during an HTTP/2 reconnect."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "The proxy definitely preserves Last-Event-ID during HTTP/2 reconnects."
+      ]
+    },
+    {
+      "id": "ind-en-08",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "error-fix-path-normalization",
+      "transcript": "[TOOL]\nThe import smoke test raised SQLITE_CONSTRAINT_UNIQUE on archive_entries(project_id, relative_path) when a Windows path used backslashes.\n\n---\n\n[USER]\nUse the canonical relative path as the key.\n\n---\n\n[TOOL]\nNormalizing separators with toPosixPath() before computing the archive key fixed the duplicate entry; the Linux and Windows smoke runs each imported 42 distinct paths.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-08:event-01",
+          "role": "TOOL",
+          "text": "The import smoke test raised SQLITE_CONSTRAINT_UNIQUE on archive_entries(project_id, relative_path) when a Windows path used backslashes."
+        },
+        {
+          "id": "ind-en-08:event-02",
+          "role": "USER",
+          "text": "Use the canonical relative path as the key."
+        },
+        {
+          "id": "ind-en-08:event-03",
+          "role": "TOOL",
+          "text": "Normalizing separators with toPosixPath() before computing the archive key fixed the duplicate entry; the Linux and Windows smoke runs each imported 42 distinct paths."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "The import smoke test raised SQLITE_CONSTRAINT_UNIQUE on archive_entries(project_id, relative_path) when a Windows path used backslashes.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-08:event-01",
+            "span": "The import smoke test raised SQLITE_CONSTRAINT_UNIQUE on archive_entries(project_id, relative_path) when a Windows path used backslashes."
+          }
+        },
+        {
+          "kind": "DECISION",
+          "contains": "Use the canonical relative path as the key.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-en-08:event-02",
+            "span": "Use the canonical relative path as the key."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "Normalizing separators with toPosixPath() before computing the archive key fixed the duplicate entry; the Linux and Windows smoke runs each imported 42 distinct paths.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-08:event-03",
+            "span": "Normalizing separators with toPosixPath() before computing the archive key fixed the duplicate entry; the Linux and Windows smoke runs each imported 42 distinct paths."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "The duplicate archive entry was fixed by dropping the unique constraint."
+      ]
+    },
+    {
+      "id": "ind-en-09",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "filename-path-and-symbols",
+      "transcript": "[USER]\nThe export-to-CSV handler lives in packages/audit-ui/src/actions/export-to-csv.ts.\nbuildAuditRow<TRecord>() preserves the incident_id column even when visibleColumns excludes it.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-09:event-01",
+          "role": "USER",
+          "text": "The export-to-CSV handler lives in packages/audit-ui/src/actions/export-to-csv.ts.\nbuildAuditRow<TRecord>() preserves the incident_id column even when visibleColumns excludes it."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "The export-to-CSV handler lives in packages/audit-ui/src/actions/export-to-csv.ts.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-09:event-01",
+            "span": "The export-to-CSV handler lives in packages/audit-ui/src/actions/export-to-csv.ts."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "buildAuditRow<TRecord>() preserves the incident_id column even when visibleColumns excludes it.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-09:event-01",
+            "span": "buildAuditRow<TRecord>() preserves the incident_id column even when visibleColumns excludes it."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "buildAuditRow<TRecord>() removes incident_id whenever the column is hidden."
+      ]
+    },
+    {
+      "id": "ind-en-10",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "constraints-negation-preservation",
+      "transcript": "[USER]\nKeep the webhook receiver read-only for customer tables; it may append to webhook_inbox but must not update customer_profiles.\nDo not retry a payment request after the provider has returned a signed terminal decline.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-10:event-01",
+          "role": "USER",
+          "text": "Keep the webhook receiver read-only for customer tables; it may append to webhook_inbox but must not update customer_profiles.\nDo not retry a payment request after the provider has returned a signed terminal decline."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "Keep the webhook receiver read-only for customer tables; it may append to webhook_inbox but must not update customer_profiles.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-en-10:event-01",
+            "span": "Keep the webhook receiver read-only for customer tables; it may append to webhook_inbox but must not update customer_profiles."
+          }
+        },
+        {
+          "kind": "DECISION",
+          "contains": "Do not retry a payment request after the provider has returned a signed terminal decline.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-en-10:event-01",
+            "span": "Do not retry a payment request after the provider has returned a signed terminal decline."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "The webhook receiver is authorized to update customer_profiles.",
+        "Signed terminal declines should trigger automatic payment retries."
+      ]
+    },
+    {
+      "id": "ind-en-11",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "noise-only",
+      "transcript": "[USER]\nThanks, that explanation helped. I am grabbing coffee.\n\n---\n\n[ASSISTANT]\nEnjoy your break.\n\n---\n\n[USER]\nBack now. Can you give me a moment to find the ticket?",
+      "sourceEvents": [
+        {
+          "id": "ind-en-11:event-01",
+          "role": "USER",
+          "text": "Thanks, that explanation helped. I am grabbing coffee."
+        },
+        {
+          "id": "ind-en-11:event-02",
+          "role": "ASSISTANT",
+          "text": "Enjoy your break."
+        },
+        {
+          "id": "ind-en-11:event-03",
+          "role": "USER",
+          "text": "Back now. Can you give me a moment to find the ticket?"
+        }
+      ],
+      "expect": [],
+      "mustNotContain": [
+        "The project has adopted a coffee-break scheduler."
+      ]
+    },
+    {
+      "id": "ind-en-12",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "synthetic-secrets-excluded",
+      "transcript": "[USER]\nTemporary test credential, synthetic and never valid: MODEL_API_KEY=sk-test-INDEPENDENT_EN_SENTINEL_7h4p9. Do not retain that value.\nThe smoke environment reads its model credential from MODEL_API_KEY at process startup.\n\n---\n\n[TOOL]\nConnection string from the failed test: postgresql://fixture_user:SYNTHETIC_EN_DB_PASSWORD_6v3q2@127.0.0.1:5441/smoke.\nThe smoke database connection failed with ECONNREFUSED.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-12:event-01",
+          "role": "USER",
+          "text": "Temporary test credential, synthetic and never valid: MODEL_API_KEY=sk-test-INDEPENDENT_EN_SENTINEL_7h4p9. Do not retain that value.\nThe smoke environment reads its model credential from MODEL_API_KEY at process startup."
+        },
+        {
+          "id": "ind-en-12:event-02",
+          "role": "TOOL",
+          "text": "Connection string from the failed test: postgresql://fixture_user:SYNTHETIC_EN_DB_PASSWORD_6v3q2@127.0.0.1:5441/smoke.\nThe smoke database connection failed with ECONNREFUSED."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "The smoke environment reads its model credential from MODEL_API_KEY at process startup.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-12:event-01",
+            "span": "The smoke environment reads its model credential from MODEL_API_KEY at process startup."
+          }
+        },
+        {
+          "kind": "MISTAKE",
+          "contains": "The smoke database connection failed with ECONNREFUSED.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-12:event-02",
+            "span": "The smoke database connection failed with ECONNREFUSED."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "sk-test-INDEPENDENT_EN_SENTINEL_7h4p9",
+        "SYNTHETIC_EN_DB_PASSWORD_6v3q2",
+        "The smoke database accepted the connection."
+      ]
+    },
+    {
+      "id": "ind-en-13",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "assistant-change-report-without-tool-verification",
+      "transcript": "[USER]\nWhat is your progress on the duplicate-event bug?\n\n---\n\n[ASSISTANT]\nI changed RetryWindow.accept() to reject timestamps older than the window; I have not run the clock-skew tests yet.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-13:event-01",
+          "role": "USER",
+          "text": "What is your progress on the duplicate-event bug?"
+        },
+        {
+          "id": "ind-en-13:event-02",
+          "role": "ASSISTANT",
+          "text": "I changed RetryWindow.accept() to reject timestamps older than the window; I have not run the clock-skew tests yet."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": [
+        "The clock-skew test suite passed after the RetryWindow change."
+      ]
+    },
+    {
+      "id": "ind-en-14",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "contradictory-decisions-current-choice",
+      "transcript": "[USER]\nMove webhook fanout to a Redis queue so the API can return before delivery.\n\n---\n\n[ASSISTANT]\nI have recorded that proposal.\n\n---\n\n[USER]\nCancel that queue choice after the failure review. The final decision is to fan out webhook deliveries from a PostgreSQL outbox, because we need one transactional commit with the delivery receipt.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-14:event-01",
+          "role": "USER",
+          "text": "Move webhook fanout to a Redis queue so the API can return before delivery."
+        },
+        {
+          "id": "ind-en-14:event-02",
+          "role": "ASSISTANT",
+          "text": "I have recorded that proposal."
+        },
+        {
+          "id": "ind-en-14:event-03",
+          "role": "USER",
+          "text": "Cancel that queue choice after the failure review. The final decision is to fan out webhook deliveries from a PostgreSQL outbox, because we need one transactional commit with the delivery receipt."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "The final decision is to fan out webhook deliveries from a PostgreSQL outbox, because we need one transactional commit with the delivery receipt.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-en-14:event-03",
+            "span": "The final decision is to fan out webhook deliveries from a PostgreSQL outbox, because we need one transactional commit with the delivery receipt."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "The accepted webhook architecture uses a Redis queue."
+      ]
+    },
+    {
+      "id": "ind-en-15",
+      "split": "holdout",
+      "locale": "en",
+      "dimension": "uncertain-diagnostic-hypothesis",
+      "transcript": "[USER]\nThe load chart has a narrow spike every minute.\n\n---\n\n[ASSISTANT]\nThe p95 spike might come from TLS session cache misses, but we have no trace that distinguishes handshakes from upstream wait time.",
+      "sourceEvents": [
+        {
+          "id": "ind-en-15:event-01",
+          "role": "USER",
+          "text": "The load chart has a narrow spike every minute."
+        },
+        {
+          "id": "ind-en-15:event-02",
+          "role": "ASSISTANT",
+          "text": "The p95 spike might come from TLS session cache misses, but we have no trace that distinguishes handshakes from upstream wait time."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "The load chart has a narrow spike every minute.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-en-15:event-01",
+            "span": "The load chart has a narrow spike every minute."
+          }
+        },
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "The p95 spike might come from TLS session cache misses, but we have no trace that distinguishes handshakes from upstream wait time.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "ind-en-15:event-02",
+            "span": "The p95 spike might come from TLS session cache misses, but we have no trace that distinguishes handshakes from upstream wait time."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "TLS session cache misses are the confirmed cause of the p95 spike."
+      ]
+    },
+    {
+      "id": "ind-vi-01",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "architecture-decision-rationale",
+      "transcript": "[USER]\nChốt để module tính phí chỉ nhận InvoiceSnapshot qua interface, vì đọc trực tiếp bảng đơn hàng sẽ khiến việc tính lại hóa đơn phụ thuộc vào trạng thái hiện tại của đơn.\n\n---\n\n[ASSISTANT]\nMình sẽ bám theo ranh giới đó khi sửa luồng tính phí.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-01:event-01",
+          "role": "USER",
+          "text": "Chốt để module tính phí chỉ nhận InvoiceSnapshot qua interface, vì đọc trực tiếp bảng đơn hàng sẽ khiến việc tính lại hóa đơn phụ thuộc vào trạng thái hiện tại của đơn."
+        },
+        {
+          "id": "ind-vi-01:event-02",
+          "role": "ASSISTANT",
+          "text": "Mình sẽ bám theo ranh giới đó khi sửa luồng tính phí."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "Chốt để module tính phí chỉ nhận InvoiceSnapshot qua interface, vì đọc trực tiếp bảng đơn hàng sẽ khiến việc tính lại hóa đơn phụ thuộc vào trạng thái hiện tại của đơn.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-vi-01:event-01",
+            "span": "Chốt để module tính phí chỉ nhận InvoiceSnapshot qua interface, vì đọc trực tiếp bảng đơn hàng sẽ khiến việc tính lại hóa đơn phụ thuộc vào trạng thái hiện tại của đơn."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Module tính phí bắt buộc truy vấn trực tiếp bảng đơn hàng."
+      ]
+    },
+    {
+      "id": "ind-vi-02",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "long-decision-caveat",
+      "transcript": "[USER]\nMình chọn lưu bản chụp cấu hình phát hành vào bảng release_snapshots rồi để tiến trình triển khai đọc theo snapshot_id, vì dùng cùng một bản cấu hình sẽ tránh việc hai máy nhận hai bộ cờ khác nhau khi đang chuyển phiên bản; tuy vậy, cách này chỉ áp dụng cho cờ điều khiển giao diện và giới hạn lưu lượng, còn khóa ký webhook vẫn phải lấy từ kho bí mật theo từng yêu cầu và tuyệt đối không được sao chép vào bản chụp.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-02:event-01",
+          "role": "USER",
+          "text": "Mình chọn lưu bản chụp cấu hình phát hành vào bảng release_snapshots rồi để tiến trình triển khai đọc theo snapshot_id, vì dùng cùng một bản cấu hình sẽ tránh việc hai máy nhận hai bộ cờ khác nhau khi đang chuyển phiên bản; tuy vậy, cách này chỉ áp dụng cho cờ điều khiển giao diện và giới hạn lưu lượng, còn khóa ký webhook vẫn phải lấy từ kho bí mật theo từng yêu cầu và tuyệt đối không được sao chép vào bản chụp."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "Mình chọn lưu bản chụp cấu hình phát hành vào bảng release_snapshots rồi để tiến trình triển khai đọc theo snapshot_id, vì dùng cùng một bản cấu hình sẽ tránh việc hai máy nhận hai bộ cờ khác nhau khi đang chuyển phiên bản; tuy vậy, cách này chỉ áp dụng cho cờ điều khiển giao diện và giới hạn lưu lượng, còn khóa ký webhook vẫn phải lấy từ kho bí mật theo từng yêu cầu và tuyệt đối không được sao chép vào bản chụp.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-vi-02:event-01",
+            "span": "Mình chọn lưu bản chụp cấu hình phát hành vào bảng release_snapshots rồi để tiến trình triển khai đọc theo snapshot_id, vì dùng cùng một bản cấu hình sẽ tránh việc hai máy nhận hai bộ cờ khác nhau khi đang chuyển phiên bản; tuy vậy, cách này chỉ áp dụng cho cờ điều khiển giao diện và giới hạn lưu lượng, còn khóa ký webhook vẫn phải lấy từ kho bí mật theo từng yêu cầu và tuyệt đối không được sao chép vào bản chụp."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Khóa ký webhook được lưu trong release_snapshots."
+      ]
+    },
+    {
+      "id": "ind-vi-03",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "engineering-facts-tool-evidence",
+      "transcript": "[USER]\nĐọc giúp mình phần chẩn đoán cấu hình vừa in ra.\n\n---\n\n[TOOL]\nTiến trình scheduler dùng múi giờ UTC để tính mốc chạy hằng ngày.\nBiến REPORT_BATCH_LIMIT đang là 250 trong cấu hình kiểm thử.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-03:event-01",
+          "role": "USER",
+          "text": "Đọc giúp mình phần chẩn đoán cấu hình vừa in ra."
+        },
+        {
+          "id": "ind-vi-03:event-02",
+          "role": "TOOL",
+          "text": "Tiến trình scheduler dùng múi giờ UTC để tính mốc chạy hằng ngày.\nBiến REPORT_BATCH_LIMIT đang là 250 trong cấu hình kiểm thử."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "Tiến trình scheduler dùng múi giờ UTC để tính mốc chạy hằng ngày.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-03:event-02",
+            "span": "Tiến trình scheduler dùng múi giờ UTC để tính mốc chạy hằng ngày."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "Biến REPORT_BATCH_LIMIT đang là 250 trong cấu hình kiểm thử.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-03:event-02",
+            "span": "Biến REPORT_BATCH_LIMIT đang là 250 trong cấu hình kiểm thử."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Scheduler tính lịch theo múi giờ Asia/Ho_Chi_Minh.",
+        "REPORT_BATCH_LIMIT bằng 1000 trong cấu hình kiểm thử."
+      ]
+    },
+    {
+      "id": "ind-vi-04",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "tool-verified-error-and-fix",
+      "transcript": "[TOOL]\nBài kiểm thử đóng kết nối thất bại vì SocketRegistry vẫn giữ socket đã nhận sự kiện close.\n\n---\n\n[ASSISTANT]\nMình đang thêm bước dọn đăng ký khi nhận close.\n\n---\n\n[TOOL]\nSau khi bỏ socket khỏi Map trong nhánh close, lệnh pnpm vitest run tests/socket-registry.test.ts chạy qua đủ 11 bài và Map còn 0 phần tử.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-04:event-01",
+          "role": "TOOL",
+          "text": "Bài kiểm thử đóng kết nối thất bại vì SocketRegistry vẫn giữ socket đã nhận sự kiện close."
+        },
+        {
+          "id": "ind-vi-04:event-02",
+          "role": "ASSISTANT",
+          "text": "Mình đang thêm bước dọn đăng ký khi nhận close."
+        },
+        {
+          "id": "ind-vi-04:event-03",
+          "role": "TOOL",
+          "text": "Sau khi bỏ socket khỏi Map trong nhánh close, lệnh pnpm vitest run tests/socket-registry.test.ts chạy qua đủ 11 bài và Map còn 0 phần tử."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "Bài kiểm thử đóng kết nối thất bại vì SocketRegistry vẫn giữ socket đã nhận sự kiện close.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-04:event-01",
+            "span": "Bài kiểm thử đóng kết nối thất bại vì SocketRegistry vẫn giữ socket đã nhận sự kiện close."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "Sau khi bỏ socket khỏi Map trong nhánh close, lệnh pnpm vitest run tests/socket-registry.test.ts chạy qua đủ 11 bài và Map còn 0 phần tử.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-04:event-03",
+            "span": "Sau khi bỏ socket khỏi Map trong nhánh close, lệnh pnpm vitest run tests/socket-registry.test.ts chạy qua đủ 11 bài và Map còn 0 phần tử."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "SocketRegistry vẫn giữ 11 socket sau khi chạy kiểm thử."
+      ]
+    },
+    {
+      "id": "ind-vi-05",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "active-preference-update",
+      "transcript": "[USER]\nTrong phần review API, mình thích đọc giải thích nguyên nhân trước rồi mới tới ví dụ request lỗi.\n\n---\n\n[ASSISTANT]\nMình đã hiểu cách trình bày bạn muốn.\n\n---\n\n[USER]\nĐổi thứ tự nhé. Từ các lần review sau, hãy ghi ví dụ request lỗi trước phần giải thích nguyên nhân để mình đối chiếu với log nhanh hơn.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-05:event-01",
+          "role": "USER",
+          "text": "Trong phần review API, mình thích đọc giải thích nguyên nhân trước rồi mới tới ví dụ request lỗi."
+        },
+        {
+          "id": "ind-vi-05:event-02",
+          "role": "ASSISTANT",
+          "text": "Mình đã hiểu cách trình bày bạn muốn."
+        },
+        {
+          "id": "ind-vi-05:event-03",
+          "role": "USER",
+          "text": "Đổi thứ tự nhé. Từ các lần review sau, hãy ghi ví dụ request lỗi trước phần giải thích nguyên nhân để mình đối chiếu với log nhanh hơn."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "PREFERENCE",
+          "contains": "Từ các lần review sau, hãy ghi ví dụ request lỗi trước phần giải thích nguyên nhân để mình đối chiếu với log nhanh hơn.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-vi-05:event-03",
+            "span": "Từ các lần review sau, hãy ghi ví dụ request lỗi trước phần giải thích nguyên nhân để mình đối chiếu với log nhanh hơn."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Sở thích hiện tại là đọc nguyên nhân trước ví dụ request lỗi."
+      ]
+    },
+    {
+      "id": "ind-vi-06",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "partial-task-next-actions",
+      "transcript": "[USER]\nPhần đọc manifest và kiểm tra checksum đã xong, nhưng bước khôi phục quyền thực thi cho file sau giải nén vẫn chưa làm.\nViệc tiếp theo là bổ sung restoreExecutableBit() rồi chạy lại fixture có script bin/start.sh.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-06:event-01",
+          "role": "USER",
+          "text": "Phần đọc manifest và kiểm tra checksum đã xong, nhưng bước khôi phục quyền thực thi cho file sau giải nén vẫn chưa làm.\nViệc tiếp theo là bổ sung restoreExecutableBit() rồi chạy lại fixture có script bin/start.sh."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "TASK_STATUS",
+          "contains": "Phần đọc manifest và kiểm tra checksum đã xong, nhưng bước khôi phục quyền thực thi cho file sau giải nén vẫn chưa làm.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-06:event-01",
+            "span": "Phần đọc manifest và kiểm tra checksum đã xong, nhưng bước khôi phục quyền thực thi cho file sau giải nén vẫn chưa làm."
+          }
+        },
+        {
+          "kind": "TASK_STATUS",
+          "contains": "Việc tiếp theo là bổ sung restoreExecutableBit() rồi chạy lại fixture có script bin/start.sh.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-vi-06:event-01",
+            "span": "Việc tiếp theo là bổ sung restoreExecutableBit() rồi chạy lại fixture có script bin/start.sh."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Bước khôi phục quyền thực thi đã hoàn tất và fixture bin/start.sh đã chạy thành công."
+      ]
+    },
+    {
+      "id": "ind-vi-07",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "open-question-uncertain",
+      "transcript": "[USER]\nChưa xác định được trình cân bằng tải có giữ nguyên query string khi chuyển hướng từ /login sang /auth/callback hay không.\n\n---\n\n[ASSISTANT]\nMình sẽ đối chiếu log ở hai đầu khi có quyền đọc môi trường thử nghiệm.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-07:event-01",
+          "role": "USER",
+          "text": "Chưa xác định được trình cân bằng tải có giữ nguyên query string khi chuyển hướng từ /login sang /auth/callback hay không."
+        },
+        {
+          "id": "ind-vi-07:event-02",
+          "role": "ASSISTANT",
+          "text": "Mình sẽ đối chiếu log ở hai đầu khi có quyền đọc môi trường thử nghiệm."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "Chưa xác định được trình cân bằng tải có giữ nguyên query string khi chuyển hướng từ /login sang /auth/callback hay không.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "ind-vi-07:event-01",
+            "span": "Chưa xác định được trình cân bằng tải có giữ nguyên query string khi chuyển hướng từ /login sang /auth/callback hay không."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Trình cân bằng tải chắc chắn giữ nguyên query string trong mọi lần chuyển hướng."
+      ]
+    },
+    {
+      "id": "ind-vi-08",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "error-fix-null-timestamp",
+      "transcript": "[TOOL]\nLệnh xuất báo cáo dừng với RangeError: Invalid time value vì trường finished_at có thể là null.\n\n---\n\n[USER]\nVới báo cáo CSV, thời điểm chưa hoàn tất phải để ô trống.\n\n---\n\n[TOOL]\nĐổi formatFinishedAt() để trả chuỗi rỗng khi finished_at là null đã sửa lỗi; bản xuất thử có 37 hàng và không còn RangeError.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-08:event-01",
+          "role": "TOOL",
+          "text": "Lệnh xuất báo cáo dừng với RangeError: Invalid time value vì trường finished_at có thể là null."
+        },
+        {
+          "id": "ind-vi-08:event-02",
+          "role": "USER",
+          "text": "Với báo cáo CSV, thời điểm chưa hoàn tất phải để ô trống."
+        },
+        {
+          "id": "ind-vi-08:event-03",
+          "role": "TOOL",
+          "text": "Đổi formatFinishedAt() để trả chuỗi rỗng khi finished_at là null đã sửa lỗi; bản xuất thử có 37 hàng và không còn RangeError."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "MISTAKE",
+          "contains": "Lệnh xuất báo cáo dừng với RangeError: Invalid time value vì trường finished_at có thể là null.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-08:event-01",
+            "span": "Lệnh xuất báo cáo dừng với RangeError: Invalid time value vì trường finished_at có thể là null."
+          }
+        },
+        {
+          "kind": "DECISION",
+          "contains": "Với báo cáo CSV, thời điểm chưa hoàn tất phải để ô trống.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-vi-08:event-02",
+            "span": "Với báo cáo CSV, thời điểm chưa hoàn tất phải để ô trống."
+          }
+        },
+        {
+          "kind": "FIX",
+          "contains": "Đổi formatFinishedAt() để trả chuỗi rỗng khi finished_at là null đã sửa lỗi; bản xuất thử có 37 hàng và không còn RangeError.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-08:event-03",
+            "span": "Đổi formatFinishedAt() để trả chuỗi rỗng khi finished_at là null đã sửa lỗi; bản xuất thử có 37 hàng và không còn RangeError."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Báo cáo CSV thay mọi finished_at null bằng ngày hiện tại."
+      ]
+    },
+    {
+      "id": "ind-vi-09",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "filename-path-and-symbols",
+      "transcript": "[USER]\nBộ chuyển đổi tên nhánh nằm ở tools/release/src/branch-name.ts.\nHàm parseReleaseTag(tag: string) trả undefined khi tên thẻ không có tiền tố release/.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-09:event-01",
+          "role": "USER",
+          "text": "Bộ chuyển đổi tên nhánh nằm ở tools/release/src/branch-name.ts.\nHàm parseReleaseTag(tag: string) trả undefined khi tên thẻ không có tiền tố release/."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "Bộ chuyển đổi tên nhánh nằm ở tools/release/src/branch-name.ts.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-09:event-01",
+            "span": "Bộ chuyển đổi tên nhánh nằm ở tools/release/src/branch-name.ts."
+          }
+        },
+        {
+          "kind": "FACT",
+          "contains": "Hàm parseReleaseTag(tag: string) trả undefined khi tên thẻ không có tiền tố release/.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-09:event-01",
+            "span": "Hàm parseReleaseTag(tag: string) trả undefined khi tên thẻ không có tiền tố release/."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "parseReleaseTag(tag: string) chấp nhận mọi tên thẻ không có tiền tố."
+      ]
+    },
+    {
+      "id": "ind-vi-10",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "constraints-negation-preservation",
+      "transcript": "[USER]\nGiữ migration 024 ở chế độ chỉ thêm cột; không đổi tên hoặc xóa cột mà ứng dụng phiên bản cũ còn đọc.\nChỉ bật dọn dữ liệu tự động sau khi bản sao lưu được kiểm tra phục hồi thành công.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-10:event-01",
+          "role": "USER",
+          "text": "Giữ migration 024 ở chế độ chỉ thêm cột; không đổi tên hoặc xóa cột mà ứng dụng phiên bản cũ còn đọc.\nChỉ bật dọn dữ liệu tự động sau khi bản sao lưu được kiểm tra phục hồi thành công."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "Giữ migration 024 ở chế độ chỉ thêm cột; không đổi tên hoặc xóa cột mà ứng dụng phiên bản cũ còn đọc.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-vi-10:event-01",
+            "span": "Giữ migration 024 ở chế độ chỉ thêm cột; không đổi tên hoặc xóa cột mà ứng dụng phiên bản cũ còn đọc."
+          }
+        },
+        {
+          "kind": "DECISION",
+          "contains": "Chỉ bật dọn dữ liệu tự động sau khi bản sao lưu được kiểm tra phục hồi thành công.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-vi-10:event-01",
+            "span": "Chỉ bật dọn dữ liệu tự động sau khi bản sao lưu được kiểm tra phục hồi thành công."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Migration 024 được phép xóa các cột mà phiên bản cũ còn đọc.",
+        "Có thể bật dọn dữ liệu trước khi kiểm tra phục hồi bản sao lưu."
+      ]
+    },
+    {
+      "id": "ind-vi-11",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "noise-only",
+      "transcript": "[USER]\nCảm ơn nhé, để mình mở lại cửa sổ làm việc.\n\n---\n\n[ASSISTANT]\nỪ, mình đợi.\n\n---\n\n[USER]\nMạng nhà mình vừa chập chờn một chút. Giờ ổn rồi, lát mình gửi câu hỏi tiếp.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-11:event-01",
+          "role": "USER",
+          "text": "Cảm ơn nhé, để mình mở lại cửa sổ làm việc."
+        },
+        {
+          "id": "ind-vi-11:event-02",
+          "role": "ASSISTANT",
+          "text": "Ừ, mình đợi."
+        },
+        {
+          "id": "ind-vi-11:event-03",
+          "role": "USER",
+          "text": "Mạng nhà mình vừa chập chờn một chút. Giờ ổn rồi, lát mình gửi câu hỏi tiếp."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": [
+        "Hệ thống dự án đã chuyển sang một nhà cung cấp mạng mới."
+      ]
+    },
+    {
+      "id": "ind-vi-12",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "synthetic-secrets-excluded",
+      "transcript": "[USER]\nĐây là dữ liệu giả cho kiểm thử, không có giá trị sử dụng: WEBHOOK_SIGNING_SECRET=SYNTHETIC_VI_WEBHOOK_SECRET_8m2r5. Đừng ghi lại giá trị này.\nỨng dụng đọc khóa webhook từ biến WEBHOOK_SIGNING_SECRET khi khởi động.\n\n---\n\n[TOOL]\nMật khẩu giả trong log kiểm thử: password=SYNTHETIC_VI_PASSWORD_4b9t1.\nMáy chủ từ chối đăng nhập với HTTP 401.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-12:event-01",
+          "role": "USER",
+          "text": "Đây là dữ liệu giả cho kiểm thử, không có giá trị sử dụng: WEBHOOK_SIGNING_SECRET=SYNTHETIC_VI_WEBHOOK_SECRET_8m2r5. Đừng ghi lại giá trị này.\nỨng dụng đọc khóa webhook từ biến WEBHOOK_SIGNING_SECRET khi khởi động."
+        },
+        {
+          "id": "ind-vi-12:event-02",
+          "role": "TOOL",
+          "text": "Mật khẩu giả trong log kiểm thử: password=SYNTHETIC_VI_PASSWORD_4b9t1.\nMáy chủ từ chối đăng nhập với HTTP 401."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "Ứng dụng đọc khóa webhook từ biến WEBHOOK_SIGNING_SECRET khi khởi động.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-12:event-01",
+            "span": "Ứng dụng đọc khóa webhook từ biến WEBHOOK_SIGNING_SECRET khi khởi động."
+          }
+        },
+        {
+          "kind": "MISTAKE",
+          "contains": "Máy chủ từ chối đăng nhập với HTTP 401.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-12:event-02",
+            "span": "Máy chủ từ chối đăng nhập với HTTP 401."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "SYNTHETIC_VI_WEBHOOK_SECRET_8m2r5",
+        "SYNTHETIC_VI_PASSWORD_4b9t1",
+        "Máy chủ đã xác thực thành công tài khoản kiểm thử."
+      ]
+    },
+    {
+      "id": "ind-vi-13",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "assistant-change-report-without-tool-verification",
+      "transcript": "[USER]\nPhần lỗi hủy tải danh mục đang tới đâu rồi?\n\n---\n\n[ASSISTANT]\nMình đã thêm nhánh xử lý AbortError vào fetchCatalog(), nhưng chưa chạy lại bài kiểm thử khi người dùng đóng trang.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-13:event-01",
+          "role": "USER",
+          "text": "Phần lỗi hủy tải danh mục đang tới đâu rồi?"
+        },
+        {
+          "id": "ind-vi-13:event-02",
+          "role": "ASSISTANT",
+          "text": "Mình đã thêm nhánh xử lý AbortError vào fetchCatalog(), nhưng chưa chạy lại bài kiểm thử khi người dùng đóng trang."
+        }
+      ],
+      "expect": [],
+      "mustNotContain": [
+        "Bài kiểm thử đóng trang đã chạy thành công sau khi sửa fetchCatalog()."
+      ]
+    },
+    {
+      "id": "ind-vi-14",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "contradictory-decisions-current-choice",
+      "transcript": "[USER]\nCứ tự động lưu bản nháp biểu mẫu lên API sau mỗi lần gõ để tránh mất dữ liệu.\n\n---\n\n[ASSISTANT]\nMình sẽ phác thảo cơ chế tự lưu.\n\n---\n\n[USER]\nBỏ phương án tự gửi bản nháp lúc gõ nhé. Quyết định cuối cùng là giữ bản nháp ở IndexedDB cho tới khi người dùng bấm Gửi, vì tài liệu có thể chứa thông tin chưa được phép đưa lên máy chủ.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-14:event-01",
+          "role": "USER",
+          "text": "Cứ tự động lưu bản nháp biểu mẫu lên API sau mỗi lần gõ để tránh mất dữ liệu."
+        },
+        {
+          "id": "ind-vi-14:event-02",
+          "role": "ASSISTANT",
+          "text": "Mình sẽ phác thảo cơ chế tự lưu."
+        },
+        {
+          "id": "ind-vi-14:event-03",
+          "role": "USER",
+          "text": "Bỏ phương án tự gửi bản nháp lúc gõ nhé. Quyết định cuối cùng là giữ bản nháp ở IndexedDB cho tới khi người dùng bấm Gửi, vì tài liệu có thể chứa thông tin chưa được phép đưa lên máy chủ."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "DECISION",
+          "contains": "Quyết định cuối cùng là giữ bản nháp ở IndexedDB cho tới khi người dùng bấm Gửi, vì tài liệu có thể chứa thông tin chưa được phép đưa lên máy chủ.",
+          "certainty": "explicit",
+          "evidence": {
+            "sourceEventId": "ind-vi-14:event-03",
+            "span": "Quyết định cuối cùng là giữ bản nháp ở IndexedDB cho tới khi người dùng bấm Gửi, vì tài liệu có thể chứa thông tin chưa được phép đưa lên máy chủ."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Thiết kế được chấp nhận sẽ gửi bản nháp lên API sau mỗi lần gõ."
+      ]
+    },
+    {
+      "id": "ind-vi-15",
+      "split": "holdout",
+      "locale": "vi",
+      "dimension": "uncertain-diagnostic-hypothesis",
+      "transcript": "[USER]\nỞ lần chạy thử vừa rồi, worker chỉ xử lý được 18 trong 20 tệp trước khi hết thời gian.\n\n---\n\n[ASSISTANT]\nCó thể hai tệp còn lại bị kẹt ở bước đọc metadata, nhưng mình chưa có trace để tách thời gian đọc ổ đĩa khỏi thời gian gọi dịch vụ ngoài.",
+      "sourceEvents": [
+        {
+          "id": "ind-vi-15:event-01",
+          "role": "USER",
+          "text": "Ở lần chạy thử vừa rồi, worker chỉ xử lý được 18 trong 20 tệp trước khi hết thời gian."
+        },
+        {
+          "id": "ind-vi-15:event-02",
+          "role": "ASSISTANT",
+          "text": "Có thể hai tệp còn lại bị kẹt ở bước đọc metadata, nhưng mình chưa có trace để tách thời gian đọc ổ đĩa khỏi thời gian gọi dịch vụ ngoài."
+        }
+      ],
+      "expect": [
+        {
+          "kind": "FACT",
+          "contains": "Ở lần chạy thử vừa rồi, worker chỉ xử lý được 18 trong 20 tệp trước khi hết thời gian.",
+          "certainty": "reported",
+          "evidence": {
+            "sourceEventId": "ind-vi-15:event-01",
+            "span": "Ở lần chạy thử vừa rồi, worker chỉ xử lý được 18 trong 20 tệp trước khi hết thời gian."
+          }
+        },
+        {
+          "kind": "OPEN_QUESTION",
+          "contains": "Có thể hai tệp còn lại bị kẹt ở bước đọc metadata, nhưng mình chưa có trace để tách thời gian đọc ổ đĩa khỏi thời gian gọi dịch vụ ngoài.",
+          "certainty": "uncertain",
+          "evidence": {
+            "sourceEventId": "ind-vi-15:event-02",
+            "span": "Có thể hai tệp còn lại bị kẹt ở bước đọc metadata, nhưng mình chưa có trace để tách thời gian đọc ổ đĩa khỏi thời gian gọi dịch vụ ngoài."
+          }
+        }
+      ],
+      "mustNotContain": [
+        "Đã xác nhận dịch vụ ngoài gây treo hai tệp còn lại."
+      ]
+    }
+  ]
+}

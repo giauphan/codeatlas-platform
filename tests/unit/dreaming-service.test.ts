@@ -100,6 +100,9 @@ const mockDbAdapter = {
       { id: 'memory_2', score: 0.8 },
     ]),
   ),
+  searchVectorScoped: mock.fn<(table: string, vector: number[], limit: number, tenantId: string, whereClause: string, filterBinds?: Record<string, unknown>) => Promise<VectorSearchResult[]>>(
+    (table, vector, limit) => mockDbAdapter.searchVector(table, vector, limit),
+  ),
   connect: mock.fn<() => Promise<void>>(() => Promise.resolve()),
   initializeSchema: mock.fn<() => Promise<void>>(() => Promise.resolve()),
   checkColumnExists: mock.fn<() => Promise<boolean>>(() => Promise.resolve(true)),
@@ -167,6 +170,7 @@ describe('DreamingService', () => {
     mockDbAdapter.execute.mock.resetCalls();
     mockDbAdapter.query.mock.resetCalls();
     mockDbAdapter.searchVector.mock.resetCalls();
+    mockDbAdapter.searchVectorScoped.mock.resetCalls();
     mockDbAdapter.connect.mock.resetCalls();
     mockDbAdapter.initializeSchema.mock.resetCalls();
     mockDbAdapter.checkColumnExists.mock.resetCalls();
@@ -256,7 +260,7 @@ describe('DreamingService', () => {
           'p', 's', 'MISTAKE', 'This is a sufficiently long content to pass the noise gate threshold of at least forty characters.', 7,
         ),
         (err: Error) => {
-          assert.ok(err.message.includes('ORA-00001'));
+          assert.equal(err.message, 'save_failed');
           return true;
         },
       );
@@ -323,9 +327,9 @@ describe('DreamingService', () => {
       await DreamingService.queryDreamMemories('test-project', 'query filter', 10, 0, 'SESSION_SUMMARY, KNOWLEDGE', undefined, undefined, undefined, 'auth', ['jwt', 'login']);
       const [sql, binds] = mockDbAdapter.query.mock.calls[0].arguments as [string, Record<string, unknown>];
       assert.strictEqual(binds.scopeExact, 'auth');
-      assert.strictEqual(binds.tag_like_0, '%"jwt"%');
-      assert.strictEqual(binds.type1, 'KNOWLEDGE');
-      assert.ok(sql.includes('memory_type IN (:type0, :type1)'));
+      assert.strictEqual(binds.tagLike0, '%"jwt"%');
+      assert.strictEqual(binds.memoryType1, 'KNOWLEDGE');
+      assert.ok(sql.includes('memory_type IN (:memoryType0, :memoryType1)'));
       assert.ok(!sql.includes('USER_TAB_COLUMNS'));
     });
   });
@@ -485,7 +489,7 @@ describe('DreamingService', () => {
 
       assert.ok(sql.includes('LIMIT :limit OFFSET :offset'), 'must use SQLite pagination syntax');
       assert.ok(!sql.includes('FETCH NEXT'), 'must not emit FETCH NEXT');
-      assert.ok(sql.includes('ORDER BY created_at DESC'));
+      assert.ok(sql.includes('created_at DESC'));
       assert.strictEqual(binds.limit, 7);
       assert.strictEqual(binds.offset, 14);
       // searchVector skipped when there is no embedding
@@ -511,14 +515,15 @@ describe('DreamingService', () => {
       assert.strictEqual(binds.offset, undefined);
     });
 
-    test('empty searchVector result (sqlite) short-circuits without querying', async () => {
+    test('empty vector candidates fall back to lexical lookup instead of hiding unembedded memories', async () => {
       process.env.CODEATLAS_DB_TYPE = 'sqlite';
       mockDbAdapter.searchVector.mock.mockImplementationOnce(() => Promise.resolve([]));
 
       const rows = await DreamingService.queryDreamMemories('test-project', 'no match', 10);
 
       assert.deepStrictEqual(rows, []);
-      assert.strictEqual(mockDbAdapter.query.mock.calls.length, 0);
+      assert.ok(mockDbAdapter.query.mock.calls.some(call => String(call.arguments[0]).includes('lower(content) LIKE')));
+      assert.match(String(mockDbAdapter.query.mock.calls[0].arguments[0]), /lower\(content\) LIKE/);
     });
 
     test('filters (sqlite) bind scope, tags and memory_type', async () => {
@@ -536,13 +541,13 @@ describe('DreamingService', () => {
 
       assert.strictEqual(binds.scopeExact, 'auth');
       assert.strictEqual(binds.scopeLike, 'auth/%');
-      assert.strictEqual(binds.tag_like_0, '%"jwt"%');
-      assert.strictEqual(binds.tag_like_1, '%"login"%');
-      assert.strictEqual(binds.type0, 'SESSION_SUMMARY');
-      assert.strictEqual(binds.type1, 'KNOWLEDGE');
+      assert.strictEqual(binds.tagLike0, '%"jwt"%');
+      assert.strictEqual(binds.tagLike1, '%"login"%');
+      assert.strictEqual(binds.memoryType0, 'SESSION_SUMMARY');
+      assert.strictEqual(binds.memoryType1, 'KNOWLEDGE');
       assert.strictEqual(binds.provider, 'claude');
-      assert.ok(sql.includes('memory_type IN (:type0, :type1)'));
-      assert.ok(sql.includes("status IN ('active', 'superseded')"));
+      assert.ok(sql.includes('memory_type IN (:memoryType0, :memoryType1)'));
+      assert.ok(sql.includes("status = 'active'"));
       // No USER_TAB_COLUMNS probe — SQLite uses pragma table_info
       assert.ok(!sql.includes('USER_TAB_COLUMNS'));
     });

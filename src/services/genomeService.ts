@@ -487,36 +487,42 @@ export class GenomeService {
     try {
       await setSessionContext(connection);
 
-      // Fetch all genes
-      const { clause: inClause, binds: bindParams } = buildInClause(geneIds, { tenantId: getTenantId() });
-
-      const result = await connection.execute<any[]>(
-        `SELECT id, name, description, problem, solution, architecture,
+      // Bound reads as well as writes; one unbounded SELECT would defeat batching.
+      const sourceIds = [...new Set(geneIds)];
+      const genes: Record<string, unknown>[] = [];
+      const batchSize = 900;
+      const tenantId = getTenantId();
+      for (let offset = 0; offset < sourceIds.length; offset += batchSize) {
+        const { clause, binds } = buildInClause(sourceIds.slice(offset, offset + batchSize), { tenantId });
+        const result = await connection.execute<Record<string, unknown>>(
+          `SELECT id, name, description, problem, solution, architecture,
                 category, confidence, version, embedding
-         FROM codeatlas_genome WHERE tenant_id = :tenantId AND id IN (${inClause})`,
-        bindParams,
-      );
-
-      const genes = result.rows || [];
-      if (genes.length < 2) throw new Error("Not all genes found");
+           FROM codeatlas_genome WHERE tenant_id = :tenantId AND id IN (${clause})`,
+          binds,
+        );
+        genes.push(...(result.rows || []));
+      }
+      if (genes.length < 2 || genes.length !== sourceIds.length) {
+        throw new Error("Not all genes found");
+      }
 
       // Combine content
       const combinedProblem = genes
-        .map((g: any[]) => String(rowValue(g, "problem") || ""))
+        .map((g) => String(rowValue(g, "problem") || ""))
         .join("\n\n");
       const combinedSolution = genes
-        .map((g: any[]) => String(rowValue(g, "solution") || ""))
+        .map((g) => String(rowValue(g, "solution") || ""))
         .join("\n\n");
       const avgConfidence =
         genes.reduce(
-          (s: number, g: any[]) => s + Number(rowValue(g, "confidence")),
+          (s, g) => s + Number(rowValue(g, "confidence")),
           0,
         ) / genes.length;
 
       // Create unified gene
       const geneId = await this.upsertGene({
         name: targetName,
-        description: `Merged from ${geneIds.length} genes:\n${genes.map((g: any[]) => String(rowValue(g, "name"))).join(", ")}`,
+        description: `Merged from ${genes.length} genes:\n${genes.map((g) => String(rowValue(g, "name"))).join(", ")}`,
         problem: combinedProblem,
         solution: combinedSolution,
         architecture: String(rowValue(genes[0], "architecture") || ""),
@@ -529,28 +535,28 @@ export class GenomeService {
       });
 
       // Mark source genes as merged
-      // ⚡ Bolt Optimization: Batch updates and inserts instead of querying inside loop (avoids N+1 DB roundtrips)
       if (genes.length > 0) {
-        const updateBinds = genes.map((g) => ({
-          id: String(g[0]),
-          tenantId: getTenantId(),
-        }));
-        await connection.executeMany(
-          `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-          updateBinds as any,
-          { autoCommit: true },
-        );
+        const updateIds = genes.map((g) => String(rowValue(g, "id")));
+        for (let k = 0; k < updateIds.length; k += batchSize) {
+          const chunk = updateIds.slice(k, k + batchSize);
+          const { clause, binds } = buildInClause(chunk, { tenantId });
+          await connection.execute(
+            `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id IN (${clause})`,
+            binds,
+            { autoCommit: true }
+          );
+        }
 
         // Record relationship
         const insertBinds = genes.map((g) => ({
           id: `rel-${randomUUID().slice(0, 8)}`,
-          src: String(g[0]),
+          src: String(rowValue(g, "id")),
           tgt: geneId,
         }));
         await connection.executeMany(
           `INSERT INTO gene_relationships (id, source_id, target_id, relationship, weight)
            VALUES (:id, :src, :tgt, 'merged_into', 1.0)`,
-          insertBinds as any,
+          insertBinds,
           { autoCommit: true },
         );
       }
@@ -794,16 +800,20 @@ export class GenomeService {
       await setSessionContext(connection);
 
       let count = 0;
-      // ⚡ Bolt Optimization: Batch retirement update using executeMany instead of executing queries in a loop.
+      // ⚡ Bolt Optimization: Batch retirement update using IN clause instead of executeMany to reduce DB overhead.
       if (geneIds.length > 0) {
-        const binds = geneIds.map((id) => ({ id, tenantId: getTenantId() }));
-        const result = await connection.executeMany(
-          `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
-           WHERE id = :id AND status != 'retired' AND tenant_id = :tenantId`,
-          binds as any,
-          { autoCommit: true },
-        );
-        count = result.rowsAffected || 0;
+        const BATCH_CHUNK_SIZE = 900;
+        for (let k = 0; k < geneIds.length; k += BATCH_CHUNK_SIZE) {
+          const chunk = geneIds.slice(k, k + BATCH_CHUNK_SIZE);
+          const { clause, binds } = buildInClause(chunk, { tenantId: getTenantId() });
+          const result = await connection.execute(
+            `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
+             WHERE status != 'retired' AND tenant_id = :tenantId AND id IN (${clause})`,
+            binds,
+            { autoCommit: true },
+          );
+          count += result.rowsAffected || 0;
+        }
       }
 
       logger.info(`[Genome] Retired ${count} genes`);

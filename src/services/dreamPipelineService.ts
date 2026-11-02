@@ -7,11 +7,15 @@
 
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
-import { DreamingService, type DreamMemoryType } from "./dreamingService.js";
+import { createHash } from "node:crypto";
+import { DreamingService, type DreamMemoryType, type DreamSaveStatus } from "./dreamingService.js";
 import { summarizeConversationForDreams } from "./llmService.js";
 import { ConsolidationEngine, type ConsolidationReport } from "./consolidationEngine.js";
 import { GenomeService } from "./genomeService.js";
 import { WikiService, type LLMProviderType } from "./wikiService.js";
+import { DreamCaptureStore, type PendingCaptureEvent } from "./dreamCaptureStore.js";
+import { MemoryIngestionService, type ReconciliationOptions, type ReconciliationResult } from "./memoryIngestionService.js";
+import { createDatabaseAdapter } from "../database/factory.js";
 
 function normalizeWikiProvider(provider: string): LLMProviderType | undefined {
   if (provider === "anthropic" || provider === "openai" || provider === "openai-compatible" || provider === "template") {
@@ -22,7 +26,11 @@ function normalizeWikiProvider(provider: string): LLMProviderType | undefined {
 
 export interface DailyPipelineOptions {
   project?: string;
+  projectId?: string;
   provider?: string;
+  runId?: string;
+  runAt?: string;
+  runFence?: { jobKey: string; ownerToken: string; fencingToken: number };
 }
 
 export interface DailyPipelineResult {
@@ -73,7 +81,10 @@ export interface DreamSaveOptions {
 
 export interface DreamSaveResult {
   success: boolean;
-  id: string;
+  id?: string;
+  status: DreamSaveStatus;
+  persisted: boolean;
+  reason_code?: string;
   memory_type: DreamMemoryType;
   project: string;
   durationMs: number;
@@ -83,6 +94,15 @@ export class DreamPipelineService {
   private static isRunning = false;
   private static lastRunDate: string | null = null;
   private static lastDurationMs: number | null = null;
+
+  /**
+   * Return durable source events that still need extraction/reconciliation.
+   * Event rows remain pending until the Phase5 extraction worker records their
+   * outcomes; merely reading them never advances an ACK or discards evidence.
+   */
+  public static async reconcilePendingIngests(options: ReconciliationOptions = {}): Promise<ReconciliationResult> {
+    return MemoryIngestionService.processPending(options);
+  }
 
   /**
    * Get current pipeline execution status and metrics
@@ -131,10 +151,19 @@ export class DreamPipelineService {
       const engine = new ConsolidationEngine();
       consolidationResult = await engine.run({
         project: options.project && options.project !== "all" ? options.project : undefined,
+        projectId: options.projectId,
         operations: ["dedup", "extract_concepts", "score", "score_dreams"],
         provider: options.provider && options.provider !== "all" ? options.provider : undefined,
+        runId: options.runId,
+        runAt: options.runAt,
+        runFence: options.runFence,
       });
-      logger.info(`[Dreaming Pipeline] Daily consolidation completed for project="${project}" provider="${provider}"`);
+      if (consolidationResult.status !== "completed" || consolidationResult.errors.length > 0) {
+        pipelineError = "consolidation operations failed";
+        logger.error(`[Dreaming Pipeline] Daily consolidation failed for project="${project}" provider="${provider}" (status=${consolidationResult.status}, errors=${consolidationResult.errors.length})`);
+      } else {
+        logger.info(`[Dreaming Pipeline] Daily consolidation completed for project="${project}" provider="${provider}"`);
+      }
     } catch (err: unknown) {
       pipelineError = err instanceof Error ? err.message : String(err);
       logger.error(`[Dreaming Pipeline] Daily consolidation failed for project="${project}": ${pipelineError}`);
@@ -145,7 +174,7 @@ export class DreamPipelineService {
     const durationMs = Date.now() - pipelineStartTime;
     const completedAt = new Date().toISOString();
     this.lastDurationMs = durationMs;
-    this.lastRunDate = completedAt.split("T")[0];
+    if (!pipelineError) this.lastRunDate = completedAt.split("T")[0];
 
     logger.info(`[Dreaming Pipeline] [${completedAt}] Daily dream generation pipeline COMPLETED in ${durationMs}ms (status: ${pipelineError ? "error" : "success"}, merged: ${consolidationResult?.dreamsMerged ?? 0}, concepts: ${consolidationResult?.conceptsCreated ?? 0})`);
 
@@ -203,7 +232,37 @@ export class DreamPipelineService {
     const savedDreams: Array<{ id: string; memory_type: string; content: string }> = [];
     const skipped: string[] = [];
 
-    for (const dream of candidateDreams) {
+    // Structured extraction retains source events and evidence on the legacy
+    // transcript endpoint too. Unstructured legacy candidates keep the direct
+    // save compatibility path.
+    const structured = candidateDreams.every(dream => Array.isArray(dream.evidence) && dream.evidence.length > 0);
+    if (structured) {
+      const segments = options.content.split(/\n\n---\n\n/);
+      const eventIds: string[] = [];
+      for (const segment of segments) {
+        const match = segment.match(/^\[(USER|ASSISTANT|TOOL)\]\n([\s\S]*)$/);
+        if (!match) continue;
+        const actorRole = match[1] as PendingCaptureEvent['actorRole'];
+        const content = match[2].trim();
+        const eventId = `legacy_${createHash('sha256').update(JSON.stringify([auth.uid, project, sessId, actorRole, content])).digest('hex')}`;
+        const ack = await DreamCaptureStore.accept({ eventId, sessionId: sessId, project, actorRole, content });
+        if (!ack.acknowledged) throw new Error('Transcript source persistence failed');
+        eventIds.push(eventId);
+      }
+
+      for (const eventId of eventIds) {
+        const result = await MemoryIngestionService.processPending({ projectId: project, eventId, limit: 1 });
+        if (!result.success) throw new Error('Transcript extraction remains pending for retry');
+        for (const id of result.memory_ids) {
+          const rows = await createDatabaseAdapter().query<{ id: string; memory_type: string; content: string }>(
+            'SELECT id, memory_type, content FROM ai_dreaming_memory WHERE tenant_id = :tenantId AND id = :id', { tenantId: auth.uid, id });
+          savedDreams.push(...rows);
+        }
+        for (let i = 0; i < result.events_filtered; i++) skipped.push('filtered');
+      }
+    }
+
+    for (const dream of structured ? [] : candidateDreams) {
       const memId = await authStorage.run(auth, () =>
         DreamingService.saveDreamMemory(
           project,
@@ -282,26 +341,30 @@ export class DreamPipelineService {
     const project = options.project || "global";
     const importanceVal = typeof options.importance === "number" ? Math.min(9, Math.max(1, options.importance)) : 5;
 
-    const memId = await authStorage.run(auth, () =>
-      DreamingService.saveDreamMemory(
-        project,
-        options.session_id || "unknown",
-        options.memory_type,
-        options.content,
-        importanceVal,
-        options.provider,
-        options.scope,
-        options.tags,
-        options.related_ids
-      )
-    );
+    const acknowledgement = await authStorage.run(auth, () => DreamingService.saveDreamMemoryWithAck({
+      project,
+      sessionId: options.session_id || "unknown",
+      memoryType: options.memory_type,
+      content: options.content,
+      importance: importanceVal,
+      aiModel: options.provider,
+      scope: options.scope,
+      tags: options.tags,
+      relatedIds: options.related_ids,
+    }));
 
     const durationMs = Date.now() - startTime;
-    logger.info(`[Dreaming Pipeline] Saved dream memory [${options.memory_type}] (${memId}) in ${durationMs}ms for project="${project}"`);
+    const persisted = (acknowledgement.status === "stored" || acknowledgement.status === "duplicate") &&
+      acknowledgement.persisted && typeof acknowledgement.id === "string" && acknowledgement.id.length > 0;
+    const success = persisted || acknowledgement.status === "filtered";
+    logger.info(`[Dreaming Pipeline] Dream memory ${acknowledgement.status} [${options.memory_type}] in ${durationMs}ms for project="${project}"`);
 
     return {
-      success: true,
-      id: memId,
+      success,
+      ...(persisted ? { id: acknowledgement.id } : {}),
+      status: acknowledgement.status,
+      persisted,
+      ...(acknowledgement.reason_code ? { reason_code: acknowledgement.reason_code } : {}),
       memory_type: options.memory_type,
       project,
       durationMs,
