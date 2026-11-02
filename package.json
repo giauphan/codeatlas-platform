@@ -79,7 +79,7 @@
     "express": "^4.19.2",
     "express-rate-limit": "^8.6.0",
     "firebase-admin": "^14.3.0",
-    "glob": "^10.3.10",
+    "glob": "^14.0.2",
     "google-auth-library": "^11.0.1",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
