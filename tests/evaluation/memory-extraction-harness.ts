@@ -97,7 +97,10 @@ function resultText(result: ExtractionResult): string {
 }
 
 function normalizeQuote(value: string): string {
-  return normalize(value).replace(/[.!?]+$/, '');
+  const normalized = normalize(value);
+  let end = normalized.length;
+  while (end > 0 && '.!?'.includes(normalized[end - 1])) end--;
+  return normalized.slice(0, end);
 }
 
 function groundingViolationCount(result: ExtractionResult, fixture: ExtractionFixture): number {

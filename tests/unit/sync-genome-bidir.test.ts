@@ -33,3 +33,42 @@ test("sync API calls reject redirects and preserve the configured base path", as
   await assert.rejects(apiCall("/redirect"));
   assert.equal(redirectedRequestCount, 0);
 });
+
+test('sync API joins long base paths without quadratic trailing-slash scans', async () => {
+  const pathname = `/prefix${'/'.repeat(60_000)}x`;
+  let requestedPath = '';
+  const apiCall = createApiCall(new URL(`https://api.example.com${pathname}`), 'key', async (input) => {
+    requestedPath = new URL(String(input)).pathname;
+    return new Response(null, { status: 204 });
+  });
+  const start = performance.now();
+  await apiCall('/gene');
+  assert.equal(requestedPath, `${pathname}/gene`);
+  assert.ok(performance.now() - start < 1_000, 'path joining must not rescan long paths');
+});
+
+test('malformed remote gene collections cannot inject log lines', async (t) => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ genes: { length: '1\nFORGED LOG ENTRY' } }));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const origin = `http://127.0.0.1:${address.port}`;
+  const { spawn } = await import('node:child_process');
+  const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/sync-genome-bidir.ts', 'synthetic-key', origin, 'download'], {
+    env: { ...process.env, CODEATLAS_API_URL: origin, CODEATLAS_ALLOW_PRIVATE_API_URL: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  child.stdout.setEncoding('utf8').on('data', chunk => { output += chunk; });
+  child.stderr.setEncoding('utf8').on('data', chunk => { output += chunk; });
+  const code = await new Promise<number | null>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', resolve);
+  });
+  assert.notEqual(code, 0);
+  assert.doesNotMatch(output, /FORGED LOG ENTRY/);
+});

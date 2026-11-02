@@ -758,7 +758,7 @@ export class DreamingService {
               logger.warn('[Dreaming] Failed to bump access_count:', bumpErr instanceof Error ? bumpErr.message : String(bumpErr));
             });
             DreamingService.activeBackgroundTasks.add(updateTask);
-            updateTask.finally(() => {
+            void updateTask.finally(() => {
               DreamingService.activeBackgroundTasks.delete(updateTask);
             });
           }

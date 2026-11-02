@@ -303,7 +303,7 @@ async function main() {
     // Send to API
     const provider = model || "Claude";
     // Use the project dir name as the project hint
-    const project = session.projectDir.replace(/^-/, "").replace(/-/g, "_");
+    const project = session.projectDir.replace(/^-/, "").replaceAll("-", "_");
 
     const ok = await ingestSession(
       session.sessionId,

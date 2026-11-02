@@ -93,7 +93,7 @@ function redactPrivateKeyBlocks(value: string): string {
 export function redactMemoryText(value: string): string {
   return redactPrivateKeyBlocks(value)
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:)[^@\s/]+(@)/gi, '$1[REDACTED]$2')
-    .replace(/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|aws[_-]?secret[_-]?access[_-]?key|aws[_-]?session[_-]?token|password|secret|authorization)["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)/gi, (_match, prefix: string) => `${prefix.replace(/["']/g, '').replace(/\s*[:=]\s*$/, '')}=[REDACTED]`)
+    .replace(/(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|aws[_-]?secret[_-]?access[_-]?key|aws[_-]?session[_-]?token|password|secret|authorization)["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)/gi, (_match, prefix: string) => `${prefix.replace(/["']/g, '').trimEnd().slice(0, -1).trimEnd()}=[REDACTED]`)
     .replace(/\bBearer\s+(?:value\s+)?[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [REDACTED]')
     .replace(/\b(?:sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{12,}|api_test_[A-Za-z0-9_-]+|(?:AKIA|ASIA)[A-Z0-9]{16})\b/g, '[REDACTED]');
 }

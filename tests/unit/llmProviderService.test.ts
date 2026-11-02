@@ -172,3 +172,17 @@ describe('LLMProviderService', () => {
     }
   });
 });
+
+test('long provider paths are handled without repeated trailing-slash scans', async () => {
+  const service = new LLMProviderService();
+  const path = `/v1${'/'.repeat(60_000)}x`;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('{}', { status: 401 });
+  const start = performance.now();
+  try {
+    await service.generateText({ provider: 'openai-compatible', apiKey: 'test', prompt: 'test', baseUrl: `http://localhost:11434${path}` });
+    assert.ok(performance.now() - start < 1_000, 'provider path processing must remain linear');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

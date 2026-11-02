@@ -246,8 +246,8 @@ export class WikiService {
     for (const page of pages) {
       if (page.parent_path && !nodeMap.has(page.parent_path)) {
         // Extract a title for the synthesized parent from its path name
-        const titleMatch = page.parent_path.match(/([^\/]+)$/);
-        const title = titleMatch ? titleMatch[1].charAt(0).toUpperCase() + titleMatch[1].slice(1) : page.parent_path;
+        const segment = page.parent_path.slice(page.parent_path.lastIndexOf('/') + 1);
+        const title = segment ? segment.charAt(0).toUpperCase() + segment.slice(1) : page.parent_path;
 
         nodeMap.set(page.parent_path, {
           path: page.parent_path,
@@ -262,8 +262,8 @@ export class WikiService {
 
     for (const page of pages) {
       if (page.parent_path && !nodeMap.has(page.parent_path)) {
-        const titleMatch = page.parent_path.match(/([^\/]+)$/);
-        const title = titleMatch ? titleMatch[1].charAt(0).toUpperCase() + titleMatch[1].slice(1) : page.parent_path;
+        const segment = page.parent_path.slice(page.parent_path.lastIndexOf('/') + 1);
+        const title = segment ? segment.charAt(0).toUpperCase() + segment.slice(1) : page.parent_path;
 
         nodeMap.set(page.parent_path, {
           path: page.parent_path,
