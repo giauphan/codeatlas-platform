@@ -325,7 +325,7 @@ export class ConsolidationEngine {
       if (removed.has(left.id)) continue;
       for (let j = i + 1; j < group.length; j++) {
         const right = group[j];
-        if (removed.has(right.id) || this.cosineSimilarity(left.embedding, right.embedding) <= CONSOLIDATION_SIMILARITY_THRESHOLD) continue;
+        if (removed.has(right.id) || !(this.cosineSimilarity(left.embedding, right.embedding) > CONSOLIDATION_SIMILARITY_THRESHOLD)) continue;
         const removeLeft = left.importance < right.importance;
         const duplicate = removeLeft ? left : right;
         removed.add(duplicate.id);
@@ -613,7 +613,7 @@ export class ConsolidationEngine {
       for (let j = i + 1; j < group.length; j++) {
         const newer = group[j];
         if (ids.has(newer.id)) continue;
-        if (newer.confidence <= older.confidence || this.cosineSimilarity(older.embedding, newer.embedding) <= CONSOLIDATION_SIMILARITY_THRESHOLD) continue;
+        if (!(newer.confidence > older.confidence) || !(this.cosineSimilarity(older.embedding, newer.embedding) > CONSOLIDATION_SIMILARITY_THRESHOLD)) continue;
         ids.add(older.id);
         break;
       }

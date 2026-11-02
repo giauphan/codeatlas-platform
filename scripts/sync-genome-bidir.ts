@@ -90,9 +90,7 @@ function slugify(name) {
 }
 
 // ── Upload ──────────────────────────────────────────────
-async function upload(apiCall) {
-  console.log("\nUpload: Local skills to Cloud Genome");
-
+function getLocalSkills() {
   const localSkills = [];
   if (fs.existsSync(SKILLS_DIR)) {
     for (const dir of fs.readdirSync(SKILLS_DIR)) {
@@ -105,28 +103,46 @@ async function upload(apiCall) {
       }
     }
   }
+  return localSkills;
+}
 
+async function uploadSkill(apiCall, [name, desc, cat]) {
+  process.stdout.write("  " + name + "... ");
+
+  if (DEMO) {
+    console.log("(would sync " + cat + ")");
+    return true;
+  }
+
+  try {
+    const res = await apiCall("/api/genome/gene", {
+      method: "POST",
+      body: JSON.stringify({
+        name, description: desc, problem: "Need " + name,
+        solution: desc, category: cat, project: "codeatlas-genome",
+        sourceType: "skill", confidence: 0.70,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      console.log("OK");
+      return true;
+    }
+    console.log("FAIL: " + safeLogValue(data.error || res.status));
+  } catch (e) {
+    console.log("FAIL: " + safeLogValue(e instanceof Error ? e.message : e));
+  }
+  return false;
+}
+
+async function upload(apiCall) {
+  console.log("\nUpload: Local skills to Cloud Genome");
+  const localSkills = getLocalSkills();
   const toUpload = localSkills.length > 0 ? localSkills : CORE_SKILLS;
   let count = 0;
-
-  for (const [name, desc, cat] of toUpload) {
-    process.stdout.write("  " + name + "... ");
-
-    if (DEMO) { console.log("(would sync " + cat + ")"); count++; continue; }
-
-    try {
-      const res = await apiCall("/api/genome/gene", {
-        method: "POST",
-        body: JSON.stringify({
-          name, description: desc, problem: "Need " + name,
-          solution: desc, category: cat, project: "codeatlas-genome",
-          sourceType: "skill", confidence: 0.70,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) { console.log("OK"); count++; }
-      else { console.log("FAIL: " + safeLogValue(data.error || res.status)); }
-    } catch (e) { console.log("FAIL: " + safeLogValue(e instanceof Error ? e.message : e)); }
+  for (const skill of toUpload) {
+    // Serialize upserts to preserve output order and avoid racing gene version updates.
+    if (await uploadSkill(apiCall, skill)) count++;
   }
   return count;
 }

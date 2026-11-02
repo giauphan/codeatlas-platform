@@ -9,6 +9,22 @@ import { indexingService } from "./indexingService.js";
 
 const FILE_EXISTS_CONCURRENCY = 50;
 
+function normalizeProjectPath(projectPath: string): string {
+  return projectPath.replaceAll("\\", "/").toLowerCase();
+}
+
+function findAnalysisProject(
+  projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[],
+  projectDir: string,
+  absPath: string,
+) {
+  return projects.find(
+    (project) => project.dir === absPath ||
+      project.name.toLowerCase() === projectDir.toLowerCase() ||
+      normalizeProjectPath(path.relative(process.cwd(), project.dir)) === normalizeProjectPath(projectDir)
+  );
+}
+
 export interface AnalysisResultLocal extends AnalysisResult {
   stats?: { files: number; functions: number; classes: number; dependencies: number; circularDeps: number; deadCode: number };
 }
@@ -717,11 +733,7 @@ export async function loadAnalysis(projectDir?: string, force = false): Promise<
       logger.warn(`[Auto-Scan] 🛡️ Ignored IDE system/extensions directory from workspace indexing: ${absPath}`);
       return null;
     }
-    let match = projects.find(
-      (p) => p.dir === absPath || 
-             p.name.toLowerCase() === projectDir.toLowerCase() ||
-             path.relative(process.cwd(), p.dir).replaceAll("\\", "/").toLowerCase() === projectDir.replaceAll("\\", "/").toLowerCase()
-    );
+    let match = findAnalysisProject(projects, projectDir, absPath);
     if (match) {
       target = match;
       await registerProjectAsync(target.dir).catch(err => {
@@ -966,11 +978,7 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
       logger.warn(`[Auto-Scan] 🛡️ Ignored IDE system/extensions directory from workspace indexing: ${absPath}`);
       return null;
     }
-    let match = projects.find(
-      (p) => p.dir === absPath || 
-             p.name.toLowerCase() === projectDir.toLowerCase() ||
-             path.relative(process.cwd(), p.dir).replaceAll("\\", "/").toLowerCase() === projectDir.replaceAll("\\", "/").toLowerCase()
-    );
+    let match = findAnalysisProject(projects, projectDir, absPath);
     if (match) {
       target = match;
       await registerProjectAsync(target.dir);
@@ -1020,7 +1028,7 @@ export async function resolveProjectDir(projectDir: string, tenantId?: string, r
   const absPath = path.resolve(projectDir);
   const match = projects.find(
     (p) => p.dir === absPath || 
-           path.relative(process.cwd(), p.dir).replaceAll("\\", "/").toLowerCase() === projectDir.replaceAll("\\", "/").toLowerCase() ||
+           normalizeProjectPath(path.relative(process.cwd(), p.dir)) === normalizeProjectPath(projectDir) ||
            (!requireExactPath && p.name.toLowerCase() === projectDir.toLowerCase())
   );
   if (!match) return null;

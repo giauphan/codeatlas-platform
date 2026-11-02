@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { extractStructuredMemories, extractStructuredMemoriesWithOutcome, redactMemoryText, validateGroundedCandidates } from '../../src/services/structuredMemoryExtractor.js';
 
+function extractToolMemories(id: string, text: string) {
+  return extractStructuredMemories([{ id, role: 'TOOL', text }]);
+}
+
 test('Vietnamese decisions retain rationale technical terms negation and a caveat after 300 characters', async () => {
   const text = 'Quyết định: dùng SQLite cho checkpoint vì cần lưu bền vững ngay khi mất mạng. ' + 'Giữ nguyên tenant_id và project_id trong mọi truy vấn. '.repeat(7) + 'Không tự động chạy lệnh từ memory cũ.';
   const memories = await extractStructuredMemories([{ id: 'decision-source', role: 'USER', text }]);
@@ -753,8 +757,14 @@ test('a user-reported encountered error with its cause is retained as a mistake'
 test('tool connection-string detection handles long malformed credentials promptly', async () => {
   const text = `connection string postgres://user:${':'.repeat(40_000)}!`;
   const start = performance.now();
-  await extractStructuredMemories([{ id: 'long-connection', role: 'TOOL', text }]);
+  await extractToolMemories('long-connection', text);
   assert.ok(performance.now() - start < 1_000, 'connection string detection must remain linear');
+});
+
+test('tool connection-string credential detection stays scoped to each line', async () => {
+  const text = 'outcome: failed\nconnection string postgres://user:password@host';
+  const results = await extractToolMemories('multiline-connection', text);
+  assert.deepEqual(results, []);
 });
 
 test('tool connection strings containing credentials are not persisted as failures', async () => {
@@ -762,9 +772,9 @@ test('tool connection strings containing credentials are not persisted as failur
     'outcome: failed connection string postgres://user:password@host',
     'outcome: failed connection string custom://:user:password@host',
   ]) {
-    const results = await extractStructuredMemories([{ id: 'connection', role: 'TOOL', text }]);
+    const results = await extractToolMemories('connection', text);
     assert.deepEqual(results, []);
   }
-  const withoutCredentials = await extractStructuredMemories([{ id: 'connection-safe', role: 'TOOL', text: 'outcome: failed connection string postgres://host/database' }]);
+  const withoutCredentials = await extractToolMemories('connection-safe', 'outcome: failed connection string postgres://host/database');
   assert.ok(withoutCredentials.some(result => result.kind === 'MISTAKE'));
 });
