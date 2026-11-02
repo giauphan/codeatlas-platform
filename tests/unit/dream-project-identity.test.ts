@@ -4,12 +4,20 @@ import { SQLiteAdapter } from '../../src/database/adapters/sqliteAdapter.js';
 import { authStorage } from '../../src/utils/context.js';
 
 let adapter: SQLiteAdapter;
-mock.module('../../src/database/factory.js', { namedExports: { createDatabaseAdapter: () => adapter } });
+let adapterError: Error | undefined;
+let adapterFactoryCalls = 0;
+mock.module('../../src/database/factory.js', { namedExports: { createDatabaseAdapter: () => {
+  adapterFactoryCalls++;
+  if (adapterError) throw adapterError;
+  return adapter;
+} } });
 const { DreamProjectIdentityService } = await import('../../src/services/dreamProjectIdentityService.js');
 
 const tenant = { uid: 'tenant-project-identity', tier: 'enterprise', keyId: 'test-key' };
 
 beforeEach(async () => {
+  adapterError = undefined;
+  adapterFactoryCalls = 0;
   adapter = new SQLiteAdapter(':memory:');
   await adapter.initialize();
 });
@@ -60,4 +68,23 @@ test('the same alias is isolated by tenant and slash normalization is stable', a
   assert.deepEqual(other.collisions, []);
   assert.deepEqual(await authStorage.run(tenant, () => DreamProjectIdentityService.getAliases('project-a')), ['C:/work/repo']);
   assert.deepEqual(await authStorage.run(otherTenant, () => DreamProjectIdentityService.getAliases('project-b')), ['C:/work/repo']);
+});
+
+test('registration validates auth and project ID before constructing the repository, including empty-alias input', async () => {
+  adapterError = new Error('factory unavailable');
+
+  await assert.rejects(DreamProjectIdentityService.register({ projectId: 'valid' }), /Auth context required/);
+  assert.equal(adapterFactoryCalls, 0);
+
+  await assert.rejects(
+    authStorage.run(tenant, () => DreamProjectIdentityService.register({ projectId: '  ' })),
+    /Invalid project_id/,
+  );
+  assert.equal(adapterFactoryCalls, 0);
+
+  await assert.rejects(
+    authStorage.run(tenant, () => DreamProjectIdentityService.register({ projectId: 'valid' })),
+    /factory unavailable/,
+  );
+  assert.equal(adapterFactoryCalls, 1);
 });

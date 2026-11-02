@@ -9,11 +9,14 @@
 
 import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
+import type { AdapterConnection } from "../database/connection.js";
 import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 import { buildInClause } from "../database/utils.js";
+import { GeneUpsertPersistenceAdapter } from "../database/adapters/geneUpsertPersistence.js";
+import { upsertGene as executeGeneUpsert } from "./geneUpsertUseCase.js";
 
 /** Get authenticated tenant ID — fallback to admin for testing */
 export function getTenantId(): string {
@@ -78,124 +81,35 @@ export interface ExtractRequest {
   autoExtract?: boolean;
 }
 
+async function withGenomeConnection<T>(work: (connection: AdapterConnection) => Promise<T>): Promise<T> {
+  const connection = await (await initPool()).getConnection();
+  try {
+    await setSessionContext(connection);
+    return await work(connection);
+  } finally {
+    try {
+      await connection.close();
+    } catch {
+      // Preserve the existing best-effort cleanup policy.
+    }
+  }
+}
+
 // ─── Service ─────────────────────────────────────────────────
 export class GenomeService {
   /**
    * Create or update a Gene.
    */
   static async upsertGene(input: GeneInput): Promise<string> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
-
-      // Generate embedding from problem + solution combined
-      const combinedText = `${input.problem}\n\n${input.solution}`;
-      const embedding = await generateEmbedding(combinedText, "query");
-
-      // Gene with the same name + project pair means the same failure pattern.
-      // We increment version rather than overwrite, preserving history.
-      const existing = await connection.execute<any[]>(
-        `SELECT id, version FROM codeatlas_genome WHERE name = :name AND project = :project AND tenant_id = :tenantId`,
-        {
-          name: input.name,
-          project: input.project,
-          tenantId: getTenantId(),
-        } as any,
-      );
-
-      let geneId: string;
-      const rows = existing.rows || [];
-
-      if (rows.length > 0) {
-        // Preserve existing usage_count and prevention context;
-        // only increment version and update timestamp.
-        geneId = String(rows[0][0]);
-        const oldVersion = Number(rows[0][1]);
-        const newVersion = oldVersion + 1;
-
-        // Save mutation record
-        await connection.execute(
-          `INSERT INTO gene_mutations (id, gene_id, old_version, new_version, changes, created_at)
-           VALUES (:id, :geneId, :oldVer, :newVer, :changes, CURRENT_TIMESTAMP)`,
-          {
-            id: `mut-${randomUUID().slice(0, 8)}`,
-            geneId,
-            oldVer: oldVersion,
-            newVer: newVersion,
-            changes: JSON.stringify({
-              description: input.description,
-              solution: input.solution,
-            }),
-          } as any,
-          { autoCommit: true },
-        );
-
-        // Overwrite gene fields while preserving creation timestamp.
-        await connection.execute(
-          `UPDATE codeatlas_genome SET
-           description = :desc, problem = :problem, solution = :solution,
-           architecture = :arch, category = :cat, confidence = :conf,
-           version = :ver, evolution_score = evolution_score + 1,
-           embedding = :emb, status = 'active', updated_at = CURRENT_TIMESTAMP
-           WHERE id = :id AND tenant_id = :tenantId`,
-          {
-            id: geneId,
-            desc: input.description,
-            problem: input.problem,
-            solution: input.solution,
-            arch: input.architecture || "",
-            cat: input.category,
-            conf: input.confidence || 0.5,
-            ver: newVersion,
-            emb: embedding ? new Uint8Array(new Float32Array(embedding).buffer) : null,
-            tenantId: getTenantId(),
-          } as any,
-          { autoCommit: true },
-        );
-        logger.info(`[Genome] Gene "${input.name}" updated to v${newVersion}`);
-      } else {
-        // Insert new
-        geneId = `gene-${randomUUID().slice(0, 8)}`;
-        await connection.execute(
-          `INSERT INTO codeatlas_genome (
-             id, name, description, problem, solution, architecture,
-             category, project, confidence, version, evolution_score,
-             usage_count, success_rate, embedding, status, source_type,
-             source_id, dependencies, created_at, updated_at, tenant_id
-           ) VALUES (
-             :id, :name, :desc, :problem, :solution, :arch,
-             :cat, :project, :conf, 1, 1, 0, 0.50, :emb, 'active',
-             :srcType, :srcId, :deps, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :tenantId
-           )`,
-          {
-            id: geneId,
-            name: input.name,
-            desc: input.description,
-            problem: input.problem,
-            solution: input.solution,
-            arch: input.architecture || "",
-            cat: input.category,
-            project: input.project,
-            conf: input.confidence || 0.5,
-            emb: embedding ? new Uint8Array(new Float32Array(embedding).buffer) : null,
-            srcType: input.sourceType,
-            srcId: input.sourceId || "",
-            deps: JSON.stringify(input.dependencies || []),
-            tenantId: getTenantId(),
-          } as any,
-          { autoCommit: true },
-        );
-        logger.info(`[Genome] Gene "${input.name}" created (v1)`);
-      }
-
-      return geneId;
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+    return withGenomeConnection(async (connection) => {
+      return executeGeneUpsert(input, {
+        persistence: new GeneUpsertPersistenceAdapter(connection),
+        getTenantId,
+        generateEmbedding: (text) => generateEmbedding(text, "query"),
+        logInfo: (message) => logger.info(message),
+        createId: (prefix) => `${prefix}-${randomUUID().slice(0, 8)}`,
+      });
+    });
   }
 
   /**
