@@ -205,6 +205,108 @@ describe("GenomeService", () => {
 
   // ── upsertGene ────────────────────────────────────────────────────
   describe("upsertGene()", () => {
+    const geneInput = {
+      name: "Scoped Pattern",
+      description: "Scoped description",
+      problem: "Scoped problem",
+      solution: "Scoped solution",
+      category: "pattern",
+      project: "project-alpha",
+      sourceType: "manual",
+    };
+
+    test("sets the session context and closes the connection after success", async () => {
+      mockEmptyQuery();
+
+      await GenomeService.upsertGene(geneInput);
+
+      assert.equal(mockSetSessionContext.mock.callCount(), 1);
+      assert.equal(mockSetSessionContext.mock.calls[0].arguments[0], mockConnection);
+      assert.equal(mockConnection.close.mock.callCount(), 1);
+    });
+
+    test("closes the connection when session setup fails", async () => {
+      const setupError = new Error("session setup failed");
+      mockSetSessionContext.mock.mockImplementationOnce(async () => {
+        throw setupError;
+      });
+
+      await assert.rejects(() => GenomeService.upsertGene(geneInput), setupError);
+
+      assert.equal(mockSetSessionContext.mock.callCount(), 1);
+      assert.equal(mockConnection.close.mock.callCount(), 1);
+    });
+
+    test("closes the connection when a database operation fails after session setup", async () => {
+      const queryError = new Error("gene lookup failed");
+      mockConnection.execute.mock.mockImplementationOnce(async () => {
+        throw queryError;
+      });
+
+      await assert.rejects(() => GenomeService.upsertGene(geneInput), queryError);
+
+      assert.equal(mockSetSessionContext.mock.callCount(), 1);
+      assert.equal(mockConnection.close.mock.callCount(), 1);
+    });
+
+    test("looks up an existing gene using both project and tenant binds", async () => {
+      mockConnection.execute.mock.mockImplementation(async () => ({
+        rows: [],
+        rowsAffected: 1,
+      }));
+
+      await GenomeService.upsertGene(geneInput);
+
+      const select = mockConnection.execute.mock.calls.find((call) =>
+        String(call.arguments[0]).includes("SELECT id, version FROM codeatlas_genome"),
+      );
+      assert.ok(select, "existing gene lookup should run");
+      assert.match(String(select.arguments[0]), /project = :project/);
+      assert.match(String(select.arguments[0]), /tenant_id = :tenantId/);
+      assert.deepEqual(select.arguments[1], {
+        name: geneInput.name,
+        project: geneInput.project,
+        tenantId: "test-user",
+      });
+    });
+
+    test("inserts a new gene with its project and tenant binds", async () => {
+      mockConnection.execute.mock.mockImplementation(async (sql: string) =>
+        sql.includes("SELECT id, version FROM codeatlas_genome")
+          ? { rows: [] }
+          : { rowsAffected: 1 },
+      );
+
+      await GenomeService.upsertGene(geneInput);
+
+      const insert = mockConnection.execute.mock.calls.find((call) =>
+        String(call.arguments[0]).includes("INSERT INTO codeatlas_genome"),
+      );
+      assert.ok(insert, "new gene should be inserted");
+      assert.match(String(insert.arguments[0]), /:project/);
+      assert.match(String(insert.arguments[0]), /:tenantId/);
+      assert.equal((insert.arguments[1] as Record<string, unknown>).project, geneInput.project);
+      assert.equal((insert.arguments[1] as Record<string, unknown>).tenantId, "test-user");
+    });
+
+    test("updates only the selected existing gene within its tenant", async () => {
+      mockConnection.execute.mock.mockImplementation(async (sql: string) =>
+        sql.includes("SELECT id, version FROM codeatlas_genome")
+          ? { rows: [["gene-existing", 3]] }
+          : { rowsAffected: 1 },
+      );
+
+      await GenomeService.upsertGene(geneInput);
+
+      const update = mockConnection.execute.mock.calls.find((call) =>
+        String(call.arguments[0]).includes("UPDATE codeatlas_genome SET"),
+      );
+      assert.ok(update, "existing gene should be updated");
+      assert.match(String(update.arguments[0]), /WHERE id = :id AND tenant_id = :tenantId/);
+      assert.equal((update.arguments[1] as Record<string, unknown>).id, "gene-existing");
+      assert.equal((update.arguments[1] as Record<string, unknown>).tenantId, "test-user");
+    });
+
     test("creates new gene (v1) when it does not exist", async () => {
       // No existing gene
       mockConnection.execute.mock.mockImplementation(async (sql: string) => {

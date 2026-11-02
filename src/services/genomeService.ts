@@ -9,6 +9,7 @@
 
 import { randomUUID } from "node:crypto";
 import { initPool, setSessionContext } from "../database/connection.js";
+import type { AdapterConnection } from "../database/connection.js";
 import { createDatabaseAdapter } from "../database/factory.js";
 import { generateEmbedding } from "./embeddingService.js";
 import { logger } from "../utils/logger.js";
@@ -78,15 +79,27 @@ export interface ExtractRequest {
   autoExtract?: boolean;
 }
 
+async function withGenomeConnection<T>(work: (connection: AdapterConnection) => Promise<T>): Promise<T> {
+  const connection = await (await initPool()).getConnection();
+  try {
+    await setSessionContext(connection);
+    return await work(connection);
+  } finally {
+    try {
+      await connection.close();
+    } catch {
+      // Preserve the existing best-effort cleanup policy.
+    }
+  }
+}
+
 // ─── Service ─────────────────────────────────────────────────
 export class GenomeService {
   /**
    * Create or update a Gene.
    */
   static async upsertGene(input: GeneInput): Promise<string> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
+    return withGenomeConnection(async (connection) => {
 
       // Generate embedding from problem + solution combined
       const combinedText = `${input.problem}\n\n${input.solution}`;
@@ -189,13 +202,7 @@ export class GenomeService {
       }
 
       return geneId;
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+    });
   }
 
   /**
