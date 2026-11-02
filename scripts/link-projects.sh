@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Check if tenant ID is provided
-if [ -z "$1" ]; then
+if [[ -z "$1" ]]; then
   echo "❌ Error: Please provide a Tenant ID (Firebase User UID)."
   echo "Usage: ./link_projects.sh <tenant_id> [project_name_1] [project_name_2] ..."
   echo "Example: ./link_projects.sh tenant_user_1 shopee-deal-sweeper gemini-openai-proxy"
@@ -20,7 +20,7 @@ echo "⚙️ Creating tenant directory at: $USER_DIR"
 mkdir -p "$USER_DIR"
 
 # If no specific projects are provided, list available ones and exit
-if [ $# -eq 0 ]; then
+if [[ $# -eq 0 ]]; then
   echo "💡 No specific projects provided. Here are the available projects in $HOME:"
   find "$HOME" -maxdepth 1 -type d -not -path '*/.*' -not -path "$HOME" | sed "s|$HOME/||"
   echo ""
@@ -34,12 +34,12 @@ for PROJECT_NAME in "$@"; do
   SRC_PATH="$HOME/$PROJECT_NAME"
   DEST_PATH="$USER_DIR/$PROJECT_NAME"
   
-  if [ ! -d "$SRC_PATH" ]; then
+  if [[ ! -d "$SRC_PATH" ]]; then
     echo "❌ Error: Project directory not found at $SRC_PATH"
     continue
   fi
   
-  if [ -e "$DEST_PATH" ]; then
+  if [[ -e "$DEST_PATH" ]]; then
     echo "ℹ️ Project $PROJECT_NAME is already linked or exists in $USER_DIR. Skipping."
   else
     echo "🔗 Linking $PROJECT_NAME -> $DEST_PATH..."

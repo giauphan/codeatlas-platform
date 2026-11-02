@@ -173,7 +173,9 @@ export class SessionCheckpointService {
       if (outputField === 'active_task') overrides.active_task = safeText(items[0] || '');
       else overrides[outputField] = items.map(item => safeText(item));
     }
-    const sourceId = `explicit_${createHash('sha256').update(JSON.stringify([ids.sort(), overrides])).digest('hex')}`;
+    const sourceId = `explicit_${createHash('sha256').update(JSON.stringify([ids.sort((left, right) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    ), overrides])).digest('hex')}`;
     return persist(input.projectId, input.sessionId, sourceId, rows, overrides);
   }
 }

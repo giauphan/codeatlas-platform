@@ -9,15 +9,48 @@
  *
  * Usage:
  *   npx tsx scripts/sync-genome-bidir.ts <api-key> [api-base] [mode]
+ *   Configure CODEATLAS_API_URL to trust a custom API origin; api-base must match it.
+ *   Set CODEATLAS_ALLOW_PRIVATE_API_URL=1 for a trusted private API endpoint.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { isIP } from "node:net";
+import { pathToFileURL } from "node:url";
 
 const keyArg = process.argv[2] || process.env.CODEATLAS_API_KEY || "";
 const API_BASE = process.argv[3] || process.env.CODEATLAS_API_URL || "https://atlas.genrostore.com";
 const MODE = (process.argv[4] || "upload");
 const DEMO = !keyArg || keyArg === "demo";
+
+export function getApiBase(
+  value: string,
+  allowPrivate = process.env.CODEATLAS_ALLOW_PRIVATE_API_URL === "1",
+  trustedApiBase = process.env.CODEATLAS_API_URL || "https://atlas.genrostore.com",
+): URL {
+  let url;
+  let trustedUrl;
+  try {
+    url = new URL(value);
+    trustedUrl = new URL(trustedApiBase);
+  } catch {
+    throw new Error("API base and configured trusted API URL must be valid absolute URLs");
+  }
+
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+  const ipLiteral = hostname.replace(/^\[|\]$/g, "");
+  const isLoopback = hostname === "localhost" || hostname.endsWith(".localhost") ||
+    (isIP(ipLiteral) === 4 && ipLiteral.startsWith("127.")) || ipLiteral === "::1";
+  const isInternalHostname = (!hostname.includes(".") && hostname !== "localhost") ||
+    /(?:^|\.)(?:local|localdomain|internal|localhost|test|invalid)$/.test(hostname);
+  if ((url.protocol !== "https:" && !(url.protocol === "http:" && (isLoopback || allowPrivate))) ||
+      (!allowPrivate && (isIP(ipLiteral) !== 0 && !isLoopback || isInternalHostname)) ||
+      url.username || url.password || url.search || url.hash || url.origin !== trustedUrl.origin) {
+    throw new Error("API base must match the configured trusted API origin and use HTTPS; private hosts require CODEATLAS_ALLOW_PRIVATE_API_URL=1 (HTTP is allowed only for loopback or with that opt-in), and credentials, query, and fragment are not allowed");
+  }
+
+  return url;
+}
 
 const SKILLS_DIR = path.join(process.env.HOME || "/home/ubuntu", ".hermes", "skills");
 
@@ -34,12 +67,16 @@ const CORE_SKILLS = [
   ["documentation-and-adrs", "Record architectural decisions and documentation", "workflow"],
 ];
 
-async function apiCall(pathStr, opts = {}) {
-  const url = API_BASE + pathStr;
-  const headers = {};
-  if (!DEMO) headers["x-api-key"] = keyArg;
-  if (opts.method && opts.method !== "GET") headers["Content-Type"] = "application/json";
-  return fetch(url, { ...opts, headers });
+export function createApiCall(apiBase: URL, apiKey: string, fetcher: typeof fetch = fetch) {
+  return async function apiCall(pathStr: string, opts: RequestInit = {}): Promise<Response> {
+    const basePath = apiBase.pathname.replace(/\/+$/, "");
+    const endpointPath = pathStr.replace(/^\/+/, "");
+    const url = new URL(`${basePath}/${endpointPath}`, apiBase.origin);
+    const headers = new Headers(opts.headers);
+    if (apiKey) headers.set("x-api-key", apiKey);
+    if (opts.method && opts.method !== "GET") headers.set("Content-Type", "application/json");
+    return fetcher(url, { ...opts, headers, redirect: "error" });
+  };
 }
 
 function slugify(name) {
@@ -47,7 +84,7 @@ function slugify(name) {
 }
 
 // ── Upload ──────────────────────────────────────────────
-async function upload() {
+async function upload(apiCall) {
   console.log("\nUpload: Local skills to Cloud Genome");
 
   const localSkills = [];
@@ -89,7 +126,7 @@ async function upload() {
 }
 
 // ── Download ────────────────────────────────────────────
-async function download() {
+async function download(apiCall) {
   console.log("\nDownload: Cloud Genome to Local skills");
   if (DEMO) { console.log("  (demo — would download)\n"); return 0; }
 
@@ -145,13 +182,14 @@ async function download() {
 
 // ── Main ────────────────────────────────────────────────
 async function main() {
+  const apiCall = createApiCall(getApiBase(API_BASE), DEMO ? "" : keyArg);
   console.log("Bidirectional Skill <-> Genome Sync");
   console.log("Mode: " + MODE + (DEMO ? " (DEMO)" : ""));
   console.log("API: " + API_BASE + "\n");
 
   let up = 0, down = 0;
-  if (MODE === "upload" || MODE === "bidir") up = await upload();
-  if (MODE === "download" || MODE === "bidir") down = await download();
+  if (MODE === "upload" || MODE === "bidir") up = await upload(apiCall);
+  if (MODE === "download" || MODE === "bidir") down = await download(apiCall);
 
   console.log("\n---");
   console.log("Uploaded: " + up + " | Downloaded: " + down);
@@ -162,4 +200,9 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildClaudeAcceptanceRequestHeaders, buildClaudeArgs, CLAUDE_SESSION_BUDGET_USD, selectClaudeAcceptanceModel, validateClaudeAcceptanceInput } from '../../scripts/memory-pipeline-claude-two-session-acceptance.mjs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { buildClaudeAcceptanceRequestHeaders, buildClaudeArgs, CLAUDE_SESSION_BUDGET_USD, resolveClaudeAcceptanceExecutable, selectClaudeAcceptanceModel, validateClaudeAcceptanceInput } from '../../scripts/memory-pipeline-claude-two-session-acceptance.mjs';
 
 const valid = {
   optIn: '1',
@@ -35,6 +38,7 @@ test('each fresh Claude invocation is capped at one dollar and session two has n
   assert.equal(CLAUDE_SESSION_BUDGET_USD, '1.00');
   assert.equal(first[first.indexOf('--max-budget-usd') + 1], '1.00');
   assert.ok(first.includes('--allowedTools'));
+  assert.equal(first[first.indexOf('--allowedTools') + 1], `Bash(${process.execPath} *)`);
   assert.equal(second[second.indexOf('--max-budget-usd') + 1], '1.00');
   assert.equal(second.includes('--allowedTools'), false);
   assert.ok(debug.includes('--debug=hooks,mcp'));
@@ -56,4 +60,22 @@ test('Claude acceptance skips malformed model aliases and respects a valid trust
   } }), 'claude-sonnet-4-5');
   assert.equal(selectClaudeAcceptanceModel({ CODEATLAS_CLAUDE_ACCEPTANCE_MODEL: 'codex/gpt-6-luna' }, {}), 'codex/gpt-6-luna');
   assert.throws(() => selectClaudeAcceptanceModel({ CODEATLAS_CLAUDE_ACCEPTANCE_MODEL: 'unsafe model name' }, {}));
+});
+
+test('Claude acceptance selects an explicit absolute executable without searching PATH', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'claude-acceptance-exec-'));
+  try {
+    const executable = path.join(dir, 'claude');
+    writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o700 });
+    assert.equal(resolveClaudeAcceptanceExecutable({ HOME: dir, CODEATLAS_CLAUDE_ACCEPTANCE_EXECUTABLE: executable, PATH: '/untrusted' }), executable);
+    assert.throws(() => resolveClaudeAcceptanceExecutable({ HOME: dir, CODEATLAS_CLAUDE_ACCEPTANCE_EXECUTABLE: 'claude' }));
+    assert.throws(() => resolveClaudeAcceptanceExecutable({ HOME: dir, CODEATLAS_CLAUDE_ACCEPTANCE_EXECUTABLE: dir }));
+    const nonExecutable = path.join(dir, 'not-executable');
+    writeFileSync(nonExecutable, 'not executable', { mode: 0o600 });
+    assert.throws(() => resolveClaudeAcceptanceExecutable({ HOME: dir, CODEATLAS_CLAUDE_ACCEPTANCE_EXECUTABLE: nonExecutable }));
+    const defaultDir = path.join(dir, '.local', 'bin');
+    mkdirSync(defaultDir, { recursive: true });
+    writeFileSync(path.join(defaultDir, 'claude'), '#!/bin/sh\nexit 0\n', { mode: 0o700 });
+    assert.equal(resolveClaudeAcceptanceExecutable({ HOME: dir }), path.join(defaultDir, 'claude'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

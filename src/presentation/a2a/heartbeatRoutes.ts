@@ -18,37 +18,45 @@ import { a2aRateLimiter } from "./a2aRoutes.js";
 export function mountHeartbeatRoutes(app: express.Express): void {
 
   // Register an agent
-  app.get("/a2a/register", a2aRateLimiter, authMiddleware, rejectArrayParams("agent_url", "agent_name", "capabilities"), (req, res) => {
-    const agentUrl = req.query.agent_url as string;
-    const agentName = req.query.agent_name as string || "Unknown Agent";
-    const capabilities = (req.query.capabilities as string || "").split(",").filter(Boolean);
+  app.get("/a2a/register", a2aRateLimiter, authMiddleware, rejectArrayParams("agent_url", "agent_name", "capabilities"), async (req, res, next) => {
+    try {
+      const agentUrl = req.query.agent_url as string;
+      const agentName = req.query.agent_name as string || "Unknown Agent";
+      const capabilities = (req.query.capabilities as string || "").split(",").filter(Boolean);
 
-    if (!agentUrl) {
-      res.status(400).json({ error: "Missing agent_url parameter" });
-      return;
+      if (!agentUrl) {
+        res.status(400).json({ error: "Missing agent_url parameter" });
+        return;
+      }
+
+      const agentId = agentName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+      await a2aRegistry.register({
+        agentId, agentUrl, agentName, capabilities,
+        status: "online",
+        lastHeartbeat: new Date(),
+        registeredAt: new Date(),
+      });
+
+      logger.info(`[A2A Heartbeat] Agent registered: ${agentName} (${agentUrl})`);
+      res.json({ status: "registered", agentId, agentUrl });
+    } catch (err) {
+      next(err);
     }
-
-    const agentId = agentName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-    a2aRegistry.register({
-      agentId, agentUrl, agentName, capabilities,
-      status: "online",
-      lastHeartbeat: new Date(),
-      registeredAt: new Date(),
-    });
-
-    logger.info(`[A2A Heartbeat] Agent registered: ${agentName} (${agentUrl})`);
-    res.json({ status: "registered", agentId, agentUrl });
   });
 
   // Heartbeat ping
-  app.post("/a2a/heartbeat", a2aRateLimiter, authMiddleware, (req, res) => {
-    const { agent_url } = req.body || {};
-    if (!agent_url) {
-      res.status(400).json({ error: "Missing agent_url" });
-      return;
+  app.post("/a2a/heartbeat", a2aRateLimiter, authMiddleware, async (req, res, next) => {
+    try {
+      const { agent_url } = req.body || {};
+      if (!agent_url) {
+        res.status(400).json({ error: "Missing agent_url" });
+        return;
+      }
+      await a2aRegistry.heartbeat(agent_url);
+      res.json({ status: "ok", timestamp: new Date().toISOString() });
+    } catch (err) {
+      next(err);
     }
-    a2aRegistry.heartbeat(agent_url);
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   // List agents

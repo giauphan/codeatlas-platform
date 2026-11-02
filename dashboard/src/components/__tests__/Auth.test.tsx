@@ -14,6 +14,25 @@ vi.mock('firebase/auth', () => ({
 }));
 
 describe('Auth Component', () => {
+  it('moves focus between authentication tabs with the arrow keys', async () => {
+    const user = userEvent.setup();
+    render(<Auth onLogin={vi.fn()} />);
+
+    const tokenTab = screen.getByRole('tab', { name: 'TOKEN' });
+    const signInTab = screen.getByRole('tab', { name: 'SIGN IN' });
+    await user.click(tokenTab);
+    await user.keyboard('{ArrowRight}');
+
+    expect(signInTab).toHaveFocus();
+    expect(signInTab).toHaveAttribute('aria-selected', 'true');
+    expect(signInTab).toHaveAttribute('tabindex', '0');
+    expect(tokenTab).toHaveAttribute('tabindex', '-1');
+
+    await user.keyboard('{ArrowLeft}');
+    expect(tokenTab).toHaveFocus();
+    expect(tokenTab).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('shows error message when onLogin throws an error', async () => {
     const mockOnLogin = vi.fn().mockRejectedValue(new Error('Invalid token provided'));
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { accessSync, chmodSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -11,6 +11,7 @@ const scriptPath = fileURLToPath(import.meta.url);
 const repositoryRoot = path.resolve(path.dirname(scriptPath), '..');
 const mcpRepository = path.resolve(repositoryRoot, '..', 'codeatlas-mcp-server');
 const SELECTED_API = 'http://localhost:3381';
+const SAFE_SYSTEM_PATH = '/usr/bin:/bin';
 export const CLAUDE_SESSION_BUDGET_USD = '1.00';
 const SESSION_TIMEOUT_MS = 60_000;
 const PROVIDER_ENV_NAMES = [
@@ -19,6 +20,20 @@ const PROVIDER_ENV_NAMES = [
 ];
 
 function fail() { throw new Error('Claude two-session acceptance preflight or execution failed.'); }
+
+export function resolveClaudeAcceptanceExecutable(env = {}) {
+  const configured = env.CODEATLAS_CLAUDE_ACCEPTANCE_EXECUTABLE;
+  const candidate = configured === undefined
+    ? path.join(env.HOME || os.homedir(), '.local', 'bin', 'claude')
+    : configured;
+  if (typeof candidate !== 'string' || !path.isAbsolute(candidate)) fail();
+  try {
+    const executable = realpathSync(candidate);
+    if (!statSync(executable).isFile()) fail();
+    accessSync(executable, constants.X_OK);
+    return executable;
+  } catch { fail(); }
+}
 
 export function validateClaudeAcceptanceInput(input = {}) {
   if (input.optIn !== '1') fail();
@@ -32,13 +47,13 @@ export function validateClaudeAcceptanceInput(input = {}) {
   return { targetUrl: SELECTED_API, projectDir: input.projectDir, projectId: input.projectId, sqlitePath: input.sqlitePath };
 }
 
-export function buildClaudeArgs({ model, settingsPath, tools, prompt, debug = false }) {
+export function buildClaudeArgs({ model, settingsPath, tools, prompt, debug = false, nodeExecutable = process.execPath }) {
   return [
     '--print', '--model', model, '--max-budget-usd', CLAUDE_SESSION_BUDGET_USD,
     '--output-format', 'json', '--setting-sources', '', '--settings', settingsPath,
     '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--disable-slash-commands',
     ...(debug ? ['--debug=hooks,mcp'] : []),
-    '--tools', tools, ...(tools ? ['--allowedTools', 'Bash(node *)'] : []), '--', prompt,
+    '--tools', tools, ...(tools ? ['--allowedTools', `Bash(${nodeExecutable} *)`] : []), '--', prompt,
   ];
 }
 
@@ -149,7 +164,7 @@ function sessionIdFromTranscript(file) {
 function runClaude({ prompt, tools, settingsPath, env }) {
   return new Promise((resolve, reject) => {
     const childEnv = {
-      PATH: env.PATH || '/usr/bin:/bin',
+      PATH: SAFE_SYSTEM_PATH,
       HOME: env.HOME,
       TMPDIR: env.TMPDIR,
       LANG: env.LANG || 'C.UTF-8',
@@ -163,7 +178,7 @@ function runClaude({ prompt, tools, settingsPath, env }) {
       CODEATLAS_CONTEXT_CACHE_DIR: path.join(env.HOME, '.codeatlas', 'context-cache'),
       ...env.providerEnv,
     };
-    const child = spawn('claude', buildClaudeArgs({ model: env.providerModel, settingsPath, tools, prompt, debug: env.debug === true }), {
+    const child = spawn(env.claudeExecutable, buildClaudeArgs({ model: env.providerModel, settingsPath, tools, prompt, debug: env.debug === true }), {
       cwd: env.CODEATLAS_CLAUDE_ACCEPTANCE_PROJECT_DIR, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -261,6 +276,7 @@ async function main() {
     });
     stage = 'provider_configuration_preflight';
     const provider = loadTrustedProviderSettings(process.env);
+    const claudeExecutable = resolveClaudeAcceptanceExecutable(process.env);
     const cliPath = path.join(mcpRepository, 'dist', 'index.js');
     const installerPath = path.join(mcpRepository, 'scripts', 'setup-hooks.js');
     const verifyPath = path.join(mcpRepository, 'scripts', 'verify-build.js');
@@ -272,7 +288,7 @@ async function main() {
     const seed = randomUUID();
     const toolToken = `CA${createHash('sha256').update(`codeatlas-tool-receipt:${seed}`).digest('hex').slice(0, 20).toUpperCase()}`;
     const toolCommandSource = `const a=require('node:assert/strict');a.equal(2+2,4);const c=require('node:crypto');const t='CA'+c.createHash('sha256').update('codeatlas-tool-receipt:${seed}').digest('hex').slice(0,20).toUpperCase();console.log('accepted receipt '+t+'; checks=1')`;
-    const toolCommand = `node -e "${toolCommandSource.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+    const toolCommand = `${process.execPath} -e "${toolCommandSource.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
     const firstPrompt = `For the next project session, remember the exact receipt printed by the command result. Use Bash once to run this exact command, then say only that it completed: ${toolCommand}`;
     const secondPrompt = 'What exact receipt token and check count were printed by the command in the prior CodeAtlas project session? Use only startup historical context. Do not use tools. Return the receipt and count only.';
     if (firstPrompt.includes(toolToken) || secondPrompt.includes(toolToken)) fail();
@@ -295,11 +311,12 @@ async function main() {
       CODEATLAS_CLAUDE_ACCEPTANCE_PROJECT_DIR: projectDir,
       providerEnv: provider.providerEnv,
       providerModel: provider.model,
+      claudeExecutable,
       debug: process.env.CODEATLAS_CLAUDE_ACCEPTANCE_DEBUG === '1',
     };
     stage = 'compiled_cli_validation';
-    runQuiet(process.execPath, [verifyPath], { cwd: mcpRepository, env: { PATH: process.env.PATH || '/usr/bin:/bin', HOME: privateHome }, timeout: 30_000 });
-    runQuiet(process.execPath, [installerPath, settingsPath], { cwd: mcpRepository, env: { PATH: process.env.PATH || '/usr/bin:/bin', HOME: privateHome }, timeout: 15_000 });
+    runQuiet(process.execPath, [verifyPath], { cwd: mcpRepository, env: { PATH: SAFE_SYSTEM_PATH, HOME: privateHome }, timeout: 30_000 });
+    runQuiet(process.execPath, [installerPath, settingsPath], { cwd: mcpRepository, env: { PATH: SAFE_SYSTEM_PATH, HOME: privateHome }, timeout: 15_000 });
     validateInstalledHooks(settingsPath, cliPath);
     result.checks = { target_guard_passed: true, derived_project_matches: true, read_only_db_preflight: true, isolated_hooks_installed: true, operator_settings_used: false, claude_debug_enabled: privateEnv.debug };
 

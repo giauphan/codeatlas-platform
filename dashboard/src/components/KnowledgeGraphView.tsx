@@ -51,13 +51,38 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
   // Fetch concepts and dreams
   useEffect(() => {
-    (async () => {
-      const headers = await getAuthHeaders();
-      fetch(`${API_BASE}/api/concepts/search?limit=30`, { headers })
-        .then(r => r.json()).then(d => setConcepts(d.concepts || [])).catch(() => {});
-      fetch(`${API_BASE}/api/dreams/query?limit=30`, { headers })
-        .then(r => r.json()).then(d => setDreams(d.memories || [])).catch(() => {});
-    })();
+    const fetchGraphContext = async () => {
+      let headers: HeadersInit;
+      try {
+        headers = await getAuthHeaders();
+      } catch {
+        // Graph context is supplementary; the main analysis graph remains usable.
+        return;
+      }
+
+      const loadConcepts = async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/concepts/search?limit=30`, { headers });
+          const data = await response.json();
+          setConcepts(data.concepts || []);
+        } catch {
+          // Keep dreams available if concept lookup fails.
+        }
+      };
+      const loadDreams = async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/dreams/query?limit=30`, { headers });
+          const data = await response.json();
+          setDreams(data.memories || []);
+        } catch {
+          // Keep concepts available if dream lookup fails.
+        }
+      };
+
+      await Promise.all([loadConcepts(), loadDreams()]);
+    };
+
+    void fetchGraphContext();
   }, []);
 
   const typeColors: Record<string, string> = {

@@ -158,7 +158,9 @@ export class DreamRunLedger {
     if (auth.uid !== 'admin' && auth.tier !== 'admin' && auth.role !== 'admin') return [auth.uid];
     const rows = await this.db.query<{ tenant_id: string }>(
       'SELECT DISTINCT tenant_id FROM dream_capture_events UNION SELECT DISTINCT tenant_id FROM ai_dreaming_memory');
-    return [...new Set([auth.uid, ...rows.map(row => row.tenant_id)])].sort();
+    return [...new Set([auth.uid, ...rows.map(row => row.tenant_id)])].sort((left, right) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    );
   }
 
   async claimRun(input: ClaimRunInput): Promise<DreamRunClaim | null> {

@@ -10,15 +10,13 @@ if (!globalThis.location) {
   globalThis.location = { origin: 'http://test.codeatlas.local' } as Location;
 }
 
-const OBFUSCATION_KEY = `codeatlas::${globalThis.location?.origin ?? 'app'}` || 'codeatlas::fallback';
+const OBFUSCATION_KEY = `codeatlas::${globalThis.location?.origin ?? 'app'}`;
 
 const xorCipher = (input: string): string => {
-  // Fallback to empty if OBFUSCATION_KEY is somehow empty (shouldn't happen)
-  const key = OBFUSCATION_KEY || 'codeatlas';
   let out = '';
   for (let i = 0; i < input.length; i++) {
     out += String.fromCharCode(
-      input.charCodeAt(i) ^ key.charCodeAt(i % key.length),
+      input.charCodeAt(i) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length),
     );
   }
   return out;

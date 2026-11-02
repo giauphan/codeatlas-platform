@@ -8,7 +8,7 @@ function formatPgQueryRegex(sql, params) {
   const paramNames = [];
 
   const pgSql = sql.replace(NAMED_PLACEHOLDER, (full) => {
-    if (full.startsWith('$') && !isNaN(parseInt(full.slice(1), 10))) {
+    if (full.startsWith('$') && !Number.isNaN(Number.parseInt(full.slice(1), 10))) {
       return full;
     }
     const name = full.slice(1);
