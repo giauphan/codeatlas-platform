@@ -5,6 +5,22 @@ import { createDatabaseAdapter } from "../database/factory.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 
+async function resolveFirebaseRole(uid: string, role: string): Promise<string> {
+  if (role === "admin") return role;
+
+  try {
+    const db = createDatabaseAdapter();
+    const rows = await db.query<{ role: string | null; tier: string | null }>(
+      `SELECT role, tier FROM users WHERE id = :uid LIMIT 1`,
+      { uid }
+    );
+    return rows.length > 0 ? rows[0].role || rows[0].tier || "user" : role;
+  } catch (e) {
+    logger.error("Failed to fetch user role from local database:", e);
+    return role;
+  }
+}
+
 /**
  * Authentication middleware for ALL API routes.
  * Supports Firebase ID Token (Bearer Token) and API key (x-api-key header).
@@ -16,21 +32,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     const token = authHeader.substring(7);
     try {
       const decodedToken = await getAuth().verifyIdToken(token);
-      let role = (decodedToken.role as string) || "user";
-      if (role !== "admin") {
-        try {
-          const db = createDatabaseAdapter();
-          const rows = await db.query<{ role: string | null; tier: string | null }>(
-            `SELECT role, tier FROM users WHERE id = :uid LIMIT 1`,
-            { uid: decodedToken.uid }
-          );
-          if (rows.length > 0) {
-            role = rows[0].role || rows[0].tier || "user";
-          }
-        } catch (e) {
-          logger.error("Failed to fetch user role from local database:", e);
-        }
-      }
+      const role = await resolveFirebaseRole(decodedToken.uid, (decodedToken.role as string) || "user");
 
       const auth = {
         tier: "enterprise",

@@ -61,27 +61,39 @@ function redactAndNormalize(content: string): string {
 }
 
 function sanitizeCheckpoint(value: unknown, depth = 0, key = ""): unknown {
-  if (depth > 5) throw new Error("checkpoint_too_deep");
+  assertCheckpointDepth(depth);
   if (isSensitiveMemoryFieldName(key)) return "[REDACTED]";
   if (value === null || typeof value === "boolean") return value;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error("invalid_checkpoint");
-    return value;
-  }
-  if (typeof value === "string") {
-    if (value.length > 2000) throw new Error("checkpoint_too_large");
-    return redactAndNormalize(value);
-  }
-  if (Array.isArray(value)) {
-    if (value.length > 50) throw new Error("checkpoint_too_large");
-    return value.map((item) => sanitizeCheckpoint(item, depth + 1));
-  }
-  if (value && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>);
-    if (entries.length > 50) throw new Error("checkpoint_too_large");
-    return Object.fromEntries(entries.map(([entryKey, item]) => [entryKey.slice(0, 100), sanitizeCheckpoint(item, depth + 1, entryKey)]));
-  }
+  if (typeof value === "number") return sanitizeCheckpointNumber(value);
+  if (typeof value === "string") return sanitizeCheckpointString(value);
+  if (Array.isArray(value)) return sanitizeCheckpointArray(value, depth);
+  if (value && typeof value === "object") return sanitizeCheckpointObject(value, depth);
   throw new Error("invalid_checkpoint");
+}
+
+function assertCheckpointDepth(depth: number): void {
+  if (depth > 5) throw new Error("checkpoint_too_deep");
+}
+
+function sanitizeCheckpointNumber(value: number): number {
+  if (!Number.isFinite(value)) throw new Error("invalid_checkpoint");
+  return value;
+}
+
+function sanitizeCheckpointString(value: string): string {
+  if (value.length > 2000) throw new Error("checkpoint_too_large");
+  return redactAndNormalize(value);
+}
+
+function sanitizeCheckpointArray(value: unknown[], depth: number): unknown[] {
+  if (value.length > 50) throw new Error("checkpoint_too_large");
+  return value.map((item) => sanitizeCheckpoint(item, depth + 1));
+}
+
+function sanitizeCheckpointObject(value: object, depth: number): Record<string, unknown> {
+  const entries = Object.entries(value);
+  if (entries.length > 50) throw new Error("checkpoint_too_large");
+  return Object.fromEntries(entries.map(([entryKey, item]) => [entryKey.slice(0, 100), sanitizeCheckpoint(item, depth + 1, entryKey)]));
 }
 
 function stableJson(value: unknown): string {
@@ -97,22 +109,69 @@ function rejected(eventId: string, reasonCode: string): CaptureEventAck {
   return { success: false, status: "rejected", persisted: false, acknowledged: false, event_id: eventId, memory_ids: [], reason_code: reasonCode };
 }
 
+type CaptureReceipt = { request_hash: string; status: string; memory_ids_json: string };
+
+function captureAck(eventId: string, row: CaptureReceipt, requestHash: string, status: "stored" | "duplicate" | "filtered"): CaptureEventAck {
+  if (row.request_hash !== requestHash) return rejected(eventId, "event_id_reused");
+  return {
+    success: true,
+    status,
+    persisted: status !== "filtered",
+    acknowledged: true,
+    event_id: eventId,
+    memory_ids: JSON.parse(row.memory_ids_json || "[]"),
+    source_persisted: true,
+    ...(status === "stored" || row.status === "pending" ? { extraction_status: "pending" as const } : {}),
+  };
+}
+
+function captureError(eventId: string, reasonCode: string): CaptureEventAck {
+  return { success: false, status: "error", persisted: false, acknowledged: false, event_id: eventId, memory_ids: [], reason_code: reasonCode };
+}
+
+async function persistCaptureEvent(
+  input: CaptureEventInput,
+  values: { eventId: string; tenantId: string; projectId: string; content: string; checkpointJson: string | null; requestHash: string },
+): Promise<CaptureEventAck> {
+  const { eventId, tenantId, projectId, content, checkpointJson, requestHash } = values;
+  const db = createDatabaseAdapter();
+  if (input.projectId) await DreamProjectIdentityService.register({ projectId, displayName: input.displayName ?? input.project, workspacePath: input.workspacePath, aliases: [input.project] });
+  const query = `SELECT request_hash, status, memory_ids_json FROM dream_capture_events
+    WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId LIMIT 1`;
+  const prior = await db.query<CaptureReceipt>(query, { tenantId, projectId, eventId });
+  if (prior.length) {
+    const status = prior[0].status === "filtered" ? "filtered" : "duplicate";
+    return captureAck(eventId, prior[0], requestHash, status);
+  }
+  const insertion = await db.execute(
+    `INSERT INTO dream_capture_events
+      (tenant_id, project_id, project, display_name, workspace_path, event_id, session_id, actor_role, memory_type_hint, tool_name, request_hash, content_redacted, checkpoint_json, occurred_at, source_spans_json, status, acknowledged_at, created_at)
+     VALUES
+      (:tenantId, :projectId, :project, :displayName, :workspacePath, :eventId, :sessionId, :actorRole, :memoryTypeHint, :toolName, :requestHash, :content, :checkpointJson, :occurredAt, :sourceSpansJson, 'pending', :createdAt, :createdAt)
+     ON CONFLICT DO NOTHING`,
+    {
+      tenantId, projectId, project: input.project, displayName: input.displayName ?? null,
+      workspacePath: input.workspacePath ?? null, eventId, sessionId: input.sessionId,
+      actorRole: input.actorRole ?? null, memoryTypeHint: input.memoryTypeHint ?? null,
+      toolName: input.toolName ?? null, requestHash, content, checkpointJson,
+      occurredAt: input.occurredAt ?? null,
+      sourceSpansJson: input.sourceSpans === undefined ? null : JSON.stringify(input.sourceSpans),
+      createdAt: new Date().toISOString(),
+    },
+  );
+  // Re-read after insert so concurrent delivery only acknowledges the committed canonical event.
+  const saved = await db.query<CaptureReceipt>(query, { tenantId, projectId, eventId });
+  if (!saved.length) return captureError(eventId, "receipt_missing");
+  if (saved[0].request_hash !== requestHash) return rejected(eventId, "event_id_reused");
+  const status = insertion.rowsAffected > 0 ? "stored" : saved[0].status === "filtered" ? "filtered" : "duplicate";
+  return captureAck(eventId, saved[0], requestHash, status);
+}
+
 export class DreamCaptureStore {
   static async accept(input: CaptureEventInput): Promise<CaptureEventAck> {
     const eventId = typeof input.eventId === "string" ? input.eventId : "";
-    if (!eventId.trim() || eventId.length > MAX_EVENT_ID_LENGTH) return rejected(eventId, "invalid_event_id");
-    if (typeof input.content !== "string" || !input.content.trim()) return rejected(eventId, "invalid_content");
-    if (!input.sessionId || !input.project) return rejected(eventId, "missing_scope");
-    if (input.displayName !== undefined && (input.displayName.length > 512 || /[\r\n\0]/.test(input.displayName))) return rejected(eventId, "invalid_display_name");
-    if (input.workspacePath !== undefined && (input.workspacePath.length > 2048 || /[\r\n\0]/.test(input.workspacePath))) return rejected(eventId, "invalid_workspace_path");
-    if (input.actorRole !== undefined && input.actorRole !== "USER" && input.actorRole !== "ASSISTANT" && input.actorRole !== "TOOL") return rejected(eventId, "invalid_actor_role");
-    if (input.memoryTypeHint !== undefined && !["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN", "SESSION_SUMMARY"].includes(input.memoryTypeHint)) return rejected(eventId, "invalid_memory_type_hint");
-    if (input.toolName !== undefined && (input.toolName.length > 128 || /[\r\n\0]/.test(input.toolName))) return rejected(eventId, "invalid_tool_name");
-
-    if (input.sourceSpans && (input.sourceSpans.length > 100 || input.sourceSpans.some(({ start, end }) =>
-      !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start))) {
-      return rejected(eventId, "invalid_source_spans");
-    }
+    const validationError = validateCaptureInput(input, eventId);
+    if (validationError) return rejected(eventId, validationError);
 
     const content = redactAndNormalize(input.content);
     if (!content) return rejected(eventId, "empty_after_normalization");
@@ -145,78 +204,10 @@ export class DreamCaptureStore {
       sourceSpans: input.sourceSpans ?? null,
     });
     const requestHash = hash(canonicalPayload);
-    const db = createDatabaseAdapter();
-
     try {
-      if (input.projectId) await DreamProjectIdentityService.register({ projectId, displayName: input.displayName ?? input.project, workspacePath: input.workspacePath, aliases: [input.project] });
-      const prior = await db.query<{ request_hash: string; status: string; memory_ids_json: string }>(
-        `SELECT request_hash, status, memory_ids_json FROM dream_capture_events
-         WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId LIMIT 1`,
-        { tenantId, projectId, eventId },
-      );
-      if (prior.length) {
-        if (prior[0].request_hash !== requestHash) return rejected(eventId, "event_id_reused");
-        const status = prior[0].status === "filtered" ? "filtered" : "duplicate";
-        return {
-          success: true,
-          status,
-          persisted: status !== "filtered",
-          acknowledged: true,
-          event_id: eventId,
-          memory_ids: JSON.parse(prior[0].memory_ids_json || "[]"),
-          source_persisted: true,
-          ...(prior[0].status === "pending" ? { extraction_status: "pending" as const } : {}),
-        };
-      }
-
-      const insertion = await db.execute(
-        `INSERT INTO dream_capture_events
-          (tenant_id, project_id, project, display_name, workspace_path, event_id, session_id, actor_role, memory_type_hint, tool_name, request_hash, content_redacted, checkpoint_json, occurred_at, source_spans_json, status, acknowledged_at, created_at)
-         VALUES
-          (:tenantId, :projectId, :project, :displayName, :workspacePath, :eventId, :sessionId, :actorRole, :memoryTypeHint, :toolName, :requestHash, :content, :checkpointJson, :occurredAt, :sourceSpansJson, 'pending', :createdAt, :createdAt)
-         ON CONFLICT DO NOTHING`,
-        {
-          tenantId,
-          projectId,
-          project: input.project,
-          displayName: input.displayName ?? null,
-          workspacePath: input.workspacePath ?? null,
-          eventId,
-          sessionId: input.sessionId,
-          actorRole: input.actorRole ?? null,
-          memoryTypeHint: input.memoryTypeHint ?? null,
-          toolName: input.toolName ?? null,
-          requestHash,
-          content,
-          checkpointJson,
-          occurredAt: input.occurredAt ?? null,
-          sourceSpansJson: input.sourceSpans === undefined ? null : JSON.stringify(input.sourceSpans),
-          createdAt: new Date().toISOString(),
-        },
-      );
-
-      // Re-read after insert so a concurrent delivery only acknowledges the committed canonical event.
-      const saved = await db.query<{ request_hash: string; status: string; memory_ids_json: string }>(
-        `SELECT request_hash, status, memory_ids_json FROM dream_capture_events
-         WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId LIMIT 1`,
-        { tenantId, projectId, eventId },
-      );
-      if (!saved.length) return { success: false, status: "error", persisted: false, acknowledged: false, event_id: eventId, memory_ids: [], reason_code: "receipt_missing" };
-      if (saved[0].request_hash !== requestHash) return rejected(eventId, "event_id_reused");
-      const isNew = insertion.rowsAffected > 0;
-      const status = !isNew && saved[0].status === "filtered" ? "filtered" : isNew ? "stored" : "duplicate";
-      return {
-        success: true,
-        status,
-        persisted: status !== "filtered",
-        acknowledged: true,
-        event_id: eventId,
-        memory_ids: JSON.parse(saved[0].memory_ids_json || "[]"),
-        source_persisted: true,
-        ...((isNew || saved[0].status === "pending") ? { extraction_status: "pending" as const } : {}),
-      };
+      return await persistCaptureEvent(input, { eventId, tenantId, projectId, content, checkpointJson, requestHash });
     } catch {
-      return { success: false, status: "error", persisted: false, acknowledged: false, event_id: eventId, memory_ids: [], reason_code: "ingest_failed" };
+      return captureError(eventId, "ingest_failed");
     }
   }
 
@@ -262,4 +253,29 @@ export class DreamCaptureStore {
       payloadRedacted: true as const,
     }));
   }
+}
+
+function validateCaptureInput(input: CaptureEventInput, eventId: string): string | null {
+  if (!eventId.trim() || eventId.length > MAX_EVENT_ID_LENGTH) return "invalid_event_id";
+  if (typeof input.content !== "string" || !input.content.trim()) return "invalid_content";
+  if (!input.sessionId || !input.project) return "missing_scope";
+  if (isInvalidBoundedText(input.displayName, 512)) return "invalid_display_name";
+  if (isInvalidBoundedText(input.workspacePath, 2048)) return "invalid_workspace_path";
+  if (!isValidActorRole(input.actorRole)) return "invalid_actor_role";
+  if (input.memoryTypeHint !== undefined && !["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN", "SESSION_SUMMARY"].includes(input.memoryTypeHint)) return "invalid_memory_type_hint";
+  if (isInvalidBoundedText(input.toolName, 128)) return "invalid_tool_name";
+  if (input.sourceSpans && (input.sourceSpans.length > 100 || input.sourceSpans.some(isInvalidSourceSpan))) return "invalid_source_spans";
+  return null;
+}
+
+function isInvalidBoundedText(value: string | undefined, maxLength: number): boolean {
+  return value !== undefined && (value.length > maxLength || /[\r\n\0]/.test(value));
+}
+
+function isValidActorRole(role: CaptureEventInput["actorRole"]): boolean {
+  return role === undefined || role === "USER" || role === "ASSISTANT" || role === "TOOL";
+}
+
+function isInvalidSourceSpan(span: { start: number; end: number }): boolean {
+  return !Number.isSafeInteger(span.start) || !Number.isSafeInteger(span.end) || span.start < 0 || span.end < span.start;
 }

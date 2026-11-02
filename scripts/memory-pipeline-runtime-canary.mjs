@@ -13,6 +13,47 @@ const DEFAULT_HOOK_BUDGET_MS = 30_000;
 const MAX_HOOK_BUDGET_MS = 60_000;
 
 function fail(message) { throw new Error(message); }
+function requireCanary(condition, message) { if (!condition) fail(message); }
+const allChecks = (...checks) => checks.every(Boolean);
+function compareText(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+function matchesHookCommand(value, cli, route) {
+  return value.includes(cli) && new RegExp(`\\bhook\\s+${route}$`).test(value);
+}
+function containsText(value, expected) { return typeof value === 'string' && value.includes(expected); }
+function failureCategory(httpStatus, failure) {
+  if (httpStatus) return 'http_error';
+  if (failure?.message.startsWith('Native ')) return 'native_hook_error';
+  return 'canary_step_error';
+}
+function hookCommands(installed, eventName) {
+  return (installed.hooks?.[eventName] || []).flatMap(group => group.hooks || []).map(hook => hook.command || '');
+}
+function hasExactMarker(memory, marker) {
+  return typeof memory?.id === 'string' && typeof memory?.content === 'string' && memory.content.includes(marker);
+}
+function checkpointHasCanaryEvidence(checkpoint, marker, checkpointIds) {
+  if (!checkpoint) return false;
+  return String(checkpoint.active_task || '').includes(marker) || checkpointIds.some(id => checkpoint.source_event_ids?.includes(id));
+}
+function memoryHasCanaryEvidence(memory, memoryIds, marker) {
+  return memoryIds.has(memory?.id) || containsText(memory?.content, marker);
+}
+function sourceIdsInContext(context, checkpointIds) {
+  if (typeof context !== 'string') return false;
+  return checkpointIds.every(id => context.includes(id));
+}
+function failureDetails(error) {
+  const failure = error instanceof Error ? error : undefined;
+  const httpStatus = failure?.message.match(/HTTP (\d{3})/)?.[1];
+  return {
+    category: failureCategory(httpStatus, failure),
+    ...(httpStatus ? { http_status: Number(httpStatus) } : {}),
+    ...(failure?.name ? { error_type: String(failure.name).slice(0, 40) } : {}),
+    ...(failure?.code ? { native_error_code: String(failure.code).slice(0, 40) } : {}),
+    ...(failure?.signal ? { native_signal: String(failure.signal).slice(0, 20) } : {}),
+    ...(Number.isInteger(failure?.status) ? { native_exit_status: failure.status } : {}),
+  };
+}
 
 function debugEnabled(env) {
   return env.CODEATLAS_MEMORY_PIPELINE_DEBUG === '1';
@@ -221,12 +262,12 @@ async function runCanary(env) {
   const cli = path.join(mcpRepo, 'dist', 'index.js');
   const manifestPath = path.join(mcpRepo, 'dist', 'build-manifest.json');
   const verifyBuild = path.join(mcpRepo, 'scripts', 'verify-build.js');
-  if (!existsSync(cli) || !existsSync(manifestPath) || !existsSync(verifyBuild)) fail('Compiled MCP CLI or build manifest is unavailable.');
+  requireCanary(allChecks(existsSync(cli), existsSync(manifestPath), existsSync(verifyBuild)), 'Compiled MCP CLI or build manifest is unavailable.');
 
   const packageJson = JSON.parse(readFileSync(path.join(projectDir, 'package.json'), 'utf8'));
-  if (packageJson.name !== 'codeatlas-ai') fail('The selected project is not this CodeAtlas Platform checkout.');
+  requireCanary(packageJson.name === 'codeatlas-ai', 'The selected project is not this CodeAtlas Platform checkout.');
   const gitRoot = runFile('git', ['-C', projectDir, 'rev-parse', '--show-toplevel'], { timeout: 2_000 }, 'Project git-root validation').stdout.trim();
-  if (realpathSync(gitRoot) !== projectDir) fail('CODEATLAS_CANARY_PROJECT_DIR must be the canonical git root.');
+  requireCanary(realpathSync(gitRoot) === projectDir, 'CODEATLAS_CANARY_PROJECT_DIR must be the canonical git root.');
 
   const identity = await loadCompiledProjectIdentity(mcpRepo, projectDir);
   const config = validateRuntimeCanaryInput({ optIn: env.CODEATLAS_MEMORY_RUNTIME_CANARY, targetUrl, apiKey, projectDir, projectId, derivedProjectId: identity.project_id });
@@ -269,22 +310,21 @@ async function runCanary(env) {
     const installed = JSON.parse(readFileSync(settingsPath, 'utf8'));
     const expectedRoutes = { SessionStart: 'brain-context', UserPromptSubmit: 'brain-context', PostToolUse: 'brain-save', PostToolUseFailure: 'brain-save', Stop: 'brain-save', PreCompact: 'brain-save' };
     for (const [eventName, route] of Object.entries(expectedRoutes)) {
-      const command = installed.hooks?.[eventName]?.flatMap(group => group.hooks || []).map(hook => hook.command || '')
-        .find(value => value.includes(cli) && new RegExp(`\\bhook\\s+${route}$`).test(value));
-      if (!command) fail('The isolated native installer did not register the expected host event routes.');
+      const command = hookCommands(installed, eventName).find(value => matchesHookCommand(value, cli, route));
+      requireCanary(Boolean(command), 'The isolated native installer did not register the expected host event routes.');
     }
     report.checks.isolated_installer = { registered_events: Object.keys(expectedRoutes), operator_settings_read: false };
 
     stage = 'target_health_and_database_preflight';
     const health = await requestJson(config.targetUrl, '/api/health', apiKey, { timeoutMs: 5_000 });
-    if (health.status !== 'ok') fail('Target API health check did not return ok.');
+    requireCanary(health.status === 'ok', 'Target API health check did not return ok.');
     const version = await requestJson(config.targetUrl, '/api/version', apiKey, { timeoutMs: 5_000 });
     const initialCheckpoint = await requestJson(config.targetUrl, `/api/dreams/checkpoints/latest?project_id=${encodeURIComponent(projectId)}`, apiKey, { timeoutMs: 5_000 });
-    if (!['ok', 'empty'].includes(initialCheckpoint.retrieval_status)) fail('Target project checkpoint preflight returned an unexpected status.');
+    requireCanary(['ok', 'empty'].includes(initialCheckpoint.retrieval_status), 'Target project checkpoint preflight returned an unexpected status.');
     const toolRowsBefore = db.prepare('SELECT COUNT(*) AS count FROM dream_capture_events WHERE project_id = ? AND session_id = ?').get(projectId, sessionId).count;
-    if (toolRowsBefore !== 0) fail('Generated canary session ID unexpectedly already exists in target storage.');
+    requireCanary(toolRowsBefore === 0, 'Generated canary session ID unexpectedly already exists in target storage.');
     const projectPendingBefore = pendingEventIds(db, projectId);
-    if (projectPendingBefore.length) fail('The selected project already has unrelated pending source events; refusing to run project-scoped reconciliation.');
+    requireCanary(projectPendingBefore.length === 0, 'The selected project already has unrelated pending source events; refusing to run project-scoped reconciliation.');
     report.target.platform_version = typeof version.version === 'string' ? version.version : 'unknown';
     report.checks.target_preflight = { health: health.status, checkpoint_status: initialCheckpoint.retrieval_status, session_collision_count: toolRowsBefore, unrelated_pending_count: 0 };
 
@@ -307,7 +347,7 @@ async function runCanary(env) {
     const toolResult = runFile(process.execPath, ['-e', checkSource], {
       cwd: projectDir, env: { PATH: childEnv.PATH }, timeout: 5_000,
     }, 'Synthetic repository verification command').stdout.trim();
-    if (!toolResult.includes(marker) || !toolResult.includes('verified package codeatlas-ai')) fail('The actual repository verification command returned an unexpected result.');
+    requireCanary(allChecks(toolResult.includes(marker), toolResult.includes('verified package codeatlas-ai')), 'The actual repository verification command returned an unexpected result.');
     const hookStarted = performance.now();
     runNativeHook({ cli, route: 'brain-save', projectDir, env: childEnv, timeoutMs: budgetMs, event: {
       hook_event_name: 'PostToolUse', session_id: sessionId, tool_use_id: toolEventId, cwd: projectDir, tool_name: 'Bash',
@@ -315,7 +355,7 @@ async function runCanary(env) {
     } });
     const captureMs = Math.round(performance.now() - hookStarted);
     const toolRows = captureRows(db, projectId, sessionId, [toolEventId]);
-    if (toolRows.length !== 1 || toolRows[0].actor_role !== 'TOOL') fail('Native PostToolUse did not persist exactly one tool source event.');
+    requireCanary(allChecks(toolRows.length === 1, toolRows[0]?.actor_role === 'TOOL'), 'Native PostToolUse did not persist exactly one tool source event.');
     report.checks.post_tool_capture = { elapsed_ms: captureMs, event_id: toolRows[0].event_id, source_status: toolRows[0].status };
 
     stage = 'duplicate_delivery_check';
@@ -326,7 +366,7 @@ async function runCanary(env) {
     };
     runNativeHook({ cli, route: 'brain-save', projectDir, env: childEnv, timeoutMs: budgetMs, event: replayInput });
     const replayRows = captureRows(db, projectId, sessionId, [toolEventId]);
-    if (replayRows.length !== 1 || JSON.stringify(replayRows) !== JSON.stringify(toolRows)) fail('Replaying the identical tool event changed its durable source or memory acknowledgement.');
+    requireCanary(allChecks(replayRows.length === 1, JSON.stringify(replayRows) === JSON.stringify(toolRows)), 'Replaying the identical tool event changed its durable source or memory acknowledgement.');
     report.checks.duplicate_delivery = { elapsed_ms: Math.round(performance.now() - replayStarted), exact_event_id: toolEventId, persisted_row_count: replayRows.length, acknowledgement_stable: true };
 
     stage = 'stop_hook_execution';
@@ -343,9 +383,7 @@ async function runCanary(env) {
     const userEventId = derivedEventId(projectId, sessionId, userUuid);
     const cursor = Buffer.byteLength(transcriptText);
     const checkpointId = checkpointEventId(projectId, sessionId, 'Stop', cursor);
-    const checkpointIds = [toolEventId, userEventId, checkpointId].sort((a, b) =>
-      a < b ? -1 : a > b ? 1 : 0,
-    );
+    const checkpointIds = [toolEventId, userEventId, checkpointId].sort(compareText);
     const stopStarted = performance.now();
     runNativeHook({ cli, route: 'brain-save', projectDir, env: childEnv, timeoutMs: budgetMs, event: {
       hook_event_name: 'Stop', session_id: sessionId, cwd: projectDir, transcript_path: transcriptPath,
@@ -355,11 +393,9 @@ async function runCanary(env) {
     const pendingBeforeReconcile = pendingEventIds(db, projectId);
     report.checks.stop_pending_marker = {
       pending_count: pendingBeforeReconcile.length,
-      exact_marker_only: pendingBeforeReconcile.length === 1 && pendingBeforeReconcile[0] === checkpointId,
+      exact_marker_only: allChecks(pendingBeforeReconcile.length === 1, pendingBeforeReconcile[0] === checkpointId),
     };
-    if (pendingBeforeReconcile.length !== 1 || pendingBeforeReconcile[0] !== checkpointId) {
-      fail('The exact canary Stop marker is not the only pending event; refusing reconciliation.');
-    }
+    requireCanary(allChecks(pendingBeforeReconcile.length === 1, pendingBeforeReconcile[0] === checkpointId), 'The exact canary Stop marker is not the only pending event; refusing reconciliation.');
     stage = 'stop_marker_reconciliation';
     const reconciliation = await requestJson(config.targetUrl, '/api/dreams/reconcile-pending', apiKey, {
       method: 'POST', body: buildCanaryReconciliationPayload(projectId, checkpointId), timeoutMs: 30_000,
@@ -373,25 +409,18 @@ async function runCanary(env) {
       pending_before: pendingBeforeReconcile.length,
       scope: 'exact_canary_stop_event',
     };
-    if (reconciliation.success !== true || reconciliation.failed !== 0 || reconciliation.skipped === true) {
-      fail('Explicit canary reconciliation did not complete successfully with processing enabled.');
-    }
+    requireCanary(allChecks(reconciliation.success === true, reconciliation.failed === 0, reconciliation.skipped !== true), 'Explicit canary reconciliation did not complete successfully with processing enabled.');
     stage = 'stop_checkpoint_verification';
     const checkpointRows = captureRows(db, projectId, sessionId, [toolEventId, userEventId, checkpointId]);
-    if (checkpointRows.length !== checkpointIds.length || checkpointRows.some(row => !checkpointIds.includes(row.event_id))) {
-      fail('Stop transcript capture did not persist the exact expected source event IDs.');
-    }
-    if (checkpointRows.some(row => row.status === 'pending')) fail('Explicit reconciliation left a canary source event pending.');
-    if (!checkpointRows.some(row => row.event_id === checkpointId && ['processed', 'filtered'].includes(row.status))) {
-      fail('Explicit reconciliation did not process or filter the canary checkpoint marker.');
-    }
+    requireCanary(allChecks(checkpointRows.length === checkpointIds.length, !checkpointRows.some(row => !checkpointIds.includes(row.event_id))), 'Stop transcript capture did not persist the exact expected source event IDs.');
+    requireCanary(!checkpointRows.some(row => row.status === 'pending'), 'Explicit reconciliation left a canary source event pending.');
+    requireCanary(checkpointRows.some(row => allChecks(row.event_id === checkpointId, ['processed', 'filtered'].includes(row.status))), 'Explicit reconciliation did not process or filter the canary checkpoint marker.');
     report.checks.explicit_reconciliation.canary_pending_count = 0;
     const checkpoint = await requestJson(config.targetUrl, `/api/dreams/checkpoints/latest?project_id=${encodeURIComponent(projectId)}`, apiKey, { timeoutMs: 5_000 });
     const savedCheckpoint = checkpoint.checkpoint;
-    if (checkpoint.retrieval_status !== 'ok' || !savedCheckpoint || savedCheckpoint.project_id !== projectId || savedCheckpoint.session_id !== sessionId ||
-        !String(savedCheckpoint.active_task || '').includes(marker) || checkpointIds.some(id => !savedCheckpoint.source_event_ids?.includes(id))) {
-      fail('Stop did not materialize a same-project checkpoint with the complete canary source ID set.');
-    }
+    requireCanary(allChecks(checkpoint.retrieval_status === 'ok', Boolean(savedCheckpoint), savedCheckpoint?.project_id === projectId,
+      savedCheckpoint?.session_id === sessionId, String(savedCheckpoint?.active_task || '').includes(marker),
+      !checkpointIds.some(id => !savedCheckpoint?.source_event_ids?.includes(id))), 'Stop did not materialize a same-project checkpoint with the complete canary source ID set.');
     report.checks.stop_checkpoint = { elapsed_ms: Math.round(performance.now() - stopStarted), checkpoint_id: savedCheckpoint.id, source_event_ids: [...savedCheckpoint.source_event_ids] };
 
     stage = 'same_project_exact_query';
@@ -399,28 +428,26 @@ async function runCanary(env) {
       `/api/dreams/query?${new URLSearchParams({ project: identity.project, project_id: projectId, query: marker, limit: '100' })}`,
       apiKey, { timeoutMs: 8_000 });
     const memories = Array.isArray(exactQuery.memories) ? exactQuery.memories : [];
-    const matchingMemories = memories.filter(memory => typeof memory?.id === 'string' && typeof memory?.content === 'string' && memory.content.includes(marker));
+    const matchingMemories = memories.filter(memory => hasExactMarker(memory, marker));
     const exactRows = openMemoryRows(db, projectId, marker);
     const exactIds = new Set(exactRows.map(row => row.id));
     const matchingIds = matchingMemories.map(memory => memory.id).filter(id => exactIds.has(id));
-    if (!matchingIds.length) fail('Same-project exact query did not return a persisted canary memory ID.');
+    requireCanary(matchingIds.length > 0, 'Same-project exact query did not return a persisted canary memory ID.');
     report.checks.same_project_query = { retrieval_status: exactQuery.retrieval_status || 'ok', exact_memory_ids: matchingIds };
 
     stage = 'other_project_isolation';
     const otherIdentity = await loadCompiledProjectIdentity(mcpRepo, mcpRepo);
-    if (otherIdentity.project_id === projectId) fail('The independent-project isolation control resolved to the canary project ID.');
+    requireCanary(otherIdentity.project_id !== projectId, 'The independent-project isolation control resolved to the canary project ID.');
     const otherProject = await requestJson(config.targetUrl, `/api/dreams/checkpoints/latest?project_id=${encodeURIComponent(otherIdentity.project_id)}`, apiKey, { timeoutMs: 5_000 });
     const otherCheckpoint = otherProject.checkpoint;
-    const leaked = Boolean(otherCheckpoint && (String(otherCheckpoint.active_task || '').includes(marker) || checkpointIds.some(id => otherCheckpoint.source_event_ids?.includes(id))));
-    if (leaked) fail('Canary source evidence appeared in the independent project checkpoint.');
+    const leaked = checkpointHasCanaryEvidence(otherCheckpoint, marker, checkpointIds);
+    requireCanary(!leaked, 'Canary source evidence appeared in the independent project checkpoint.');
     const otherQuery = await requestJson(config.targetUrl,
       `/api/dreams/query?${new URLSearchParams({ project: otherIdentity.project, project_id: otherIdentity.project_id, query: marker, limit: '100' })}`,
       apiKey, { timeoutMs: 8_000 });
     const otherMemories = Array.isArray(otherQuery.memories) ? otherQuery.memories : [];
     const canaryMemoryIds = new Set(matchingIds);
-    if (otherMemories.some(memory => canaryMemoryIds.has(memory?.id) || (typeof memory?.content === 'string' && memory.content.includes(marker)))) {
-      fail('Canary memory evidence appeared in the independent project query.');
-    }
+    requireCanary(!otherMemories.some(memory => memoryHasCanaryEvidence(memory, canaryMemoryIds, marker)), 'Canary memory evidence appeared in the independent project query.');
     report.checks.other_project_isolation = { project_id: otherIdentity.project_id, checkpoint_status: otherProject.retrieval_status || 'unknown', query_status: otherQuery.retrieval_status || 'ok', canary_sources_leaked: false, canary_memories_leaked: false };
 
     stage = 'fresh_session_start';
@@ -431,9 +458,9 @@ async function runCanary(env) {
     let packet;
     try { packet = JSON.parse(startup.stdout); } catch { fail('Fresh SessionStart did not produce a JSON host context packet.'); }
     const context = packet?.hookSpecificOutput?.additionalContext;
-    const sourceIdsReadable = typeof context === 'string' && checkpointIds.every(id => context.includes(id));
-    if (packet?.hookSpecificOutput?.hookEventName !== 'SessionStart' || !sourceIdsReadable || !context.includes(marker) ||
-        !/untrusted|historical reference/i.test(context)) fail('Fresh SessionStart did not inject the canary checkpoint and its source citations.');
+    const sourceIdsReadable = sourceIdsInContext(context, checkpointIds);
+    requireCanary(allChecks(packet?.hookSpecificOutput?.hookEventName === 'SessionStart', sourceIdsReadable,
+      containsText(context, marker), /untrusted|historical reference/i.test(context || '')), 'Fresh SessionStart did not inject the canary checkpoint and its source citations.');
     report.checks.fresh_session_start = { elapsed_ms: Math.round(performance.now() - startStarted), session_id: freshSessionId, injected: true, source_ids_readable: true, context_chars: context.length };
 
     report.status = 'passed';
@@ -444,16 +471,7 @@ async function runCanary(env) {
   } catch (error) {
     report.status = 'failed';
     report.failed_stage = stage;
-    const failure = error instanceof Error ? error : undefined;
-    const httpStatus = failure?.message.match(/HTTP (\d{3})/)?.[1];
-    report.failure = {
-      category: httpStatus ? 'http_error' : failure?.message.startsWith('Native ') ? 'native_hook_error' : 'canary_step_error',
-      ...(httpStatus ? { http_status: Number(httpStatus) } : {}),
-      ...(failure?.name ? { error_type: String(failure.name).slice(0, 40) } : {}),
-      ...(failure?.code ? { native_error_code: String(failure.code).slice(0, 40) } : {}),
-      ...(failure?.signal ? { native_signal: String(failure.signal).slice(0, 20) } : {}),
-      ...(Number.isInteger(failure?.status) ? { native_exit_status: failure.status } : {}),
-    };
+    report.failure = failureDetails(error);
     report.finished_at = new Date().toISOString();
     report.elapsed_ms = Math.round(performance.now() - started);
     reportPathFromEnv(env, report, resultPath);

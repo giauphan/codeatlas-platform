@@ -108,6 +108,9 @@ safeMockModule(path.join(srcDir, 'services/dreamingService.js'), dreamingService
 safeMockModule(path.join(srcDir, 'services/dreamCaptureStore.js'), {
   DreamCaptureStore: { accept: mockAcceptCapture },
 });
+safeMockModule(path.join(srcDir, 'services/sessionCheckpointService.js'), {
+  SessionCheckpointService: { latest: mock.fn(async () => null) },
+});
 
 safeMockModule(path.join(srcDir, 'services/llmService.js'), {
   summarizeConversationForDreams: mockSummarizeConversation,

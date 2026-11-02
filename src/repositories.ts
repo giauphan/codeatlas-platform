@@ -248,31 +248,7 @@ export class AuthenticateUserUseCase {
 
     // 1. Super Admin — try the repository first so the key resolves to the user's real uid
     if (superAdminKey && apiKey === superAdminKey) {
-      const cached = this.authCache.get(apiKey);
-      if (cached && cached.cachedUntil > Date.now()) {
-        return cached.data;
-      }
-      try {
-        const firestoreData = await this.authRepo.verifyKey(apiKey);
-        if (firestoreData) {
-          firestoreData.expires = Infinity;
-          this.authCache.set(apiKey, { data: firestoreData, cachedUntil: Infinity });
-          return firestoreData;
-        }
-      } catch (err: unknown) {
-        // Fallback gracefully if Firestore is unconfigured or unavailable
-        logger.debug(`[AuthenticateUserUseCase] Super admin lookup failed, using fallback: ${err instanceof Error ? err.message : String(err)}`);
-      }
-      // Cache the fallback briefly so a degraded store is not hit on every request
-      // We don't overwrite `expires` semantics of the original payload so downstream systems don't treat it differently.
-      const fallback: AuthData = {
-        tier: 'enterprise',
-        uid: 'admin',
-        keyId: 'admin',
-        expires: Infinity,
-      };
-      this.authCache.set(apiKey, { data: fallback, cachedUntil: Date.now() + this.adminFallbackTtl });
-      return fallback;
+      return this.authenticateSuperAdmin(apiKey);
     }
 
     // 2. Check Local RAM Cache
@@ -293,6 +269,34 @@ export class AuthenticateUserUseCase {
     this.authRepo.updateLastUsed(authData.uid, authData.keyId).catch(() => {});
 
     return authData;
+  }
+
+  private async authenticateSuperAdmin(apiKey: string): Promise<AuthData> {
+    const cached = this.authCache.get(apiKey);
+    if (cached && cached.cachedUntil > Date.now()) {
+      return cached.data;
+    }
+    try {
+      const firestoreData = await this.authRepo.verifyKey(apiKey);
+      if (firestoreData) {
+        firestoreData.expires = Infinity;
+        this.authCache.set(apiKey, { data: firestoreData, cachedUntil: Infinity });
+        return firestoreData;
+      }
+    } catch (err: unknown) {
+      // Fallback gracefully if Firestore is unconfigured or unavailable
+      logger.debug(`[AuthenticateUserUseCase] Super admin lookup failed, using fallback: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    // Cache the fallback briefly so a degraded store is not hit on every request
+    // We don't overwrite `expires` semantics of the original payload so downstream systems don't treat it differently.
+    const fallback: AuthData = {
+      tier: 'enterprise',
+      uid: 'admin',
+      keyId: 'admin',
+      expires: Infinity,
+    };
+    this.authCache.set(apiKey, { data: fallback, cachedUntil: Date.now() + this.adminFallbackTtl });
+    return fallback;
   }
 }
 

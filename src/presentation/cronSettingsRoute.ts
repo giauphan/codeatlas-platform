@@ -29,6 +29,45 @@ export interface CronSettings {
 
 export type CronSettingsPatch = Partial<Omit<CronSettings, "updated_at">>;
 
+type SettingsValidation = { valid: true } | { valid: false; error: string };
+
+function validateSchedulePatch(patch: Record<string, unknown>): SettingsValidation {
+  for (const key of ["dreams_schedule", "reconciliation_schedule"] as const) {
+    const expression = patch[key];
+    if (expression === undefined) continue;
+    if (typeof expression !== "string") return { valid: false, error: `${key} must be a string` };
+    const validation = validateCronExpression(expression);
+    if (!validation.valid) return { valid: false, error: `${key}: ${validation.error}` };
+  }
+  return { valid: true };
+}
+
+function validateTimezonePatch(patch: Record<string, unknown>): SettingsValidation {
+  if (patch.timezone === undefined) return { valid: true };
+  if (typeof patch.timezone !== "string") return { valid: false, error: "timezone must be a string" };
+  const validation = validateTimeZone(patch.timezone);
+  return validation.valid ? { valid: true } : { valid: false, error: validation.error ?? "Invalid timezone" };
+}
+
+function validateBooleanPatches(patch: Record<string, unknown>): SettingsValidation {
+  for (const key of ["dreams_enabled", "reconciliation_enabled"] as const) {
+    if (patch[key] !== undefined && typeof patch[key] !== "boolean") {
+      return { valid: false, error: `${key} must be a boolean` };
+    }
+  }
+  return { valid: true };
+}
+
+function validateScopePatches(patch: Record<string, unknown>): SettingsValidation {
+  for (const key of ["tenant_id", "project_id", "project"] as const) {
+    const scope = patch[key];
+    if (scope !== undefined && (typeof scope !== "string" || !scope.trim() || scope.trim().length > 512)) {
+      return { valid: false, error: `${key} must be a non-empty string of at most 512 characters` };
+    }
+  }
+  return { valid: true };
+}
+
 function settingsPath(): string {
   return process.env.CRON_SETTINGS_PATH || join(process.env.HOME || "/home/ubuntu", ".hermes", "cron-settings.json");
 }
@@ -75,30 +114,15 @@ export function validateCronSettingsUpdate(value: unknown): { valid: boolean; er
     "tenant_id", "project_id", "project",
   ]);
   for (const key of Object.keys(patch)) if (!allowed.has(key)) return { valid: false, error: `Unknown setting: ${key}` };
-  for (const key of ["dreams_schedule", "reconciliation_schedule"] as const) {
-    const expression = patch[key];
-    if (expression !== undefined) {
-      if (typeof expression !== "string") return { valid: false, error: `${key} must be a string` };
-      const validation = validateCronExpression(expression);
-      if (!validation.valid) return { valid: false, error: `${key}: ${validation.error}` };
-    }
-  }
-  if (patch.timezone !== undefined) {
-    if (typeof patch.timezone !== "string") return { valid: false, error: "timezone must be a string" };
-    const validation = validateTimeZone(patch.timezone);
-    if (!validation.valid) return { valid: false, error: validation.error };
-  }
-  for (const key of ["dreams_enabled", "reconciliation_enabled"] as const) {
-    if (patch[key] !== undefined && typeof patch[key] !== "boolean") return { valid: false, error: `${key} must be a boolean` };
+  for (const validate of [validateSchedulePatch, validateTimezonePatch, validateBooleanPatches]) {
+    const result = validate(patch);
+    if (!result.valid) return result;
   }
   if (patch.dreams_provider !== undefined && (typeof patch.dreams_provider !== "string" || patch.dreams_provider.length > 100)) {
     return { valid: false, error: "dreams_provider must be a string of at most 100 characters" };
   }
-  for (const key of ["tenant_id", "project_id", "project"] as const) {
-    if (patch[key] !== undefined && (typeof patch[key] !== "string" || !patch[key].trim() || patch[key].trim().length > 512)) {
-      return { valid: false, error: `${key} must be a non-empty string of at most 512 characters` };
-    }
-  }
+  const scopeValidation = validateScopePatches(patch);
+  if (!scopeValidation.valid) return scopeValidation;
   return { valid: true };
 }
 

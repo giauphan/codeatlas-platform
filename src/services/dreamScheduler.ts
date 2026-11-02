@@ -146,6 +146,22 @@ function safeError(reason: string): string {
     .slice(0, 500);
 }
 
+function validateJobResponse(response: { httpStatus: number; body: unknown }): void {
+  const body = response.body && typeof response.body === "object" ? response.body as Record<string, unknown> : {};
+  const stats = extractOperationStats(body);
+  if (!Number.isInteger(response.httpStatus) || response.httpStatus < 200 || response.httpStatus >= 300) {
+    throw new Error(`job API returned HTTP ${response.httpStatus}`);
+  }
+  if (body.success !== true) throw new Error("job API response did not report success=true");
+  if ((stats.failed ?? 0) > 0) throw new Error("job API response reported failed operations");
+  const consolidation = body.consolidation && typeof body.consolidation === "object"
+    ? body.consolidation as Record<string, unknown>
+    : undefined;
+  if (consolidation && (consolidation.status !== "completed" || (Array.isArray(consolidation.errors) && consolidation.errors.length > 0))) {
+    throw new Error("consolidation report contains failed operations");
+  }
+}
+
 /** Durable, cross-instance run claims with lease tokens that fence stale workers. */
 export class DreamRunLedger {
   constructor(private readonly db: IDatabaseAdapter) {}
@@ -422,49 +438,45 @@ export class DreamScheduler {
       if (heartbeatLost) throw new Error("scheduler lease was lost while job was running");
       const body = response.body && typeof response.body === "object" ? response.body as Record<string, unknown> : {};
       failureStats = extractOperationStats(body);
-      if (!Number.isInteger(response.httpStatus) || response.httpStatus < 200 || response.httpStatus >= 300) {
-        throw new Error(`job API returned HTTP ${response.httpStatus}`);
-      }
-      if (body.success !== true) {
-        throw new Error("job API response did not report success=true");
-      }
-      if ((failureStats.failed ?? 0) > 0) {
-        throw new Error("job API response reported failed operations");
-      }
-      const consolidation = body.consolidation && typeof body.consolidation === "object"
-        ? body.consolidation as Record<string, unknown>
-        : undefined;
-      if (consolidation && (consolidation.status !== "completed" || (Array.isArray(consolidation.errors) && consolidation.errors.length > 0))) {
-        throw new Error("consolidation report contains failed operations");
-      }
+      validateJobResponse(response);
       const result: DreamJobResult = {
         success: true,
-        counts: extractOperationStats(body),
+        counts: failureStats,
       };
       const completed = await this.options.ledger.completeRun(claim, result, this.now().toISOString());
       if (completed) DreamDiagnostics.recordScheduler('success', Date.now() - attemptStartedAt);
       else DreamDiagnostics.recordSchedulerLeaseLost(Date.now() - attemptStartedAt);
       return completed ? "completed" : "skipped";
     } catch (error) {
-      if (heartbeatLost) {
-        DreamDiagnostics.recordSchedulerLeaseLost(Date.now() - attemptStartedAt);
-        return "skipped";
-      }
-      const attempt = claim.attempt;
-      const backoff = Math.min(this.maxBackoffMs, this.baseBackoffMs * 2 ** Math.max(0, attempt - 1));
-      const retryAt = new Date(this.now().getTime() + backoff).toISOString();
-      const reason = error instanceof Error ? error.message : String(error);
-      const recorded = await this.options.ledger.failRun(claim, reason, this.now().toISOString(), retryAt, failureStats);
-      if (!recorded) {
-        DreamDiagnostics.recordSchedulerLeaseLost(Date.now() - attemptStartedAt);
-        return "skipped";
-      }
-      DreamDiagnostics.recordScheduler('failure', Date.now() - attemptStartedAt);
-      return attempt >= this.maxAttempts ? "failed" : "retryable";
+      return await this.recordFailure(claim, attemptStartedAt, heartbeatLost, error, failureStats);
     } finally {
       heartbeatStopped = true;
       if (heartbeatTimer) clearTimeout(heartbeatTimer);
     }
+  }
+
+  private async recordFailure(
+    claim: DreamRunClaim,
+    attemptStartedAt: number,
+    heartbeatLost: boolean,
+    error: unknown,
+    failureStats?: Record<string, number>,
+  ): Promise<DreamRunState | "skipped"> {
+    if (heartbeatLost) {
+      DreamDiagnostics.recordSchedulerLeaseLost(Date.now() - attemptStartedAt);
+      return "skipped";
+    }
+    const attempt = claim.attempt;
+    const backoff = Math.min(this.maxBackoffMs, this.baseBackoffMs * 2 ** Math.max(0, attempt - 1));
+    const retryAt = new Date(this.now().getTime() + backoff).toISOString();
+    const reason = error instanceof Error ? error.message : String(error);
+    const recorded = await this.options.ledger.failRun(claim, reason, this.now().toISOString(), retryAt, failureStats);
+    if (!recorded) {
+      DreamDiagnostics.recordSchedulerLeaseLost(Date.now() - attemptStartedAt);
+      return "skipped";
+    }
+    DreamDiagnostics.recordScheduler("failure", Date.now() - attemptStartedAt);
+    return attempt >= this.maxAttempts ? "failed" : "retryable";
   }
 
   async tick(settings: ScheduledJobSettings, now = this.now(), recoveryWindowMinutes = 24 * 60): Promise<Array<{ jobType: DreamJobType; scheduledFor: string; state: DreamRunState | "skipped" }>> {

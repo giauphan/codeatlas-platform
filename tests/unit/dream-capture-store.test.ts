@@ -90,6 +90,20 @@ test('replay returns duplicate and changed payload with same event id is rejecte
   assert.equal((await adapter.query<{ count: number }>('SELECT COUNT(*) AS count FROM dream_capture_events'))[0].count, 1);
 });
 
+test('newly stored capture acknowledges pending extraction even if its receipt changes before reread', async () => {
+  const execute = adapter.execute.bind(adapter);
+  adapter.execute = async (...args: Parameters<typeof adapter.execute>) => {
+    const result = await execute(...args);
+    if (String(args[0]).includes('INSERT INTO dream_capture_events')) {
+      await execute("UPDATE dream_capture_events SET status = 'filtered' WHERE event_id = :eventId", { eventId: event.eventId });
+    }
+    return result;
+  };
+  const ack = await authStorage.run(tenantA, () => DreamCaptureStore.accept(event));
+  assert.equal(ack.status, 'stored');
+  assert.equal(ack.extraction_status, 'pending');
+});
+
 test('concurrent event delivery and crash after durable write replay without duplicate rows', async () => {
   const concurrent = await Promise.all([
     authStorage.run(tenantA, () => DreamCaptureStore.accept(event)),

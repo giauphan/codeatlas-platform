@@ -251,6 +251,48 @@ function validateInstalledHooks(settingsPath, cliPath) {
   }
 }
 
+async function validateFirstSessionCapture({ db, projectId, projectsDir, first, toolToken, apiKey, targetUrl, result, setStage }) {
+  if (!first.result.toLowerCase().includes('completed')) fail();
+  const transcriptFiles = walkJsonl(projectsDir);
+  const firstSessionIds = [...new Set(transcriptFiles.map(sessionIdFromTranscript).filter(Boolean))];
+  const toolCaptureRows = db.prepare(`SELECT session_id, content_redacted FROM dream_capture_events
+      WHERE project_id=? AND actor_role='TOOL' AND content_redacted LIKE ? ORDER BY created_at`).all(projectId, `%${toolToken}%`);
+  if (toolCaptureRows.length < 1 || firstSessionIds.length < 1 || !toolCaptureRows.some(row => firstSessionIds.includes(row.session_id))) fail();
+  const firstSessionId = toolCaptureRows.find(row => firstSessionIds.includes(row.session_id)).session_id;
+  const firstRows = sessionCaptureRows(db, projectId, firstSessionId);
+  if (!firstRows.some(row => row.actor_role === 'TOOL' && row.content_redacted.includes(toolToken))) fail();
+  if (firstRows.some(row => row.actor_role === 'USER' && row.content_redacted.includes(toolToken))) fail();
+  const rowsBeforeReconcile = pendingCount(db, projectId);
+  if (rowsBeforeReconcile > 0) {
+    const pendingRows = db.prepare("SELECT DISTINCT session_id FROM dream_capture_events WHERE project_id=? AND status='pending'").all(projectId);
+    if (pendingRows.some(row => row.session_id !== firstSessionId)) fail();
+    setStage('first_session_reconciliation');
+    const reconcileStarted = performance.now();
+    const reconciliation = await requestJson(targetUrl, apiKey, '/api/dreams/reconcile-pending', {
+      method: 'POST', body: { project_id: projectId, limit: 100 }, timeoutMs: 30_000,
+    });
+    result.timings_ms.reconciliation = Math.round(performance.now() - reconcileStarted);
+    if (reconciliation.success !== true || reconciliation.failed !== 0 || pendingCount(db, projectId) !== 0) fail();
+  }
+  const checkpoint = await requestJson(targetUrl, apiKey, `/api/dreams/checkpoints/latest?project_id=${encodeURIComponent(projectId)}`);
+  if (checkpoint.retrieval_status !== 'ok' || !checkpoint.checkpoint || checkpoint.checkpoint.session_id !== firstSessionId) fail();
+  result.checks.reconciliation_succeeded = true;
+  result.checks.checkpoint_available_before_session_two = true;
+  result.counts.session_one_capture_rows = firstRows.length;
+  result.counts.tool_token_capture_rows = toolCaptureRows.length;
+  return firstSessionId;
+}
+
+async function validateSecondSession({ second, secondPrompt, toolToken, projectsDir, priorSessionIds, firstSessionId, result }) {
+  result.checks.second_prompt_excluded_tool_token = !secondPrompt.includes(toolToken);
+  result.checks.second_response_restored_tool_token = second.result.includes(toolToken);
+  result.checks.second_response_restored_check_count = /\b1\b/.test(second.result);
+  if (!result.checks.second_response_restored_tool_token || !result.checks.second_response_restored_check_count) fail();
+  const sessionIds = [...new Set(walkJsonl(projectsDir).map(sessionIdFromTranscript).filter(Boolean))];
+  if (!sessionIds.some(id => !priorSessionIds.has(id)) || sessionIds.every(id => id === firstSessionId)) fail();
+  result.counts.fresh_claude_session_count = 2;
+}
+
 async function main() {
   const started = performance.now();
   const result = { status: 'failed', checks: {}, counts: {}, timings_ms: {} };
@@ -330,53 +372,16 @@ async function main() {
     const firstStarted = performance.now();
     const first = await runClaude({ prompt: firstPrompt, tools: 'Bash', settingsPath, env: privateEnv });
     result.timings_ms.session_one = Math.round(performance.now() - firstStarted);
-    if (!first.result.toLowerCase().includes('completed')) fail();
-
     stage = 'first_session_tool_capture';
     const projectsDir = path.join(claudeDir, 'projects');
-    const transcriptFiles = walkJsonl(projectsDir);
-    const firstSessionIds = [...new Set(transcriptFiles.map(sessionIdFromTranscript).filter(Boolean))];
-    const toolCaptureRows = db.prepare(`SELECT session_id, content_redacted FROM dream_capture_events
-      WHERE project_id=? AND actor_role='TOOL' AND content_redacted LIKE ? ORDER BY created_at`).all(projectId, `%${toolToken}%`);
-    if (toolCaptureRows.length < 1 || firstSessionIds.length < 1 || !toolCaptureRows.some(row => firstSessionIds.includes(row.session_id))) fail();
-    const firstSessionId = toolCaptureRows.find(row => firstSessionIds.includes(row.session_id)).session_id;
-    const firstRows = sessionCaptureRows(db, projectId, firstSessionId);
-    if (!firstRows.some(row => row.actor_role === 'TOOL' && row.content_redacted.includes(toolToken))) fail();
-    const userPromptContainsToolToken = firstRows.some(row => row.actor_role === 'USER' && row.content_redacted.includes(toolToken));
-    if (userPromptContainsToolToken) fail();
-    const rowsBeforeReconcile = pendingCount(db, projectId);
-    if (rowsBeforeReconcile > 0) {
-      const pendingRows = db.prepare("SELECT DISTINCT session_id FROM dream_capture_events WHERE project_id=? AND status='pending'").all(projectId);
-      if (pendingRows.some(row => row.session_id !== firstSessionId)) fail();
-      stage = 'first_session_reconciliation';
-      const reconcileStarted = performance.now();
-      const reconciliation = await requestJson(config.targetUrl, apiKey, '/api/dreams/reconcile-pending', {
-        method: 'POST', body: { project_id: projectId, limit: 100 }, timeoutMs: 30_000,
-      });
-      result.timings_ms.reconciliation = Math.round(performance.now() - reconcileStarted);
-      if (reconciliation.success !== true || reconciliation.failed !== 0 || pendingCount(db, projectId) !== 0) fail();
-      result.checks.reconciliation_succeeded = true;
-    } else {
-      result.checks.reconciliation_succeeded = true;
-    }
-    const checkpoint = await requestJson(config.targetUrl, apiKey, `/api/dreams/checkpoints/latest?project_id=${encodeURIComponent(projectId)}`);
-    if (checkpoint.retrieval_status !== 'ok' || !checkpoint.checkpoint || checkpoint.checkpoint.session_id !== firstSessionId) fail();
-    result.checks.checkpoint_available_before_session_two = true;
-    result.counts.session_one_capture_rows = firstRows.length;
-    result.counts.tool_token_capture_rows = toolCaptureRows.length;
+    const firstSessionId = await validateFirstSessionCapture({ db, projectId, projectsDir, first, toolToken, apiKey, targetUrl: config.targetUrl, result, setStage: value => { stage = value; } });
 
     stage = 'second_claude_session';
     const secondStarted = performance.now();
     const sessionIdsBeforeSecond = new Set(walkJsonl(projectsDir).map(sessionIdFromTranscript).filter(Boolean));
     const second = await runClaude({ prompt: secondPrompt, tools: '', settingsPath, env: privateEnv });
     result.timings_ms.session_two = Math.round(performance.now() - secondStarted);
-    result.checks.second_prompt_excluded_tool_token = !secondPrompt.includes(toolToken);
-    result.checks.second_response_restored_tool_token = second.result.includes(toolToken);
-    result.checks.second_response_restored_check_count = /\b1\b/.test(second.result);
-    if (!result.checks.second_response_restored_tool_token || !result.checks.second_response_restored_check_count) fail();
-    const secondSessionIds = [...new Set(walkJsonl(projectsDir).map(sessionIdFromTranscript).filter(Boolean))];
-    if (!secondSessionIds.some(id => !sessionIdsBeforeSecond.has(id)) || secondSessionIds.every(id => id === firstSessionId)) fail();
-    result.counts.fresh_claude_session_count = 2;
+    await validateSecondSession({ second, secondPrompt, toolToken, projectsDir, priorSessionIds: sessionIdsBeforeSecond, firstSessionId, result });
     result.status = 'passed';
   } catch (error) {
     result.status = 'failed';

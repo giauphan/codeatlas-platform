@@ -36,32 +36,42 @@ const decode = (stored: string): string => {
   return xorCipher(decodeURIComponent(escape(atob(stored.slice(ENCODED_PREFIX.length)))));
 };
 
+const isQuotaError = (error: unknown): boolean => {
+  if (typeof error !== 'object' || error === null) return false;
+  const candidate = error as { name?: unknown; code?: unknown };
+  return candidate.name === 'QuotaExceededError' ||
+    candidate.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    candidate.code === 22 ||
+    candidate.code === 1014;
+};
+
+const removeAnalysisCacheEntries = (preserveKey: string): void => {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    if (key?.startsWith('ca_analysis_cache_') && key !== preserveKey) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(key => sessionStorage.removeItem(key));
+};
+
+const retryAfterQuotaError = (key: string, payload: string, value: string): void => {
+  try {
+    removeAnalysisCacheEntries(key);
+    sessionStorage.setItem(key, payload);
+  } catch {
+    console.info(`[CodeAtlas] Project analysis size (${(value.length / 1024 / 1024).toFixed(2)} MB) exceeds browser sessionStorage quota limit. Operating in high-performance memory-only mode without local cache.`);
+  }
+};
+
 export const safeSessionStorageSetItem = (key: string, value: string) => {
     const payload = encode(value);
     try {
       sessionStorage.setItem(key, payload);
-    } catch (err: any) {
-      const isQuotaError = err && (
-        err.name === 'QuotaExceededError' ||
-        err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-        err.code === 22 ||
-        err.code === 1014
-      );
-      if (isQuotaError) {
-        try {
-          const keysToRemove: string[] = [];
-          for (let i = 0; i < sessionStorage.length; i++) {
-            const k = sessionStorage.key(i);
-            if (k && k.startsWith('ca_analysis_cache_') && k !== key) {
-              keysToRemove.push(k);
-            }
-          }
-          keysToRemove.forEach(k => sessionStorage.removeItem(k));
-
-          sessionStorage.setItem(key, payload);
-        } catch (retryErr) {
-          console.info(`[CodeAtlas] Project analysis size (${(value.length / 1024 / 1024).toFixed(2)} MB) exceeds browser sessionStorage quota limit. Operating in high-performance memory-only mode without local cache.`);
-        }
+    } catch (err: unknown) {
+      if (isQuotaError(err)) {
+        retryAfterQuotaError(key, payload, value);
       } else {
         console.info("Failed to write to sessionStorage:", err);
       }
