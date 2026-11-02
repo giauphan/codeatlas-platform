@@ -160,6 +160,7 @@ export function SecondBrainView() {
           {categories.map(cat => (
             <button
               key={cat}
+              type="button"
               onClick={() => setSelectedCategory(cat)}
               aria-pressed={selectedCategory === cat}
               className={FOCUS_RING_CLASS}
