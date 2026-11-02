@@ -363,6 +363,20 @@ describe("GenomeService", () => {
       );
     });
 
+    test("rejects a partial source set before creating or updating genes", async () => {
+      mockConnection.execute.mock.mockImplementation(async (sql: string) => {
+        if (sql.includes("SELECT id, name, description, problem")) {
+          return { rows: [mockGeneRow("source-a"), mockGeneRow("source-b")] };
+        }
+        throw new Error("unexpected write");
+      });
+      await assert.rejects(
+        () => GenomeService.mergeGenes(["source-a", "source-b", "missing"], "Combined", "test-project"),
+        /Not all genes found/,
+      );
+      assert.equal(mockConnection.executeMany.mock.callCount(), 0);
+    });
+
     test("preserves object-row IDs in merged updates and relationships", async () => {
       mockConnection.execute.mock.mockImplementation(async (sql: string) => {
         if (sql.includes("SELECT id, name, description, problem")) {

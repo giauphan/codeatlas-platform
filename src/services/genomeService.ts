@@ -502,7 +502,9 @@ export class GenomeService {
         );
         genes.push(...(result.rows || []));
       }
-      if (genes.length < 2) throw new Error("Not all genes found");
+      if (genes.length < 2 || genes.length !== sourceIds.length) {
+        throw new Error("Not all genes found");
+      }
 
       // Combine content
       const combinedProblem = genes
