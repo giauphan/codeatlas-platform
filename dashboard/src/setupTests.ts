@@ -21,5 +21,5 @@ if (!globalThis.IDBKeyRange) {
 
 // Mock globalThis.location for session storage obfuscation key
 if (!globalThis.location) {
-  globalThis.location = { origin: 'http://test.codeatlas.local' } as Location;
+  globalThis.location = { origin: 'https://test.codeatlas.local' } as Location;
 }

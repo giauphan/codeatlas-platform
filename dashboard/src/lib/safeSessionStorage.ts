@@ -7,7 +7,7 @@
 
 // Ensure location is available even in test environments
 if (!globalThis.location) {
-  globalThis.location = { origin: 'http://test.codeatlas.local' } as Location;
+  globalThis.location = { origin: 'https://test.codeatlas.local' } as Location;
 }
 
 const OBFUSCATION_KEY = `codeatlas::${globalThis.location?.origin ?? 'app'}`;

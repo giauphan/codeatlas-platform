@@ -378,9 +378,9 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
       }
 
-      const q = filePath.toLowerCase().replace(/\\/g, "/");
+      const q = filePath.toLowerCase().replaceAll("\\", "/");
       const matches = loaded.analysis.graph.nodes.filter((n) => {
-        const fp = (n.filePath || n.id).toLowerCase().replace(/\\/g, "/");
+        const fp = (n.filePath || n.id).toLowerCase().replaceAll("\\", "/");
         return fp.includes(q);
       });
 
@@ -518,7 +518,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       for (const node of nodes) {
         const mid = getMermaidId(node.id);
-        const label = node.label.replace(/"/g, "'");
+        const label = node.label.replaceAll('"', "'");
         const typeIcon = node.type === "module" ? "📄" : node.type === "class" ? "🏗️" : node.type === "function" ? "⚡" : "📦";
         if (node.type === "module") {
           lines.push(`    ${mid}["${typeIcon} ${label}"]`);
@@ -1254,7 +1254,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       );
 
       let mermaid = "";
-      const sanitizeLabel = (s: string) => s.replace(/"/g, "'").replace(/[<>]/g, "");
+      const sanitizeLabel = (s: string) => s.replaceAll('"', "'").replace(/[<>]/g, "");
 
       if (dType === "sequence") {
         const seqLines: string[] = ["sequenceDiagram"];

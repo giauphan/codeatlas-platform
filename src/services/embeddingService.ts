@@ -316,7 +316,6 @@ async function requestFromModel(
             logger.info(`[Embeddings] Model ${label}${keyRef} rate limited (429). Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
-            continue;
           }
 
           // For key rotation errors (401, 403, 429), try next key

@@ -18,11 +18,11 @@ function getDb(): Promise<IDBPDatabase> {
       deleteObjectStore: (_name: string) => {},
       close: () => {},
       // Add direct methods that the real idb library provides
-      get: async (_storeName: string, _key: string) => undefined,
+      get: (_storeName: string, _key: string) => Promise.resolve(undefined),
       put: async (_storeName: string, _value: any, _key?: string) => {},
       delete: async (_storeName: string, _key: string) => {},
       clear: async (_storeName: string) => {},
-      count: async (_storeName: string) => 0,
+      count: (_storeName: string) => Promise.resolve(0),
     };
     return Promise.resolve(mockDb);
   }

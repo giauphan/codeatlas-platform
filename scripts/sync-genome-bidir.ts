@@ -69,7 +69,9 @@ const CORE_SKILLS = [
 
 export function createApiCall(apiBase: URL, apiKey: string, fetcher: typeof fetch = fetch) {
   return async function apiCall(pathStr: string, opts: RequestInit = {}): Promise<Response> {
-    const basePath = apiBase.pathname.replace(/\/+$/, "");
+    let end = apiBase.pathname.length;
+    while (end > 0 && apiBase.pathname[end - 1] === "/") end--;
+    const basePath = apiBase.pathname.slice(0, end);
     const endpointPath = pathStr.replace(/^\/+/, "");
     const url = new URL(`${basePath}/${endpointPath}`, apiBase.origin);
     const headers = new Headers(opts.headers);
@@ -134,6 +136,7 @@ async function download(apiCall) {
   if (!res.ok) { console.log("  API error: " + res.status); return 0; }
   const data = await res.json();
   const genes = data.genes || [];
+  if (!Array.isArray(genes)) throw new Error('Invalid genome response: genes must be an array');
   console.log("  Found " + genes.length + " skill genes");
   let count = 0;
 

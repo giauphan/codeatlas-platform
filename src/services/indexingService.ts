@@ -19,14 +19,14 @@ const IGNORED_CALLS = new Set(["if", "while", "for", "switch", "catch", "then", 
 const TS_IMPORT_REGEX = /import\s+(?:\{[^}]*\}\s+from\s+)?["']([^"']+)["']|from\s+["']([^"']+)["']/;
 const TS_CLASS_REGEX = /(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/;
 const TS_FUNC_REGEX = /(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(/;
-const TS_CALL_REGEX = /(\w+)\(/g;
+const TS_CALL_REGEX = /\b(\w+)\(/g;
 const PY_IMPORT_REGEX = /(?:from\s+(\S+)\s+)?import\s+(.+)/;
 const PY_CLASS_REGEX = /^\s*class\s+(\w+)/;
 const PY_DEF_REGEX = /^\s*def\s+(\w+)\s*\(/;
 const GO_FUNC_REGEX = /^\s*func\s+(?:\(\w+\s+\*?\w+\)\s+)?(\w+)\s*\(/;
 const GO_STRUCT_REGEX = /^\s*type\s+(\w+)\s+struct/;
 const PHP_CLASS_REGEX = /^\s*(?:abstract\s+)?class\s+(\w+)/i;
-const PHP_FUNC_REGEX = /^\s*(?:public|private|protected|static)?\s*function\s+(\w+)\s*\(/i;
+const PHP_FUNC_REGEX = /^\s*(?:(?:public|private|protected|static)\s*)?function\s+(\w+)\s*\(/i;
 
 // Types matching the parser output
 export interface GraphNode {

@@ -1,5 +1,11 @@
 import { logger } from "../utils/logger.js";
 
+function withoutTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end--;
+  return value.slice(0, end);
+}
+
 export interface LLMGenerateOptions {
   prompt: string;
   systemPrompt?: string;
@@ -153,7 +159,7 @@ export class LLMProviderService {
           (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
           !parsed.hostname.toLowerCase().includes('metadata')
         ) {
-          const safeBase = parsed.origin + parsed.pathname.replace(/\/+$/, '');
+          const safeBase = parsed.origin + withoutTrailingSlashes(parsed.pathname);
           endpoint = safeBase.endsWith('/chat/completions') || safeBase.endsWith('/v1/chat/completions')
                 ? safeBase
                 : safeBase + '/chat/completions';
@@ -176,7 +182,7 @@ export class LLMProviderService {
         ) {
           // Allow https externally, local http
           if (parsed.protocol === 'https:' || parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
-            const safeBase = parsed.origin + parsed.pathname.replace(/\/+$/, '');
+            const safeBase = parsed.origin + withoutTrailingSlashes(parsed.pathname);
             // Only append path if base doesn't already contain it exactly as trailing element
             endpoint = safeBase.endsWith('/chat/completions') || safeBase.endsWith('/v1/chat/completions')
                 ? safeBase

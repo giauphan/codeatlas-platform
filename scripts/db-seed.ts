@@ -31,7 +31,7 @@ async function seed() {
     }
 
     // 2. Seed API Key (if not exists)
-    const apiKey = process.env.CODEATLAS_API_KEY || `sk-${randomUUID().replace(/-/g, "").slice(0, 32)}`;
+    const apiKey = process.env.CODEATLAS_API_KEY || `sk-${randomUUID().replaceAll("-", "").slice(0, 32)}`;
     const keyHash = await hashApiKey(apiKey);
     const keyExists = await db.query(
       "SELECT 1 FROM users WHERE id = ? AND EXISTS (SELECT 1 FROM keys WHERE user_id = ? AND key_hash = ?)",

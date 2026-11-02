@@ -50,7 +50,7 @@ await new Promise<void>((resolveListen, reject) => {
   server.once('error', reject);
 });
 const address = server.address();
-assert.ok(address && typeof address === 'object');
+if (!address || typeof address !== 'object') throw new Error('Test server did not bind to a TCP port');
 const baseUrl = `http://127.0.0.1:${address.port}`;
 
 async function registerKey(id: string, uid: string, key: string): Promise<void> {

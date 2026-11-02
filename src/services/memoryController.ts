@@ -263,7 +263,7 @@ export class MemoryController {
 // Auto-initialize on module import (AUTO-LOAD)
 // This ensures memory loads when the application starts
 if (process.env.MEMORY_AUTO_LOAD !== 'false') {
-  Promise.resolve().then(() => {
+  void Promise.resolve().then(() => {
     // Delay slightly to allow logger to be ready
     setTimeout(() => {
       MemoryController.autoInitialize().catch(error => {
