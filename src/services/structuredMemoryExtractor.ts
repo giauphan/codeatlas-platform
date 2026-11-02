@@ -224,30 +224,36 @@ function explicitFixOutcome(text: string): boolean {
   return directCorrection || (replacement && verified) || (readPerRecord && verified);
 }
 
+function authorityContainsCredentials(text: string, start: number): boolean {
+  let separator = -1;
+  let cursor = start;
+  while (cursor < text.length && text[cursor] !== '/' && text[cursor] !== '@') {
+    if (text[cursor] === ':' && cursor > start && separator === -1) separator = cursor;
+    cursor++;
+  }
+  return text[cursor] === '@' && separator !== -1 && separator < cursor - 1;
+}
+
 // Check credentials without repeatedly rescanning long malformed URL strings.
+function hasCredentialUrlAfter(text: string, searchFrom: number, lineEnd: number): boolean {
+  while (searchFrom < lineEnd) {
+    const scheme = text.indexOf('://', searchFrom);
+    if (scheme === -1 || scheme + 3 > lineEnd) return false;
+    const start = scheme + 3;
+    if (authorityContainsCredentials(text, start)) return true;
+    searchFrom = start;
+  }
+  return false;
+}
+
 function hasCredentialConnectionString(text: string): boolean {
   let lineStart = 0;
   while (lineStart <= text.length) {
     const newline = text.indexOf('\n', lineStart);
     const lineEnd = newline === -1 ? text.length : newline;
     const marker = /\bconnection string\b/iu.exec(text.slice(lineStart, lineEnd));
-    if (marker) {
-      let searchFrom = lineStart + marker.index + marker[0].length;
-      while (searchFrom < lineEnd) {
-        const scheme = text.indexOf('://', searchFrom);
-        if (scheme === -1 || scheme + 3 > lineEnd) break;
-        const start = scheme + 3;
-        let separator = -1;
-        let cursor = start;
-        while (cursor < text.length && text[cursor] !== '/' && text[cursor] !== '@') {
-          if (text[cursor] === ':' && cursor > start && separator === -1) separator = cursor;
-          cursor++;
-        }
-        if (text[cursor] === '@' && separator !== -1 && separator < cursor - 1) return true;
-        searchFrom = start;
-      }
-    }
-    if (newline === -1) break;
+    if (marker && hasCredentialUrlAfter(text, lineStart + marker.index + marker[0].length, lineEnd)) return true;
+    if (newline === -1) return false;
     lineStart = newline + 1;
   }
   return false;

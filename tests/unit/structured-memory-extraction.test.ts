@@ -757,6 +757,12 @@ test('tool connection-string detection handles long malformed credentials prompt
   assert.ok(performance.now() - start < 1_000, 'connection string detection must remain linear');
 });
 
+test('tool connection-string credential detection stays scoped to each line', async () => {
+  const text = 'outcome: failed\nconnection string postgres://user:password@host';
+  const results = await extractStructuredMemories([{ id: 'multiline-connection', role: 'TOOL', text }]);
+  assert.deepEqual(results, []);
+});
+
 test('tool connection strings containing credentials are not persisted as failures', async () => {
   for (const text of [
     'outcome: failed connection string postgres://user:password@host',
