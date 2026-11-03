@@ -74,22 +74,14 @@ export class LLMProviderService {
   }
 
   private resolveProvider(options?: Partial<LLMGenerateOptions>): 'anthropic' | 'openai' | 'openai-compatible' | 'template' {
-    if (options?.provider) {
-      if (options.provider === 'template') {
-        return 'template';
-      }
-      if (options.provider === 'anthropic') {
-        const key = options.apiKey || process.env.ANTHROPIC_API_KEY;
-        return key ? 'anthropic' : 'template';
-      }
-      if (options.provider === 'openai') {
-        const key = options.apiKey || process.env.OPENAI_API_KEY;
-        return key ? 'openai' : 'template';
-      }
-      if (options.provider === 'openai-compatible') {
-        return 'openai-compatible';
-      }
+    if (options?.provider === 'template') return 'template';
+    if (options?.provider === 'anthropic') {
+      return options.apiKey || process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'template';
     }
+    if (options?.provider === 'openai') {
+      return options.apiKey || process.env.OPENAI_API_KEY ? 'openai' : 'template';
+    }
+    if (options?.provider === 'openai-compatible') return 'openai-compatible';
 
     if (process.env.ANTHROPIC_API_KEY) {
       return 'anthropic';
@@ -214,6 +206,37 @@ export class LLMProviderService {
     }
     messages.push({ role: 'user', content: options.prompt });
 
+    const safeUrl = this.resolveSafeEndpoint(endpointUrl);
+
+    const res = await fetch(safeUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`OpenAI API endpoint returned HTTP ${res.status}`);
+    }
+
+    const data = (await res.json()) as unknown;
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      'choices' in data &&
+      Array.isArray((data as { choices: unknown }).choices) &&
+      (data as { choices: Array<{ message?: { content?: unknown } }> }).choices.length > 0 &&
+      typeof (data as { choices: Array<{ message?: { content?: unknown } }> }).choices[0].message?.content === 'string'
+    ) {
+      return (data as { choices: Array<{ message: { content: string } }> }).choices[0].message.content;
+    }
+
+    throw new Error('Invalid response structure from OpenAI format endpoint');
+  }
+
+  private resolveSafeEndpoint(endpointUrl: string): string {
     let safeUrl = 'https://api.openai.com/v1/chat/completions';
 
     const _DEFAULT_FQDNS = [
@@ -260,47 +283,22 @@ export class LLMProviderService {
           ? 'http:'
           : 'https:';
 
-        // Strict port guard
-        let port = '';
-        if (parsed.port) {
-          if (matchedHost !== 'localhost' && matchedHost !== '127.0.0.1') {
-             throw new Error('SSRF Validation Error: Custom ports only allowed for local endpoints');
-          }
-           port = /^[0-9]{1,5}$/.test(parsed.port) ? `:${parsed.port}` : '';
-        }
+        const port = this.safeEndpointPort(parsed, matchedHost);
 
         safeUrl = `${protocol}//${matchedHost}${port}${matchedPath}`;
       }
     } catch (err) {
       console.warn('[LLMProviderService] SSRF validation failed, using safe fallback. Reason:', err instanceof Error ? err.message : String(err));
     }
+    return safeUrl;
+  }
 
-    const res = await fetch(safeUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model,
-        messages
-      })
-    });
-
-    if (!res.ok) {
-      throw new Error(`OpenAI API endpoint returned HTTP ${res.status}`);
+  private safeEndpointPort(parsed: URL, matchedHost: string): string {
+    if (!parsed.port) return '';
+    if (matchedHost !== 'localhost' && matchedHost !== '127.0.0.1') {
+      throw new Error('SSRF Validation Error: Custom ports only allowed for local endpoints');
     }
-
-    const data = (await res.json()) as unknown;
-    if (
-      typeof data === 'object' &&
-      data !== null &&
-      'choices' in data &&
-      Array.isArray((data as { choices: unknown }).choices) &&
-      (data as { choices: Array<{ message?: { content?: unknown } }> }).choices.length > 0 &&
-      typeof (data as { choices: Array<{ message?: { content?: unknown } }> }).choices[0].message?.content === 'string'
-    ) {
-      return (data as { choices: Array<{ message: { content: string } }> }).choices[0].message.content;
-    }
-
-    throw new Error('Invalid response structure from OpenAI format endpoint');
+    return /^\d{1,5}$/.test(parsed.port) ? `:${parsed.port}` : '';
   }
 
   private buildModulePrompt(moduleName: string, astContext: Record<string, unknown>): string {

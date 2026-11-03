@@ -30,6 +30,76 @@ const TABS = [
   { id: 'signin', label: 'SIGN IN', icon: LogIn },
 ] as const;
 
+function getSignInErrorMessage(data: { error?: string; hint?: string }): string {
+  const code = data.error || '';
+  if (code.includes('INVALID_PASSWORD') || code.includes('EMAIL_NOT_FOUND') || code.includes('invalid-credential')) {
+    return 'Invalid email or password. Please check and try again.';
+  }
+  if (code.includes('TOO_MANY_ATTEMPTS')) {
+    return 'Account temporarily locked due to too many failed attempts. Please try again later.';
+  }
+  if (code.includes('USER_DISABLED')) {
+    return 'Account has been disabled.';
+  }
+  return data.hint || data.error || 'Sign in failed';
+}
+
+function getNextTab(e: React.KeyboardEvent<HTMLDivElement>, mode: 'token' | 'signin'): 'token' | 'signin' | null {
+  const tabIds = TABS.map(t => t.id);
+  let nextTabId: typeof mode | null = null;
+
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    e.preventDefault();
+    const currentIndex = tabIds.indexOf(mode);
+    const nextIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % tabIds.length : (currentIndex - 1 + tabIds.length) % tabIds.length;
+    nextTabId = tabIds[nextIndex];
+  } else if (e.key === 'Home') {
+    e.preventDefault();
+    nextTabId = tabIds[0];
+  } else if (e.key === 'End') {
+    e.preventDefault();
+    nextTabId = tabIds[tabIds.length - 1];
+  }
+  return nextTabId;
+}
+
+interface TokenFormProps {
+  showToken: boolean;
+  setShowToken: (show: boolean) => void;
+  apiKey: string;
+  setApiKey: (key: string) => void;
+  loading: boolean;
+  error: string | null;
+  onSubmit: React.FormEventHandler<HTMLFormElement>;
+}
+
+function TokenForm({ showToken, setShowToken, apiKey, setApiKey, loading, error, onSubmit }: Readonly<TokenFormProps>) {
+  return (
+            <motion.form role="tabpanel" id="panel-token" aria-labelledby="tab-token" key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={onSubmit}>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label htmlFor="api-key" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
+                <div style={{ position: 'relative' }}>
+                  <Key size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
+                  <input id="api-key" type={showToken ? "text" : "password"} autoComplete="off" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required aria-invalid={!!error} />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken(!showToken)}
+                    className={`password-toggle-btn ${FOCUS_RING_CLASS}`}
+                    aria-label={showToken ? "Hide access key" : "Show access key"}
+                    title={showToken ? "Hide access key" : "Show access key"}
+                  >
+                    {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+              {error && <div role="alert" style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
+              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={loading}>
+                {loading ? <><Loader2 className="animate-spin" size={24} /> INITIALIZING...</> : 'INITIALIZE SESSION'}
+              </button>
+            </motion.form>
+  );
+}
+
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [mode, setMode] = useState<'token' | 'signin'>('token');
   const [email, setEmail] = useState('');
@@ -70,21 +140,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   }, [focusTarget]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const tabIds = TABS.map(t => t.id);
-    let nextTabId: typeof mode | null = null;
-
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      e.preventDefault();
-      const currentIndex = tabIds.indexOf(mode);
-      const nextIndex = e.key === 'ArrowRight' ? (currentIndex + 1) % tabIds.length : (currentIndex - 1 + tabIds.length) % tabIds.length;
-      nextTabId = tabIds[nextIndex];
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      nextTabId = tabIds[0];
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      nextTabId = tabIds[tabIds.length - 1];
-    }
+    const nextTabId = getNextTab(e, mode);
 
     if (nextTabId) {
       setMode(nextTabId);
@@ -107,18 +163,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       const data = await resp.json();
 
       if (!resp.ok) {
-        let friendlyMsg = data.error || 'Sign in failed';
-        const code = data.error || '';
-        if (code.includes('INVALID_PASSWORD') || code.includes('EMAIL_NOT_FOUND') || code.includes('invalid-credential')) {
-          friendlyMsg = 'Invalid email or password. Please check and try again.';
-        } else if (code.includes('TOO_MANY_ATTEMPTS')) {
-          friendlyMsg = 'Account temporarily locked due to too many failed attempts. Please try again later.';
-        } else if (code.includes('USER_DISABLED')) {
-          friendlyMsg = 'Account has been disabled.';
-        } else if (data.hint) {
-          friendlyMsg = data.hint;
-        }
-        throw new Error(friendlyMsg);
+        throw new Error(getSignInErrorMessage(data));
       }
 
       // Store Firebase ID token + refresh token — auto-refresh handles expiry
@@ -176,28 +221,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
 
         <AnimatePresence mode="wait">
           {mode === 'token' ? (
-            <motion.form role="tabpanel" id="panel-token" aria-labelledby="tab-token" key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleTokenSubmit}>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label htmlFor="api-key" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontWeight: 700 }}>NEURAL ACCESS KEY</label>
-                <div style={{ position: 'relative' }}>
-                  <Key size={18} style={{ position: 'absolute', left: '1rem', top: '1rem', color: 'var(--primary-neon)' }} />
-                  <input id="api-key" type={showToken ? "text" : "password"} autoComplete="off" style={{ paddingLeft: '3rem', paddingRight: '3rem' }} className="glass-input" placeholder="Enter your Enterprise Key..." value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={loading} required aria-invalid={mode === 'token' && !!error} />
-                  <button
-                    type="button"
-                    onClick={() => setShowToken(!showToken)}
-                    className={`password-toggle-btn ${FOCUS_RING_CLASS}`}
-                    aria-label={showToken ? "Hide access key" : "Show access key"}
-                    title={showToken ? "Hide access key" : "Show access key"}
-                  >
-                    {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </div>
-              {error && <div role="alert" style={{ background: 'rgba(255, 75, 75, 0.1)', border: '1px solid #ff4b4b', color: '#ff4b4b', padding: '1rem', borderRadius: '12px', fontSize: '0.8rem', marginBottom: '1.5rem', fontWeight: 600 }}>{error}</div>}
-              <button type="submit" className="btn-neon-cyan" style={{ width: '100%', height: '54px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={loading}>
-                {loading ? <><Loader2 className="animate-spin" size={24} /> INITIALIZING...</> : 'INITIALIZE SESSION'}
-              </button>
-            </motion.form>
+            <TokenForm showToken={showToken} setShowToken={setShowToken} apiKey={apiKey} setApiKey={setApiKey}
+              loading={loading} error={error} onSubmit={handleTokenSubmit} />
           ) : (
             <motion.form role="tabpanel" id="panel-signin" aria-labelledby="tab-signin" key="signin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleEmailSubmit}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>

@@ -6,6 +6,29 @@ import { hashApiKey } from "../src/utils/apiKey.js";
 import { randomUUID } from "node:crypto";
 import { logger } from "../src/utils/logger";
 
+async function insertIfMissing(
+  db: ReturnType<typeof createDatabaseAdapter>,
+  existsSql: string,
+  existsParams: unknown[],
+  insertSql: string,
+  insertParams: unknown[],
+): Promise<boolean> {
+  if ((await db.query(existsSql, existsParams)).length > 0) return false;
+  await db.execute(insertSql, insertParams);
+  return true;
+}
+
+async function seedRows<T>(
+  rows: T[],
+  alreadyExists: (row: T) => Promise<boolean>,
+  insert: (row: T) => Promise<void>,
+): Promise<void> {
+  await rows.reduce(async (previous, row) => {
+    await previous;
+    if (!(await alreadyExists(row))) await insert(row);
+  }, Promise.resolve());
+}
+
 async function seed() {
   const db = createDatabaseAdapter();
   await db.connect();
@@ -18,15 +41,12 @@ async function seed() {
     const tenantId = process.env.CODEATLAS_TENANT_ID || "admin";
 
     // 1. Seed Tenant (if not exists)
-    const tenantExists = await db.query(
-      "SELECT 1 FROM tenants WHERE id = ?",
-      [tenantId]
-    );
-    if (tenantExists.length === 0) {
-      await db.execute(
+    const tenantCreated = await insertIfMissing(db,
+      "SELECT 1 FROM tenants WHERE id = ?", [tenantId],
         "INSERT INTO tenants (id, name, tier) VALUES (?, ?, ?)",
         [tenantId, "System Admin", "enterprise"]
       );
+    if (tenantCreated) {
       logger.info(`[Seeder] Created tenant: ${tenantId}`);
     }
 
@@ -95,13 +115,11 @@ async function seed() {
       }
     ];
 
-    for (const dream of dreams) {
-      const exists = await db.query(
+    await seedRows(dreams, async (dream) => (await db.query(
         "SELECT 1 FROM ai_dreaming_memory WHERE project = ? AND memory_type = ? AND content_hash = ? AND tenant_id = ?",
         [dream.project, dream.memory_type, dream.content_hash, dream.tenant_id]
-      );
-      if (exists.length === 0) {
-        await db.execute(
+      )).length > 0, async (dream) => {
+      await db.execute(
           `INSERT INTO ai_dreaming_memory (
             id, session_id, project, memory_type, content, content_hash,
             importance, confidence, status, scope, tags, tenant_id
@@ -114,8 +132,7 @@ async function seed() {
             dream.scope, dream.tags, dream.tenant_id
           ]
         );
-      }
-    }
+    });
     logger.info(`[Seeder] Created ${dreams.length} sample dream memories`);
 
     // 5. Seed Sample Genome Entries
@@ -148,13 +165,11 @@ async function seed() {
       }
     ];
 
-    for (const genome of genomes) {
-      const exists = await db.query(
+    await seedRows(genomes, async (genome) => (await db.query(
         "SELECT 1 FROM codeatlas_genome WHERE id = ?",
         [genome.id]
-      );
-      if (exists.length === 0) {
-        await db.execute(
+      )).length > 0, async (genome) => {
+      await db.execute(
           `INSERT INTO codeatlas_genome (
             id, name, description, problem, solution, architecture,
             category, project, confidence, status, tenant_id
@@ -167,8 +182,7 @@ async function seed() {
             genome.status, genome.tenant_id
           ]
         );
-      }
-    }
+    });
     logger.info(`[Seeder] Created ${genomes.length} sample genome entries`);
 
     // 6. Seed Sample Semantic Memory
@@ -193,13 +207,11 @@ async function seed() {
       }
     ];
 
-    for (const memory of semanticMemories) {
-      const exists = await db.query(
+    await seedRows(semanticMemories, async (memory) => (await db.query(
         "SELECT 1 FROM ai_semantic_memory WHERE id = ?",
         [memory.id]
-      );
-      if (exists.length === 0) {
-        await db.execute(
+      )).length > 0, async (memory) => {
+      await db.execute(
           `INSERT INTO ai_semantic_memory (
             id, project_name, entity_type, entity_name, file_path, content, tenant_id
           ) VALUES (
@@ -210,8 +222,7 @@ async function seed() {
             memory.file_path, memory.content, memory.tenant_id
           ]
         );
-      }
-    }
+    });
     logger.info(`[Seeder] Created ${semanticMemories.length} sample semantic memories`);
 
     // 7. Seed Sample Relational Memory
@@ -225,13 +236,11 @@ async function seed() {
       }
     ];
 
-    for (const rel of relationalMemories) {
-      const exists = await db.query(
+    await seedRows(relationalMemories, async (rel) => (await db.query(
         "SELECT 1 FROM ai_relational_memory WHERE source_id = ? AND target_id = ? AND project_name = ?",
         [rel.source_id, rel.target_id, rel.project_name]
-      );
-      if (exists.length === 0) {
-        await db.execute(
+      )).length > 0, async (rel) => {
+      await db.execute(
           `INSERT INTO ai_relational_memory (
             source_id, target_id, project_name, relationship_type, tenant_id
           ) VALUES (
@@ -239,8 +248,7 @@ async function seed() {
           )`,
           [rel.source_id, rel.target_id, rel.project_name, rel.relationship_type, rel.tenant_id]
         );
-      }
-    }
+    });
     logger.info(`[Seeder] Created ${relationalMemories.length} sample relational memories`);
 
     logger.info("✅ Seeder completed successfully");

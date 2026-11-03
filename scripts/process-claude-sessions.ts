@@ -138,45 +138,10 @@ async function extractTranscript(filePath: string): Promise<{
     lineCount++;
     try {
       const line: ClaudeLine = JSON.parse(raw);
-
-      // Skip meta/commands/internal boilerplate
-      if (line.isMeta) continue;
-      if (line.type === "mode" || line.type === "system") continue;
-
-      const msg = line.message;
-      if (!msg || !msg.role || !msg.content) continue;
-
-      // Skip user messages that are just <local-command-caveat> or <command-name>
-      if (msg.role === "user") {
-        const content = typeof msg.content === "string" ? msg.content : "";
-        if (
-          content.includes("<local-command-caveat>") ||
-          content.includes("<command-name>") ||
-          content.includes("<command-message>")
-        ) {
-          continue;
-        }
-      }
-
-      // Extract text content (could be string or array of content blocks)
-      let text = "";
-      if (typeof msg.content === "string") {
-        text = msg.content;
-      } else if (Array.isArray(msg.content)) {
-        text = msg.content
-          .map((c: any) => (typeof c === "string" ? c : c.text || ""))
-          .join(" ");
-      }
-
-      if (!text.trim()) continue;
-      if (text.length < 20) continue; // skip too-short fragments
-
-      // Extract model from assistant responses
-      if (msg.role === "assistant" && !model) {
-        model = (line as any).model || undefined;
-      }
-
-      messages.push(`[${msg.role.toUpperCase()}]\n${text}`);
+      const message = extractTranscriptMessage(line);
+      if (!message) continue;
+      if (message.model && !model) model = message.model;
+      messages.push(message.formatted);
     } catch {
       // skip malformed lines
     }
@@ -187,6 +152,34 @@ async function extractTranscript(filePath: string): Promise<{
     messageCount: messages.length,
     model,
   };
+}
+
+function extractTranscriptMessage(line: ClaudeLine): { formatted: string; model?: string } | null {
+  if (line.isMeta || line.type === "mode" || line.type === "system") return null;
+  const message = line.message;
+  if (!message?.role || !message.content) return null;
+  if (message.role === "user" && isInternalCommand(message.content)) return null;
+  const text = transcriptText(message.content);
+  if (!text.trim() || text.length < 20) return null;
+  const model = (line as ClaudeLine & { model?: string }).model;
+  return {
+    formatted: `[${message.role.toUpperCase()}]\n${text}`,
+    ...(message.role === "assistant" && model
+      ? { model }
+      : {}),
+  };
+}
+
+function isInternalCommand(content: NonNullable<ClaudeLine["message"]>["content"]): boolean {
+  if (typeof content !== "string") return false;
+  return content.includes("<local-command-caveat>") ||
+    content.includes("<command-name>") || content.includes("<command-message>");
+}
+
+function transcriptText(content: NonNullable<ClaudeLine["message"]>["content"]): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.map((part) => (typeof part === "string" ? part : part.text || "")).join(" ");
 }
 
 // ── Send to ingest API ──────────────────────────────────────────────────────

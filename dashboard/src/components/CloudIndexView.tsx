@@ -20,6 +20,12 @@ interface CloudIndexViewProps {
   isUpdatingSettings?: boolean;
 }
 
+function getIndexingStatus(isIndexing: boolean, isIndexingEnabled: boolean): string {
+  if (isIndexing) return 'Scanning source files...';
+  if (isIndexingEnabled) return 'Standby - Watching for changes';
+  return 'Code indexing is disabled';
+}
+
 export const CloudIndexView: React.FC<CloudIndexViewProps> = ({ 
   analysis, 
   isIndexing, 
@@ -92,7 +98,7 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
                   boxShadow: isIndexing ? '0 0 10px var(--primary-neon)' : 'none'
                 }} />
                 <span style={{ fontWeight: 600, color: isIndexing ? '#fff' : 'var(--text-muted)' }}>
-                  {isIndexing ? 'Scanning source files...' : isIndexingEnabled ? 'Standby - Watching for changes' : 'Code indexing is disabled'}
+                  {getIndexingStatus(isIndexing, isIndexingEnabled)}
                 </span>
               </div>
             </div>

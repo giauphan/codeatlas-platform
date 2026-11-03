@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SQLiteAdapter } from '../../src/database/adapters/sqliteAdapter.js';
 import { authStorage } from '../../src/utils/context.js';
+import { DreamDiagnostics } from '../../src/services/dreamDiagnostics.js';
 
 let adapter: SQLiteAdapter;
 let temporaryDatabaseDir: string | undefined;
@@ -117,6 +118,14 @@ test('a distinct key for equal content gets a durable receipt and rejects change
     reason_code: 'idempotency_key_reused',
   });
   assert.equal((await adapter.query<{ count: number }>('SELECT COUNT(*) AS count FROM ai_dreaming_memory'))[0].count, 1);
+});
+
+test('content deduplication records one duplicate diagnostic per save', async () => {
+  await authStorage.run(tenantA, () => DreamingService.saveDreamMemoryWithAck(payload));
+  const before = DreamDiagnostics.snapshot().duplicate;
+  const duplicate = await authStorage.run(tenantA, () => DreamingService.saveDreamMemoryWithAck({ ...payload, idempotencyKey: 'other-key' }));
+  assert.equal(duplicate.status, 'duplicate');
+  assert.equal(DreamDiagnostics.snapshot().duplicate - before, 1);
 });
 
 test('save receipts survive an adapter restart and preserve key conflict checks', async () => {
