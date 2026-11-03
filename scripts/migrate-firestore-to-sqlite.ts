@@ -71,6 +71,23 @@ async function runSequential<T, R>(
   );
 }
 
+const FIRESTORE_FETCH_CONCURRENCY = 10;
+
+async function mapBoundedConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>
+): Promise<R[]> {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    chunks.push(items.slice(i, i + concurrency));
+  }
+  const chunkResults = await runSequential(chunks, (chunk) =>
+    Promise.all(chunk.map((item) => worker(item)))
+  );
+  return chunkResults.flat();
+}
+
 async function migrateUserKeyDoc(
   db: DatabaseAdapter,
   uid: string,
@@ -119,7 +136,8 @@ async function migrateUserKeyDoc(
 
 async function migrateSingleUserDoc(
   db: DatabaseAdapter,
-  userDoc: FirebaseFirestore.QueryDocumentSnapshot
+  userDoc: FirebaseFirestore.QueryDocumentSnapshot,
+  keyDocs: readonly FirebaseFirestore.QueryDocumentSnapshot[]
 ): Promise<{ isAdminCandidate: boolean; uid: string; keysMigrated: number }> {
   const uid = userDoc.id;
   const data = userDoc.data() || {};
@@ -168,8 +186,7 @@ async function migrateSingleUserDoc(
   );
   console.log(`  ✓ User migrated: ${uid} (${email || "no-email"}, role=${role}, tier=${tier})`);
 
-  const keysSnapshot = await userDoc.ref.collection("keys").get(); // NOSONAR
-  const keyResults = await runSequential(keysSnapshot.docs, (keyDoc) =>
+  const keyResults = await runSequential(keyDocs, (keyDoc) =>
     migrateUserKeyDoc(db, uid, tier, keyDoc.id, keyDoc.data() || {})
   );
   const keysMigrated = keyResults.filter(Boolean).length;
@@ -293,8 +310,17 @@ export async function migrateFirestoreToSqlite(): Promise<void> {
   try {
     console.log("\n=== 1. Migrating Firestore Users & API Keys to SQLite ===");
     const usersSnapshot = await firestore.collection("users").get();
-    const userResults = await runSequential(usersSnapshot.docs, (userDoc) =>
-      migrateSingleUserDoc(db, userDoc)
+    const usersWithKeys = await mapBoundedConcurrency(
+      usersSnapshot.docs,
+      FIRESTORE_FETCH_CONCURRENCY,
+      async (userDoc) => {
+        const keysSnapshot = await userDoc.ref.collection("keys").get();
+        return { userDoc, keyDocs: keysSnapshot.docs };
+      }
+    );
+    const userResults = await runSequential(
+      usersWithKeys,
+      ({ userDoc, keyDocs }) => migrateSingleUserDoc(db, userDoc, keyDocs)
     );
 
     const tenantsCount = userResults.length;
