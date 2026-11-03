@@ -329,17 +329,25 @@ export class ConsolidationEngine {
     for (let i = 0; i < group.length; i++) {
       const left = group[i];
       if (removed.has(left.id)) continue;
-      for (let j = i + 1; j < group.length; j++) {
-        const right = group[j];
-        if (removed.has(right.id)) continue;
-        const similarity = this.cosineSimilarity(left.embedding, right.embedding);
-        if (Number.isNaN(similarity) || similarity <= CONSOLIDATION_SIMILARITY_THRESHOLD) continue;
-        const removeLeft = left.importance < right.importance;
-        const duplicate = removeLeft ? left : right;
-        removed.add(duplicate.id);
-        duplicateIds.add(duplicate.id);
-        if (removeLeft) break;
-      }
+      this.collectDuplicatesForDream(group, i, removed, duplicateIds);
+    }
+  }
+
+  private collectDuplicatesForDream(
+    group: { id: string; importance: number; embedding: Float32Array }[],
+    index: number, removed: Set<string>, duplicateIds: Set<string>,
+  ): void {
+    const left = group[index];
+    for (let j = index + 1; j < group.length; j++) {
+      const right = group[j];
+      if (removed.has(right.id)) continue;
+      const similarity = this.cosineSimilarity(left.embedding, right.embedding);
+      if (Number.isNaN(similarity) || similarity <= CONSOLIDATION_SIMILARITY_THRESHOLD) continue;
+      const removeLeft = left.importance < right.importance;
+      const duplicate = removeLeft ? left : right;
+      removed.add(duplicate.id);
+      duplicateIds.add(duplicate.id);
+      if (removeLeft) break;
     }
   }
 
