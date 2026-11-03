@@ -1,15 +1,5 @@
 import React, { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react'; // NOSONAR
 import { 
-   // NOSONAR
-   // NOSONAR
-   // NOSONAR
-   // NOSONAR
-   // NOSONAR
-   // NOSONAR
-   // NOSONAR
-  serverTimestamp // NOSONAR
-} from 'firebase/firestore';
-import { 
   LogOut, 
   Globe, 
   Network, 

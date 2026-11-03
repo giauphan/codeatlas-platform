@@ -50,6 +50,7 @@
     "db-seed": "tsx scripts/db-seed.ts",
     "atlas": "node atlas",
     "generate-key": "node atlas generate-key",
+    "migrate-firestore": "node atlas migrate-firestore",
     "test:memory-pipeline": "node --import tsx --test tests/cross-repo/compiled-memory-pipeline.acceptance.ts",
     "test:memory-pipeline:model": "RUN_MODEL_MEMORY_PIPELINE=1 node --experimental-test-module-mocks --import tsx --test tests/cross-repo/model-memory-pipeline.acceptance.ts"
   },

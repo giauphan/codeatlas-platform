@@ -602,11 +602,40 @@ async function readLocalIndexingSettings(fullProjectDir: string, res: express.Re
     return { indexingEnabled, checkedLocal };
 }
 
-async function readFirestoreIndexingSetting(cleanProjectName: string, tenantId: string | undefined, initial: boolean): Promise<boolean> {
-    let indexingEnabled = initial;
-    if (!shouldUseFirestore()) {
-      return initial;
+async function readSqliteIndexingSetting(cleanProjectName: string, tenantId: string | undefined, initial: boolean): Promise<boolean> {
+  try {
+    const db = createDatabaseAdapter();
+    let effectiveTenantId = tenantId || 'default';
+    if (tenantId) {
+      const users = await db.query<{ tenantId: string }>(
+        `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
+        { uid: tenantId }
+      );
+      if (users.length > 0 && users[0].tenantId) {
+        effectiveTenantId = users[0].tenantId;
+      }
     }
+    const docId = `${effectiveTenantId}_${cleanProjectName}`;
+    const rows = await db.query<{ indexingEnabled: number | null }>(
+      `SELECT indexing_enabled AS "indexingEnabled" FROM projects
+       WHERE id = :id OR (name = :name AND tenant_id = :tenantId)
+       LIMIT 1`,
+      { id: docId, name: cleanProjectName, tenantId: effectiveTenantId }
+    );
+    if (rows.length > 0 && typeof rows[0].indexingEnabled === 'number') {
+      return rows[0].indexingEnabled !== 0;
+    }
+  } catch (e: unknown) {
+    logger.warn("[Settings API] SQLite settings lookup failed:", e instanceof Error ? e.message : String(e));
+  }
+  return initial;
+}
+
+async function readFirestoreIndexingSetting(cleanProjectName: string, tenantId: string | undefined, initial: boolean): Promise<boolean> {
+    if (!shouldUseFirestore()) {
+      return readSqliteIndexingSetting(cleanProjectName, tenantId, initial);
+    }
+    let indexingEnabled = initial;
       // Fallback: check Firestore
       try {
         const apps = firebaseClient.getApps();
@@ -671,8 +700,45 @@ app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayP
   }
 });
 
+async function writeSqliteIndexingSetting(cleanProjectName: string, tenantId: string | undefined, indexingEnabled: boolean): Promise<void> {
+  try {
+    const db = createDatabaseAdapter();
+    let effectiveTenantId = tenantId || 'default';
+    if (tenantId) {
+      const users = await db.query<{ tenantId: string }>(
+        `SELECT tenant_id AS "tenantId" FROM users WHERE id = :uid LIMIT 1`,
+        { uid: tenantId }
+      );
+      if (users.length > 0 && users[0].tenantId) {
+        effectiveTenantId = users[0].tenantId;
+      }
+    }
+    await db.execute(
+      `INSERT OR IGNORE INTO tenants (id, name) VALUES (:id, :name)`,
+      { id: effectiveTenantId, name: effectiveTenantId }
+    );
+    const docId = `${effectiveTenantId}_${cleanProjectName}`;
+    await db.execute(
+      `INSERT INTO projects (id, tenant_id, name, indexing_enabled, updated_at)
+       VALUES (:id, :tenantId, :name, :indexingEnabled, CURRENT_TIMESTAMP)
+       ON CONFLICT(id) DO UPDATE SET
+          indexing_enabled = excluded.indexing_enabled,
+          updated_at = CURRENT_TIMESTAMP`,
+      {
+        id: docId,
+        tenantId: effectiveTenantId,
+        name: cleanProjectName,
+        indexingEnabled: indexingEnabled ? 1 : 0
+      }
+    );
+  } catch (e: unknown) {
+    logger.warn("[Settings API] SQLite settings persistence failed:", e instanceof Error ? e.message : String(e));
+  }
+}
+
 async function writeFirestoreIndexingSetting(cleanProjectName: string, tenantId: string | undefined, indexingEnabled: boolean): Promise<void> {
-    // Save to Firestore
+    await writeSqliteIndexingSetting(cleanProjectName, tenantId, indexingEnabled);
+    // Save to Firestore if explicitly enabled
     if (shouldUseFirestore()) {
       try {
         const apps = firebaseClient.getApps();
@@ -909,9 +975,8 @@ async function syncProjectTelemetry(cleanProjectName: string, projectDir: string
           } catch (e) {
             logger.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
           }
-        } else {
-          await syncLocalProjectRecord(cleanProjectName, tenantId);
         }
+        await syncLocalProjectRecord(cleanProjectName, projectDir, tenantId, analysis);
 }
 
 async function migrateLegacyProjectTelemetry(
@@ -943,8 +1008,17 @@ async function migrateLegacyProjectTelemetry(
               }
 }
 
-async function syncLocalProjectRecord(cleanProjectName: string, tenantId: string): Promise<void> {
-          // Local Mode: Upsert to local SQLite db
+async function syncLocalProjectRecord(
+  cleanProjectName: string,
+  projectDir: string,
+  tenantId: string,
+  analysis?: {
+    stats?: unknown;
+    entityCounts?: unknown;
+    graph?: { nodes?: unknown[]; links?: unknown[] };
+  }
+): Promise<void> {
+          // Local Mode: Upsert project and telemetry metadata to local SQLite db
           try {
             const db = createDatabaseAdapter();
             let effectiveTenantId = tenantId || 'default';
@@ -957,16 +1031,40 @@ async function syncLocalProjectRecord(cleanProjectName: string, tenantId: string
                 effectiveTenantId = users[0].tenantId;
               }
             }
-            const docId = `${effectiveTenantId}_${cleanProjectName}`;
             await db.execute(
-              `INSERT INTO projects (id, tenant_id, name, updated_at)
-               VALUES (:id, :tenantId, :name, CURRENT_TIMESTAMP)
+              `INSERT OR IGNORE INTO tenants (id, name) VALUES (:id, :name)`,
+              { id: effectiveTenantId, name: effectiveTenantId }
+            );
+            const docId = `${effectiveTenantId}_${cleanProjectName}`;
+            const statsObj = analysis?.stats || analysis?.entityCounts || {};
+            const statsJson = JSON.stringify(statsObj);
+            const nodesCount = analysis?.graph?.nodes?.length || 0;
+            const linksCount = analysis?.graph?.links?.length || 0;
+            const lastIndexed = new Date().toISOString();
+            await db.execute(
+              `INSERT INTO projects (
+                 id, tenant_id, name, path, status, nodes_count, links_count, last_indexed, stats_json, updated_at
+               )
+               VALUES (
+                 :id, :tenantId, :name, :path, 'synced', :nodesCount, :linksCount, :lastIndexed, :statsJson, CURRENT_TIMESTAMP
+               )
                ON CONFLICT(id) DO UPDATE SET
+                  path = excluded.path,
+                  status = excluded.status,
+                  nodes_count = excluded.nodes_count,
+                  links_count = excluded.links_count,
+                  last_indexed = excluded.last_indexed,
+                  stats_json = excluded.stats_json,
                   updated_at = CURRENT_TIMESTAMP`,
               {
                 id: docId,
                 tenantId: effectiveTenantId,
-                name: cleanProjectName
+                name: cleanProjectName,
+                path: projectDir,
+                nodesCount,
+                linksCount,
+                lastIndexed,
+                statsJson
               }
             );
           } catch (localDbErr: unknown) {

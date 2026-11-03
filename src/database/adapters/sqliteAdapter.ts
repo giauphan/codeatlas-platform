@@ -428,6 +428,13 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         tenant_id TEXT NOT NULL REFERENCES tenants(id),
         name TEXT NOT NULL,
         description TEXT,
+        path TEXT,
+        status TEXT DEFAULT 'synced',
+        nodes_count INTEGER DEFAULT 0,
+        links_count INTEGER DEFAULT 0,
+        last_indexed TEXT,
+        stats_json TEXT,
+        indexing_enabled INTEGER DEFAULT 1,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );
@@ -553,6 +560,13 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     addColumnIfMissing("ai_dreaming_memory", "request_hash", "TEXT");
     addColumnIfMissing("ai_dreaming_memory", "project_id", "TEXT");
     addColumnIfMissing("codeatlas_concepts", "project_id", "TEXT");
+    addColumnIfMissing("projects", "path", "TEXT");
+    addColumnIfMissing("projects", "status", "TEXT DEFAULT 'synced'");
+    addColumnIfMissing("projects", "nodes_count", "INTEGER DEFAULT 0");
+    addColumnIfMissing("projects", "links_count", "INTEGER DEFAULT 0");
+    addColumnIfMissing("projects", "last_indexed", "TEXT");
+    addColumnIfMissing("projects", "stats_json", "TEXT");
+    addColumnIfMissing("projects", "indexing_enabled", "INTEGER DEFAULT 1");
     addColumnIfMissing("dream_capture_events", "actor_role", "TEXT");
     addColumnIfMissing("dream_capture_events", "memory_type_hint", "TEXT");
     addColumnIfMissing("dream_capture_events", "tool_name", "TEXT");
