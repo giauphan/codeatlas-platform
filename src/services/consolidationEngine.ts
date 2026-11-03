@@ -311,9 +311,13 @@ export class ConsolidationEngine {
       const embedding = this.parseEmbedding(this.getVal(row, R_IDX.EMBEDDING, "EMBEDDING"));
       if (!embedding) continue;
       const projectName = String(this.getVal(row, R_IDX.PROJECT, "PROJECT") || "default");
-      const group = groups.get(projectName) ?? [];
+      // ⚡ Bolt Optimization: Avoid redundant Map writes when grouping items
+      let group = groups.get(projectName);
+      if (!group) {
+        group = [];
+        groups.set(projectName, group);
+      }
       group.push({ id, importance: Number(this.getVal(row, R_IDX.IMPORTANCE, "IMPORTANCE")), embedding: this.getNormalizedVector(embedding, id) });
-      groups.set(projectName, group);
     }
     return groups;
   }
@@ -411,9 +415,13 @@ export class ConsolidationEngine {
         continue;
       }
       const key = `${String(this.getVal(row, R_IDX.PROJECT, "PROJECT") || "default")}:${String(this.getVal(row, R_IDX.MEMORY_TYPE, "MEMORY_TYPE") || "GENERAL")}`;
-      const group = clusters.get(key) ?? [];
+      // ⚡ Bolt Optimization: Avoid redundant Map writes when grouping items
+      let group = clusters.get(key);
+      if (!group) {
+        group = [];
+        clusters.set(key, group);
+      }
       group.push(row);
-      clusters.set(key, group);
     }
     return clusters;
   }
@@ -612,9 +620,13 @@ export class ConsolidationEngine {
       const embedding = this.parseEmbedding(this.getVal(row, SCORE_IDX.EMBEDDING, "EMBEDDING"));
       if (!embedding) continue;
       const key = `${String(this.getVal(row, SCORE_IDX.PROJECT, "PROJECT") || "default")}:${String(this.getVal(row, SCORE_IDX.MEMORY_TYPE, "MEMORY_TYPE") || "GENERAL")}`;
-      const group = groups.get(key) ?? [];
+      // ⚡ Bolt Optimization: Avoid redundant Map writes when grouping items
+      let group = groups.get(key);
+      if (!group) {
+        group = [];
+        groups.set(key, group);
+      }
       group.push({ id, confidence: Number(this.getVal(row, SCORE_IDX.CONFIDENCE, "CONFIDENCE") || 0.5), embedding: this.getNormalizedVector(embedding, id) });
-      groups.set(key, group);
     }
     return groups;
   }
