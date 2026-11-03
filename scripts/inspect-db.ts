@@ -1,4 +1,4 @@
-import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { initializeApp, applicationDefault, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import * as fs from "fs";
 import * as path from "path";
@@ -17,10 +17,11 @@ if (!fs.existsSync(absolutePath)) {
   console.error(`Credentials file not found at: ${absolutePath}`);
   process.exit(1);
 }
+process.env.GOOGLE_APPLICATION_CREDENTIALS = absolutePath;
 
 if (!getApps().length) {
   initializeApp({
-    credential: cert(absolutePath),
+    credential: applicationDefault(),
     projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
   });
 }

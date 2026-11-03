@@ -1,4 +1,4 @@
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { initializeApp, getApps, applicationDefault, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import * as path from "path";
 import * as fs from "fs";
@@ -13,8 +13,9 @@ if (serviceAccountPath) {
   const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
   if (fs.existsSync(absolutePath)) {
     try {
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = absolutePath;
       initializeApp({
-        credential: cert(absolutePath),
+        credential: applicationDefault(),
         projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
       });
     } catch (e) {

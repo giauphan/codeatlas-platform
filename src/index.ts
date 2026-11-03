@@ -7,7 +7,7 @@ import * as path from "path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as fs from "fs";
 import * as url from "url";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { initializeApp, getApps, applicationDefault, cert } from "firebase-admin/app";
 
 // Wire up adapters: MCP tools, REST routes, A2A, Genome.
 import { server, createMcpServer } from "./presentation/mcpServer.js";
@@ -37,8 +37,9 @@ if (!apps || apps.length === 0) {
       const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
       
       if (fs.existsSync(absolutePath)) {
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = absolutePath;
         initializeApp({
-          credential: cert(absolutePath),
+          credential: applicationDefault(),
           projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
         });
       } else {

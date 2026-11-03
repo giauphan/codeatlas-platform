@@ -2,7 +2,7 @@ import "dotenv/config";
 import * as crypto from "crypto";
 import * as path from "path";
 import * as fs from "fs";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { initializeApp, getApps, applicationDefault, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { createDatabaseAdapter } from "../src/database/factory.js";
 
@@ -11,7 +11,8 @@ function initializeFirebase() {
     const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || "./serviceAccountKey.json";
     const absPath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
     if (fs.existsSync(absPath)) {
-      initializeApp({ credential: cert(absPath) });
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = absPath;
+      initializeApp({ credential: applicationDefault() });
     } else {
       initializeApp({ projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node" });
     }
