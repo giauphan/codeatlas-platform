@@ -156,7 +156,7 @@ test('configured checkpoint extraction meets the approved semantic quality and p
       candidates.set(fixture.id, memories);
     }
   }));
-  const summary = await evaluateFixtures(fixtures, async (_transcript, _provider, _project, sessionId) => candidates.get(sessionId) || null);
+  const summary = await evaluateFixtures(fixtures, (_transcript, _provider, _project, sessionId) => Promise.resolve(candidates.get(sessionId) || null));
   const forbidden = summary.outcomes.reduce((sum, item) => sum + item.violations.length, 0);
   const promptHash = hashJson([...new Set(promptInputs)]);
   console.log(JSON.stringify({ profile: 'configured-checkpoint-model', metricVersion: METRIC_VERSION, ...selectedMetadata,

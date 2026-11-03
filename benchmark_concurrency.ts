@@ -1,6 +1,6 @@
-import { performance } from 'perf_hooks';
-import * as fs from 'fs';
-import * as path from 'path';
+import { performance } from 'node:perf_hooks';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 function getVersionSync() {
   let version = "unknown";
@@ -116,4 +116,4 @@ async function runConcurrencyBenchmark() {
   console.log(`Max Event Loop Delay (Async): ${(maxDelayAsync === -Infinity ? 0 : maxDelayAsync).toFixed(2)} ms`);
 }
 
-runConcurrencyBenchmark().catch(console.error);
+await runConcurrencyBenchmark();

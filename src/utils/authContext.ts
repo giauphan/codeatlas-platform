@@ -9,14 +9,14 @@ export function injectAuthContext(server: McpServer, sessionAuth?: Auth) {
   server.tool = function (name: string, ...args: any[]) {
     const originalCallback = args[args.length - 1];
     if (typeof originalCallback === "function") {
-      args[args.length - 1] = async function (callbackArgs: any, ...extra: any[]) {
+      args[args.length - 1] = function (callbackArgs: any, ...extra: any[]) {
         if (!sessionAuth) {
-          return {
+          return Promise.resolve({
             content: [{ type: "text" as const, text: "Error: MCP session authentication is required. Connect with valid credentials." }],
             isError: true as const,
-          };
+          });
         }
-        return authStorage.run(sessionAuth, async () => {
+        return authStorage.run(sessionAuth, () => {
           return (originalCallback as any)(callbackArgs, ...extra);
         });
       };

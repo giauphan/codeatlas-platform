@@ -19,7 +19,7 @@ mock.module('../../src/database/factory.js', {
   namedExports: { createDatabaseAdapter: () => adapter },
 });
 mock.module('../../src/services/embeddingService.js', {
-  namedExports: { generateEmbedding: async () => null, generateEmbeddingsBatch: async () => [] },
+  namedExports: { generateEmbedding: () => Promise.resolve(null), generateEmbeddingsBatch: () => Promise.resolve([]) },
 });
 
 const { DreamCaptureStore } = await import('../../src/services/dreamCaptureStore.js');

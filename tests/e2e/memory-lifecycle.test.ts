@@ -159,3 +159,43 @@ const authServiceMock = { checkAuth: mockCheckAuth };
 safeMockModule(path.join(srcDir, 'services/authService.js'), authServiceMock);
 
 const { DreamingService } = await import(path.join(srcDir, 'services/dreamingService.js'));
+
+describe('Memory Lifecycle E2E', () => {
+  test('checkNoise rejects too-short content (< 40 chars)', () => {
+    const result = DreamingService.checkNoise('KNOWLEDGE', 'Too short', 5);
+    assert.strictEqual(result.isNoise, true);
+    assert.ok(result.reason!.includes('short'));
+  });
+
+  test('checkNoise accepts valid high-quality content', () => {
+    const goodContent = 'Use JWT with RS256 for API authentication tokens. Rotate keys every 90 days. Store refresh tokens in HttpOnly cookies.';
+    const result = DreamingService.checkNoise('KNOWLEDGE', goodContent, 6);
+    assert.strictEqual(result.isNoise, false);
+    assert.strictEqual(result.reason, null);
+  });
+
+  test('calcInitialConfidence returns correct values by type and importance', () => {
+    const criticalMistake = DreamingService.calcInitialConfidence('MISTAKE', 10);
+    assert.strictEqual(criticalMistake, Math.min(0.99, 0.65 + 0.25));
+
+    const lowImpKnowledge = DreamingService.calcInitialConfidence('KNOWLEDGE', 2);
+    assert.strictEqual(lowImpKnowledge, Math.max(0.05, 0.50 - 0.15));
+
+    const maxed = DreamingService.calcInitialConfidence('MISTAKE', 10);
+    assert.ok(maxed <= 0.99);
+    const minned = DreamingService.calcInitialConfidence('KNOWLEDGE', 0);
+    assert.ok(minned >= 0.05);
+  });
+
+  test('saveDreamMemory blocks noise and returns sentinel', async () => {
+    const { authStorage } = await import(path.join(srcDir, 'utils/context.js'));
+    const result = await authStorage.run({ uid: 'test-user', tier: 'enterprise', keyId: 'k1' }, async () => {
+      return DreamingService.saveDreamMemory(
+        'p', 's', 'KNOWLEDGE', 'Too short', 5,
+      );
+    });
+    assert.strictEqual(result, '__noise_blocked__');
+  });
+});
+
+

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { evaluateFixtures, formatEvaluationFailures, type ExtractionFixture } from './memory-extraction-harness.js';
+import { evaluateFixtures, formatEvaluationFailures, type ExtractionFixture, type EvaluationSummary } from './memory-extraction-harness.js';
 
 const corpusPath = fileURLToPath(new URL('../fixtures/memory-extraction/cases.json', import.meta.url));
 const releasePath = fileURLToPath(new URL('../fixtures/memory-extraction/release-holdout-adjudicated.json', import.meta.url));
@@ -110,7 +110,7 @@ async function assertSplit(split: 'development' | 'holdout' | 'independent' | 'r
   assert.equal(summary.outcomes.reduce((total, item) => total + item.violations.length, 0), 0, `forbidden claims or secret sentinels leaked\n${mismatchDetails}`);
 }
 
-async function reportContentOnly(split: 'development' | 'holdout'): Promise<void> {
+async function reportContentOnly(split: 'development' | 'holdout'): Promise<EvaluationSummary> {
   const fixtures = corpus.cases.filter((fixture) => fixture.split === split);
   const summary = await evaluateFixtures(fixtures, summarizeConversationForDreams, { requireEvidenceAndCertainty: false });
   console.log(
@@ -119,6 +119,7 @@ async function reportContentOnly(split: 'development' | 'holdout'): Promise<void
     `precision=${summary.precision.toFixed(3)}, recall=${summary.recall.toFixed(3)}, ` +
     `FP=${summary.falsePositives}, FN=${summary.falseNegatives}, byLocale=${JSON.stringify(summary.byLocale)}`,
   );
+  return summary;
 }
 
 test('memory extraction corpus has stable labels and bilingual development coverage', () => {
@@ -314,8 +315,14 @@ test('memory extraction development fixtures preserve labeled meaning and reject
 });
 
 test('memory extraction reports content-only precision and recall without printing fixture text', async () => {
-  await reportContentOnly('development');
-  if (process.env.RUN_MEMORY_EXTRACTION_HOLDOUT === '1') await reportContentOnly('holdout');
+  const summary = await reportContentOnly('development');
+  assert.ok(summary.fixtureCount > 0);
+  assert.ok(summary.precision >= 0);
+  assert.ok(summary.recall >= 0);
+  if (process.env.RUN_MEMORY_EXTRACTION_HOLDOUT === '1') {
+    const holdout = await reportContentOnly('holdout');
+    assert.ok(holdout.fixtureCount > 0);
+  }
 });
 
 test('memory extraction held-out fixtures preserve labeled meaning and reject unsupported output', {

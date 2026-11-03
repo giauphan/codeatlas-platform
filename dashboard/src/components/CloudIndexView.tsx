@@ -166,8 +166,8 @@ export const CloudIndexView: React.FC<CloudIndexViewProps> = ({
               { label: 'Scanned Files', value: analysis?.totalFilesAnalyzed || analysis?.stats?.totalFiles || 0, icon: Globe },
               { label: 'Neural Nodes', value: analysis?.graph?.nodes?.length || 0, icon: Server },
               { label: 'Logic Units', value: analysis?.stats?.totalFunctions || analysis?.stats?.totalClasses || analysis?.entityCounts?.functions || 0, icon: Cpu },
-            ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+            ].map((item) => (
+              <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div style={{ color: 'var(--primary-neon)' }}><item.icon size={20} /></div>
                 <div>
                   <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>{item.value}</div>

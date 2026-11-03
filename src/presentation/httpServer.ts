@@ -864,7 +864,7 @@ app.get("/api/analysis", authMiddleware, localRateLimiter, rejectArrayParams("pr
 });
 
 // REST API: Trigger re-index
-app.post("/api/reindex", authMiddleware, localRateLimiter, async (req, res) => {
+app.post("/api/reindex", authMiddleware, localRateLimiter, (req, res) => {
   res.status(400).json({
     error: "Local indexing is not supported on a pure cloud API server. Please trigger indexing locally from your codeatlas-ai client to synchronize AST data."
   });
@@ -1262,7 +1262,7 @@ app.get("/sse", async (req, res) => {
 
     const myGen = currentGen;
     // Cleanup on connection close with a 3-minute grace period
-    res.on("close", async () => {
+    res.on("close", () => {
       clearInterval(heartbeatInterval);
       logger.info(`[SSE] Session connection closed: ${sessionId} (generation: ${myGen}). Keeping session alive for 3-minute grace period.`);
       

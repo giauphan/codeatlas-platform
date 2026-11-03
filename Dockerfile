@@ -23,8 +23,10 @@ COPY scripts/ ./scripts/
 RUN pnpm run build
 
 # Build dashboard
-RUN cd dashboard && pnpm run build
+WORKDIR /app/dashboard
+RUN pnpm run build
 
+WORKDIR /app
 # Prune to production deps only
 RUN pnpm prune --prod
 

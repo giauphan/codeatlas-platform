@@ -43,7 +43,6 @@ export function DreamMemoryView() {
 
   // Dream config (daily cron schedule, provider)
   const [dreamConfig, setDreamConfig] = useState<DreamConfig | null>(null);
-  const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
   const [tempSchedule, setTempSchedule] = useState('');
   const [tempProvider, setTempProvider] = useState('');
@@ -55,7 +54,6 @@ export function DreamMemoryView() {
   const dreamConfigRef = useRef<DreamConfig | null>(null);
 
   const fetchDreamConfig = useCallback(async () => {
-    setConfigLoading(true);
     setConfigError(null);
     try {
       const headers = await getAuthHeaders();
@@ -71,8 +69,6 @@ export function DreamMemoryView() {
       fetchMemories(searchQuery, 0, data);
     } catch (err: any) {
       setConfigError(err.message);
-    } finally {
-      setConfigLoading(false);
     }
   }, []);
 
@@ -380,13 +376,13 @@ export function DreamMemoryView() {
           </div>
         )}
         {configStatus && !configError && (
-          <div role="status" style={{ marginTop: '0.75rem', color: 'var(--primary-neon)', fontSize: '0.85rem', fontWeight: 600 }}>
+          <output style={{ display: 'block', marginTop: '0.75rem', color: 'var(--primary-neon)', fontSize: '0.85rem', fontWeight: 600 }}>
             {configStatus}
-          </div>
+          </output>
         )}
       </div>
 
-      <div role="group" aria-label="Filter by memory type" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+      <fieldset aria-label="Filter by memory type" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', border: 'none', padding: 0, margin: 0 }}>
         {['KNOWLEDGE', 'PREFERENCE', 'MISTAKE', 'PATTERN'].map(type => (
           <button
             key={type}
@@ -404,7 +400,7 @@ export function DreamMemoryView() {
             {type}
           </button>
         ))}
-      </div>
+      </fieldset>
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {!firebaseReady && (

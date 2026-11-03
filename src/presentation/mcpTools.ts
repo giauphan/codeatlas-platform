@@ -581,13 +581,13 @@ function a2a(name: string, description: string, params: string[]) {
     return;
   }
   registerTool({ name, description, params });
-  a2aExecutor.registerToolHandler(name, async (p: Record<string, unknown>) => {
-    return {
+  a2aExecutor.registerToolHandler(name, (p: Record<string, unknown>) => {
+    return Promise.resolve({
       tool: name,
       params: p,
       note: `Tool '${name}' is available via MCP. Call it through the MCP stdio transport for full execution.`,
       description,
-    };
+    });
   });
 }
 

@@ -227,7 +227,7 @@ async function handleEventCapture(
 export function registerDreamingRoutes(app: express.Application): void {
   registerCheckpointRoutes(app);
 
-  app.get("/api/admin/dreams/diagnostics", authMiddleware, async (_req, res) => {
+  app.get("/api/admin/dreams/diagnostics", authMiddleware, (_req, res) => {
     const auth = authStorage.getStore();
     if (!auth || (auth.uid !== "admin" && auth.role !== "admin" && auth.tier !== "admin")) {
       return res.status(403).json({ error: "Admin access required" });
@@ -428,7 +428,7 @@ export function registerDreamingRoutes(app: express.Application): void {
   });
 
   // GET /api/dreams/pipeline/status — inspect running pipeline metrics
-  app.get("/api/dreams/pipeline/status", authMiddleware, async (_req, res) => {
+  app.get("/api/dreams/pipeline/status", authMiddleware, (_req, res) => {
     try {
       const status = DreamPipelineService.getPipelineStatus();
       res.json({ success: true, ...status });

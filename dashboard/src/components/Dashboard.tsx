@@ -46,6 +46,27 @@ const API_BASE = window.location.origin.includes('localhost:5173')
   ? 'http://localhost:8080'
   : window.location.origin;
 
+const SAFE_API_BASE = API_BASE.startsWith('http') ? API_BASE : window.location.origin;
+const ALLOWED_ORIGIN = new URL(SAFE_API_BASE).origin;
+
+function createSafeApiUrl(path: string, params?: Record<string, string>): string {
+  const url = new URL(path, SAFE_API_BASE);
+  if (url.origin !== ALLOWED_ORIGIN) {
+    throw new Error(`Untrusted origin in request: ${url.origin}`);
+  }
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== '') {
+        if (typeof value === 'string' && (value.includes('://') || value.startsWith('//'))) {
+          throw new Error(`Invalid parameter value for ${key}`);
+        }
+        url.searchParams.set(key, value);
+      }
+    }
+  }
+  return url.toString();
+}
+
 interface ApiKey {
   id: string;
   name: string;
@@ -120,12 +141,13 @@ export const Dashboard: React.FC = () => {
 
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
-  const [stats, setStats] = useState({ totalRequests: 0 });
+  const [stats] = useState({ totalRequests: 0 });
 
   const fetchIndexingSettings = async (projectDir: string) => {
     try {
       const headers = await getAuthHeaders();
-      const resp = await fetch(`${API_BASE}/api/projects/settings?projectDir=${encodeURIComponent(projectDir)}`, { headers });
+      const url = createSafeApiUrl('/api/projects/settings', { projectDir });
+      const resp = await fetch(url, { headers });
       if (resp.ok) {
         const data = await resp.json();
         setIsIndexingEnabled(data.indexingEnabled);
@@ -223,7 +245,8 @@ export const Dashboard: React.FC = () => {
   if (resp.ok) {
     const data = await resp.json();
     if (data.error) {
-      console.warn(`[Dashboard] Analysis API returned error: ${data.error}`);
+      const cleanError = String(data.error).replace(/[\r\n]/g, ' ');
+      console.warn(`[Dashboard] Analysis API returned error: ${cleanError}`);
       setAnalysis(null);
       memoryAnalysisCache.delete(cacheKey);
     } else {
@@ -255,9 +278,7 @@ export const Dashboard: React.FC = () => {
     }
 
     try {
-      const url = projectDir 
-        ? `${API_BASE}/api/analysis?projectDir=${encodeURIComponent(projectDir)}`
-        : `${API_BASE}/api/analysis`;
+      const url = createSafeApiUrl('/api/analysis', projectDir ? { projectDir } : undefined);
       const headers = await getAuthHeaders();
       const resp = await fetch(url, { headers });
       await handleAnalysisResponse(resp, cacheKey, projectDir);
@@ -371,7 +392,8 @@ export const Dashboard: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this project? This cannot be undone.')) return;
     try {
       const headers = await getAuthHeaders();
-      const resp = await fetch(`${API_BASE}/api/projects?projectDir=${encodeURIComponent(dir)}`, {
+      const url = createSafeApiUrl('/api/projects', { projectDir: dir });
+      const resp = await fetch(url, {
         method: 'DELETE',
         headers
       });
@@ -470,17 +492,6 @@ export const Dashboard: React.FC = () => {
 
   const renderCurrentView = () => {
     switch (activeTab) {
-      case 'Control Center':
-        return <ControlCenterView
-          stats={stats}
-          keys={keys}
-          analysis={analysis}
-          createKey={handleCreateApiKey}
-          deleteKey={handleDeleteApiKey}
-          copyToClipboard={handleCopyClick}
-          copiedId={copiedId}
-          loading={loading}
-        />;
       case 'Knowledge Graph':
         return <Suspense fallback={<div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Loading knowledge graph…</div>}>
           <KnowledgeGraphView
@@ -516,6 +527,7 @@ export const Dashboard: React.FC = () => {
           selectedProjectDir={selectedProjectDir}
           onProjectChange={handleProjectChange}
         />;
+      case 'Control Center':
       default:
         return <ControlCenterView
           stats={stats}

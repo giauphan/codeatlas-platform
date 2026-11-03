@@ -24,7 +24,7 @@ export class A2AOrchestrationService {
    * @param toolParams Optional parameters for the tool.
    * @returns The newly created A2AOrchestrationTask.
    */
-  async createTask(
+  createTask(
     leaderAgentId: string,
     description: string,
     developerAgentId?: string,
@@ -53,7 +53,7 @@ export class A2AOrchestrationService {
 
     orchestrationTaskStore.set(orchestrationTaskId, newTask);
     logger.info(`[A2A Orchestration] Task created: ${orchestrationTaskId} for tenant: ${tenantId}, state: ${initialState}`);
-    return newTask;
+    return Promise.resolve(newTask);
   }
 
   /**
@@ -124,22 +124,22 @@ export class A2AOrchestrationService {
    * @param orchestrationTaskId The ID of the task.
    * @returns The A2AOrchestrationTask, or undefined if not found.
    */
-  async getTask(orchestrationTaskId: string): Promise<A2AOrchestrationTask | undefined> {
+  getTask(orchestrationTaskId: string): Promise<A2AOrchestrationTask | undefined> {
     const task = orchestrationTaskStore.get(orchestrationTaskId);
     if (task && task.tenantId !== this.getTenantId()) {
       logger.warn(`[A2A Orchestration] Attempted unauthorized access to task ${orchestrationTaskId} by tenant ${this.getTenantId()}`);
-      return undefined; // Hide task if tenant doesn't match
+      return Promise.resolve(undefined); // Hide task if tenant doesn't match
     }
-    return task;
+    return Promise.resolve(task);
   }
 
   /**
    * Lists all orchestration tasks for the current tenant.
    * @returns An array of A2AOrchestrationTask.
    */
-  async listTasks(): Promise<A2AOrchestrationTask[]> {
+  listTasks(): Promise<A2AOrchestrationTask[]> {
     const tenantId = this.getTenantId();
-    return Array.from(orchestrationTaskStore.values()).filter(task => task.tenantId === tenantId);
+    return Promise.resolve(Array.from(orchestrationTaskStore.values()).filter(task => task.tenantId === tenantId));
   }
 
   // Define valid state transitions

@@ -88,7 +88,7 @@ function App() {
         throw new Error(errMsg);
       }
 
-      storeAuthTokens(key.trim(), undefined);
+      storeAuthTokens(key.trim());
       const isApiKey = key.trim().startsWith('ca_');
       setUser({
         uid: 'session',
