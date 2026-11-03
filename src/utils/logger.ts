@@ -55,47 +55,46 @@ function stringify(val: unknown): string {
   return String(val);
 }
 
+function jsonOutput(level: Level, ts: string, message: string, meta: Record<string, unknown> | undefined): string {
+  const entry: Record<string, unknown> = {
+    level,
+    time: ts,
+    msg: message,
+  };
+  if (meta) entry.meta = meta;
+  let output: string;
+  try {
+    output = JSON.stringify(entry);
+  } catch {
+    entry.meta = String(meta);
+    output = JSON.stringify(entry);
+  }
+  return output;
+}
+
+function prettyOutput(level: Level, ts: string, message: string, meta: Record<string, unknown> | undefined): string {
+  const prefix = `[${ts}] [${level.toUpperCase()}]`;
+  let output = `${prefix} ${message}`;
+  if (meta) {
+    try {
+      output += ` ${JSON.stringify(meta)}`;
+    } catch {
+      output += ` ${String(meta)}`;
+    }
+  }
+  return output;
+}
+
 function log(level: Level, ...args: unknown[]): void {
   if (LOG_LEVELS[level] < threshold) return;
-
   const meta = formatMeta(args);
   const message = args.map(stringify).join(" ");
   const ts = timestamp();
-
-  if (isJson) {
-    const entry: Record<string, unknown> = {
-      level,
-      time: ts,
-      msg: message,
-    };
-    if (meta) entry.meta = meta;
-    let output: string;
-    try {
-      output = JSON.stringify(entry);
-    } catch {
-      entry.meta = String(meta);
-      output = JSON.stringify(entry);
-    }
-    if (level === "error" || level === "warn") {
-      process.stderr.write(output + "\n");
-    } else {
-      process.stdout.write(output + "\n");
-    }
+  const output = isJson ? jsonOutput(level, ts, message, meta) : prettyOutput(level, ts, message, meta);
+  if (level === "error" || (isJson && level === "warn")) {
+    process.stderr.write(output + "\n");
   } else {
-    const prefix = `[${ts}] [${level.toUpperCase()}]`;
-    let output = `${prefix} ${message}`;
-    if (meta) {
-      try {
-        output += ` ${JSON.stringify(meta)}`;
-      } catch {
-        output += ` ${String(meta)}`;
-      }
-    }
-    if (level === "error") {
-      process.stderr.write(output + "\n");
-    } else {
-      process.stdout.write(output + "\n");
-    }
+    process.stdout.write(output + "\n");
   }
 }
 

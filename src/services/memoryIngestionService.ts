@@ -45,6 +45,21 @@ function isExplicitChange(memory: StructuredMemory, event: PendingCaptureEvent):
     /\b(now prefer|now want|changed? (?:my|our|the) (?:preference|decision)|updated decision|instead of|no longer)\b|(?:bây giờ|đổi quyết định|thay đổi|thay vì|không còn)/iu.test(memory.content);
 }
 
+function validateSupersedes(value: unknown, sourceEvents: ExtractionSourceEvent[]): NonNullable<StructuredMemory['supersedes']> | null {
+  if (!Array.isArray(value)) return null;
+  const supersedes: NonNullable<StructuredMemory['supersedes']> = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const reference = raw as Record<string, unknown>;
+    if (typeof reference.sourceEventId !== 'string' || typeof reference.span !== 'string' || !reference.span) return null;
+    const source = sourceEvents.find(event => event.id === reference.sourceEventId);
+    const quote = redactMemoryText(reference.span).trim();
+    if (!source || quote !== reference.span || !redactMemoryText(source.text).includes(quote)) return null;
+    supersedes.push({ sourceEventId: reference.sourceEventId, span: quote });
+  }
+  return supersedes;
+}
+
 export class MemoryIngestionService {
   private static async requireFence(fence?: Fence): Promise<void> {
     if (!fence) return;
@@ -96,115 +111,131 @@ export class MemoryIngestionService {
     for (const event of events) {
       if (completedInRun.has(event.eventId)) continue;
       const eventAuth = { ...auth, uid: event.tenantId };
-      await authStorage.run(eventAuth, async () => {
-      try {
-        await this.requireFence(options.runFence);
-        const projectId = event.projectId || event.project;
-        if (event.checkpoint !== undefined) await SessionCheckpointService.latest(projectId);
-        const batch = event.checkpoint === undefined ? [event] : await this.checkpointBatch(event);
-        const pendingSources = await this.pendingBatchSources(event, projectId, batch);
-        if (!pendingSources.length) return;
-        const sourceEvents: ExtractionSourceEvent[] = batch.map(source => ({ id: source.eventId, role: source.actorRole || 'USER', text: source.content }));
-        const sourceHash = digest(JSON.stringify({
-          tenantId: event.tenantId,
-          projectId,
-          markerEventId: event.eventId,
-          markerSequence: event.captureSequence,
-          checkpoint: event.checkpoint,
-          sources: sourceEvents.map(source => [source.id, source.role, source.text]),
-        }));
-        const generator = options.generate ?? (options.useModel && event.checkpoint !== undefined
-          ? (await import('./llmService.js')).createMemoryExtractionGenerator?.()
-          : undefined);
-        let outcome: StructuredExtractionOutcome;
-        if (event.checkpoint !== undefined) {
-          const receipt = await this.readModelReceipt(event, projectId, sourceHash, sourceEvents);
-          if (receipt) outcome = receipt;
-          else if (!generator) {
-            outcome = await extractStructuredMemoriesWithOutcome(sourceEvents, { checkpoint: event.checkpoint });
-          }
-          else {
-            outcome = await extractStructuredMemoriesWithOutcome(sourceEvents, { checkpoint: event.checkpoint, generate: generator });
-            if (outcome.mode === 'model') outcome = await this.saveModelReceipt(event, projectId, sourceHash, sourceEvents, outcome);
-          }
-        } else {
-          outcome = await extractStructuredMemoriesWithOutcome(sourceEvents, { checkpoint: event.checkpoint, generate: generator });
-        }
-        if (event.checkpoint !== undefined && outcome.mode === 'deterministic') {
-          const pendingIds = new Set(pendingSources.map(source => source.eventId));
-          outcome = { ...outcome, memories: outcome.memories.filter(memory => memory.evidence.every(evidence => pendingIds.has(evidence.sourceEventId))) };
-        }
-        const memories = outcome.memories;
-        const memoryIds: string[] = [];
-        const memoryIdsBySource = new Map<string, string[]>();
-        for (const memory of memories) {
-          await this.requireFence(options.runFence);
-          const sources = batch.filter(source => memory.evidence.some(item => item.sourceEventId === source.eventId));
-          if (!sources.length) throw new Error('Missing source evidence');
-          const source = sources[0];
-          const key = digest(`${EXTRACTOR_VERSION}\0${sources.map(item => item.eventId).sort((left, right) =>
-            left < right ? -1 : left > right ? 1 : 0,
-          ).join('\0')}\0${memory.kind}\0${memory.content}`);
-          const ack = await DreamingService.saveDreamMemoryWithAck({
-            project: event.project, projectId, displayName: event.displayName, workspacePath: event.workspacePath,
-            sessionId: source.sessionId, memoryType: memory.memoryType, content: memory.content, importance: memory.importance,
-            idempotencyKey: `extract:${key}`, aiModel: EXTRACTOR_VERSION,
-            structuredEvidence: { memory, events: sources.map(item => ({ id: item.eventId, role: item.actorRole || 'USER', text: item.content })) },
-          });
-          if (ack.status === 'filtered') continue;
-          if (!ack.persisted || !ack.id) throw new Error('Memory persistence was not acknowledged');
-          for (const source of sources) {
-            await this.persistEvidence(ack.id, { ...memory, evidence: memory.evidence.filter(item => item.sourceEventId === source.eventId) }, source, outcome.mode === 'model');
-            const ids = memoryIdsBySource.get(source.eventId) ?? [];
-            ids.push(ack.id);
-            memoryIdsBySource.set(source.eventId, ids);
-          }
-          if (ack.status === 'stored') result.stored++;
-          else result.duplicate++;
-          memoryIds.push(ack.id);
-        }
-        await this.requireFence(options.runFence);
-        if (outcome.mode === 'model') {
-          await this.retireUnselectedBatchMemories(event, projectId, batch.map(source => source.eventId), memoryIds);
-        }
-        if (outcome.mode === 'model') {
-          for (const source of batch.filter(item => !pendingSources.some(pending => pending.eventId === item.eventId))) {
-            const sourceMemoryIds = [...new Set(memoryIdsBySource.get(source.eventId) ?? [])];
-            await createDatabaseAdapter().execute(
-              `UPDATE dream_capture_events SET status = :status, memory_ids_json = :memoryIds
-               WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId AND status IN ('processed', 'filtered')`,
-              { tenantId: event.tenantId, projectId, eventId: source.eventId, status: sourceMemoryIds.length ? 'processed' : 'filtered', memoryIds: JSON.stringify(sourceMemoryIds) },
-            );
-          }
-        }
-        // Every pending source in this exact checkpoint batch has now been
-        // fully extracted and its evidence persisted. Mark only rows that are
-        // still pending, with IDs that were actually acknowledged as persisted.
-        for (const source of pendingSources) {
-          const sourceMemoryIds = [...new Set(memoryIdsBySource.get(source.eventId) ?? [])];
-          const updated = await createDatabaseAdapter().execute(
-            `UPDATE dream_capture_events SET status = :status, memory_ids_json = :memoryIds
-             WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId AND status = 'pending'`,
-            { tenantId: event.tenantId, projectId, eventId: source.eventId, status: sourceMemoryIds.length ? 'processed' : 'filtered', memoryIds: JSON.stringify(sourceMemoryIds) },
-          );
-          completedInRun.add(source.eventId);
-          if (updated.rowsAffected > 0) {
-            if (sourceMemoryIds.length) result.events_processed++;
-            else result.events_filtered++;
-          }
-        }
-        result.memory_ids.push(...memoryIds);
-      } catch {
-        // A partially saved event stays pending. Unique receipts and evidence
-        // keys let the next worker finish it without inflating counts.
-        result.failed++;
-        result.success = false;
-      }
-      });
+      await authStorage.run(eventAuth, () => this.processEvent(event, options, result, completedInRun));
     }
     result.memory_ids = [...new Set(result.memory_ids)];
     recordMetrics();
     return result;
+  }
+
+  private static async processEvent(event: PendingCaptureEvent, options: ReconciliationOptions, result: ReconciliationResult, completedInRun: Set<string>): Promise<void> {
+    try {
+      await this.requireFence(options.runFence);
+      const projectId = event.projectId || event.project;
+      if (event.checkpoint !== undefined) await SessionCheckpointService.latest(projectId);
+      const batch = event.checkpoint === undefined ? [event] : await this.checkpointBatch(event);
+      const pendingSources = await this.pendingBatchSources(event, projectId, batch);
+      if (!pendingSources.length) return;
+      const outcome = await this.extractBatch(event, projectId, batch, pendingSources, options);
+      const { memoryIds, memoryIdsBySource } = await this.persistBatchMemories(event, projectId, batch, outcome, options, result);
+      await this.requireFence(options.runFence);
+      if (outcome.mode === 'model') {
+        await this.retireUnselectedBatchMemories(event, projectId, batch.map(source => source.eventId), memoryIds);
+      }
+      await this.markBatchSources(event, projectId, batch, pendingSources, outcome, memoryIdsBySource, result, completedInRun);
+      result.memory_ids.push(...memoryIds);
+    } catch {
+      // A partially saved event stays pending. Unique receipts and evidence
+      // keys let the next worker finish it without inflating counts.
+      result.failed++;
+      result.success = false;
+  }
+  }
+
+  private static async extractBatch(event: PendingCaptureEvent, projectId: string, batch: PendingCaptureEvent[], pendingSources: PendingCaptureEvent[], options: ReconciliationOptions): Promise<StructuredExtractionOutcome> {
+    const sourceEvents: ExtractionSourceEvent[] = batch.map(source => ({ id: source.eventId, role: source.actorRole || 'USER', text: source.content }));
+    const sourceHash = digest(JSON.stringify({
+      tenantId: event.tenantId,
+      projectId,
+      markerEventId: event.eventId,
+      markerSequence: event.captureSequence,
+      checkpoint: event.checkpoint,
+      sources: sourceEvents.map(source => [source.id, source.role, source.text]),
+    }));
+    const generator = options.generate ?? (options.useModel && event.checkpoint !== undefined
+      ? (await import('./llmService.js')).createMemoryExtractionGenerator?.()
+      : undefined);
+    let outcome: StructuredExtractionOutcome;
+    if (event.checkpoint !== undefined) {
+      const receipt = await this.readModelReceipt(event, projectId, sourceHash, sourceEvents);
+      if (receipt) outcome = receipt;
+      else if (!generator) {
+        outcome = await extractStructuredMemoriesWithOutcome(sourceEvents, { checkpoint: event.checkpoint });
+      }
+      else {
+        outcome = await extractStructuredMemoriesWithOutcome(sourceEvents, { checkpoint: event.checkpoint, generate: generator });
+        if (outcome.mode === 'model') outcome = await this.saveModelReceipt(event, projectId, sourceHash, sourceEvents, outcome);
+      }
+    } else {
+      outcome = await extractStructuredMemoriesWithOutcome(sourceEvents, { checkpoint: event.checkpoint, generate: generator });
+  }
+  if (event.checkpoint !== undefined && outcome.mode === 'deterministic') {
+    const pendingIds = new Set(pendingSources.map(source => source.eventId));
+    outcome = { ...outcome, memories: outcome.memories.filter(memory => memory.evidence.every(evidence => pendingIds.has(evidence.sourceEventId))) };
+  }
+  return outcome;
+  }
+
+  private static async persistBatchMemories(event: PendingCaptureEvent, projectId: string, batch: PendingCaptureEvent[], outcome: StructuredExtractionOutcome, options: ReconciliationOptions, result: ReconciliationResult): Promise<{ memoryIds: string[]; memoryIdsBySource: Map<string, string[]> }> {
+    const memories = outcome.memories;
+    const memoryIds: string[] = [];
+    const memoryIdsBySource = new Map<string, string[]>();
+    for (const memory of memories) {
+      await this.requireFence(options.runFence);
+      const sources = batch.filter(source => memory.evidence.some(item => item.sourceEventId === source.eventId));
+      if (!sources.length) throw new Error('Missing source evidence');
+      const source = sources[0];
+      const key = digest(`${EXTRACTOR_VERSION}\0${sources.map(item => item.eventId).sort((left, right) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      ).join('\0')}\0${memory.kind}\0${memory.content}`);
+      const ack = await DreamingService.saveDreamMemoryWithAck({
+        project: event.project, projectId, displayName: event.displayName, workspacePath: event.workspacePath,
+        sessionId: source.sessionId, memoryType: memory.memoryType, content: memory.content, importance: memory.importance,
+        idempotencyKey: `extract:${key}`, aiModel: EXTRACTOR_VERSION,
+        structuredEvidence: { memory, events: sources.map(item => ({ id: item.eventId, role: item.actorRole || 'USER', text: item.content })) },
+      });
+      if (ack.status === 'filtered') continue;
+      if (!ack.persisted || !ack.id) throw new Error('Memory persistence was not acknowledged');
+      for (const source of sources) {
+        await this.persistEvidence(ack.id, { ...memory, evidence: memory.evidence.filter(item => item.sourceEventId === source.eventId) }, source, outcome.mode === 'model');
+        const ids = memoryIdsBySource.get(source.eventId) ?? [];
+        ids.push(ack.id);
+        memoryIdsBySource.set(source.eventId, ids);
+      }
+      if (ack.status === 'stored') result.stored++;
+      else result.duplicate++;
+      memoryIds.push(ack.id);
+  }
+  return { memoryIds, memoryIdsBySource };
+  }
+
+  private static async markBatchSources(event: PendingCaptureEvent, projectId: string, batch: PendingCaptureEvent[], pendingSources: PendingCaptureEvent[], outcome: StructuredExtractionOutcome, memoryIdsBySource: Map<string, string[]>, result: ReconciliationResult, completedInRun: Set<string>): Promise<void> {
+    if (outcome.mode === 'model') {
+      for (const source of batch.filter(item => !pendingSources.some(pending => pending.eventId === item.eventId))) {
+        const sourceMemoryIds = [...new Set(memoryIdsBySource.get(source.eventId) ?? [])];
+        await createDatabaseAdapter().execute(
+          `UPDATE dream_capture_events SET status = :status, memory_ids_json = :memoryIds
+           WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId AND status IN ('processed', 'filtered')`,
+          { tenantId: event.tenantId, projectId, eventId: source.eventId, status: sourceMemoryIds.length ? 'processed' : 'filtered', memoryIds: JSON.stringify(sourceMemoryIds) },
+        );
+      }
+  }
+  // Every pending source in this exact checkpoint batch has now been
+  // fully extracted and its evidence persisted. Mark only rows that are
+  // still pending, with IDs that were actually acknowledged as persisted.
+  for (const source of pendingSources) {
+    const sourceMemoryIds = [...new Set(memoryIdsBySource.get(source.eventId) ?? [])];
+    const updated = await createDatabaseAdapter().execute(
+      `UPDATE dream_capture_events SET status = :status, memory_ids_json = :memoryIds
+       WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId AND status = 'pending'`,
+      { tenantId: event.tenantId, projectId, eventId: source.eventId, status: sourceMemoryIds.length ? 'processed' : 'filtered', memoryIds: JSON.stringify(sourceMemoryIds) },
+    );
+    completedInRun.add(source.eventId);
+    if (updated.rowsAffected > 0) {
+      if (sourceMemoryIds.length) result.events_processed++;
+      else result.events_filtered++;
+    }
+  }
   }
 
   private static async pendingBatchSources(event: PendingCaptureEvent, projectId: string, batch: PendingCaptureEvent[]): Promise<PendingCaptureEvent[]> {
@@ -251,17 +282,8 @@ export class MemoryIngestionService {
         memories[index].status = stored.status;
       }
       if (stored.supersedes !== undefined) {
-        if (!Array.isArray(stored.supersedes)) return null;
-        const supersedes: StructuredMemory['supersedes'] = [];
-        for (const raw of stored.supersedes) {
-          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-          const reference = raw as Record<string, unknown>;
-          if (typeof reference.sourceEventId !== 'string' || typeof reference.span !== 'string' || !reference.span) return null;
-          const source = sourceEvents.find(event => event.id === reference.sourceEventId);
-          const quote = redactMemoryText(reference.span).trim();
-          if (!source || quote !== reference.span || !redactMemoryText(source.text).includes(quote)) return null;
-          supersedes.push({ sourceEventId: reference.sourceEventId, span: quote });
-        }
+        const supersedes = validateSupersedes(stored.supersedes, sourceEvents);
+        if (!supersedes) return null;
         memories[index].supersedes = supersedes;
       }
     }

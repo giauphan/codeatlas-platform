@@ -259,65 +259,39 @@ function hasCredentialConnectionString(text: string): boolean {
   return false;
 }
 
-function classify(text: string, role: SourceRole): { kind: MemoryKind; certainty: MemoryCertainty; confidence: number } | null {
-  const normalized = text.trim();
-  const lower = normalized.toLocaleLowerCase();
-  if (nonMemoryText(normalized)) return null;
+type Classification = { kind: MemoryKind; certainty: MemoryCertainty; confidence: number } | null;
 
-  if (role === 'ASSISTANT') {
-    // Assistant text cannot establish decisions, changes, errors, or outcomes.
-    // Keep only a causally framed hypothesis with an explicit evidence caveat.
-    const hypothesis = /\b(?:might|may|could)\s+(?:be|come|result|stem|arise|indicate|cause)|\bpossibly caused by\b|(?:có thể)[^.!?;]{0,100}bị/iu.test(lower);
-    const caveat = /\b(?:no (?:trace|evidence|data)|cannot confirm|can't confirm|unknown whether|unclear whether|not enough evidence)\b|(?:chưa (?:có )?(?:trace|bằng chứng|dữ liệu)|chưa rõ|không rõ|chưa xác định)/iu.test(lower);
-    const assurance = /\b(?:successfully|passed|completed|deployed|healthy)\b|(?:thành công|đã chạy thành công)/iu.test(lower);
-    const uncertain = hypothesis && caveat && !assurance;
-    return uncertain ? { kind: 'OPEN_QUESTION', certainty: 'uncertain', confidence: 0.65 } : null;
-  }
-  if (role === 'USER' && explicitFixOutcome(normalized)) return { kind: 'FIX', certainty: 'reported', confidence: 0.82 };
-  if (role === 'USER' && reportedImplementationProgress(normalized)) return { kind: 'TASK_STATUS', certainty: 'reported', confidence: 0.82 };
-  if (role === 'TOOL') {
-    if (hasCredentialConnectionString(normalized)) return null;
-    const explicitFailure = /\boutcome\s*:\s*failed\b|\bexit_code\s*=\s*[1-9]\d*\b/i.test(lower);
-    if (explicitFailure) return { kind: 'MISTAKE', certainty: 'reported', confidence: 0.84 };
-    const explicitSuccess = /\bexit_code\s*=\s*0\b/i.test(lower);
-    if (explicitSuccess) return { kind: 'TASK_STATUS', certainty: 'reported', confidence: 0.8 };
-    const fixed = /\b(?:fixed|resolved|corrected|repaired|eliminated|removed the (?:error|bug|duplicate)|prevented the (?:error|bug|duplicate))\b|\bafter\b.{0,160}\b(?:added|changed|removed|cleared|patched|fixed|normalized)\b|(?:đã sửa lỗi|khắc phục (?:được )?lỗi|đã khắc phục|sửa được lỗi)|(?:sau khi)[^.!?;]{0,160}(?:bỏ|thêm|đổi|chuẩn hóa)/iu.test(lower);
-    if (fixed) return { kind: 'FIX', certainty: 'reported', confidence: 0.82 };
-    const failed = observedFailure(normalized) && /\b(?:fail(?:ed|ure)?|error|exception|crash|RangeError|SQLITE_CONSTRAINT|thất bại|lỗi)\b/iu.test(lower);
-    if (failed) return { kind: 'MISTAKE', certainty: 'reported', confidence: 0.82 };
-    if (hypotheticalFailure(normalized) || /\b(?:when|if|unless)\b[^.!?;]{0,140}\b(?:fails?|returns? non[- ]?zero|exits? non[- ]?zero|is unavailable)\b|\breturns? non[- ]?zero\b[^.!?;]{0,80}\bif\b|(?:nếu|khi)[^.!?;]{0,140}(?:trả về mã khác không|không khả dụng)/iu.test(normalized)) return { kind: 'FACT', certainty: 'reported', confidence: 0.74 };
-    const success = /\b(exit_code\s*=\s*0|\d+\s+tests?\s+passed|completed successfully|saved successfully|passed all \d+ tests?)\b|(?:chạy qua đủ \d+ bài|đạt đủ \d+ bài kiểm thử|kiểm thử thành công)/iu.test(lower);
-    if (success) return { kind: 'TASK_STATUS', certainty: 'reported', confidence: 0.8 };
-    const structuredEvidence = /(?:^|\s)(?:[\w@.-]+\/)+[\w@./-]+|\b[A-Za-z_$][\w$]*(?:<[^>]+>)?\s*\(|\b[A-Z][A-Z\d_]{1,}\b|\b(?:\d{1,3}\.){3}\d{1,3}:?\d*\b|\b(?:HTTP|SQLITE|ECONN|RangeError|TypeError)[-_ ]?\d*\b/u.test(normalized);
-    const observation = /\b(?:log|trace|response|output|manifest|documentation|report)\b[^.!?;]{0,120}\b(?:shows?|lists?|contains?|records?|reports?|states?)\b|(?:log|dấu vết|phản hồi|tài liệu|báo cáo)[^.!?;]{0,120}(?:cho thấy|ghi nhận|liệt kê|nêu rõ)/iu.test(normalized);
-    return structuredEvidence || observation ? { kind: 'FACT', certainty: 'reported', confidence: 0.76 } : null;
-  }
-  if (unresolvedQuestionWithContext(normalized) || containsAny(lower, [/\b(should we|what should|how should|open question|unresolved question|remaining question|(?:need|yet) to decide|still need to determine|need to find out whether|unclear whether|unknown whether|have not decided whether|haven't decided whether)\b/i, /(?:có nên|làm thế nào|câu hỏi (?:còn )?mở|chưa rõ|chưa xác định|chưa biết|hay không)/iu])) {
-    return { kind: 'OPEN_QUESTION', certainty: 'uncertain', confidence: 0.72 };
-  }
-  if (normalized.endsWith('?')) return null;
-  if (/^the (?:test|build|smoke) report confirms\b/iu.test(lower)) return null;
+function classifyAssistant(lower: string): Classification {
+  // Assistant text cannot establish decisions, changes, errors, or outcomes.
+  // Keep only a causally framed hypothesis with an explicit evidence caveat.
+  const hypothesis = /\b(?:might|may|could)\s+(?:be|come|result|stem|arise|indicate|cause)|\bpossibly caused by\b|(?:có thể)[^.!?;]{0,100}bị/iu.test(lower);
+  const caveat = /\b(?:no (?:trace|evidence|data)|cannot confirm|can't confirm|unknown whether|unclear whether|not enough evidence)\b|(?:chưa (?:có )?(?:trace|bằng chứng|dữ liệu)|chưa rõ|không rõ|chưa xác định)/iu.test(lower);
+  const assurance = /\b(?:successfully|passed|completed|deployed|healthy)\b|(?:thành công|đã chạy thành công)/iu.test(lower);
+  const uncertain = hypothesis && caveat && !assurance;
+  return uncertain ? { kind: 'OPEN_QUESTION', certainty: 'uncertain', confidence: 0.65 } : null;
 
-  if (/\b(?:cancel that (?:queue|choice|decision)|we superseded it)\b/iu.test(lower)) return { kind: 'DECISION', certainty: 'explicit', confidence: 0.88 };
-  if (containsAny(lower, [/\b(we decided|we chose|we choose|we selected|i decided|i chose|our policy is|the policy is|we adopted|we adopt|(?:the|our) (?:api|service|system) will use|final decision|decision is to)\b/i, /(?:quyết định|(?:nhóm|đội|team)\s+(?:đã\s+)?chọn|đã chọn|chúng ta chọn|chốt|mình chọn)/iu, /^decision\s*:/i])) {
-    return { kind: 'DECISION', certainty: 'explicit', confidence: 0.92 };
-  }
-  if (workflowPreference(normalized) || presentationPreference(normalized) || containsAny(lower, [/\b(?:i|we)\s+(?:(?:now|usually|generally|always|typically)\s+)?(?:prefer|like|want|would rather)\b|\bpreference\b|\b(?:earlier|previously) i asked for\b|\bfrom now on\b/i, /(?:(?:(?:tôi|mình)\s+)?(?:(?:thường xuyên|thông thường|thường|luôn)\s+)?(?:thích|muốn|ưu tiên)|từ nay|từ các lần|đổi thứ tự)/iu])) {
-    return { kind: 'PREFERENCE', certainty: 'explicit', confidence: 0.9 };
-  }
-  if (explicitNextAction(normalized)) return { kind: 'TASK_STATUS', certainty: 'explicit', confidence: 0.86 };
-  if (/^(?:whatever the answer|regardless of the answer|either way|dù câu trả lời là gì|dù kết quả thế nào)[,;:]?\s+/iu.test(normalized) && directBehaviorChoice(normalized.replace(/^(?:whatever the answer|regardless of the answer|either way|dù câu trả lời là gì|dù kết quả thế nào)[,;:]?\s+/iu, ''))) {
-    return { kind: 'DECISION', certainty: 'explicit', confidence: 0.88 };
-  }
-  if (directBehaviorChoice(normalized)) return { kind: 'DECISION', certainty: 'explicit', confidence: 0.88 };
+}
 
-  // State external requirements as reported facts unless the USER explicitly
-  // adopts them as policy in the choice rules above.
-  if (externalConstraint(normalized)) return { kind: 'FACT', certainty: 'reported', confidence: 0.78 };
-  if (/\b(?:must be (?:blank|empty|preserved|unchanged)|must remain|should be (?:blank|empty))\b|(?:phải để (?:ô )?trống|phải giữ nguyên|phải được giữ)/iu.test(normalized)) {
-    return { kind: 'DECISION', certainty: 'explicit', confidence: 0.86 };
-  }
+function classifyTool(normalized: string, lower: string): Classification {
+  if (hasCredentialConnectionString(normalized)) return null;
+  const explicitFailure = /\boutcome\s*:\s*failed\b|\bexit_code\s*=\s*[1-9]\d*\b/i.test(lower);
+  if (explicitFailure) return { kind: 'MISTAKE', certainty: 'reported', confidence: 0.84 };
+  const explicitSuccess = /\bexit_code\s*=\s*0\b/i.test(lower);
+  if (explicitSuccess) return { kind: 'TASK_STATUS', certainty: 'reported', confidence: 0.8 };
+  const fixed = /\b(?:fixed|resolved|corrected|repaired|eliminated|removed the (?:error|bug|duplicate)|prevented the (?:error|bug|duplicate))\b|\bafter\b.{0,160}\b(?:added|changed|removed|cleared|patched|fixed|normalized)\b|(?:đã sửa lỗi|khắc phục (?:được )?lỗi|đã khắc phục|sửa được lỗi)|(?:sau khi)[^.!?;]{0,160}(?:bỏ|thêm|đổi|chuẩn hóa)/iu.test(lower);
+  if (fixed) return { kind: 'FIX', certainty: 'reported', confidence: 0.82 };
+  const failed = observedFailure(normalized) && /\b(?:fail(?:ed|ure)?|error|exception|crash|RangeError|SQLITE_CONSTRAINT|thất bại|lỗi)\b/iu.test(lower);
+  if (failed) return { kind: 'MISTAKE', certainty: 'reported', confidence: 0.82 };
+  if (hypotheticalFailure(normalized) || /\b(?:when|if|unless)\b[^.!?;]{0,140}\b(?:fails?|returns? non[- ]?zero|exits? non[- ]?zero|is unavailable)\b|\breturns? non[- ]?zero\b[^.!?;]{0,80}\bif\b|(?:nếu|khi)[^.!?;]{0,140}(?:trả về mã khác không|không khả dụng)/iu.test(normalized)) return { kind: 'FACT', certainty: 'reported', confidence: 0.74 };
+  const success = /\b(exit_code\s*=\s*0|\d+\s+tests?\s+passed|completed successfully|saved successfully|passed all \d+ tests?)\b|(?:chạy qua đủ \d+ bài|đạt đủ \d+ bài kiểm thử|kiểm thử thành công)/iu.test(lower);
+  if (success) return { kind: 'TASK_STATUS', certainty: 'reported', confidence: 0.8 };
+  const structuredEvidence = /(?:^|\s)(?:[\w@.-]+\/)+[\w@./-]+|\b[A-Za-z_$][\w$]*(?:<[^>]+>)?\s*\(|\b[A-Z][A-Z\d_]{1,}\b|\b(?:\d{1,3}\.){3}\d{1,3}:?\d*\b|\b(?:HTTP|SQLITE|ECONN|RangeError|TypeError)[-_ ]?\d*\b/u.test(normalized);
+  const observation = /\b(?:log|trace|response|output|manifest|documentation|report)\b[^.!?;]{0,120}\b(?:shows?|lists?|contains?|records?|reports?|states?)\b|(?:log|dấu vết|phản hồi|tài liệu|báo cáo)[^.!?;]{0,120}(?:cho thấy|ghi nhận|liệt kê|nêu rõ)/iu.test(normalized);
+  return structuredEvidence || observation ? { kind: 'FACT', certainty: 'reported', confidence: 0.76 } : null;
 
+}
+
+function classifyReported(normalized: string, lower: string): Classification {
   if (explicitFixOutcome(normalized)) return { kind: 'FIX', certainty: 'reported', confidence: 0.82 };
   if (reportedImplementationProgress(normalized)) return { kind: 'TASK_STATUS', certainty: 'reported', confidence: 0.82 };
 
@@ -345,6 +319,47 @@ function classify(text: string, role: SourceRole): { kind: MemoryKind; certainty
     ? { kind: 'FACT', certainty: 'reported', confidence: 0.76 } : null;
 }
 
+function classifyUser(normalized: string, lower: string): Classification {
+  if (unresolvedQuestionWithContext(normalized) || containsAny(lower, [/\b(should we|what should|how should|open question|unresolved question|remaining question|(?:need|yet) to decide|still need to determine|need to find out whether|unclear whether|unknown whether|have not decided whether|haven't decided whether)\b/i, /(?:có nên|làm thế nào|câu hỏi (?:còn )?mở|chưa rõ|chưa xác định|chưa biết|hay không)/iu])) {
+    return { kind: 'OPEN_QUESTION', certainty: 'uncertain', confidence: 0.72 };
+  }
+  if (normalized.endsWith('?')) return null;
+  if (/^the (?:test|build|smoke) report confirms\b/iu.test(lower)) return null;
+
+  if (/\b(?:cancel that (?:queue|choice|decision)|we superseded it)\b/iu.test(lower)) return { kind: 'DECISION', certainty: 'explicit', confidence: 0.88 };
+  if (containsAny(lower, [/\b(we decided|we chose|we choose|we selected|i decided|i chose|our policy is|the policy is|we adopted|we adopt|(?:the|our) (?:api|service|system) will use|final decision|decision is to)\b/i, /(?:quyết định|(?:nhóm|đội|team)\s+(?:đã\s+)?chọn|đã chọn|chúng ta chọn|chốt|mình chọn)/iu, /^decision\s*:/i])) {
+    return { kind: 'DECISION', certainty: 'explicit', confidence: 0.92 };
+  }
+  if (workflowPreference(normalized) || presentationPreference(normalized) || containsAny(lower, [/\b(?:i|we)\s+(?:(?:now|usually|generally|always|typically)\s+)?(?:prefer|like|want|would rather)\b|\bpreference\b|\b(?:earlier|previously) i asked for\b|\bfrom now on\b/i, /(?:(?:(?:tôi|mình)\s+)?(?:(?:thường xuyên|thông thường|thường|luôn)\s+)?(?:thích|muốn|ưu tiên)|từ nay|từ các lần|đổi thứ tự)/iu])) {
+    return { kind: 'PREFERENCE', certainty: 'explicit', confidence: 0.9 };
+  }
+  if (explicitNextAction(normalized)) return { kind: 'TASK_STATUS', certainty: 'explicit', confidence: 0.86 };
+  if (/^(?:whatever the answer|regardless of the answer|either way|dù câu trả lời là gì|dù kết quả thế nào)[,;:]?\s+/iu.test(normalized) && directBehaviorChoice(normalized.replace(/^(?:whatever the answer|regardless of the answer|either way|dù câu trả lời là gì|dù kết quả thế nào)[,;:]?\s+/iu, ''))) {
+    return { kind: 'DECISION', certainty: 'explicit', confidence: 0.88 };
+  }
+  if (directBehaviorChoice(normalized)) return { kind: 'DECISION', certainty: 'explicit', confidence: 0.88 };
+
+  // State external requirements as reported facts unless the USER explicitly
+  // adopts them as policy in the choice rules above.
+  if (externalConstraint(normalized)) return { kind: 'FACT', certainty: 'reported', confidence: 0.78 };
+  if (/\b(?:must be (?:blank|empty|preserved|unchanged)|must remain|should be (?:blank|empty))\b|(?:phải để (?:ô )?trống|phải giữ nguyên|phải được giữ)/iu.test(normalized)) {
+    return { kind: 'DECISION', certainty: 'explicit', confidence: 0.86 };
+  }
+
+  return classifyReported(normalized, lower);
+}
+
+function classify(text: string, role: SourceRole): { kind: MemoryKind; certainty: MemoryCertainty; confidence: number } | null {
+  const normalized = text.trim();
+  const lower = normalized.toLocaleLowerCase();
+  if (nonMemoryText(normalized)) return null;
+
+  if (role === 'ASSISTANT') return classifyAssistant(lower);
+  if (role === 'USER' && explicitFixOutcome(normalized)) return { kind: 'FIX', certainty: 'reported', confidence: 0.82 };
+  if (role === 'USER' && reportedImplementationProgress(normalized)) return { kind: 'TASK_STATUS', certainty: 'reported', confidence: 0.82 };
+  if (role === 'TOOL') return classifyTool(normalized, lower);
+  return classifyUser(normalized, lower);
+}
 function splitSentences(text: string): Array<{ text: string; start: number; end: number }> {
   const result: Array<{ text: string; start: number; end: number }> = [];
   let start = 0;
@@ -424,28 +439,20 @@ function sourceUnits(event: ExtractionSourceEvent): string[] {
   return splitSentences(text).map(sentence => sentence.text);
 }
 
-function deterministicCandidates(events: ExtractionSourceEvent[]): StructuredMemory[] {
-  const memories: StructuredMemory[] = [];
-  for (const event of events) {
-    const eventMemories: StructuredMemory[] = [];
-    for (const unit of sourceUnits(event)) {
-      const memory = makeMemory(event, unit, unit, classify(unit, event.role));
-      if (memory) eventMemories.push(memory);
-    }
-    if (event.role === 'USER') {
-      for (const memory of eventMemories) {
-        if (!['PREFERENCE', 'DECISION'].includes(memory.kind) || !EXPLICIT_CHOICE_CHANGE.test(memory.content)) continue;
-        const historical = eventMemories.filter(prior => prior !== memory && prior.kind === memory.kind && HISTORICAL_CHOICE.test(prior.content) &&
-          (explicitSameEventReplacement(memory, prior) || canSupersede(memory, prior)));
-        if (!historical.length) continue;
-        for (const prior of historical) prior.status = 'superseded';
-        memory.status = 'active';
-        memory.supersedes = historical.flatMap(prior => prior.evidence);
-      }
-    }
-    memories.push(...eventMemories);
+function markSameEventReplacements(eventMemories: StructuredMemory[]): void {
+  for (const memory of eventMemories) {
+    if (!['PREFERENCE', 'DECISION'].includes(memory.kind) || !EXPLICIT_CHOICE_CHANGE.test(memory.content)) continue;
+    const historical = eventMemories.filter(prior => prior !== memory && prior.kind === memory.kind && HISTORICAL_CHOICE.test(prior.content) &&
+      (explicitSameEventReplacement(memory, prior) || canSupersede(memory, prior)));
+    if (!historical.length) continue;
+    for (const prior of historical) prior.status = 'superseded';
+    memory.status = 'active';
+    memory.supersedes = historical.flatMap(prior => prior.evidence);
   }
 
+}
+
+function markPriorReplacements(memories: StructuredMemory[]): void {
   // A clearly signaled update supersedes a prior choice only when the wording
   // establishes the same topic and does not conflict with an explicit scope.
   for (let index = 0; index < memories.length; index += 1) {
@@ -458,6 +465,9 @@ function deterministicCandidates(events: ExtractionSourceEvent[]): StructuredMem
     current.supersedes = previous.flatMap(memory => memory.evidence);
   }
 
+}
+
+function mergeDuplicateMemories(memories: StructuredMemory[]): StructuredMemory[] {
   const unique = new Map<string, StructuredMemory>();
   for (const memory of memories) {
     const key = `${memory.kind}:${memory.content.normalize('NFC').toLocaleLowerCase().replace(/\s+/g, ' ').trim()}`;
@@ -474,34 +484,74 @@ function deterministicCandidates(events: ExtractionSourceEvent[]): StructuredMem
   return [...unique.values()];
 }
 
-function candidateContentGrounded(candidate: StructuredMemory, sourceEvents: ExtractionSourceEvent[]): boolean {
-  if (!candidate.evidence.length) return false;
-  let quotedContent = false;
-  for (const item of candidate.evidence) {
-    const source = sourceEvents.find((event) => event.id === item.sourceEventId);
-    if (!source || !item.span || !redact(source.text).includes(item.span)) return false;
-    if (nonMemoryText(item.span)) return false;
-    // Accept either a complete deterministic unit or the complete source event.
-    // The latter lets a semantic extractor retain causal chains and trailing
-    // caveats that sentence segmentation would otherwise split apart.
-    const units = sourceUnits(source);
-    const completeQuote = units.includes(item.span) || item.span === redact(source.text).trim();
-    if (!completeQuote) return false;
-    // The model may choose a different semantic class than the deterministic
-    // heuristic. Assistant statements remain a hard safety boundary: only an
-    // explicitly uncertain, caveated hypothesis can be retained, never an
-    // assurance or claimed outcome.
-    if (source.role === 'ASSISTANT') {
-      const safeHypothesis = classify(item.span, source.role);
-      if (candidate.kind !== 'OPEN_QUESTION' || candidate.certainty !== 'uncertain' || safeHypothesis?.kind !== 'OPEN_QUESTION') return false;
-    } else if (source.role === 'TOOL' && ['DECISION', 'PREFERENCE'].includes(candidate.kind)) {
-      return false;
+function deterministicCandidates(events: ExtractionSourceEvent[]): StructuredMemory[] {
+  const memories: StructuredMemory[] = [];
+  for (const event of events) {
+    const eventMemories: StructuredMemory[] = [];
+    for (const unit of sourceUnits(event)) {
+      const memory = makeMemory(event, unit, unit, classify(unit, event.role));
+      if (memory) eventMemories.push(memory);
     }
-    if (source.role === 'TOOL' && candidate.certainty !== 'reported') return false;
-    if (candidate.kind === 'SESSION_CHECKPOINT' && source.role === 'ASSISTANT') return false;
-    if (candidate.content === item.span) quotedContent = true;
+    if (event.role === 'USER') markSameEventReplacements(eventMemories);
+    memories.push(...eventMemories);
   }
-  return quotedContent;
+
+  markPriorReplacements(memories);
+
+  return mergeDuplicateMemories(memories);
+}
+
+function evidenceGrounded(candidate: StructuredMemory, item: MemoryEvidence, sourceEvents: ExtractionSourceEvent[]): boolean {
+  const source = sourceEvents.find((event) => event.id === item.sourceEventId);
+  if (!source || !item.span || !redact(source.text).includes(item.span)) return false;
+  if (nonMemoryText(item.span)) return false;
+  // Accept either a complete deterministic unit or the complete source event.
+  // The latter lets a semantic extractor retain causal chains and trailing
+  // caveats that sentence segmentation would otherwise split apart.
+  const units = sourceUnits(source);
+  const completeQuote = units.includes(item.span) || item.span === redact(source.text).trim();
+  if (!completeQuote) return false;
+  // The model may choose a different semantic class than the deterministic
+  // heuristic. Assistant statements remain a hard safety boundary: only an
+  // explicitly uncertain, caveated hypothesis can be retained, never an
+  // assurance or claimed outcome.
+  if (source.role === 'ASSISTANT') {
+    const safeHypothesis = classify(item.span, source.role);
+    if (candidate.kind !== 'OPEN_QUESTION' || candidate.certainty !== 'uncertain' || safeHypothesis?.kind !== 'OPEN_QUESTION') return false;
+  } else if (source.role === 'TOOL' && ['DECISION', 'PREFERENCE'].includes(candidate.kind)) {
+    return false;
+  }
+  if (source.role === 'TOOL' && candidate.certainty !== 'reported') return false;
+  if (candidate.kind === 'SESSION_CHECKPOINT' && source.role === 'ASSISTANT') return false;
+  return true;
+}
+
+function candidateContentGrounded(candidate: StructuredMemory, sourceEvents: ExtractionSourceEvent[]): boolean {
+  return candidate.evidence.some(item => candidate.content === item.span) &&
+    candidate.evidence.every(item => evidenceGrounded(candidate, item, sourceEvents));
+}
+
+function parseCandidateEvidence(value: unknown): MemoryEvidence[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 20) return null;
+  const evidence: MemoryEvidence[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const sourceEventId = (raw as Record<string, unknown>).sourceEventId;
+    const span = (raw as Record<string, unknown>).span;
+    if (typeof sourceEventId !== 'string' || typeof span !== 'string' || !span.trim()) return null;
+    evidence.push({ sourceEventId, span: redact(span).trim() });
+  }
+  return evidence;
+}
+
+function userEvidenceClassification(evidence: MemoryEvidence[], events: ExtractionSourceEvent[]): Pick<StructuredMemory, 'kind' | 'certainty'> | null {
+  if (evidence.length !== 1) return null;
+  const source = events.find(event => event.id === evidence[0].sourceEventId);
+  if (source?.role !== 'USER') return null;
+  const span = evidence[0].span;
+  if (presentationPreference(span)) return { kind: 'PREFERENCE', certainty: 'explicit' };
+  if (explicitNextAction(span) && !explicitArchitectureChoice(span)) return { kind: 'TASK_STATUS', certainty: 'explicit' };
+  return null;
 }
 
 function validateCandidate(value: unknown, events: ExtractionSourceEvent[]): StructuredMemory | null {
@@ -511,15 +561,8 @@ function validateCandidate(value: unknown, events: ExtractionSourceEvent[]): Str
   if (!kinds.includes(item.kind as MemoryKind) || typeof item.content !== 'string' || !item.content.trim() || item.content.length > MAX_CANDIDATE_LENGTH) return null;
   if (typeof item.confidence !== 'number' || !Number.isFinite(item.confidence) || item.confidence < 0 || item.confidence > 1) return null;
   if (!['explicit', 'reported', 'uncertain'].includes(String(item.certainty))) return null;
-  if (!Array.isArray(item.evidence) || item.evidence.length === 0 || item.evidence.length > 20) return null;
-  const evidence: MemoryEvidence[] = [];
-  for (const raw of item.evidence) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-    const sourceEventId = (raw as Record<string, unknown>).sourceEventId;
-    const span = (raw as Record<string, unknown>).span;
-    if (typeof sourceEventId !== 'string' || typeof span !== 'string' || !span.trim()) return null;
-    evidence.push({ sourceEventId, span: redact(span).trim() });
-  }
+  const evidence = parseCandidateEvidence(item.evidence);
+  if (!evidence) return null;
   let kind = item.kind as MemoryKind;
   let certainty = item.certainty as MemoryCertainty;
   const unadoptedExternalEvidence = evidence.filter((citation) => {
@@ -533,16 +576,10 @@ function validateCandidate(value: unknown, events: ExtractionSourceEvent[]): Str
     kind = 'FACT';
     certainty = 'reported';
   }
-  if (evidence.length === 1) {
-    const source = events.find(event => event.id === evidence[0].sourceEventId);
-    const span = evidence[0].span;
-    if (source?.role === 'USER' && presentationPreference(span)) {
-      kind = 'PREFERENCE';
-      certainty = 'explicit';
-    } else if (source?.role === 'USER' && explicitNextAction(span) && !explicitArchitectureChoice(span)) {
-      kind = 'TASK_STATUS';
-      certainty = 'explicit';
-    }
+  const userClassification = userEvidenceClassification(evidence, events);
+  if (userClassification) {
+    kind = userClassification.kind;
+    certainty = userClassification.certainty;
   }
   const candidate: StructuredMemory = {
     kind,

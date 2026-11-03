@@ -59,6 +59,24 @@ function successfulTool(row: CaptureRow): boolean {
     /exit_code\s*=\s*0\b|\b\d+\s+tests?\s+passed\b/i.test(row.content_redacted);
 }
 
+type CheckpointFields = Pick<SessionCheckpoint, 'active_task' | 'completed' | 'decisions' | 'blockers' | 'next_actions'>;
+
+function groundedOverrides(input: CheckpointWrite, rows: CaptureRow[]): Partial<CheckpointFields> {
+  const overrides: Partial<CheckpointFields> = {};
+  const fields = [['activeTask', 'active_task'], ['completed', 'completed'], ['decisions', 'decisions'], ['blockers', 'blockers'], ['nextActions', 'next_actions']] as const;
+  for (const [inputField, outputField] of fields) {
+    const value = input[inputField];
+    if (value === undefined) continue;
+    const items = typeof value === 'string' ? [value] : value;
+    if (!Array.isArray(items) || items.length > 8 || items.some(item => typeof item !== 'string' || !item || item.length > 1600)) throw new Error('Invalid checkpoint evidence field');
+    const permitted = outputField === 'completed' ? rows.filter(successfulTool) : rows.filter(row => row.actor_role === 'USER' || (outputField === 'blockers' && row.actor_role === 'TOOL'));
+    if (items.some(item => !permitted.some(row => safeText(row.content_redacted).includes(safeText(item))))) throw new Error('Unsupported checkpoint claim: cited evidence does not support the field');
+    if (outputField === 'active_task') overrides.active_task = safeText(items[0] || '');
+    else overrides[outputField] = items.map(item => safeText(item));
+  }
+  return overrides;
+}
+
 function derive(rows: CaptureRow[]): Pick<SessionCheckpoint, 'active_task' | 'completed' | 'decisions' | 'blockers' | 'next_actions'> {
   const user = rows.filter(row => row.actor_role === 'USER' && safeText(row.content_redacted).length >= 20 && !checkNoiseBlocklist(row.content_redacted).isNoise);
   const unique = (items: string[]): string[] => [...new Set(items)].slice(-8);
@@ -159,20 +177,7 @@ export class SessionCheckpointService {
       FROM dream_capture_events WHERE tenant_id = :tenant AND project_id = :projectId AND session_id = :sessionId AND event_id IN (${placeholders.join(',')})
       ORDER BY created_at ASC, event_id ASC`, binds);
     if (rows.length !== ids.length) throw new Error('Checkpoint source evidence is missing or belongs to a different scope');
-    const overrides: Partial<Pick<SessionCheckpoint, 'active_task' | 'completed' | 'decisions' | 'blockers' | 'next_actions'>> = {};
-    const fields = [['activeTask', 'active_task'], ['completed', 'completed'], ['decisions', 'decisions'], ['blockers', 'blockers'], ['nextActions', 'next_actions']] as const;
-    for (const [inputField, outputField] of fields) {
-      const value = input[inputField];
-      if (value === undefined) continue;
-      const items = typeof value === 'string' ? [value] : value;
-      if (!Array.isArray(items) || items.length > 8 || items.some(item => typeof item !== 'string' || !item || item.length > 1600)) throw new Error('Invalid checkpoint evidence field');
-      for (const item of items) {
-        const permitted = outputField === 'completed' ? rows.filter(successfulTool) : rows.filter(row => row.actor_role === 'USER' || (outputField === 'blockers' && row.actor_role === 'TOOL'));
-        if (!permitted.some(row => safeText(row.content_redacted).includes(safeText(item)))) throw new Error('Unsupported checkpoint claim: cited evidence does not support the field');
-      }
-      if (outputField === 'active_task') overrides.active_task = safeText(items[0] || '');
-      else overrides[outputField] = items.map(item => safeText(item));
-    }
+    const overrides = groundedOverrides(input, rows);
     const sourceId = `explicit_${createHash('sha256').update(JSON.stringify([ids.sort((left, right) =>
       left < right ? -1 : left > right ? 1 : 0,
     ), overrides])).digest('hex')}`;
