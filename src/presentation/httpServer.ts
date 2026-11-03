@@ -3,11 +3,11 @@ import helmet from "helmet";
 import compression from "compression";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
-import { IncomingMessage, Server } from "http";
+import { IncomingMessage, Server } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { getApps } from "firebase-admin/app";
 import { getFirestore, type DocumentReference } from "firebase-admin/firestore";
 import { checkAuth, logActivity, shouldUseFirestore } from "../services/authService.js";
@@ -42,7 +42,7 @@ import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { a2aOrchestrationService } from "../services/a2aOrchestrationService.js";
 import { indexingService } from "../services/indexingService.js";
 import { logger } from "../utils/logger.js";
-import * as crypto from "crypto";
+import * as crypto from "node:crypto";
 import { loadSettings } from "./cronSettingsRoute.js";
 import { DreamDiagnostics } from "../services/dreamDiagnostics.js";
 import { DreamRunLedger, DreamScheduler } from "../services/dreamScheduler.js";
@@ -1355,7 +1355,7 @@ async function runDreamSchedulerTick(port: number): Promise<void> {
             headers: { "Content-Type": "application/json", "x-api-key": internalApiKey },
             body: JSON.stringify({
               project: settings.project || claim.project || undefined,
-              ...(settings.project_id ? { project_id: settings.project_id } : reconciliation ? { project_id: claim.project || undefined } : {}),
+              ...(settings.project_id ? { project_id: settings.project_id } : (reconciliation ? { project_id: claim.project || undefined } : {})),
               tenant_id: claim.tenantId,
               ...(reconciliation ? {} : { provider: settings.dreams_provider }),
               run_id: claim.runId,

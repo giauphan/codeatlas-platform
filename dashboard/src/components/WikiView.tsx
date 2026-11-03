@@ -393,7 +393,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
             if (lang === 'mermaid') {
               return (
                 <div
-                  key={index}
+                  key={`${part.substring(0, 32)}-${index}`}
                   style={{
                     margin: '1.5rem 0',
                     padding: '1.25rem',
@@ -415,7 +415,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
 
             return (
               <div
-                key={index}
+                key={`${part.substring(0, 32)}-${index}`}
                 style={{
                   margin: '1.5rem 0',
                   padding: '1.25rem',
@@ -439,7 +439,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
 
           // Render regular text paragraphs/headers
           return (
-            <div key={index} style={{ margin: '1rem 0' }}>
+            <div key={`${part.substring(0, 32)}-${index}`} style={{ margin: '1rem 0' }}>
               {part.split('\n\n').map((paragraph, pIdx) => {
                 if (paragraph.startsWith('# ')) {
                   return (

@@ -1,7 +1,7 @@
-import * as fs from "fs";
-import * as path from "path";
-import * as https from "https";
-import * as os from "os";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as https from "node:https";
+import * as os from "node:os";
 import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";

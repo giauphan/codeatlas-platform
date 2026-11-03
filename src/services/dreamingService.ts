@@ -216,7 +216,7 @@ export class DreamingService {
     };
     const base = typeBase[memoryType] ?? 0.50;
     // Importance boosts: imp 1-3 → -0.15, 4-6 → 0, 7-8 → +0.15, 9-10 → +0.25
-    const impBoost = importance >= 9 ? 0.25 : importance >= 7 ? 0.15 : importance <= 3 ? -0.15 : 0;
+    let impBoost = 0; if (importance >= 9) impBoost = 0.25; else if (importance >= 7) impBoost = 0.15; else if (importance <= 3) impBoost = -0.15;
     return Math.min(0.99, Math.max(0.05, base + impBoost));
   }
 

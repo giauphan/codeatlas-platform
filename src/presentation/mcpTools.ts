@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { checkAuth, logActivity } from "../services/authService.js";
 import {
   discoverProjectsAsync,
@@ -708,7 +708,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         entities: nodes.map((n) => ({
           name: n.label,
           type: n.type,
-          filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
+          filePath: (() => { if (!n.filePath) return null; return path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath); })(),
           line: n.line || null,
         })),
       };
@@ -874,7 +874,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           return {
             name: n.label,
             type: n.type,
-            filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
+            filePath: (() => { if (!n.filePath) return null; return path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath); })(),
             line: n.line || null,
             incomingRelationships: incomingLinks,
             outgoingRelationships: outgoingLinks,
@@ -940,7 +940,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         showing: filesEntries.length,
         truncated: byFile.size > filesEntries.length,
         files: filesEntries.map(([fp, entities]) => ({
-          filePath: fp === "unknown" ? "unknown" : (path.isAbsolute(fp) ? fp : path.resolve(loaded.projectDir, fp)),
+          filePath: (() => { if (fp === "unknown") return "unknown"; return path.isAbsolute(fp) ? fp : path.resolve(loaded.projectDir, fp); })(),
           entities: entities.map((e) => ({
             name: e.label,
             type: e.type,

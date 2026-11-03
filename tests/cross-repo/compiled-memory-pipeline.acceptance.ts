@@ -137,7 +137,7 @@ async function runHook(command: string, event: Record<string, unknown>, override
       else {
         const elapsedMs = Math.round(performance.now() - startedAt);
         assert.ok(elapsedMs <= hookCompletionBudgetMs, `Compiled ${command} hook exceeded the ${hookCompletionBudgetMs} ms canary completion budget`);
-        hookLatencySamples.push({ command: command === 'brain-context' ? 'brain-context' : command === 'brain-save' ? 'brain-save' : 'unknown', event_type: eventType, elapsed_ms: elapsedMs });
+        let cmdType = 'unknown'; if (command === 'brain-context') cmdType = 'brain-context'; else if (command === 'brain-save') cmdType = 'brain-save'; hookLatencySamples.push({ command: cmdType, event_type: eventType, elapsed_ms: elapsedMs });
         resolve({ stdout, stderr });
       }
     });
@@ -280,7 +280,11 @@ function quoteShell(value: string): string {
 
 function claudeFailure(result: { result?: string; subtype?: string; errors?: unknown[] }, code: number | null, stderrBytes: number): Error {
   const description = String(result.result || '') + JSON.stringify(result.errors || []);
-  const reason = /login|authenticat|oauth|expired|credential|invalid.?token/i.test(description) ? 'authentication' : /credit|billing|balance|budget/i.test(description) ? 'billing_or_budget' : /network|connect|ENOTFOUND|fetch|timeout/i.test(description) ? 'transport' : /unknown option|invalid.*settings|configuration|permission|not allowed|model/i.test(description) ? 'configuration' : 'unclassified';
+  let reason = 'unclassified';
+          if (/login|authenticat|oauth|expired|credential|invalid.?token/i.test(description)) reason = 'authentication';
+          else if (/credit|billing|balance|budget/i.test(description)) reason = 'billing_or_budget';
+          else if (/network|connect|ENOTFOUND|fetch|timeout/i.test(description)) reason = 'transport';
+          else if (/unknown option|invalid.*settings|configuration|permission|not allowed|model/i.test(description)) reason = 'configuration';
   const subtype = typeof result.subtype === 'string' && /^[a-zA-Z0-9_-]+$/.test(result.subtype) ? result.subtype : 'unknown';
   let safeDetail = description;
   for (const value of Object.values(providerEnv)) if (value) safeDetail = safeDetail.replaceAll(value, '[REDACTED]');

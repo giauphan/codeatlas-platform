@@ -1,13 +1,12 @@
 import React from 'react';
 
-export type CSSLength = string;
 
 interface KbdHintProps {
   id?: string;
   icon: '↵' | string;
   text: string;
-  top?: CSSLength;
-  right?: CSSLength;
+  top?: string;
+  right?: string;
   transform?: string;
 }
 

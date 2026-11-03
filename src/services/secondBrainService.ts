@@ -34,7 +34,7 @@ export class SecondBrainService {
         learnings: outcome.learnings || [],
         timestamp: new Date().toISOString(),
       }),
-      outcome.result === "failure" ? 10 : outcome.result === "success" ? 5 : 3
+      outcome.result === "failure" ? 10 : (outcome.result === "success" ? 5 : 3)
     );
     logger.info(`[SecondBrain] Outcome: ${outcome.task} → ${outcome.result}`);
     return dreamId;

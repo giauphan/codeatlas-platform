@@ -187,7 +187,7 @@ export class MemoryIngestionService {
       if (!sources.length) throw new Error('Missing source evidence');
       const source = sources[0];
       const key = digest(`${EXTRACTOR_VERSION}\0${sources.map(item => item.eventId).sort((left, right) =>
-        left < right ? -1 : left > right ? 1 : 0,
+        left < right ? -1 : (left > right ? 1 : 0),
       ).join('\0')}\0${memory.kind}\0${memory.content}`);
       const ack = await DreamingService.saveDreamMemoryWithAck({
         project: event.project, projectId, displayName: event.displayName, workspacePath: event.workspacePath,

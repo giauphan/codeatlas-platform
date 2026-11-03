@@ -1,9 +1,9 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import http from 'http';
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import http from "node:http";
 import { spawn } from 'child_process';
 import type { Express } from 'express';
 

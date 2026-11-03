@@ -3,8 +3,8 @@ import { IDatabaseAdapter, VectorSearchResult, WikiPageRecord } from "./interfac
 import { authStorage } from "../../utils/context.js";
 import { hashApiKey } from "../../utils/apiKey.js";
 import { logger } from "../../utils/logger.js";
-import * as path from "path";
-import * as os from "os";
+import * as path from "node:path";
+import * as os from "node:os";
 
 interface SqliteStatement {
   all(...params: unknown[]): unknown[];

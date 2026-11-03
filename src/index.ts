@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import "./env.js";
-import * as path from "path";
+import * as path from "node:path";
 
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import * as fs from "fs";
-import * as url from "url";
+import * as fs from "node:fs";
+import * as url from "node:url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 
 // Wire up adapters: MCP tools, REST routes, A2A, Genome.

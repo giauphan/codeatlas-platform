@@ -273,7 +273,10 @@ export function registerDreamingRoutes(app: express.Application): void {
         request_id: requestId,
         ...(result.id ? { memory_id: result.id } : {}),
       };
-      res.status(statusCode ?? (result.status === "rejected" ? 409 : result.status === "error" ? 500 : 200)).json(payload);
+      let code = 200;
+      if (result.status === "rejected") code = 409;
+      else if (result.status === "error") code = 500;
+      res.status(statusCode ?? code).json(payload);
     };
     try {
       const { apiKey, bearerToken } = extractAuth(req);

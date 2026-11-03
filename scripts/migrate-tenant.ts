@@ -1,7 +1,7 @@
 import "dotenv/config";
-import * as crypto from "crypto";
-import * as path from "path";
-import * as fs from "fs";
+import * as crypto from "node:crypto";
+import * as path from "node:path";
+import * as fs from "node:fs";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { createDatabaseAdapter } from "../src/database/factory.js";
