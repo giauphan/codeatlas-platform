@@ -1,5 +1,6 @@
 # Build output
 node_modules/
+.pnpm-store/
 dist/
 out/
 *.vsix

@@ -194,6 +194,66 @@ function forbiddenViolations(results: ExtractionResult[], fixture: ExtractionFix
   });
 }
 
+async function evaluateFixture(fixture: ExtractionFixture, extract: typeof summarizeConversationForDreams, options: EvaluationOptions, byLocale: Record<string, EvaluationBreakdown>, byKind: Record<string, EvaluationBreakdown>): Promise<FixtureOutcome> {
+  const allResults = (await extract(fixture.transcript, fixture.locale, `fixture-${fixture.id}`, fixture.id) ?? []) as ExtractionResult[];
+  const results = allResults.filter(result => result.status !== 'superseded');
+  const matched = new Set<number>();
+  let truePositives = 0;
+  let falseNegatives = 0;
+  let falsePositives = 0;
+  const expectationGroups = groupExpectations(fixture.expect);
+  const locale = byLocale[fixture.locale] ?? (byLocale[fixture.locale] = newBreakdown());
+  locale.fixtureCount += 1;
+  locale.expectedCount += expectationGroups.length;
+  locale.expectedFragmentCount += fixture.expect.length;
+  for (const kindName of new Set(expectationGroups.map((group) => group[0].kind))) {
+    const kind = byKind[kindName] ?? (byKind[kindName] = newBreakdown());
+    kind.fixtureCount += 1;
+  }
+
+  for (const group of expectationGroups) {
+    const expectation = group[0];
+    const kind = byKind[expectation.kind] ?? (byKind[expectation.kind] = newBreakdown());
+    kind.expectedCount += 1;
+    kind.expectedFragmentCount += group.length;
+    const index = results.findIndex((result, i) =>
+      !matched.has(i) && matchesExpectation(result, group, options.requireEvidenceAndCertainty !== false),
+    );
+    if (index < 0) {
+      falseNegatives++;
+      kind.falseNegatives++;
+    }
+    else {
+      matched.add(index);
+      truePositives++;
+      kind.truePositives++;
+    }
+  }
+
+  for (let index = 0; index < results.length; index += 1) {
+    if (matched.has(index)) continue;
+    falsePositives += 1;
+    const kindName = resultKind(results[index]) || 'UNKNOWN';
+    const kind = byKind[kindName] ?? (byKind[kindName] = newBreakdown());
+    kind.falsePositives += 1;
+  }
+  locale.truePositives += truePositives;
+  locale.falseNegatives += falseNegatives;
+  locale.falsePositives += falsePositives;
+
+  const violations = forbiddenViolations(allResults, fixture);
+  const groundingViolations = allResults.reduce((sum, result) => sum + groundingViolationCount(result, fixture), 0);
+
+  return {
+    id: fixture.id,
+    truePositives,
+    falseNegatives,
+    falsePositives,
+    violations,
+    groundingViolations,
+  };
+}
+
 export async function evaluateFixtures(
   fixtures: ExtractionFixture[],
   extract: typeof summarizeConversationForDreams,
@@ -203,65 +263,10 @@ export async function evaluateFixtures(
   const byLocale: Record<string, EvaluationBreakdown> = {};
   const byKind: Record<string, EvaluationBreakdown> = {};
 
-  for (const fixture of fixtures) {
-    const allResults = (await extract(fixture.transcript, fixture.locale, `fixture-${fixture.id}`, fixture.id) ?? []) as ExtractionResult[];
-    const results = allResults.filter(result => result.status !== 'superseded');
-    const matched = new Set<number>();
-    let truePositives = 0;
-    let falseNegatives = 0;
-    let falsePositives = 0;
-    const expectationGroups = groupExpectations(fixture.expect);
-    const locale = byLocale[fixture.locale] ?? (byLocale[fixture.locale] = newBreakdown());
-    locale.fixtureCount += 1;
-    locale.expectedCount += expectationGroups.length;
-    locale.expectedFragmentCount += fixture.expect.length;
-    for (const kindName of new Set(expectationGroups.map((group) => group[0].kind))) {
-      const kind = byKind[kindName] ?? (byKind[kindName] = newBreakdown());
-      kind.fixtureCount += 1;
-    }
-
-    for (const group of expectationGroups) {
-      const expectation = group[0];
-      const kind = byKind[expectation.kind] ?? (byKind[expectation.kind] = newBreakdown());
-      kind.expectedCount += 1;
-      kind.expectedFragmentCount += group.length;
-      const index = results.findIndex((result, i) =>
-        !matched.has(i) && matchesExpectation(result, group, options.requireEvidenceAndCertainty !== false),
-      );
-      if (index < 0) {
-        falseNegatives++;
-        kind.falseNegatives++;
-      }
-      else {
-        matched.add(index);
-        truePositives++;
-        kind.truePositives++;
-      }
-    }
-
-    for (let index = 0; index < results.length; index += 1) {
-      if (matched.has(index)) continue;
-      falsePositives += 1;
-      const kindName = resultKind(results[index]) || 'UNKNOWN';
-      const kind = byKind[kindName] ?? (byKind[kindName] = newBreakdown());
-      kind.falsePositives += 1;
-    }
-    locale.truePositives += truePositives;
-    locale.falseNegatives += falseNegatives;
-    locale.falsePositives += falsePositives;
-
-    const violations = forbiddenViolations(allResults, fixture);
-    const groundingViolations = allResults.reduce((sum, result) => sum + groundingViolationCount(result, fixture), 0);
-
-    outcomes.push({
-      id: fixture.id,
-      truePositives,
-      falseNegatives,
-      falsePositives,
-      violations,
-      groundingViolations,
-    });
-  }
+  // Extractors may share provider state, so retain fixture order and avoid concurrent calls.
+  await fixtures.reduce<Promise<void>>((previous, fixture) => previous.then(async () => {
+    outcomes.push(await evaluateFixture(fixture, extract, options, byLocale, byKind));
+  }), Promise.resolve());
 
   const truePositives = outcomes.reduce((sum, item) => sum + item.truePositives, 0);
   const falseNegatives = outcomes.reduce((sum, item) => sum + item.falseNegatives, 0);

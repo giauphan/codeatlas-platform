@@ -198,39 +198,31 @@ export class WikiService {
 
       await this.dbAdapter.saveWikiPage(record);
 
-      if (options.exportToDisk) {
-        // Sanitize path for file system: prevent traversal and ensure .md extension
-        // e.g. /modules/services -> modules/services.md
-        const normalizedPath = path.normalize(pageDef.path);
-        const safePath = normalizedPath.replace(/^([\\\/]|(\.\.[\/\\]))+/, '');
-        const fullPath = path.resolve(exportBaseDir, `${safePath}.md`);
-
-        if (!fullPath.startsWith(exportBaseDir)) {
-          throw new Error('Invalid wiki page path mapping');
-        }
-
-        const dirPath = path.dirname(fullPath);
-        if (!fs.existsSync(dirPath)) {
-          fs.mkdirSync(dirPath, { recursive: true });
-        }
-        fs.writeFileSync(fullPath, content, 'utf8');
-      }
+      if (options.exportToDisk) this.exportPage(exportBaseDir, pageDef.path, content);
     }
 
     return this.getWikiTree(projectName, tenantId);
   }
 
-  async getWikiTree(projectName: string, tenantId: string = 'default'): Promise<WikiTreeResponse> {
-    const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
+  private exportPage(exportBaseDir: string, pagePath: string, content: string): void {
+    // Sanitize path for file system: prevent traversal and ensure .md extension
+    // e.g. /modules/services -> modules/services.md
+    const normalizedPath = path.normalize(pagePath);
+    const safePath = normalizedPath.replace(/^([\\\/]|(\.\.[\/\\]))+/, '');
+    const fullPath = path.resolve(exportBaseDir, `${safePath}.md`);
 
-    if (pages.length === 0) {
-      return {
-        projectName,
-        root: [],
-        totalPages: 0,
-      };
+    if (!fullPath.startsWith(exportBaseDir)) {
+      throw new Error('Invalid wiki page path mapping');
     }
 
+    const dirPath = path.dirname(fullPath);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    fs.writeFileSync(fullPath, content, 'utf8');
+  }
+
+  private createWikiNodeMap(pages: WikiPageRecord[]): Map<string, WikiNode> {
     // Map DB records to WikiNodes
     const nodeMap = new Map<string, WikiNode>();
     for (const page of pages) {
@@ -257,23 +249,11 @@ export class WikiService {
       }
     }
 
+    return nodeMap;
+  }
+
+  private linkWikiNodes(pages: WikiPageRecord[], nodeMap: Map<string, WikiNode>): WikiNode[] {
     const root: WikiNode[] = [];
-    const synthesizedPaths = new Set<string>();
-
-    for (const page of pages) {
-      if (page.parent_path && !nodeMap.has(page.parent_path)) {
-        const segment = page.parent_path.slice(page.parent_path.lastIndexOf('/') + 1);
-        const title = segment ? segment.charAt(0).toUpperCase() + segment.slice(1) : page.parent_path;
-
-        nodeMap.set(page.parent_path, {
-          path: page.parent_path,
-          title,
-          children: [],
-        });
-        synthesizedPaths.add(page.parent_path);
-      }
-    }
-
     // Link children to parents and collect root nodes in a single pass O(N)
     for (const page of pages) {
       const node = nodeMap.get(page.path)!;
@@ -284,17 +264,19 @@ export class WikiService {
       }
     }
 
-    // Handle synthesized parents connection
-    for (const synthPath of synthesizedPaths) {
-      const node = nodeMap.get(synthPath)!;
-      const parentPath = this.extractParentPath(synthPath);
-      if (parentPath && nodeMap.has(parentPath)) {
-         nodeMap.get(parentPath)!.children!.push(node);
-      } else {
-         root.push(node);
-      }
+    const pagePaths = new Set(pages.map(page => page.path));
+    for (const [nodePath, node] of nodeMap) {
+      if (pagePaths.has(nodePath)) continue;
+      const parentPath = nodePath.slice(0, nodePath.lastIndexOf('/'));
+      const parent = nodeMap.get(parentPath);
+      if (parent) parent.children!.push(node);
+      else root.push(node);
     }
 
+    return root;
+  }
+
+  private sortWikiNodes(pages: WikiPageRecord[], nodeMap: Map<string, WikiNode>, root: WikiNode[]): string | undefined {
     // Single look-up map for order
     const orderMap = new Map<string, number>();
     for (const page of pages) orderMap.set(page.path, page.order_index ?? 999);
@@ -323,6 +305,26 @@ export class WikiService {
         lastGeneratedAt = current.updated_at;
       }
     }
+
+    return lastGeneratedAt;
+  }
+
+  async getWikiTree(projectName: string, tenantId: string = 'default'): Promise<WikiTreeResponse> {
+    const pages = await this.dbAdapter.listWikiPages(projectName, tenantId);
+
+    if (pages.length === 0) {
+      return {
+        projectName,
+        root: [],
+        totalPages: 0,
+      };
+    }
+
+    const nodeMap = this.createWikiNodeMap(pages);
+
+    const root = this.linkWikiNodes(pages, nodeMap);
+
+    const lastGeneratedAt = this.sortWikiNodes(pages, nodeMap, root);
 
     return {
       projectName,
@@ -432,10 +434,4 @@ export class WikiService {
     return { pages: results };
   }
 
-  private extractParentPath(pathStr: string): string | undefined {
-    const parts = pathStr.split('/').filter(Boolean);
-    if (parts.length <= 1) return undefined;
-    parts.pop();
-    return '/' + parts.join('/');
-  }
 }

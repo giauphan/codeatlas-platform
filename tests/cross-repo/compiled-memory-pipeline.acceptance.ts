@@ -278,6 +278,16 @@ function quoteShell(value: string): string {
   return "'" + value.replaceAll("'", "'\\''") + "'";
 }
 
+function claudeFailure(result: { result?: string; subtype?: string; errors?: unknown[] }, code: number | null, stderrBytes: number): Error {
+  const description = String(result.result || '') + JSON.stringify(result.errors || []);
+  const reason = /login|authenticat|oauth|expired|credential|invalid.?token/i.test(description) ? 'authentication' : /credit|billing|balance|budget/i.test(description) ? 'billing_or_budget' : /network|connect|ENOTFOUND|fetch|timeout/i.test(description) ? 'transport' : /unknown option|invalid.*settings|configuration|permission|not allowed|model/i.test(description) ? 'configuration' : 'unclassified';
+  const subtype = typeof result.subtype === 'string' && /^[a-zA-Z0-9_-]+$/.test(result.subtype) ? result.subtype : 'unknown';
+  let safeDetail = description;
+  for (const value of Object.values(providerEnv)) if (value) safeDetail = safeDetail.replaceAll(value, '[REDACTED]');
+  safeDetail = safeDetail.replace(/https?:\/\/[^\s"']+/gi, '[PROVIDER_URL]').replace(/(token|api[_-]?key|secret|password)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]').slice(0, 500);
+  return new Error(`Claude canary did not complete (exit=${code}, reason=${reason}, subtype=${subtype}, stderr_bytes=${stderrBytes}, detail=${safeDetail})`);
+}
+
 async function runClaude(prompt: string, settings: string, tools: string): Promise<string> {
   const env: NodeJS.ProcessEnv = {
     PATH: process.env.PATH,
@@ -302,13 +312,7 @@ async function runClaude(prompt: string, settings: string, tools: string): Promi
       let result: { is_error?: boolean; result?: string; subtype?: string; errors?: unknown[] };
       try { result = JSON.parse(stdout); } catch { reject(new Error(`Claude produced no JSON result (exit=${code}, stdout_bytes=${stdout.length}, stderr_bytes=${stderrBytes})`)); return; }
       if (code !== 0 || result.is_error || typeof result.result !== 'string') {
-        const description = String(result.result || '') + JSON.stringify(result.errors || []);
-        const reason = /login|authenticat|oauth|expired|credential|invalid.?token/i.test(description) ? 'authentication' : /credit|billing|balance|budget/i.test(description) ? 'billing_or_budget' : /network|connect|ENOTFOUND|fetch|timeout/i.test(description) ? 'transport' : /unknown option|invalid.*settings|configuration|permission|not allowed|model/i.test(description) ? 'configuration' : 'unclassified';
-        const subtype = typeof result.subtype === 'string' && /^[a-zA-Z0-9_-]+$/.test(result.subtype) ? result.subtype : 'unknown';
-        let safeDetail = description;
-        for (const value of Object.values(providerEnv)) if (value) safeDetail = safeDetail.replaceAll(value, '[REDACTED]');
-        safeDetail = safeDetail.replace(/https?:\/\/[^\s"']+/gi, '[PROVIDER_URL]').replace(/(token|api[_-]?key|secret|password)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]').slice(0, 500);
-        reject(new Error(`Claude canary did not complete (exit=${code}, reason=${reason}, subtype=${subtype}, stderr_bytes=${stderrBytes}, detail=${safeDetail})`));
+        reject(claudeFailure(result, code, stderrBytes));
       }
       else resolve(result.result);
     });

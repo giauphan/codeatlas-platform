@@ -6,6 +6,7 @@ import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
+import pLimit from "p-limit";
 
 const FILE_EXISTS_CONCURRENCY = 50;
 
@@ -109,6 +110,36 @@ const IDE_DIR_CACHE_MAX_SIZE = 1000;
 // TTL ensures entries that haven't been accessed for 60s expire
 const CACHE_TTL_MS = 60000;
 
+function detectSystemIdeDirectory(absPath: string): boolean {
+  let isIde = false;
+
+  if (absPath === "/config/Downloads/Antigravity" || absPath.startsWith("/config/Downloads/Antigravity/")) {
+    isIde = true;
+  } else if (absPath === cachedDynamicAntigravityPath || absPath.startsWith(cachedDynamicAntigravityPath + path.sep)) {
+    isIde = true;
+  } else if (absPath === cachedHomeDir || absPath === "/" || absPath === "/config") {
+    isIde = true;
+  } else {
+    const parts = absPath.split(path.sep);
+    if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas' && part !== '.claude')) {
+      isIde = true;
+    } else if (
+      (() => {
+        const extPath = path.join(absPath, "resources", "app", "extensions");
+        const relExt = path.relative(absPath, extPath);
+        const vsPath = path.join(absPath, "resources", "app", "out", "vs");
+        const relVs = path.relative(absPath, vsPath);
+        return (!relExt.startsWith("..") && !path.isAbsolute(relExt) && fs.existsSync(extPath)) ||
+               (!relVs.startsWith("..") && !path.isAbsolute(relVs) && fs.existsSync(vsPath));
+      })()
+    ) {
+      isIde = true;
+    }
+  }
+
+  return isIde;
+}
+
 export function isSystemIdeDirectory(dir: string): boolean {
   try {
     const trimmedDir = dir.trim();
@@ -119,7 +150,7 @@ export function isSystemIdeDirectory(dir: string): boolean {
       return false;
     }
     const now = Date.now();
-    
+
     // ⚡ Bolt: LRU-style access and TTL cache check
     if (ideDirCache.has(absPath)) {
       const entry = ideDirCache.get(absPath)!;
@@ -133,31 +164,7 @@ export function isSystemIdeDirectory(dir: string): boolean {
       ideDirCache.delete(absPath);
     }
 
-    let isIde = false;
-
-    if (absPath === "/config/Downloads/Antigravity" || absPath.startsWith("/config/Downloads/Antigravity/")) {
-      isIde = true;
-    } else if (absPath === cachedDynamicAntigravityPath || absPath.startsWith(cachedDynamicAntigravityPath + path.sep)) {
-      isIde = true;
-    } else if (absPath === cachedHomeDir || absPath === "/" || absPath === "/config") {
-      isIde = true;
-    } else {
-      const parts = absPath.split(path.sep);
-      if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas' && part !== '.claude')) {
-        isIde = true;
-      } else if (
-        (() => {
-          const extPath = path.join(absPath, "resources", "app", "extensions");
-          const relExt = path.relative(absPath, extPath);
-          const vsPath = path.join(absPath, "resources", "app", "out", "vs");
-          const relVs = path.relative(absPath, vsPath);
-          return (!relExt.startsWith("..") && !path.isAbsolute(relExt) && fs.existsSync(extPath)) ||
-                 (!relVs.startsWith("..") && !path.isAbsolute(relVs) && fs.existsSync(vsPath));
-        })()
-      ) {
-        isIde = true;
-      }
-    }
+    const isIde = detectSystemIdeDirectory(absPath);
 
     // ⚡ Bolt: Manage cache size (evict least recently used)
     if (ideDirCache.size > IDE_DIR_CACHE_MAX_SIZE) {
@@ -417,42 +424,40 @@ export async function unregisterProjectAsync(dir: string): Promise<void> {
   }
 }
 
+function scanProjectChildren(parentDir: string, discovered: string[]): void {
+  const entries = fs.readdirSync(parentDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!isScanableDirectory(entry)) continue;
+    const subPath = path.join(parentDir, entry.name);
+    if (fs.existsSync(path.join(subPath, ".codeatlas"))) discovered.push(path.resolve(subPath));
+    else scanProjectGrandchildren(subPath, discovered);
+  }
+}
+
+function scanProjectGrandchildren(parentDir: string, discovered: string[]): void {
+  try {
+    for (const entry of fs.readdirSync(parentDir, { withFileTypes: true })) {
+      if (!isScanableDirectory(entry)) continue;
+      const child = path.join(parentDir, entry.name);
+      if (fs.existsSync(path.join(child, ".codeatlas"))) discovered.push(path.resolve(child));
+    }
+  } catch { /* skip */ }
+}
+
 export function scanForCodeatlasProjects(parentDir: string): string[] {
   const discovered: string[] = [];
   try {
     if (!fs.existsSync(parentDir) || !fs.statSync(parentDir).isDirectory()) {
       return [];
     }
-    
+
     // If the directory itself contains .codeatlas, it is a project
     if (fs.existsSync(path.join(parentDir, ".codeatlas"))) {
       discovered.push(path.resolve(parentDir));
       return discovered;
     }
-    
-    // Otherwise, scan subdirectories up to 2 levels deep
-    const entries = fs.readdirSync(parentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
-        const subPath = path.join(parentDir, entry.name);
-        if (fs.existsSync(path.join(subPath, ".codeatlas"))) {
-          discovered.push(path.resolve(subPath));
-        } else {
-          // Check 2nd level
-          try {
-            const subEntries = fs.readdirSync(subPath, { withFileTypes: true });
-            for (const subEntry of subEntries) {
-              if (subEntry.isDirectory() && subEntry.name !== "node_modules" && !subEntry.name.startsWith(".")) {
-                const subSubPath = path.join(subPath, subEntry.name);
-                if (fs.existsSync(path.join(subSubPath, ".codeatlas"))) {
-                  discovered.push(path.resolve(subSubPath));
-                }
-              }
-            }
-          } catch { /* skip */ }
-        }
-      }
-    }
+
+    scanProjectChildren(parentDir, discovered);
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to scan for .codeatlas projects: ${extractErrorMessage(err)}`);
   }
@@ -480,12 +485,12 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
     if (!parentStat.isDirectory()) {
       return [];
     }
-    
+
     if (await fileExists(path.join(parentDir, ".codeatlas"))) {
       discovered.push(path.resolve(parentDir));
       return discovered;
     }
-    
+
     const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
 
     /** Default limits for parallel fs checks */
@@ -554,178 +559,162 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
   return discovered;
 }
 
+async function appendProjectDirectories(parent: string, searchDirs: string[]): Promise<void> {
+  if (!await fileExists(parent)) return;
+  try {
+    const entries = await fs.promises.readdir(parent, { withFileTypes: true });
+    for (const entry of entries) {
+      if (isValidDirectory(entry)) searchDirs.push(path.join(parent, entry.name));
+    }
+  } catch { /* Skip non-accessible directories */ }
+}
+
+async function appendOtherTenants(tenantRoot: string, tenantId: string | undefined, searchDirs: string[]): Promise<void> {
+  if (!await fileExists(tenantRoot)) return;
+  try {
+    const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
+    const limit = pLimit(FILE_EXISTS_CONCURRENCY);
+    await Promise.all(tenants.map(tenant => limit(async () => {
+      if (tenant.name === tenantId || !isValidDirectory(tenant)) return;
+      const tenantDir = path.join(tenantRoot, tenant.name);
+      try {
+        const projects = await fs.promises.readdir(tenantDir, { withFileTypes: true });
+        for (const project of projects) {
+          if (isValidDirectory(project)) searchDirs.push(path.join(tenantDir, project.name));
+        }
+      } catch { /* Skip non-accessible directories */ }
+    })));
+  } catch { /* skip */ }
+}
+
+async function collectTenantSearchDirs(tenantId: string | undefined, searchDirs: string[]): Promise<boolean> {
+  const auth = authStorage.getStore();
+  const isSystemAdmin = auth ? (auth.uid === "admin" || auth.role === "admin") : tenantId === "admin";
+  const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+  if (tenantId) await appendProjectDirectories(path.join(tenantRoot, tenantId), searchDirs);
+  if (isSystemAdmin) {
+    if (process.env.CODEATLAS_PROJECT_DIR) searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
+    if (process.env.CODEATLAS_MULTI_TENANT !== "true") searchDirs.push(process.cwd());
+    await appendOtherTenants(process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants"), tenantId, searchDirs);
+  }
+  return !!tenantId || isSystemAdmin;
+}
+
+async function filterRegisteredProjects(registered: string[], regPath: string): Promise<string[]> {
+  let updated = false;
+  const filtered = registered.filter(dir => {
+    if (isSystemIdeDirectory(dir)) {
+      updated = true;
+      return false;
+    }
+    return true;
+  });
+  if (updated) await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
+  return filtered;
+}
+
+async function appendRegisteredProjects(searchDirs: string[]): Promise<void> {
+  // Load globally registered projects
+  try {
+    const homeDir = os.homedir();
+    const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
+
+    let registered: unknown = [];
+    try {
+      const data = await fs.promises.readFile(regPath, "utf-8");
+      registered = JSON.parse(data);
+    } catch {
+      // Missing or malformed registrations leave the list empty.
+      registered = [];
+    }
+
+    if (registered) {
+      if (Array.isArray(registered)) {
+        const filtered = await filterRegisteredProjects(registered, regPath);
+        for (const dir of filtered) {
+          if (await fileExists(dir)) {
+            searchDirs.push(dir);
+          }
+        }
+      }
+    }
+  } catch { /* skip */ }
+}
+
+async function collectCommonLocalSearchDirs(searchDirs: string[]): Promise<void> {
+  if (process.env.CODEATLAS_PROJECT_DIR) {
+    searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
+  }
+
+  // Dynamically search process.cwd() for any projects configured with .codeatlas
+  const localProjects = await scanForCodeatlasProjectsAsync(process.cwd());
+  searchDirs.push(...localProjects);
+
+  // Fallback to process.cwd() if no subprojects were found with .codeatlas configuration
+  if (!searchDirs.includes(process.cwd())) {
+    searchDirs.push(process.cwd());
+  }
+
+  await appendProjectDirectories(path.join(process.cwd(), "projects"), searchDirs);
+
+}
+
+async function collectLocalSearchDirs(searchDirs: string[]): Promise<void> {
+  await collectCommonLocalSearchDirs(searchDirs);
+  await appendRegisteredProjects(searchDirs);
+}
+
+async function inspectAnalysisProject(dir: string): Promise<AnalysisProject | null> {
+  if (!await isProjectDirectoryAsync(dir)) return null;
+  try {
+    const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
+    let modifiedAt: Date;
+    try {
+      modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+        modifiedAt = (await fs.promises.stat(dir)).mtime;
+      } else {
+        throw err;
+      }
+    }
+    return {
+      name: path.basename(dir),
+      dir,
+      analysisPath,
+      modifiedAt,
+    };
+  } catch { /* skip */ }
+  return null;
+}
+
 export async function discoverProjects(tenantId?: string): Promise<{ name: string; dir: string; analysisPath: string; modifiedAt: Date }[]> {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
   const searchDirs: string[] = [];
-  // Multi-Tenant Isolation
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
-    const auth = authStorage.getStore();
-    const isSystemAdmin = auth
-      ? (auth.uid === "admin" || auth.role === "admin")
-      : (tenantId === "admin");
-
-    // 1. If tenantId is provided, always add the tenant's own projects
-    if (tenantId) {
-      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
-      const userDir = path.join(tenantRoot, tenantId);
-      if (await fileExists(userDir)) {
-        try {
-          // ⚡ Bolt: Using { withFileTypes: true } to get fs.Dirent objects directly from readdir,
-          // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
-          const userProjects = await fs.promises.readdir(userDir, { withFileTypes: true });
-          for (const p of userProjects) {
-            if (isValidDirectory(p)) {
-              searchDirs.push(path.join(userDir, p.name));
-            }
-          }
-        } catch { /* Skip non-accessible directories */ }
-      }
-    }
-
-    // 2. If system admin, also add system-wide and all tenants' directories
-    if (isSystemAdmin) {
-      if (process.env.CODEATLAS_PROJECT_DIR) {
-        searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
-      }
-      if (process.env.CODEATLAS_MULTI_TENANT !== "true") {
-        searchDirs.push(process.cwd());
-      }
-
-      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
-      if (await fileExists(tenantRoot)) {
-        try {
-          const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
-          for (let i = 0; i < tenants.length; i += FILE_EXISTS_CONCURRENCY) {
-            const chunk = tenants.slice(i, i + FILE_EXISTS_CONCURRENCY);
-            await Promise.all(chunk.map(async (t) => {
-              if (t.name === tenantId) return;
-              const tDir = path.join(tenantRoot, t.name);
-              if (isValidDirectory(t)) {
-                try {
-                  const tProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
-                  for (const p of tProjects) {
-                    if (isValidDirectory(p)) {
-                      searchDirs.push(path.join(tDir, p.name));
-                    }
-                  }
-                } catch { /* Skip non-accessible directories */ }
-              }
-            }));
-          }
-        } catch { /* skip */ }
-      }
-    }
-
-    if (!tenantId && !isSystemAdmin) {
-      return [];
-    }
+    if (!await collectTenantSearchDirs(tenantId, searchDirs)) return [];
   } else {
-    if (process.env.CODEATLAS_PROJECT_DIR) {
-      searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
-    }
-    
-    // Dynamically search process.cwd() for any projects configured with .codeatlas
-    const localProjects = await scanForCodeatlasProjectsAsync(process.cwd());
-    searchDirs.push(...localProjects);
-    
-    // Fallback to process.cwd() if no subprojects were found with .codeatlas configuration
-    if (!searchDirs.includes(process.cwd())) {
-      searchDirs.push(process.cwd());
-    }
-
-    const projectsDir = path.join(process.cwd(), "projects");
-    if (await fileExists(projectsDir)) {
-      try {
-        const subDirs = await fs.promises.readdir(projectsDir, { withFileTypes: true });
-        for (const p of subDirs) {
-          if (isValidDirectory(p)) {
-            searchDirs.push(path.join(projectsDir, p.name));
-          }
-        }
-      } catch { /* Skip non-accessible directories */ }
-    }
-
-    // Load globally registered projects
-    try {
-      const homeDir = os.homedir();
-      const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
-
-      let registered: any = [];
-      try {
-        const data = await fs.promises.readFile(regPath, "utf-8");
-        registered = JSON.parse(data);
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') {
-          // Keep old behavior: swallow parse errors gracefully
-          registered = [];
-        }
-      }
-
-      if (registered) {
-        if (Array.isArray(registered)) {
-          let updated = false;
-          const filtered = registered.filter((dir) => {
-            if (isSystemIdeDirectory(dir)) {
-              updated = true;
-              return false;
-            }
-            return true;
-          });
-          if (updated) {
-            await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
-          }
-          for (const dir of filtered) {
-            if (await fileExists(dir)) {
-              searchDirs.push(dir);
-            }
-          }
-        }
-      }
-    } catch { /* skip */ }
+    await collectLocalSearchDirs(searchDirs);
   }
 
   const seen = new Set<string>();
-  for (const dir of searchDirs) {
-    if (seen.has(dir)) continue;
+  const uniqueDirs = searchDirs.filter(dir => {
+    if (seen.has(dir)) return false;
     seen.add(dir);
-    if (isSystemIdeDirectory(dir)) continue;
-
-    if (await isProjectDirectoryAsync(dir)) {
-      try {
-        const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
-        let modifiedAt: Date;
-        // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before statSync
-        try {
-          modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
-        } catch (err: any) {
-          if (err.code === 'ENOENT') {
-            modifiedAt = (await fs.promises.stat(dir)).mtime;
-          } else {
-            throw err;
-          }
-        }
-        projects.push({
-          name: path.basename(dir),
-          dir,
-          analysisPath,
-          modifiedAt,
-        });
-      } catch { /* skip */ }
-    }
-  }
+    return !isSystemIdeDirectory(dir);
+  });
+  const limit = pLimit(FILE_EXISTS_CONCURRENCY);
+  const inspected = await Promise.all(uniqueDirs.map(dir => limit(() => inspectAnalysisProject(dir))));
+  projects.push(...inspected.filter((project): project is AnalysisProject => project !== null));
 
   projects.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime());
   return projects;
 }
 
-export async function loadAnalysis(projectDir?: string, force = false): Promise<{ analysis: AnalysisResult; projectName: string; projectDir: string } | null> {
-  const auth = authStorage.getStore();
-  const tenantId = auth ? auth.uid : undefined;
-  
-  const projects = await discoverProjects(tenantId);
-  if (projects.length === 0) return null;
+type AnalysisProject = { name: string; dir: string; analysisPath: string; modifiedAt: Date };
 
-  let target: { name: string; dir: string; analysisPath: string; modifiedAt: Date } | undefined = projects[0];
+async function selectAnalysisTarget(projects: AnalysisProject[], projectDir: string | undefined, tenantId: string | undefined): Promise<AnalysisProject | null> {
+  let target: AnalysisProject | undefined = projects[0];
 
   if (projectDir) {
     const absPath = path.resolve(projectDir);
@@ -759,6 +748,19 @@ export async function loadAnalysis(projectDir?: string, force = false): Promise<
     });
   }
 
+  return target ?? null;
+}
+
+export async function loadAnalysis(projectDir?: string, force = false): Promise<{ analysis: AnalysisResult; projectName: string; projectDir: string } | null> {
+  const auth = authStorage.getStore();
+  const tenantId = auth ? auth.uid : undefined;
+
+  const projects = await discoverProjects(tenantId);
+  if (projects.length === 0) return null;
+
+  const target = await selectAnalysisTarget(projects, projectDir, tenantId);
+  if (!target) return null;
+
   try {
     if (onProjectLoadedCallback) {
       onProjectLoadedCallback(target.dir);
@@ -783,139 +785,51 @@ export async function loadAnalysis(projectDir?: string, force = false): Promise<
   }
 }
 
+async function appendRegisteredProjectsAsync(searchDirs: string[]): Promise<void> {
+  // Load globally registered projects
+  try {
+    const homeDir = os.homedir();
+    const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
+    if (await fileExists(regPath)) {
+      const data = await fs.promises.readFile(regPath, "utf-8");
+      const registered = JSON.parse(data);
+      if (Array.isArray(registered)) {
+        const filtered = await filterRegisteredProjects(registered, regPath);
+        // Chunked to avoid EMFILE while reducing sequential I/O latency
+        for (let i = 0; i < filtered.length; i += FILE_EXISTS_CONCURRENCY) {
+          const chunk = filtered.slice(i, i + FILE_EXISTS_CONCURRENCY);
+          const results = await Promise.all(
+            chunk.map((dir) => fileExists(dir).then((ok) => (ok ? dir : null)))
+          );
+          searchDirs.push(...results.filter((result): result is string => result !== null));
+        }
+      }
+    }
+  } catch { /* skip */ }
+}
+
+async function collectLocalSearchDirsAsync(searchDirs: string[]): Promise<void> {
+  await collectCommonLocalSearchDirs(searchDirs);
+  await appendRegisteredProjectsAsync(searchDirs);
+
+  // Add all git repos discovered by the indexing service
+  const indexedProjectDirs = indexingService.getProjectDirs();
+  if (indexedProjectDirs.length > 0) {
+    for (const dir of indexedProjectDirs) {
+      if (!searchDirs.includes(dir)) {
+        searchDirs.push(dir);
+      }
+    }
+  }
+}
+
 export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: string; dir: string; analysisPath: string; modifiedAt: Date }[]> {
   const projects: { name: string; dir: string; analysisPath: string; modifiedAt: Date }[] = [];
   const searchDirs: string[] = [];
-  // Multi-Tenant Isolation
   if (process.env.CODEATLAS_MULTI_TENANT === "true") {
-    const auth = authStorage.getStore();
-    const isSystemAdmin = auth
-      ? (auth.uid === "admin" || auth.role === "admin")
-      : (tenantId === "admin");
-
-    // 1. If tenantId is provided, always add the tenant's own projects
-    if (tenantId) {
-      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
-      const userDir = path.join(tenantRoot, tenantId);
-      if (await fileExists(userDir)) {
-        try {
-          // ⚡ Bolt: Using { withFileTypes: true } to get fs.Dirent objects directly from readdir,
-          // avoiding N separate expensive fs.stat() system calls to check for isDirectory().
-          const userProjects = await fs.promises.readdir(userDir, { withFileTypes: true });
-          for (const p of userProjects) {
-            if (isValidDirectory(p)) {
-              searchDirs.push(path.join(userDir, p.name));
-            }
-          }
-        } catch { /* Skip non-accessible directories */ }
-      }
-    }
-
-    // 2. If system admin, also add system-wide and all tenants' directories
-    if (isSystemAdmin) {
-      if (process.env.CODEATLAS_PROJECT_DIR) {
-        searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
-      }
-      if (process.env.CODEATLAS_MULTI_TENANT !== "true") {
-        searchDirs.push(process.cwd());
-      }
-
-      const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
-      if (await fileExists(tenantRoot)) {
-        try {
-          const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
-          // ⚡ Bolt: Chunked concurrency for multi-tenant directory scanning
-          // to prevent EMFILE exceptions and N+1 latency spikes when there are thousands of tenants.
-          for (let i = 0; i < tenants.length; i += FILE_EXISTS_CONCURRENCY) {
-            const chunk = tenants.slice(i, i + FILE_EXISTS_CONCURRENCY);
-            await Promise.all(chunk.map(async (t) => {
-              if (t.name === tenantId) return;
-              const tDir = path.join(tenantRoot, t.name);
-              if (isValidDirectory(t)) {
-                try {
-                  const teamProjects = await fs.promises.readdir(tDir, { withFileTypes: true });
-                  for (const p of teamProjects) {
-                    if (isValidDirectory(p)) {
-                      searchDirs.push(path.join(tDir, p.name));
-                    }
-                  }
-                } catch { /* Skip non-accessible directories */ }
-              }
-            }));
-          }
-        } catch { /* skip */ }
-      }
-    }
-
-    if (!tenantId && !isSystemAdmin) {
-      return [];
-    }
+    if (!await collectTenantSearchDirs(tenantId, searchDirs)) return [];
   } else {
-    if (process.env.CODEATLAS_PROJECT_DIR) {
-      searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
-    }
-    
-    // Dynamically search process.cwd() for any projects configured with .codeatlas
-    const localProjects = await scanForCodeatlasProjectsAsync(process.cwd());
-    searchDirs.push(...localProjects);
-    
-    // Fallback to process.cwd() if no subprojects were found with .codeatlas configuration
-    if (!searchDirs.includes(process.cwd())) {
-      searchDirs.push(process.cwd());
-    }
-
-    const projectsDir = path.join(process.cwd(), "projects");
-    if (await fileExists(projectsDir)) {
-      try {
-        const subDirectories = await fs.promises.readdir(projectsDir, { withFileTypes: true });
-        for (const p of subDirectories) {
-          if (isValidDirectory(p)) {
-            searchDirs.push(path.join(projectsDir, p.name));
-          }
-        }
-      } catch { /* Skip non-accessible directories */ }
-    }
-
-    // Load globally registered projects
-    try {
-      const homeDir = os.homedir();
-      const regPath = path.join(homeDir, ".codeatlas", "registered_projects.json");
-      if (await fileExists(regPath)) {
-        const data = await fs.promises.readFile(regPath, "utf-8");
-        const registered = JSON.parse(data);
-        if (Array.isArray(registered)) {
-          let updated = false;
-          const filtered = registered.filter((dir) => {
-            if (isSystemIdeDirectory(dir)) {
-              updated = true;
-              return false;
-            }
-            return true;
-          });
-          if (updated) {
-            await fs.promises.writeFile(regPath, JSON.stringify(filtered, null, 2));
-          }
-          // Chunked to avoid EMFILE while reducing sequential I/O latency
-          for (let i = 0; i < filtered.length; i += FILE_EXISTS_CONCURRENCY) {
-            const chunk = filtered.slice(i, i + FILE_EXISTS_CONCURRENCY);
-            const results = await Promise.all(
-              chunk.map((dir) => fileExists(dir).then((ok) => (ok ? dir : null)))
-            );
-            searchDirs.push(...results.filter((result): result is string => result !== null));
-          }
-        }
-      }
-    } catch { /* skip */ }
-
-    // Add all git repos discovered by the indexing service
-    const indexedProjectDirs = indexingService.getProjectDirs();
-    if (indexedProjectDirs.length > 0) {
-      for (const dir of indexedProjectDirs) {
-        if (!searchDirs.includes(dir)) {
-          searchDirs.push(dir);
-        }
-      }
-    }
+    await collectLocalSearchDirsAsync(searchDirs);
   }
 
   const seen = new Set<string>();
@@ -929,30 +843,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
   for (let i = 0; i < uniqueDirs.length; i += chunkSize) {
     const chunk = uniqueDirs.slice(i, i + chunkSize);
     const results = await Promise.all(
-      chunk.map(async (dir) => {
-        if (await isProjectDirectoryAsync(dir)) {
-          try {
-            const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
-            let modifiedAt: Date;
-            try {
-              modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
-            } catch (err: any) {
-              if (err.code === 'ENOENT') {
-                modifiedAt = (await fs.promises.stat(dir)).mtime;
-              } else {
-                throw err;
-              }
-            }
-            return {
-              name: path.basename(dir),
-              dir,
-              analysisPath,
-              modifiedAt,
-            };
-          } catch { /* skip */ }
-        }
-        return null;
-      })
+      chunk.map(dir => inspectAnalysisProject(dir))
     );
     for (const res of results) {
       if (res) projects.push(res);
@@ -963,14 +854,8 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
   return projects;
 }
 
-export async function loadAnalysisAsync(projectDir?: string, force = false): Promise<{ analysis: AnalysisResult; projectName: string; projectDir: string } | null> {
-  const auth = authStorage.getStore();
-  const tenantId = auth ? auth.uid : undefined;
-  
-  const projects = await discoverProjectsAsync(tenantId);
-  if (projects.length === 0) return null;
-
-  let target: { name: string; dir: string; analysisPath: string; modifiedAt: Date } | undefined = projects[0];
+async function selectAnalysisTargetAsync(projects: AnalysisProject[], projectDir: string | undefined, tenantId: string | undefined): Promise<AnalysisProject | null> {
+  let target: AnalysisProject | undefined = projects[0];
 
   if (projectDir) {
     const absPath = path.resolve(projectDir);
@@ -997,6 +882,19 @@ export async function loadAnalysisAsync(projectDir?: string, force = false): Pro
   } else if (target) {
     await registerProjectAsync(target.dir);
   }
+
+  return target ?? null;
+}
+
+export async function loadAnalysisAsync(projectDir?: string, force = false): Promise<{ analysis: AnalysisResult; projectName: string; projectDir: string } | null> {
+  const auth = authStorage.getStore();
+  const tenantId = auth ? auth.uid : undefined;
+
+  const projects = await discoverProjectsAsync(tenantId);
+  if (projects.length === 0) return null;
+
+  const target = await selectAnalysisTargetAsync(projects, projectDir, tenantId);
+  if (!target) return null;
 
   try {
     if (onProjectLoadedCallback) {
@@ -1027,7 +925,7 @@ export async function resolveProjectDir(projectDir: string, tenantId?: string, r
   const projects = await discoverProjectsAsync(tenantId);
   const absPath = path.resolve(projectDir);
   const match = projects.find(
-    (p) => p.dir === absPath || 
+    (p) => p.dir === absPath ||
            normalizeProjectPath(path.relative(process.cwd(), p.dir)) === normalizeProjectPath(projectDir) ||
            (!requireExactPath && p.name.toLowerCase() === projectDir.toLowerCase())
   );

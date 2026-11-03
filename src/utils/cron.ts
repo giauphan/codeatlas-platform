@@ -28,6 +28,39 @@ function parseValue(value: string, names: Record<string, number> | undefined): n
   return Number.isSafeInteger(number) ? number : null;
 }
 
+function parseRange(base: string, min: number, max: number, names: Record<string, number> | undefined, hasStep: boolean): [number, number] | null {
+  if (base === "*") return [min, max];
+  if (base.includes("-")) {
+    const range = base.split("-");
+    if (range.length !== 2) return null;
+    const start = parseValue(range[0], names);
+    const end = parseValue(range[1], names);
+    return start === null || end === null ? null : [start, end];
+  }
+  const start = parseValue(base, names);
+  // A step after a single value means that value through the field maximum.
+  return start === null ? null : [start, hasStep ? max : start];
+}
+
+function parseComponent(component: string, min: number, max: number, names: Record<string, number> | undefined, allowSevenAsSunday: boolean, values: Set<number>): boolean {
+  if (!component) return false;
+  const segments = component.split("/");
+  if (segments.length > 2) return false;
+  const stepText = segments[1];
+  if (stepText !== undefined && !/^\d+$/.test(stepText)) return false;
+  const step = stepText === undefined ? 1 : Number(stepText);
+  if (!Number.isSafeInteger(step) || step < 1) return false;
+  const range = parseRange(segments[0], min, max, names, segments.length === 2);
+  if (!range) return false;
+  const [start, end] = range;
+  const sourceMax = allowSevenAsSunday ? 7 : max;
+  if (start < min || start > sourceMax || end < min || end > sourceMax || start > end) return false;
+  for (let value = start; value <= end; value += step) {
+    values.add(allowSevenAsSunday && value === 7 ? 0 : value);
+  }
+  return true;
+}
+
 function parseField(
   expression: string,
   min: number,
@@ -40,44 +73,7 @@ function parseField(
   const wildcard = expression.startsWith("*");
 
   for (const component of expression.split(",")) {
-    if (!component) return null;
-    const segments = component.split("/");
-    if (segments.length > 2) return null;
-
-    const base = segments[0];
-    let step = 1;
-    if (segments.length === 2) {
-      if (!/^\d+$/.test(segments[1])) return null;
-      step = Number(segments[1]);
-      if (!Number.isSafeInteger(step) || step < 1) return null;
-    }
-
-    let start: number;
-    let end: number;
-    if (base === "*") {
-      start = min;
-      end = max;
-    } else if (base.includes("-")) {
-      const range = base.split("-");
-      if (range.length !== 2) return null;
-      const parsedStart = parseValue(range[0], names);
-      const parsedEnd = parseValue(range[1], names);
-      if (parsedStart === null || parsedEnd === null) return null;
-      start = parsedStart;
-      end = parsedEnd;
-    } else {
-      const parsed = parseValue(base, names);
-      if (parsed === null) return null;
-      start = parsed;
-      // A step after a single value means that value through the field maximum.
-      end = segments.length === 2 ? max : parsed;
-    }
-
-    const sourceMax = allowSevenAsSunday ? 7 : max;
-    if (start < min || start > sourceMax || end < min || end > sourceMax || start > end) return null;
-    for (let value = start; value <= end; value += step) {
-      values.add(allowSevenAsSunday && value === 7 ? 0 : value);
-    }
+    if (!parseComponent(component, min, max, names, allowSevenAsSunday, values)) return null;
   }
 
   return values.size ? { values, wildcard } : null;

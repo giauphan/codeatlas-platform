@@ -115,46 +115,10 @@ export class SecurityScanner {
         return false;
       }
 
-      for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-        if (part === "secret" || part === "password" || part === "token" || part === "credential" || part === "bearer" || part === "apikey") {
-          return true;
-        }
-        if (part === "key") {
-          // Verify if it is preceded or followed by security-relevant context
-          if (i > 0) {
-            const prev = parts[i - 1];
-            if (
-              prev === "api" ||
-              prev === "private" ||
-              prev === "access" ||
-              prev === "secret" ||
-              prev === "encryption" ||
-              prev === "decryption" ||
-              prev === "auth" ||
-              prev === "session"
-            ) {
-              return true;
-            }
-          }
-          if (i < parts.length - 1) {
-            const next = parts[i + 1];
-            if (
-              next === "api" ||
-              next === "private" ||
-              next === "access" ||
-              next === "secret" ||
-              next === "encryption" ||
-              next === "decryption" ||
-              next === "auth" ||
-              next === "session"
-            ) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
+      const secretWords = new Set(["secret", "password", "token", "credential", "bearer", "apikey"]);
+      const keyContext = new Set(["api", "private", "access", "secret", "encryption", "decryption", "auth", "session"]);
+      return parts.some((part, index) => secretWords.has(part) ||
+        (part === "key" && (keyContext.has(parts[index - 1]) || keyContext.has(parts[index + 1]))));
     };
 
     // Helper to verify if a function is actually SQL/Database related to avoid false-positive SQL injection warnings
