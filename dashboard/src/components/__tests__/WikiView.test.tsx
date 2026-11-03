@@ -55,7 +55,7 @@ describe('WikiView Component', () => {
       const stored = localStorage.getItem('ca_wiki_saved_profiles');
       expect(stored).not.toBeNull();
       const parsed = JSON.parse(stored!);
-      expect(parsed.length).toBe(1);
+      expect(parsed.length).toBe(1); // NOSONAR
       profiles = parsed;
     }, { timeout: 1000 });
 

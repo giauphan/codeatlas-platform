@@ -40,7 +40,7 @@ services:
     container_name: codeatlas-dashboard
     restart: unless-stopped
     ports:
-      - "5173:80"
+      - "5173:8080"
     depends_on:
       - codeatlas
     networks:

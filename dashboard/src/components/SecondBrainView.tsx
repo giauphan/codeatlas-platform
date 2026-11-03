@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Brain, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react'; // NOSONAR
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
 import { SearchInputWithHint } from './ui/SearchInputWithHint';

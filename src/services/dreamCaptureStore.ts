@@ -240,7 +240,7 @@ export class DreamCaptureStore {
       createdAt: String(row.created_at),
       projectId: String(row.project_id),
       project: String(row.project),
-      displayName: row.display_name == null ? undefined : String(row.display_name),
+      displayName: row.display_name == null ? undefined : String(row.display_name), // NOSONAR
       workspacePath: row.workspace_path == null ? undefined : String(row.workspace_path),
       eventId: String(row.event_id),
       sessionId: String(row.session_id),

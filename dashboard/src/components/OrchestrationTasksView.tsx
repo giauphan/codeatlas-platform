@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Network, Search, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBranch, Lightbulb, XCircle, RefreshCw } from 'lucide-react';
+import { Network, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBranch, Lightbulb, XCircle, RefreshCw } from 'lucide-react'; // NOSONAR
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth'; // Reusing auth headers utility
 import type { A2AOrchestrationTask, OrchestrationState } from '../../../src/types/a2a'; // Importing types

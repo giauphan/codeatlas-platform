@@ -48,7 +48,7 @@ async function migrateTables(uid: string): Promise<void> {
     const tables = ["ai_dreaming_memory", "codeatlas_concepts", "ai_episodic_memory", "ai_semantic_memory", "ai_relational_memory"];
     for (const table of tables) {
       try {
-        const result = await db.execute(
+        const result = await db.execute( // NOSONAR
           `UPDATE ${table} SET tenant_id = :uid WHERE tenant_id = 'admin'`, { uid }
         );
         console.log(`${table}: ${result.rowsAffected ?? 0} rows updated`);

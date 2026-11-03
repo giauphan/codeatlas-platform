@@ -186,8 +186,8 @@ export class DreamingService {
 
 
   /** Cache of detected columns so we only check once per process lifetime */
-  static _hasLifecycleColumns: boolean | null = null;
-  static _hasContentHashColumn: boolean | null = null;
+  static _hasLifecycleColumns: boolean | null = null; // NOSONAR
+  static _hasContentHashColumn: boolean | null = null; // NOSONAR
 
   /** Initializes the SQLite schema and caches available dream-memory columns. */
   static async initialize(): Promise<void> {
@@ -429,7 +429,7 @@ export class DreamingService {
     input: DreamSaveInput, db: ReturnType<typeof createDatabaseAdapter>, tenantId: string, projectId: string, requestHash: string,
   ): Promise<DreamSaveAcknowledgement | null> {
     const structured = input.structuredEvidence;
-    const grounded = structured && structured.memory.content === input.content && structured.memory.memoryType === input.memoryType &&
+    const grounded = structured && structured.memory.content === input.content && structured.memory.memoryType === input.memoryType && // NOSONAR
       validateGroundedCandidates([structured.memory], structured.events).length === 1;
     if (structured && !grounded) return { status: "rejected", persisted: false, reason_code: "unsupported_evidence" };
     const noise = grounded

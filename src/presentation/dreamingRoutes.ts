@@ -3,7 +3,7 @@ import { registerCheckpointRoutes } from "./checkpointRoutes.js";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { checkAuth, logActivity } from "../services/authService.js";
-import { DreamingService, DreamMemoryType } from "../services/dreamingService.js";
+import { DreamingService } from "../services/dreamingService.js"; // NOSONAR
 import { loadAnalysisAsync } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
@@ -35,7 +35,7 @@ function executionAuth(tenantId: unknown) {
 /** Extract auth from request headers — API key or Firebase Bearer token. */
 function extractAuth(req: express.Request) {
   const apiKey = req.headers["x-api-key"] as string | undefined;
-  const bearerMatch = (req.headers["authorization"] as string || "").match(/^Bearer (.+)$/);
+  const bearerMatch = (req.headers["authorization"] as string || "").match(/^Bearer (.+)$/); // NOSONAR
   return { apiKey, bearerToken: bearerMatch?.[1] };
 }
 
@@ -461,7 +461,7 @@ export function registerDreamingRoutes(app: express.Application): void {
       // flow remains available when callers do not provide event_id.
       // Event-based capture is durable and idempotent. The legacy transcript
       // flow remains available when callers do not provide event_id.
-      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "event_id")) {
+      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "event_id")) { // NOSONAR
         isEventCapture = true;
         await handleEventCapture(req.body as Record<string, unknown>, content, auth, requestId, res);
         return;

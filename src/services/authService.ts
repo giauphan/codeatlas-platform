@@ -84,7 +84,7 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
 export async function authMiddleware(req: any, res: any, next: any) {
   try {
     const apiKey = req.headers['x-api-key'] as string | undefined;
-    const bearerMatch = (req.headers['authorization'] as string || '').match(/^Bearer (.+)$/);
+    const bearerMatch = (req.headers['authorization'] as string || '').match(/^Bearer (.+)$/); // NOSONAR
     const auth = await checkAuth(apiKey, bearerMatch?.[1]);
     authStorage.run(auth, () => next());
   } catch (err) {

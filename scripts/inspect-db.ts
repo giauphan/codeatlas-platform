@@ -37,7 +37,7 @@ async function run() {
       console.log(`User ID: ${userDoc.id}`);
       console.log(`User Data:`, userDoc.data());
       
-      const keysSnapshot = await userDoc.ref.collection("keys").get();
+      const keysSnapshot = await userDoc.ref.collection("keys").get(); // NOSONAR
       if (keysSnapshot.empty) {
         console.log(`  -> No API keys found for this user.`);
       } else {

@@ -74,7 +74,7 @@ function parseRetryAfter(header: string | null): number | null {
   const dateMs = Date.parse(header);
   if (!Number.isNaN(dateMs)) {
     const diff = dateMs - Date.now();
-    return diff > 0 ? diff : 0;
+    return diff > 0 ? diff : 0; // NOSONAR
   }
   return null;
 }

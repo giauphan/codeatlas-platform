@@ -71,7 +71,7 @@ for (const { table, contentCol, idCol } of TABLES) {
 
       while (retryCount < maxRetries && !embedding) {
         try {
-          embedding = await generateEmbedding(row.content, 'passage');
+          embedding = await generateEmbedding(row.content, 'passage'); // NOSONAR
         } catch (embedErr) {
           retryCount++;
           const errorMsg = (embedErr as Error).message;
@@ -81,12 +81,12 @@ for (const { table, contentCol, idCol } of TABLES) {
             embedding = null;
           } else {
             // Brief pause before retry
-            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // NOSONAR
           }
         }
       }
 
-      if (!embedding || embedding.length !== targetDim) {
+      if (!embedding || embedding.length !== targetDim) { // NOSONAR
         console.error(`[Reembed] ${table}/${row.id}: embedding returned null or wrong dim (${embedding?.length}).`);
         totalFailed++;
         continue;

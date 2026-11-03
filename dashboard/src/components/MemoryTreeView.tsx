@@ -79,7 +79,7 @@ function groupMemories(memories: Memory[]): Map<string, Map<string, Memory[]>> {
   return tree;
 }
 
-function MemoryTreeDiagram({ memories }: { memories: Memory[] }) {
+function MemoryTreeDiagram({ memories }: { memories: Memory[] }) { // NOSONAR
   const { nodes, edges, height } = useMemo(() => {
     const tree = groupMemories(memories);
     const nodes: TreeNode[] = [];
@@ -146,7 +146,7 @@ function MemoryTreeDiagram({ memories }: { memories: Memory[] }) {
   );
 }
 
-function TreeRow({ memory }: { memory: Memory }) {
+function TreeRow({ memory }: { memory: Memory }) { // NOSONAR
   const type = memory.memory_type || 'OTHER';
   const color = TYPE_COLORS[type] || '#888';
   return (

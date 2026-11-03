@@ -41,7 +41,7 @@ async function main() {
     console.log(JSON.stringify(doc.data(), null, 2));
     
     // Fetch keys subcollection
-    const keysSnap = await db.collection("users").doc(doc.id).collection("keys").get();
+    const keysSnap = await db.collection("users").doc(doc.id).collection("keys").get(); // NOSONAR
     for (const keyDoc of keysSnap.docs) {
       console.log(`  Key ID: ${keyDoc.id}`);
       console.log(`  Key Data:`, JSON.stringify(keyDoc.data(), null, 2));

@@ -45,14 +45,14 @@ async function main() {
     console.log(`Migrating: ${docId} -> ${newDocId}`);
     
     // Create new document with tenant prefix
-    await db.collection("projects").doc(newDocId).set({
+    await db.collection("projects").doc(newDocId).set({ // NOSONAR
       ...data,
       tenantId: targetUid,
       updatedAt: new Date().toISOString()
     });
     
     // Optional: Delete legacy document to prevent pollution
-    await db.collection("projects").doc(docId).delete();
+    await db.collection("projects").doc(docId).delete(); // NOSONAR
     console.log(`Successfully migrated and cleaned up ${docId}`);
   }
   

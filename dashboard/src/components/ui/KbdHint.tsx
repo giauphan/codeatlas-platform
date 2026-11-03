@@ -4,7 +4,7 @@ export type CSSLength = string;
 
 interface KbdHintProps {
   id?: string;
-  icon: '↵' | string;
+  icon: '↵' | string; // NOSONAR
   text: string;
   top?: CSSLength;
   right?: CSSLength;

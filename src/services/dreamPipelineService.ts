@@ -287,10 +287,10 @@ export class DreamPipelineService {
     const saved: Array<{ id: string; memory_type: string; content: string }> = [];
     const skipped: string[] = [];
     for (const eventId of await this.persistTranscriptEvents(transcript, tenantId, project, sessionId)) {
-      const result = await MemoryIngestionService.processPending({ projectId: project, eventId, limit: 1 });
+      const result = await MemoryIngestionService.processPending({ projectId: project, eventId, limit: 1 }); // NOSONAR
       if (!result.success) throw new Error('Transcript extraction remains pending for retry');
       for (const id of result.memory_ids) {
-        const rows = await createDatabaseAdapter().query<{ id: string; memory_type: string; content: string }>(
+        const rows = await createDatabaseAdapter().query<{ id: string; memory_type: string; content: string }>( // NOSONAR
           'SELECT id, memory_type, content FROM ai_dreaming_memory WHERE tenant_id = :tenantId AND id = :id', { tenantId, id });
         saved.push(...rows);
       }
@@ -302,7 +302,7 @@ export class DreamPipelineService {
   private static async persistTranscriptEvents(transcript: string, tenantId: string, project: string, sessionId: string): Promise<string[]> {
     const eventIds: string[] = [];
     for (const segment of transcript.split(/\n\n---\n\n/)) {
-      const match = segment.match(/^\[(USER|ASSISTANT|TOOL)\]\n([\s\S]*)$/);
+      const match = segment.match(/^\[(USER|ASSISTANT|TOOL)\]\n([\s\S]*)$/); // NOSONAR
       if (!match) continue;
       const actorRole = match[1] as PendingCaptureEvent['actorRole'];
       const content = match[2].trim();

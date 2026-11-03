@@ -11,9 +11,7 @@ import { checkAuth, logActivity } from "../../services/authService.js";
 import { a2aClientService } from "../../services/a2aClientService.js";
 import { logger } from "../../utils/logger.js";
 import { registerTool } from "./agentCard.js";
-import { a2aExecutor } from "./a2aExecutor.js";
 import { a2aRegistry } from "../../services/a2aRegistry.js";
-import { authStorage } from "../../utils/context.js";
 import { isToolEnabled } from "../../config/env.js";
 import { injectAuthContext } from "../../utils/authContext.js";
 
