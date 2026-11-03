@@ -604,8 +604,13 @@ describe("GenomeService", () => {
         rowsAffected: 1,
       }));
 
-      await GenomeService.mutateGene("gene-abc", { success: false }, "test");
-      // Should still succeed (no exception)
+      const mutatedId = await GenomeService.mutateGene("gene-abc", { success: false }, "test");
+      assert.equal(mutatedId, "gene-abc");
+      const updateCalls = mockConnection.execute.mock.calls.filter(
+        (c: any) =>
+          typeof c.arguments[0] === "string" && c.arguments[0].includes("SET"),
+      );
+      assert.ok(updateCalls.length > 0);
     });
 
     test("throws when gene not found", async () => {
@@ -882,8 +887,7 @@ describe("GenomeService", () => {
         rowsAffected: 1,
       }));
 
-      // Should not throw
-      await GenomeService.upsertGene({
+      const geneId = await GenomeService.upsertGene({
         name: "Test",
         description: "Test",
         problem: "P",
@@ -892,6 +896,7 @@ describe("GenomeService", () => {
         project: "test",
         sourceType: "manual",
       });
+      assert.ok(typeof geneId === "string" && geneId.length > 0);
     });
 
     test("extractGene throws for unsupported source type", async () => {

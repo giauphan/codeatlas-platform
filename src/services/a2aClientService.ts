@@ -41,7 +41,7 @@ export class A2AClientService {
    * Discover A2A agents. In Phase 2, reads from in-memory cache.
    * Phase 3 adds a persistent agent_registry query.
    */
-  async discover(filter: A2ADiscoverFilter): Promise<A2AAgentInfo[]> {
+  discover(filter: A2ADiscoverFilter): Promise<A2AAgentInfo[]> {
     const tenantCache = this.getTenantCache();
     const agents: A2AAgentInfo[] = [];
 
@@ -69,7 +69,7 @@ export class A2AClientService {
       });
     }
 
-    return agents;
+    return Promise.resolve(agents);
   }
 
   /**

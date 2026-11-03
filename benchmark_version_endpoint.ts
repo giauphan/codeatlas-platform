@@ -1,6 +1,6 @@
-import { performance } from 'perf_hooks';
-import * as fs from 'fs';
-import * as path from 'path';
+import { performance } from 'node:perf_hooks';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 // Simulation of current synchronous implementation
 function getVersionSync() {
@@ -59,4 +59,4 @@ async function runBenchmark() {
   console.log("\nNote: While pure execution time for async might be slightly slower in microbenchmarks due to Promise overhead, reading files synchronously in a Node.js server blocks the event loop, preventing all other requests from being processed while the disk I/O completes. In a concurrent server environment, replacing fs.readFileSync with fs.promises.readFile is a critical performance fix for scalability.");
 }
 
-runBenchmark().catch(console.error);
+await runBenchmark();

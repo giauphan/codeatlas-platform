@@ -15,8 +15,8 @@ export const authStorage = new AsyncLocalStorage<AuthContext>();
  * Compact context by removing noise using existing noise filtering rules.
  * Preserves main context memory and optionally saves additional genome/ADN segments.
  */
-export async function compactContext(context: string): Promise<string> {
+export function compactContext(context: string): Promise<string> {
   const lines = context.split('\n');
   const filteredLines = lines.filter(line => !checkNoiseBlocklist(line).isNoise);
-  return filteredLines.join('\n');
+  return Promise.resolve(filteredLines.join('\n'));
 }

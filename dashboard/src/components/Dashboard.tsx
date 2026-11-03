@@ -120,7 +120,7 @@ export const Dashboard: React.FC = () => {
 
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
-  const [stats, setStats] = useState({ totalRequests: 0 });
+  const [stats] = useState({ totalRequests: 0 });
 
   const fetchIndexingSettings = async (projectDir: string) => {
     try {
@@ -470,17 +470,6 @@ export const Dashboard: React.FC = () => {
 
   const renderCurrentView = () => {
     switch (activeTab) {
-      case 'Control Center':
-        return <ControlCenterView
-          stats={stats}
-          keys={keys}
-          analysis={analysis}
-          createKey={handleCreateApiKey}
-          deleteKey={handleDeleteApiKey}
-          copyToClipboard={handleCopyClick}
-          copiedId={copiedId}
-          loading={loading}
-        />;
       case 'Knowledge Graph':
         return <Suspense fallback={<div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Loading knowledge graph…</div>}>
           <KnowledgeGraphView
@@ -516,6 +505,7 @@ export const Dashboard: React.FC = () => {
           selectedProjectDir={selectedProjectDir}
           onProjectChange={handleProjectChange}
         />;
+      case 'Control Center':
       default:
         return <ControlCenterView
           stats={stats}

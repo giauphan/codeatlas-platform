@@ -78,7 +78,7 @@ export class IndexingService {
   /**
    * Initialize: load project list from env
    */
-  async init(projectDirs?: string[]): Promise<void> {
+  init(projectDirs?: string[]): Promise<void> {
     if (projectDirs) {
       this.projectDirs = projectDirs;
     }
@@ -99,6 +99,7 @@ export class IndexingService {
     }
 
     logger.info(`[IndexingService] Initialized with ${this.projectDirs.length} projects`);
+    return Promise.resolve();
   }
 
   /**

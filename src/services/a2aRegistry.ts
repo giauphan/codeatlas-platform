@@ -46,11 +46,11 @@ export class A2ARegistry {
   /**
    * Register or update an agent in the registry.
    */
-  async register(record: A2AAgentRecord): Promise<string> {
+  register(record: A2AAgentRecord): Promise<string> {
     const agentId = record.agentId || this.slugify(record.agentName);
 
     const auth = authStorage.getStore();
-    const tenantId = authStorage.getStore()!.uid;
+    const tenantId = auth!.uid;
     // Clone to avoid mutating the caller's object
     const safeRecord = { ...record, tenantId };
 
@@ -63,19 +63,19 @@ export class A2ARegistry {
       registeredAt: existing?.registeredAt || new Date(),
     });
 
-    return agentId;
+    return Promise.resolve(agentId);
   }
 
   /**
    * Heartbeat — update last seen timestamp.
    */
-  async heartbeat(agentUrl: string): Promise<void> {
+  heartbeat(agentUrl: string): Promise<void> {
     // Find by URL in memory store
-    for (const [id, record] of memoryStore) {
+    for (const [, record] of memoryStore) {
       if (record.agentUrl === agentUrl) {
         record.lastHeartbeat = new Date();
         record.status = "online";
-        return;
+        return Promise.resolve();
       }
     }
 
@@ -90,16 +90,17 @@ export class A2ARegistry {
       lastHeartbeat: new Date(),
       registeredAt: new Date(),
     });
+    return Promise.resolve();
   }
 
   /**
    * Query agents by capability keyword and status.
    */
-  async query(query: A2ADiscoverQuery = {}): Promise<A2AAgentRecord[]> {
+  query(query: A2ADiscoverQuery = {}): Promise<A2AAgentRecord[]> {
     this.markStale();
 
     const auth = authStorage.getStore(); // Get tenantId from context
-    const requestorTenantId = authStorage.getStore()!.uid;
+    const requestorTenantId = auth!.uid;
 
     const results: A2AAgentRecord[] = [];
     const capability = query.capability?.toLowerCase();
@@ -123,19 +124,19 @@ export class A2ARegistry {
       results.push({ ...record });
     }
 
-    return results.slice(0, limit);
+    return Promise.resolve(results.slice(0, limit));
   }
 
   /**
    * List all registered agents.
    */
-  async listAll(): Promise<A2AAgentRecord[]> {
+  listAll(): Promise<A2AAgentRecord[]> {
     this.markStale();
     const auth = authStorage.getStore(); // Get tenantId from context
-    const requestorTenantId = authStorage.getStore()!.uid;
-    return Array.from(memoryStore.values())
+    const requestorTenantId = auth!.uid;
+    return Promise.resolve(Array.from(memoryStore.values())
       .filter(r => r.tenantId === requestorTenantId) // Filter by tenantId
-      .map(r => ({ ...r }));
+      .map(r => ({ ...r })));
   }
 
   /**
