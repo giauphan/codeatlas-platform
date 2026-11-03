@@ -1006,7 +1006,7 @@ export class GenomeService {
     parts.push(`- Version: ${gene.version}`); // NOSONAR
     parts.push(`- Usage count: ${gene.usageCount}`); // NOSONAR
     parts.push(`- Success rate: ${(gene.successRate * 100).toFixed(0)}%\n`); // NOSONAR
-    parts.push(`## Instructions // NOSONAR
+    parts.push(`## Instructions
 Apply this knowledge when encountering similar problems.
 1. Analyze the current context against the problem description
 2. If matched, apply the solution pattern
