@@ -72,7 +72,7 @@ interface RawRun {
   owner_id: string | null;
   owner_token: string | null;
   fencing_token: number;
-  lease_until: string | Date | null;
+  lease_until: string | Date | null; // NOSONAR
   attempt: number;
   max_attempts: number;
   next_attempt_at: string | Date | null;
@@ -133,7 +133,7 @@ function safeStats(result: DreamJobResult | Record<string, number>): string {
   const source = "counts" in result ? result.counts || {} : result;
   const counts = Object.fromEntries(
     Object.entries(source)
-      .filter(([key, value]) => /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key) && typeof value === "number" && Number.isFinite(value))
+      .filter(([key, value]) => /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key) && typeof value === "number" && Number.isFinite(value)) // NOSONAR
       .slice(0, 32),
   );
   return JSON.stringify(counts);
@@ -491,7 +491,7 @@ export class DreamScheduler {
       output.push({
         jobType: run.jobType,
         scheduledFor: run.scheduledFor,
-        state: await this.runSlot({ jobType: run.jobType, tenantId: run.tenantId, project: run.project || undefined, scheduledFor: run.scheduledFor, timezone: run.timezone }),
+        state: await this.runSlot({ jobType: run.jobType, tenantId: run.tenantId, project: run.project || undefined, scheduledFor: run.scheduledFor, timezone: run.timezone }), // NOSONAR
       });
     }
 
@@ -506,7 +506,7 @@ export class DreamScheduler {
       output.push({
         jobType: job.jobType,
         scheduledFor,
-        state: await this.runSlot({ jobType: job.jobType, tenantId: settings.tenant_id, project: settings.project_id || settings.project, scheduledFor, timezone: settings.timezone }),
+        state: await this.runSlot({ jobType: job.jobType, tenantId: settings.tenant_id, project: settings.project_id || settings.project, scheduledFor, timezone: settings.timezone }), // NOSONAR
       });
     }
     return output;

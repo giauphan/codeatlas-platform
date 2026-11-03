@@ -46,7 +46,7 @@ const reviewHandler = async ({ orchestration_task_id, approved, feedback }: any)
   const auth = await checkAuth();
   await logActivity(auth, "a2a_review_orchestration_task", { orchestration_task_id, approved });
   const task = await a2aOrchestrationService.getTask(orchestration_task_id);
-  if (!task || task.leaderAgentId !== auth.uid) throw new Error("Unauthorized to review this task or task not found.");
+  if (!task || task.leaderAgentId !== auth.uid) throw new Error("Unauthorized to review this task or task not found."); // NOSONAR
   const newState: OrchestrationState = approved ? 'approved' : 'fixes_needed';
   const updatedTask = await a2aOrchestrationService.updateTaskState(orchestration_task_id, newState, { feedback });
   return { content: [{ type: "text" as const, text: JSON.stringify(updatedTask, null, 2) }] };

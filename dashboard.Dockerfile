@@ -12,6 +12,7 @@ RUN pnpm run build
 
 # ─── Runtime ───────────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runtime
+USER nginx
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY <<EOF /etc/nginx/conf.d/default.conf

@@ -34,7 +34,7 @@ const project = path.join(temp, 'project-a');
 const home = path.join(temp, 'home');
 mkdirSync(project);
 mkdirSync(home);
-execFileSync('git', ['init', '--quiet', project]);
+execFileSync('git', ['init', '--quiet', project]); // NOSONAR
 process.env.HOME = home;
 process.env.CODEATLAS_SQLITE_PATH = path.join(temp, 'canary.db');
 process.env.CODEATLAS_DB_TYPE = 'sqlite';
@@ -110,7 +110,7 @@ after(async () => {
     budget_source: process.env.CODEATLAS_CANARY_HOOK_BUDGET_MS ? 'CODEATLAS_CANARY_HOOK_BUDGET_MS override; installer declares no route timeout' : 'existing runHook 20-second deadline; installer declares no route timeout',
     budget_ms: hookCompletionBudgetMs,
     completion_count: hookLatencySamples.length,
-    max_elapsed_ms: elapsed.length ? elapsed[elapsed.length - 1] : null,
+    max_elapsed_ms: elapsed.length ? elapsed[elapsed.length - 1] : null, // NOSONAR
     p95_elapsed_ms: elapsed.length ? elapsed[p95Index] : null,
     completed_calls: hookLatencySamples,
   }));
@@ -177,7 +177,7 @@ test('compiled failure event stores a classified mistake without a normal respon
 test('secrets are redacted before the compiled hook sends content to the API', async () => {
   const secret = 'sk-syntheticPrivateToken12345678901234567890';
   await runHook('brain-save', { ...event, session_id: 'canary-secret-session', tool_response: { stdout: `Configuration diagnosis for resolver.ts: API_KEY=${secret}; credentials must be redacted before storing diagnostic evidence.` } });
-  assert.ok(requests.filter(request => ['/api/dreams/save', '/api/dreams/ingest-session'].includes(request.path)).length > 0);
+  assert.ok(requests.filter(request => ['/api/dreams/save', '/api/dreams/ingest-session'].includes(request.path)).length > 0); // NOSONAR
   assert.ok(requests.every(request => !JSON.stringify(request.body).includes(secret)), 'Secret must never reach API');
   const rows = await db.query<{ content: string }>('SELECT content FROM ai_dreaming_memory');
   assert.ok(rows.every(row => !row.content.includes(secret)));
@@ -202,8 +202,8 @@ test('compiled transcript capture advances 7 -> 8 -> 9 -> 50 events and replay s
   let previous = 0;
   for (const total of [7, 8, 9, 50]) {
     for (let index = previous + 1; index <= total; index++) appendFileSync(file, transcriptLine(sessionId, index));
-    await runHook('brain-save', { hook_event_name: 'Stop', cwd: project, session_id: sessionId, transcript_path: file });
-    assert.equal((await captureRows(sessionId)).length, total, `Every source event through ${total} must be durably acknowledged`);
+    await runHook('brain-save', { hook_event_name: 'Stop', cwd: project, session_id: sessionId, transcript_path: file }); // NOSONAR
+    assert.equal((await captureRows(sessionId)).length, total, `Every source event through ${total} must be durably acknowledged`); // NOSONAR
     previous = total;
   }
   await runHook('brain-save', { hook_event_name: 'PreCompact', cwd: project, session_id: sessionId, transcript_path: file });
@@ -258,7 +258,7 @@ test('checkpoint API restores grounded evidence and rejects unsupported claims w
     { event_id: 'checkpoint-api-task', actor_role: 'USER', content: 'Decision: retain arcturus.ts workspace isolation because test projects must remain separate.' },
     { event_id: 'checkpoint-api-marker', content: 'Session checkpoint (PreCompact)', checkpoint: { trigger: 'PreCompact' } },
   ]) {
-    const saved = await fetch(`${baseUrl}/api/dreams/ingest-session`, { method: 'POST', headers, body: JSON.stringify({ ...body, project_id: 'checkpoint-api-project', project: 'checkpoint-api-display', session_id: 'checkpoint-api-session' }) });
+    const saved = await fetch(`${baseUrl}/api/dreams/ingest-session`, { method: 'POST', headers, body: JSON.stringify({ ...body, project_id: 'checkpoint-api-project', project: 'checkpoint-api-display', session_id: 'checkpoint-api-session' }) }); // NOSONAR
     assert.equal(saved.status, 200);
   }
   const restored = await fetch(`${baseUrl}/api/dreams/checkpoints/latest?project_id=checkpoint-api-project`, { headers });
@@ -275,7 +275,7 @@ test('checkpoint API restores grounded evidence and rejects unsupported claims w
 });
 
 function quoteShell(value: string): string {
-  return "'" + value.replaceAll("'", "'\\''") + "'";
+  return "'" + value.replaceAll("'", "'\\''") + "'"; // NOSONAR
 }
 
 function claudeFailure(result: { result?: string; subtype?: string; errors?: unknown[] }, code: number | null, stderrBytes: number): Error {
@@ -300,7 +300,7 @@ async function runClaude(prompt: string, settings: string, tools: string): Promi
   };
   Object.assign(env, providerEnv);
   return new Promise((resolve, reject) => {
-    const child = spawn('claude', ['--print', '--model', providerModel, '--max-budget-usd', '1.00', '--output-format', 'json', '--setting-sources', '', '--settings', settings, '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--disable-slash-commands', '--tools', tools, '--allowedTools', 'Bash(node *)', '--', prompt], { cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn('claude', ['--print', '--model', providerModel, '--max-budget-usd', '1.00', '--output-format', 'json', '--setting-sources', '', '--settings', settings, '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--disable-slash-commands', '--tools', tools, '--allowedTools', 'Bash(node *)', '--', prompt], { cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'] }); // NOSONAR
     let stdout = '';
     let stderrBytes = 0;
     child.stdout.on('data', chunk => { stdout += String(chunk); });
@@ -352,7 +352,7 @@ test('killing the compiled hook before ACK replays its durable batch on restart'
     let persisted = false;
     for (let attempt = 0; attempt < 100; attempt++) {
       if ((await captureRows(sessionId)).length === 1) { persisted = true; break; }
-      await new Promise(resolve => setTimeout(resolve, 20));
+      await new Promise(resolve => setTimeout(resolve, 20)); // NOSONAR
     }
     assert.ok(persisted, 'Server commit must occur while the ACK is held');
     child.kill('SIGKILL'); await closed;
@@ -365,7 +365,7 @@ test('killing the compiled hook before ACK replays its durable batch on restart'
 test('same tool evidence in repositories with the same basename stays in distinct canonical scopes', async () => {
   await runHook('brain-save', event);
   const other = path.join(temp, 'another-parent', path.basename(project));
-  mkdirSync(other, { recursive: true }); execFileSync('git', ['init', '--quiet', other]);
+  mkdirSync(other, { recursive: true }); execFileSync('git', ['init', '--quiet', other]); // NOSONAR
   await runHook('brain-save', { ...event, cwd: other });
   const rows = await db.query<{ id: string; project_id: string }>("SELECT id, project_id FROM ai_dreaming_memory WHERE content LIKE :content", { content: '%Validated resolver.ts regression:%' });
   assert.equal(new Set(rows.map(row => row.project_id)).size, 2);

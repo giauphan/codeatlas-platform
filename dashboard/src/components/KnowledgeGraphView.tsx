@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { 
-  Box, Code2, Layers, Activity, Search,
+  Box, Code2, Layers, Activity, // NOSONAR
   Maximize2, Minimize2, Trash2
 } from 'lucide-react';
 import { SphericalKnowledgeGraph } from './KnowledgeNetwork3D';

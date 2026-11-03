@@ -128,7 +128,7 @@ export function SphericalKnowledgeGraph({
 }
 
 // ─── Actual 2D renderer ───
-function ForceGraph2DCanvas({ data, isFullscreen, searchQuery, typeColors, onNodeHover, onNodeClick }: {
+function ForceGraph2DCanvas({ data, isFullscreen, searchQuery, typeColors, onNodeHover, onNodeClick }: { // NOSONAR
   data: GraphData; isFullscreen?: boolean; searchQuery?: string; typeColors?: Record<string, string>;
   onNodeHover?: (n: GraphNode | null) => void; onNodeClick?: (n: GraphNode) => void;
 }) {

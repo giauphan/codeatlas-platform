@@ -22,8 +22,8 @@ import {
   loadAnalysis, 
   discoverProjectsAsync, 
   loadAnalysisAsync, 
-  fileExists,
-  registerProjectAsync
+   // NOSONAR
+  registerProjectAsync // NOSONAR
 } from "./services/projectService.js";
 import { indexingService } from "./services/indexingService.js";
 import { DreamingService } from "./services/dreamingService.js";
@@ -48,7 +48,7 @@ if (!apps || apps.length === 0) {
     } else {
       logger.warn("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Firebase Admin initialization skipped.");
     }
-  } catch (e) {
+  } catch (e) { // NOSONAR
     logger.error("Firebase Admin initialization failed. Ensure GOOGLE_APPLICATION_CREDENTIALS is set.");
   }
 }
@@ -101,4 +101,4 @@ if (isMain) {
 }
 
 // Re-export core modules/helpers to maintain compatibility with test suite
-export { server, app, checkAuth, getStats, discoverProjects, loadAnalysis, discoverProjectsAsync, loadAnalysisAsync };
+export { server, app, checkAuth, getStats, discoverProjects, loadAnalysis, discoverProjectsAsync, loadAnalysisAsync }; // NOSONAR

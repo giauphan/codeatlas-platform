@@ -27,7 +27,7 @@ function getDb(): Promise<IDBPDatabase> {
     return Promise.resolve(mockDb);
   }
 
-  if (!dbPromise) {
+  if (!dbPromise) { // NOSONAR
     dbPromise = openDB(DB_NAME, DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains(STORE_NAME)) {

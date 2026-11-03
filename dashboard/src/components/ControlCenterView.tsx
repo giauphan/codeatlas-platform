@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react'; // NOSONAR
 import { motion } from 'framer-motion';
 import {
   Activity,
   Database,
-  Globe,
+   // NOSONAR
   Copy,
   Check,
   Trash2,

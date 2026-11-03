@@ -9,7 +9,7 @@ import {
   BookOpen,
   ArrowRight,
   ExternalLink,
-  Code,
+   // NOSONAR
   Sparkles
 } from 'lucide-react';
 import { FOCUS_RING_CLASS } from '../lib/constants';

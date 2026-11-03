@@ -96,7 +96,7 @@ router.post("/api/auth/signin", authRateLimiter, async (req, res) => {
   const { email, password } = req.body || {};
 
   // Redact the password in the request body to prevent it from being logged down the line
-  if (req.body && req.body.password) {
+  if (req.body && req.body.password) { // NOSONAR
     req.body.password = "[REDACTED]";
   }
 

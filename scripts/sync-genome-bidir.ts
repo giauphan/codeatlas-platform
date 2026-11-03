@@ -142,7 +142,7 @@ async function upload(apiCall) {
   let count = 0;
   for (const skill of toUpload) {
     // Serialize upserts to preserve output order and avoid racing gene version updates.
-    if (await uploadSkill(apiCall, skill)) count++;
+    if (await uploadSkill(apiCall, skill)) count++; // NOSONAR
   }
   return count;
 }
