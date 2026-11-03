@@ -64,7 +64,7 @@ h1, h2, h3, .tech-font {
   font-family: 'Space Grotesk', sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  transition: all 0.3s ease; // NOSONAR
+  transition: all 0.3s ease; /* NOSONAR */
   box-shadow: var(--glow-primary);
   border: none;
   cursor: pointer;
@@ -84,7 +84,7 @@ h1, h2, h3, .tech-font {
   font-weight: 600;
   font-family: 'Space Grotesk', sans-serif;
   text-transform: uppercase;
-  transition: all 0.3s ease; // NOSONAR
+  transition: all 0.3s ease; /* NOSONAR */
   cursor: pointer;
 }
 
@@ -100,7 +100,7 @@ h1, h2, h3, .tech-font {
   color: var(--text-main);
   padding: 1rem;
   border-radius: 12px;
-  transition: all 0.3s ease; // NOSONAR
+  transition: all 0.3s ease; /* NOSONAR */
 }
 
 .glass-input:focus {
