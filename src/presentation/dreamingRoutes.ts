@@ -162,7 +162,7 @@ function invalidCaptureAcknowledgement(body: Record<string, unknown>, requestId:
   };
 }
 
-async function acceptCaptureEvent(body: Record<string, unknown>, content: unknown, auth: NonNullable<ReturnType<typeof authStorage.getStore>>): Promise<CaptureEventAck> {
+function acceptCaptureEvent(body: Record<string, unknown>, content: unknown, auth: NonNullable<ReturnType<typeof authStorage.getStore>>): Promise<CaptureEventAck> {
   return authStorage.run(auth, () => DreamCaptureStore.accept(createCaptureEventInput(body, content as string)));
 }
 
@@ -196,7 +196,10 @@ async function completeCaptureAcknowledgement(
     status: result.status,
   });
   DreamDiagnostics.recordCapture(result.status);
-  return { extractionStatus, httpStatus: result.status === "rejected" ? 400 : result.status === "error" ? 500 : 200 };
+  let httpStatus = 200;
+  if (result.status === "rejected") httpStatus = 400;
+  else if (result.status === "error") httpStatus = 500;
+  return { extractionStatus, httpStatus };
 }
 
 async function handleEventCapture(

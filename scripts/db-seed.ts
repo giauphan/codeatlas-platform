@@ -23,9 +23,10 @@ async function seedRows<T>(
   alreadyExists: (row: T) => Promise<boolean>,
   insert: (row: T) => Promise<void>,
 ): Promise<void> {
-  for (const row of rows) {
+  await rows.reduce(async (previous, row) => {
+    await previous;
     if (!(await alreadyExists(row))) await insert(row);
-  }
+  }, Promise.resolve());
 }
 
 async function seed() {

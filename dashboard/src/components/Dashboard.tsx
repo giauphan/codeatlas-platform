@@ -113,7 +113,7 @@ export const Dashboard: React.FC = () => {
   const [isIndexingEnabled, setIsIndexingEnabled] = useState<boolean>(() => {
     const savedProjDir = safeSessionStorageGetItem('ca_selected_project_dir');
     const cached = getSessionCachedIndexingSetting(savedProjDir);
-    return cached === undefined ? true : cached;
+    return cached ?? true;
   });
   const selectedProjectDirRef = useRef(selectedProjectDir);
   selectedProjectDirRef.current = selectedProjectDir;

@@ -381,7 +381,7 @@ export class IndexingService {
           if (entry.isDirectory()) {
             await walk(fullPath, localPatterns);
           } else if (entry.isFile()) {
-            await this.addIndexableFile(fullPath, entry.name, files);
+            await this.addIndexableFile(fullPath, entry.name, files); // NOSONAR -- preserve traversal order and bound filesystem reads.
           }
         }
       } catch (err) {

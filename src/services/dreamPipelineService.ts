@@ -307,7 +307,7 @@ export class DreamPipelineService {
       const actorRole = match[1] as PendingCaptureEvent['actorRole'];
       const content = match[2].trim();
       const eventId = `legacy_${createHash('sha256').update(JSON.stringify([tenantId, project, sessionId, actorRole, content])).digest('hex')}`;
-      const ack = await DreamCaptureStore.accept({ eventId, sessionId, project, actorRole, content });
+      const ack = await DreamCaptureStore.accept({ eventId, sessionId, project, actorRole, content }); // NOSONAR -- stop at the first failed source write.
       if (!ack.acknowledged) throw new Error('Transcript source persistence failed');
       eventIds.push(eventId);
     }
@@ -324,7 +324,7 @@ export class DreamPipelineService {
     const saved: Array<{ id: string; memory_type: string; content: string }> = [];
     const skipped: string[] = [];
     for (const dream of candidates) {
-      const memId = await authStorage.run(auth, () => DreamingService.saveDreamMemory(
+      const memId = await authStorage.run(auth, () => DreamingService.saveDreamMemory( // NOSONAR -- preserve write order and stop on failure.
         project, sessionId, dream.memoryType as DreamMemoryType, dream.content, dream.importance, provider,
       ));
       if (memId === "__noise_blocked__") skipped.push(dream.content.slice(0, 60));

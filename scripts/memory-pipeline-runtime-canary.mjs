@@ -15,9 +15,12 @@ const MAX_HOOK_BUDGET_MS = 60_000;
 function fail(message) { throw new Error(message); }
 function requireCanary(condition, message) { if (!condition) fail(message); }
 const allChecks = (...checks) => checks.every(Boolean);
-function compareText(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+function compareText(a, b) {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
 function matchesHookCommand(value, cli, route) {
-  return value.includes(cli) && new RegExp(`\\bhook\\s+${route}$`).test(value);
+  return value.includes(cli) && new RegExp(String.raw`\bhook\s+${route}$`).test(value);
 }
 function containsText(value, expected) { return typeof value === 'string' && value.includes(expected); }
 function failureCategory(httpStatus, failure) {
@@ -310,8 +313,8 @@ async function runCanary(env) {
     const installed = JSON.parse(readFileSync(settingsPath, 'utf8'));
     const expectedRoutes = { SessionStart: 'brain-context', UserPromptSubmit: 'brain-context', PostToolUse: 'brain-save', PostToolUseFailure: 'brain-save', Stop: 'brain-save', PreCompact: 'brain-save' };
     for (const [eventName, route] of Object.entries(expectedRoutes)) {
-      const command = hookCommands(installed, eventName).find(value => matchesHookCommand(value, cli, route));
-      requireCanary(Boolean(command), 'The isolated native installer did not register the expected host event routes.');
+      const found = hookCommands(installed, eventName).some(value => matchesHookCommand(value, cli, route));
+      requireCanary(found, 'The isolated native installer did not register the expected host event routes.');
     }
     report.checks.isolated_installer = { registered_events: Object.keys(expectedRoutes), operator_settings_read: false };
 

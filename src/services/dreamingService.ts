@@ -449,7 +449,8 @@ export class DreamingService {
     contentHash: string, requestHash: string, aliases: string[],
   ): Promise<DreamSaveAcknowledgement | null> {
     if (!DreamingService._hasContentHashColumn) return null;
-    const aliasFilter = aliases.length ? ` OR (project_id IS NULL AND project IN (${aliases.map((_, index) => `:legacyProject${index}`).join(", ")}))` : "";
+    const aliasParameters = aliases.map((_, index) => `:legacyProject${index}`).join(", ");
+    const aliasFilter = aliases.length ? ` OR (project_id IS NULL AND project IN (${aliasParameters}))` : "";
     const binds: Record<string, unknown> = { tenantId, projectId, project: input.project, memoryType: input.memoryType, contentHash };
     aliases.forEach((alias, index) => { binds[`legacyProject${index}`] = alias; });
     const existing = await db.query<{ id: string }>(
@@ -482,9 +483,10 @@ export class DreamingService {
     const savedRows = await DreamingService.findPersistedRows(db, input, tenantId, projectId, contentHash);
     if (!inserted && !savedRows.length) return DreamingService.recordSaveResult({ status: "error", persisted: false, reason_code: "save_conflict" });
     const id = savedRows[0]?.id ?? proposedId;
+    const saveStatus = inserted ? "stored" as const : "duplicate" as const;
     const result = input.idempotencyKey
-      ? await writeSaveReceipt(db, tenantId, projectId, input.idempotencyKey, requestHash, inserted ? "stored" : "duplicate", id)
-      : { status: inserted ? "stored" as const : "duplicate" as const, persisted: true, id };
+      ? await writeSaveReceipt(db, tenantId, projectId, input.idempotencyKey, requestHash, saveStatus, id)
+      : { status: saveStatus, persisted: true, id };
     return DreamingService.recordSaveResult(result);
   }
 
@@ -731,7 +733,8 @@ export class DreamingService {
   private static buildDreamQuerySql(vector: number[] | null, queryText: string, limit: number, offset: number, filters: DreamQueryFilters): string {
     const selectCols = "id, session_id, project, project_id, provider, memory_type, content, importance, created_at, confidence, status, evidence_count, access_count, version, scope, tags, related_ids";
     if (vector) {
-      const idFilter = `AND id IN (${(filters.vectorIds ?? []).map((_, index) => `:vecId${index}`).join(", ")})`;
+      const vectorParameters = (filters.vectorIds ?? []).map((_, index) => `:vecId${index}`).join(", ");
+      const idFilter = `AND id IN (${vectorParameters})`;
       return `SELECT ${selectCols} FROM ai_dreaming_memory WHERE tenant_id = :tenantId ${filters.baseFilterSql} ${idFilter}`;
     }
     filters.binds.limit = limit;
@@ -772,10 +775,12 @@ export class DreamingService {
     rows: Array<Record<string, unknown>>, vectorScores: Record<string, number>, scope: string | undefined, offset: number, limit: number,
   ): Array<Record<string, unknown>> {
     const scored = rows.map((row) => {
-      const id = String(row.id ?? row.ID ?? "");
+      const idValue = row.id ?? row.ID;
+      const id = typeof idValue === "string" || typeof idValue === "number" ? String(idValue) : "";
       const importance = Number(row.importance ?? row.IMPORTANCE) || 0;
       const rawDate = row.created_at ?? row.CREATED_AT;
-      const createdAt = rawDate instanceof Date ? rawDate : new Date(String(rawDate ?? ""));
+      const dateText = typeof rawDate === "string" || typeof rawDate === "number" ? String(rawDate) : "";
+      const createdAt = rawDate instanceof Date ? rawDate : new Date(dateText);
       const scopeValue = row.scope ?? row.SCOPE;
       const confidence = Number(row.confidence ?? row.CONFIDENCE ?? 0.5);
       const evidenceCount = Number(row.evidence_count ?? row.EVIDENCE_COUNT) || 0;
@@ -814,7 +819,10 @@ export class DreamingService {
     db: ReturnType<typeof createDatabaseAdapter>, rows: Array<Record<string, unknown>>, cleanRows: readonly unknown[], queryText: string,
     filterSql: string, binds: Record<string, unknown>,
   ): Promise<string> {
-    let status = cleanRows.length > 0 ? "ok" : rows.length > 0 ? "filtered" : queryText.trim() ? "no_match" : "empty";
+    let status = "empty";
+    if (cleanRows.length > 0) status = "ok";
+    else if (rows.length > 0) status = "filtered";
+    else if (queryText.trim()) status = "no_match";
     if (!rows.length && queryText.trim()) {
       const inventory = await db.query<{ count: number }>(
         `SELECT COUNT(*) AS count FROM ai_dreaming_memory WHERE tenant_id = :tenantId ${filterSql}`, binds,

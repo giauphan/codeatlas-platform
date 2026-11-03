@@ -605,7 +605,9 @@ async function readLocalIndexingSettings(fullProjectDir: string, res: express.Re
 
 async function readFirestoreIndexingSetting(cleanProjectName: string, tenantId: string | undefined, initial: boolean): Promise<boolean> {
     let indexingEnabled = initial;
-    if (!shouldUseFirestore()) return initial;
+    if (!shouldUseFirestore()) {
+      return initial;
+    }
       // Fallback: check Firestore
       try {
         const apps = firebaseClient.getApps();

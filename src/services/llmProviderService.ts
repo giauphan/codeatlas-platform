@@ -298,7 +298,7 @@ export class LLMProviderService {
     if (matchedHost !== 'localhost' && matchedHost !== '127.0.0.1') {
       throw new Error('SSRF Validation Error: Custom ports only allowed for local endpoints');
     }
-    return /^[0-9]{1,5}$/.test(parsed.port) ? `:${parsed.port}` : '';
+    return /^\d{1,5}$/.test(parsed.port) ? `:${parsed.port}` : '';
   }
 
   private buildModulePrompt(moduleName: string, astContext: Record<string, unknown>): string {

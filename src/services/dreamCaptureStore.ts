@@ -163,7 +163,9 @@ async function persistCaptureEvent(
   const saved = await db.query<CaptureReceipt>(query, { tenantId, projectId, eventId });
   if (!saved.length) return captureError(eventId, "receipt_missing");
   if (saved[0].request_hash !== requestHash) return rejected(eventId, "event_id_reused");
-  const status = insertion.rowsAffected > 0 ? "stored" : saved[0].status === "filtered" ? "filtered" : "duplicate";
+  let status: "stored" | "filtered" | "duplicate" = "duplicate";
+  if (insertion.rowsAffected > 0) status = "stored";
+  else if (saved[0].status === "filtered") status = "filtered";
   return captureAck(eventId, saved[0], requestHash, status);
 }
 

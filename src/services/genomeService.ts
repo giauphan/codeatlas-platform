@@ -1160,7 +1160,7 @@ Apply this knowledge when encountering similar problems.
         tenantId: getTenantId(),
       });
 
-      const existingQuery = await connection.execute<unknown[]>(
+      const existingQuery = await connection.execute<unknown[]>( // NOSONAR -- reuse the connection for one bounded query at a time.
         `SELECT id, name, version FROM codeatlas_genome WHERE name IN (${inClause}) AND project = :newProject AND tenant_id = :tenantId`,
         nameBinds,
       );

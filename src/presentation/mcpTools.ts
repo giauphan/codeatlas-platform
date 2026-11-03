@@ -100,7 +100,7 @@ function selectSystemFlowNodes(
   const query = feature.toLowerCase();
   const matchingNodes = new Set<string>();
   for (const node of graphNodes) {
-    if (node.label.toLowerCase().includes(query) || (node.filePath && node.filePath.toLowerCase().includes(query))) {
+    if (node.label.toLowerCase().includes(query) || node.filePath?.toLowerCase().includes(query)) {
       matchingNodes.add(node.id);
     }
   }
@@ -113,9 +113,8 @@ function selectSystemFlowNodes(
 
 function limitSystemFlowNodes(nodes: GraphNode[], maxNodes: number): GraphNode[] {
   if (nodes.length <= maxNodes) return nodes;
-  return nodes
-    .sort((left, right) => (NODE_PRIORITY_ORDER.get(left.type) ?? 99) - (NODE_PRIORITY_ORDER.get(right.type) ?? 99))
-    .slice(0, maxNodes);
+  nodes.sort((left, right) => (NODE_PRIORITY_ORDER.get(left.type) ?? 99) - (NODE_PRIORITY_ORDER.get(right.type) ?? 99));
+  return nodes.slice(0, maxNodes);
 }
 
 function filterSystemFlowLinks(links: GraphLink[], nodes: GraphNode[], linkType: string | null): GraphLink[] {
@@ -134,7 +133,10 @@ function filterSystemFlowLinks(links: GraphLink[], nodes: GraphNode[], linkType:
 
 function renderSystemFlowNode(node: GraphNode, id: string): string {
   const label = node.label.replaceAll('"', "'");
-  const icon = node.type === "module" ? "📄" : node.type === "class" ? "🏗️" : node.type === "function" ? "⚡" : "📦";
+  let icon = "📦";
+  if (node.type === "module") icon = "📄";
+  else if (node.type === "class") icon = "🏗️";
+  else if (node.type === "function") icon = "⚡";
   if (node.type === "module") return `    ${id}["${icon} ${label}"]`;
   if (node.type === "class") return `    ${id}[["${icon} ${label}"]]`;
   return `    ${id}("${icon} ${label}")`;
@@ -260,9 +262,10 @@ function buildFeatureTraceData(loaded: LoadedProjectAnalysis, keyword: string, d
   }
   const filesArray = Array.from(files.entries()).map(([filePath, entities]) => {
     const isExternal = filePath === "external";
+    const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(loaded.projectDir, filePath);
     return {
       filePath: isExternal ? "external" : relativeProjectFile(loaded.projectDir, filePath),
-      absolutePath: isExternal ? "external" : (path.isAbsolute(filePath) ? filePath : path.resolve(loaded.projectDir, filePath)),
+      absolutePath: isExternal ? "external" : absolutePath,
       entities,
       hasSeedMatch: entities.some(entity => entity.isSeed),
       entityCount: entities.length,
@@ -304,11 +307,12 @@ function selectFeatureDiagramNodes(
     connections.set(link.source, (connections.get(link.source) || 0) + 1);
     connections.set(link.target, (connections.get(link.target) || 0) + 1);
   }
-  return selected.sort((left, right) => {
+  selected.sort((left, right) => {
     if (seeds.has(left.id) && !seeds.has(right.id)) return -1;
     if (!seeds.has(left.id) && seeds.has(right.id)) return 1;
     return (connections.get(right.id) || 0) - (connections.get(left.id) || 0);
-  }).slice(0, maxNodes);
+  });
+  return selected.slice(0, maxNodes);
 }
 
 function uniqueCallLinks(links: FeatureLink[], nodeIds: Set<string>): FeatureLink[] {
@@ -347,8 +351,7 @@ function renderSequenceFeatureDiagram(nodes: FeatureNode[], links: FeatureLink[]
     const source = participantIds.get(link.source);
     const target = participantIds.get(link.target);
     if (source && target && source !== target) {
-      lines.push(`    ${source}->>+${target}: calls`);
-      lines.push(`    ${target}-->>-${source}: returns`);
+      lines.push(`    ${source}->>+${target}: calls`, `    ${target}-->>-${source}: returns`);
     }
   }
   return lines.join("\n");
@@ -377,8 +380,8 @@ function renderFlowchartFeatureDiagram(
     const fileSuffix = node.filePath ? `<br/>${path.basename(node.filePath)}` : "";
     lines.push(node.type === "class"
       ? `    ${id}[["🏗️ ${label}${fileSuffix}"]]`
-      : `    ${id}("⚡ ${label}${fileSuffix}")`);
-    lines.push(classifyFeatureNode(node, id, entryIds, incomingIds, seeds));
+      : `    ${id}("⚡ ${label}${fileSuffix}")`,
+      classifyFeatureNode(node, id, entryIds, incomingIds, seeds));
   }
   for (const link of links) {
     const source = mermaidIds.get(link.source);
@@ -551,8 +554,11 @@ async function scanProjectAnalysis(projectName: string, isEnterprise: boolean): 
     const stats = getStats(loaded.analysis as AnalysisResultLocal);
     const circularDeps = stats.circularDeps || 0;
     const deadCode = stats.deadCode || 0;
-    const riskLevel = vulnerabilities.length > 10 ? "CRITICAL" : vulnerabilities.length > 0 ? "HIGH" : "LOW";
+    let riskLevel = "LOW";
+    if (vulnerabilities.length > 10) riskLevel = "CRITICAL";
+    else if (vulnerabilities.length > 0) riskLevel = "HIGH";
     const securityScore = Math.max(0, 100 - vulnerabilities.length * 5 - circularDeps * 2);
+    const health = securityScore > 80 ? "EXCELLENT" : "NEEDS ATTENTION";
     return {
       project: projectName,
       riskLevel,
@@ -560,7 +566,7 @@ async function scanProjectAnalysis(projectName: string, isEnterprise: boolean): 
       vulnerabilities: vulnerabilities.length,
       circularDependencies: circularDeps,
       deadCode,
-      adminInsights: isEnterprise ? `Project health is ${securityScore > 80 ? "EXCELLENT" : "NEEDS ATTENTION"}. Priority: ${riskLevel}.` : null,
+      adminInsights: isEnterprise ? `Project health is ${health}. Priority: ${riskLevel}.` : null,
       details: { vulnerabilities },
     };
   } catch (error: unknown) {
@@ -1481,7 +1487,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const projectsToScan = projects.slice(0, limit);
 
       for (const p of projectsToScan) {
-        const scan = await scanProjectAnalysis(p.name, isEnterprise);
+        const scan = await scanProjectAnalysis(p.name, isEnterprise); // NOSONAR -- bound concurrent project scans and preserve their order.
         if (scan) scanResults.push(scan);
       }
 

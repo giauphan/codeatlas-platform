@@ -73,7 +73,7 @@ interface TokenFormProps {
   onSubmit: React.FormEventHandler<HTMLFormElement>;
 }
 
-function TokenForm({ showToken, setShowToken, apiKey, setApiKey, loading, error, onSubmit }: TokenFormProps) {
+function TokenForm({ showToken, setShowToken, apiKey, setApiKey, loading, error, onSubmit }: Readonly<TokenFormProps>) {
   return (
             <motion.form role="tabpanel" id="panel-token" aria-labelledby="tab-token" key="token" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={onSubmit}>
               <div style={{ marginBottom: '1.5rem' }}>

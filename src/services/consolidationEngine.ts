@@ -294,6 +294,12 @@ export class ConsolidationEngine {
     return { conditions, binds };
   }
 
+  private projectScope(project?: string, projectId?: string): { sql: string; binds: Record<string, string> } {
+    if (projectId) return { sql: " AND project_id = :projectId", binds: { projectId } };
+    if (project) return { sql: " AND project = :project", binds: { project } };
+    return { sql: "", binds: {} };
+  }
+
   private groupDedupRows(rows: unknown[], report?: ConsolidationReport): Map<string, { id: string; importance: number; embedding: Float32Array }[]> {
     const groups = new Map<string, { id: string; importance: number; embedding: Float32Array }[]>();
     for (const row of rows) {
@@ -325,7 +331,9 @@ export class ConsolidationEngine {
       if (removed.has(left.id)) continue;
       for (let j = i + 1; j < group.length; j++) {
         const right = group[j];
-        if (removed.has(right.id) || !(this.cosineSimilarity(left.embedding, right.embedding) > CONSOLIDATION_SIMILARITY_THRESHOLD)) continue;
+        if (removed.has(right.id)) continue;
+        const similarity = this.cosineSimilarity(left.embedding, right.embedding);
+        if (Number.isNaN(similarity) || similarity <= CONSOLIDATION_SIMILARITY_THRESHOLD) continue;
         const removeLeft = left.importance < right.importance;
         const duplicate = removeLeft ? left : right;
         removed.add(duplicate.id);
@@ -341,7 +349,7 @@ export class ConsolidationEngine {
     let merged = 0;
     const values = Array.from(ids);
     for (let offset = 0; offset < values.length; offset += 900) {
-      merged += await this.markMergedDreamChunk(db, values.slice(offset, offset + 900), offset, tenantId, project, projectId);
+      merged += await this.markMergedDreamChunk(db, values.slice(offset, offset + 900), offset, tenantId, project, projectId); // NOSONAR -- keep fenced database writes sequential.
     }
     return merged;
   }
@@ -351,12 +359,11 @@ export class ConsolidationEngine {
   ): Promise<number> {
     try {
       const { clause, binds } = buildInClause(chunk, { tenantId });
-      const scopeSql = projectId ? " AND project_id = :projectId" : project ? " AND project = :project" : "";
-      const scopeBinds = projectId ? { projectId } : project ? { project } : {};
+      const scope = this.projectScope(project, projectId);
       const result = await db.execute(
         `UPDATE ai_dreaming_memory SET status = 'merged', updated_at = CURRENT_TIMESTAMP
-         WHERE id IN (${clause}) AND tenant_id = :tenantId AND (status IS NULL OR status = 'active')${scopeSql} AND ${this.fencePredicate()}`,
-        { ...(binds as Record<string, unknown>), ...scopeBinds, ...this.fenceParameters() },
+         WHERE id IN (${clause}) AND tenant_id = :tenantId AND (status IS NULL OR status = 'active')${scope.sql} AND ${this.fencePredicate()}`,
+        { ...(binds as Record<string, unknown>), ...scope.binds, ...this.fenceParameters() },
       );
       return result.rowsAffected || 0;
     } catch (error) {
@@ -432,7 +439,7 @@ export class ConsolidationEngine {
     const embeddings = await generateEmbeddingsBatch(embedTexts, "passage");
     const inserts: Record<string, unknown>[] = [];
     concepts.forEach((concept, index) => {
-      const embedding = embeddings && embeddings.length === embedTexts.length ? embeddings[index] : null;
+      const embedding = embeddings?.length === embedTexts.length ? embeddings[index] : null;
       if (!embedding || embedding.length === 0) {
         logger.warn(`[Consolidation] Missing or invalid embedding for concept ${concept.id}. Skipping.`);
         return;
@@ -473,13 +480,14 @@ export class ConsolidationEngine {
 
   private scoreConceptRows(rows: unknown[], tenantId: string, project?: string, projectId?: string): Record<string, unknown>[] {
     const updates: Record<string, unknown>[] = [];
+    const scope = this.projectScope(project, projectId);
     for (const row of rows) {
       const id = String(this.getVal(row, R_IDX.ID, "ID"));
       const evidenceCount = Number(this.getVal(row, 5, "EVIDENCE_COUNT") || 1);
       const confidence = Math.min(0.99, 0.5 + 0.49 * (1 - Math.exp(-0.2 * evidenceCount)));
       const current = Number(this.getVal(row, R_IDX.CONFIDENCE, "CONFIDENCE") || 0.5);
       if (Math.abs(confidence - current) > 0.000001) {
-        updates.push({ conf: confidence, id, tenantId, ...(projectId ? { projectId } : project ? { project } : {}) });
+        updates.push({ conf: confidence, id, tenantId, ...scope.binds });
       }
     }
     return updates;
@@ -489,9 +497,10 @@ export class ConsolidationEngine {
     db: ReturnType<typeof createDatabaseAdapter>, updates: Record<string, unknown>[], project?: string, projectId?: string,
   ): Promise<void> {
     const dbType = (process.env.CODEATLAS_DB_TYPE || "sqlite").toLowerCase();
+    const scope = this.projectScope(project, projectId);
     await db.executeMany(
       `UPDATE codeatlas_concepts SET confidence = :conf, updated_at = ${dbType === "postgres" ? "CURRENT_TIMESTAMP" : "datetime('now')"}
-       WHERE id = :id AND tenant_id = :tenantId${projectId ? ' AND project_id = :projectId' : project ? ' AND project = :project' : ''} AND ${this.fencePredicate()}`,
+       WHERE id = :id AND tenant_id = :tenantId${scope.sql} AND ${this.fencePredicate()}`,
       updates.map((bind) => ({ ...bind, ...this.fenceParameters() })),
     );
   }
@@ -539,11 +548,12 @@ export class ConsolidationEngine {
   ): { updates: Record<string, unknown>[]; archived: number } {
     const updates: Record<string, unknown>[] = [];
     let archived = 0;
+    const scope = this.projectScope(project, projectId);
     for (const row of rows) {
       const score = this.calculateDreamLifecycleScore(row, runAt);
       if (score.status === "archived") archived++;
       if (Math.abs(score.confidence - score.current) > 0.000001 || score.status === "archived") {
-        updates.push({ id: score.id, tenantId, confidence: score.confidence, status: score.status, ...(projectId ? { projectId } : project ? { project } : {}) });
+        updates.push({ id: score.id, tenantId, confidence: score.confidence, status: score.status, ...scope.binds });
       }
     }
     return { updates, archived };
@@ -575,9 +585,10 @@ export class ConsolidationEngine {
     db: ReturnType<typeof createDatabaseAdapter>, updates: Record<string, unknown>[], project?: string, projectId?: string,
   ): Promise<void> {
     if (!updates.length) return;
+    const scope = this.projectScope(project, projectId);
     await db.executeMany(
       `UPDATE ai_dreaming_memory SET confidence = :confidence, status = :status
-       WHERE id = :id AND tenant_id = :tenantId AND status = 'active'${projectId ? ' AND project_id = :projectId' : project ? ' AND project = :project' : ''} AND ${this.fencePredicate()}`,
+       WHERE id = :id AND tenant_id = :tenantId AND status = 'active'${scope.sql} AND ${this.fencePredicate()}`,
       updates.map((bind) => ({ ...bind, ...this.fenceParameters() })),
     );
   }
@@ -613,7 +624,9 @@ export class ConsolidationEngine {
       for (let j = i + 1; j < group.length; j++) {
         const newer = group[j];
         if (ids.has(newer.id)) continue;
-        if (!(newer.confidence > older.confidence) || !(this.cosineSimilarity(older.embedding, newer.embedding) > CONSOLIDATION_SIMILARITY_THRESHOLD)) continue;
+        if (Number.isNaN(newer.confidence) || Number.isNaN(older.confidence) || newer.confidence <= older.confidence) continue;
+        const similarity = this.cosineSimilarity(older.embedding, newer.embedding);
+        if (Number.isNaN(similarity) || similarity <= CONSOLIDATION_SIMILARITY_THRESHOLD) continue;
         ids.add(older.id);
         break;
       }
@@ -625,11 +638,12 @@ export class ConsolidationEngine {
   ): Promise<number> {
     let count = 0;
     const values = Array.from(ids);
+    const scope = this.projectScope(project, projectId);
     for (let offset = 0; offset < values.length; offset += 900) {
       const chunk = values.slice(offset, offset + 900);
-      const { clause, binds } = buildInClause(chunk, { tid: tenantId, ...(projectId ? { projectId } : project ? { project } : {}) });
+      const { clause, binds } = buildInClause(chunk, { tid: tenantId, ...scope.binds });
       const result = await db.execute(
-        `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid${projectId ? ' AND project_id = :projectId' : project ? ' AND project = :project' : ''} AND ${this.fencePredicate()}`,
+        `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid${scope.sql} AND ${this.fencePredicate()}`,
         { ...(binds as Record<string, unknown>), ...this.fenceParameters() },
       );
       count += result.rowsAffected || 0;

@@ -30,6 +30,13 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
+test('vector ranking does not coerce unexpected object-valued identifiers or dates', () => {
+  const invalidValue = { toString() { throw new Error('unexpected object coercion'); } };
+  const rows = [{ id: invalidValue, created_at: invalidValue, content: richContent('invalid-row') }];
+  const ranked = DreamingService['scoreDreamQueryRows'](rows, {}, undefined, 0, 10);
+  assert.deepEqual(ranked, rows);
+});
+
 test('tenant/project/type/provider/scope/tag filters happen before vector candidate limit', async () => {
   await authStorage.run(tenantA, async () => {
     await DreamProjectIdentityService.register({ projectId: 'canonical-target', displayName: 'target-app', workspacePath: '/work/target-app' });

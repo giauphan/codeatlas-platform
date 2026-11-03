@@ -258,17 +258,32 @@ async function requestFromModel(
     const keyIndex = (startCursor + keyAttempt) % keys.length;
     const keyRef = keys.length > 1 ? ` (key #${keyIndex})` : "";
 
-    const result = await requestWithKey(spec, input, inputType, dim, url, body, keys[keyIndex], keyIndex, keyAttempt, keyRef);
+    const result = await requestWithKey({ spec, input, inputType, dim, url, body }, { key: keys[keyIndex], keyIndex, keyAttempt, keyRef });
     if (result !== undefined) return result;
   }
 
   return null;
 }
 
-async function requestWithKey(
-  spec: ModelSpec, input: string[], inputType: 'passage' | 'query', dim: number,
-  url: string, body: string, key: string, keyIndex: number, keyAttempt: number, keyRef: string,
-): Promise<number[][] | null | undefined> {
+interface EmbeddingRequestContext {
+  spec: ModelSpec;
+  input: string[];
+  inputType: 'passage' | 'query';
+  dim: number;
+  url: string;
+  body: string;
+}
+
+interface EmbeddingKeyContext {
+  key: string;
+  keyIndex: number;
+  keyAttempt: number;
+  keyRef: string;
+}
+
+async function requestWithKey(request: EmbeddingRequestContext, keyContext: EmbeddingKeyContext): Promise<number[][] | null | undefined> {
+  const { spec, input, inputType, dim, url, body } = request;
+  const { key, keyIndex, keyAttempt, keyRef } = keyContext;
   const label = specLabel(spec);
   // For rate limit errors (429), try with exponential backoff
   for (let retryAttempt = 0; retryAttempt <= MAX_RETRY_ATTEMPTS; retryAttempt++) {
@@ -300,7 +315,7 @@ async function requestWithKey(
       }
 
       if (!response.ok) {
-        if (await handleEmbeddingError(response, spec, inputType, input.length, dim, url, keyAttempt, retryAttempt, keyRef)) continue;
+        if (await handleEmbeddingError(response, request, keyContext, retryAttempt)) continue;
         return undefined;
       }
 
@@ -339,9 +354,10 @@ async function readEmbeddings(response: Response, label: string, dim: number): P
 }
 
 async function handleEmbeddingError(
-  response: Response, spec: ModelSpec, inputType: 'passage' | 'query', batchSize: number,
-  dim: number, url: string, keyAttempt: number, retryAttempt: number, keyRef: string,
+  response: Response, request: EmbeddingRequestContext, keyContext: EmbeddingKeyContext, retryAttempt: number,
 ): Promise<boolean> {
+  const { spec, input, inputType, dim, url } = request;
+  const { keyAttempt, keyRef } = keyContext;
   const label = specLabel(spec);
   logger.error(`[Embeddings] Model ${label}${keyRef} returned error ${response.status} for ${response.url}: ${response.statusText}`);
 
@@ -357,7 +373,7 @@ async function handleEmbeddingError(
         provider: spec.provider,
         url,
         inputType,
-        batchSize: batchSize,
+        batchSize: input.length,
         dim,
         status: response.status,
         attempt: keyAttempt,
