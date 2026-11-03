@@ -1018,7 +1018,8 @@ export const WikiView: React.FC<WikiViewProps> = ({
                       borderRadius: '8px',
                       padding: '0.75rem 1.25rem',
                       fontSize: '0.9rem',
-                      fontWeight: 600
+                      fontWeight: 600,
+                      cursor: isGenerating ? 'wait' : undefined
                     }}
                   >
                     {isGenerating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
