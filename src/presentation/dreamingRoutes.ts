@@ -35,7 +35,7 @@ function executionAuth(tenantId: unknown) {
 /** Extract auth from request headers — API key or Firebase Bearer token. */
 function extractAuth(req: express.Request) {
   const apiKey = req.headers["x-api-key"] as string | undefined;
-  const bearerMatch = (req.headers["authorization"] as string || "").match(/^Bearer (.+)$/);
+  const bearerMatch = /^Bearer (.+)$/.exec(req.headers["authorization"] as string || "");
   return { apiKey, bearerToken: bearerMatch?.[1] };
 }
 
@@ -274,8 +274,11 @@ export function registerDreamingRoutes(app: express.Application): void {
         ...(result.id ? { memory_id: result.id } : {}),
       };
       let code = 200;
-      if (result.status === "rejected") code = 409;
-      else if (result.status === "error") code = 500;
+      if (result.status === "rejected") {
+        code = 409;
+      } else if (result.status === "error") {
+        code = 500;
+      }
       res.status(statusCode ?? code).json(payload);
     };
     try {
@@ -460,8 +463,6 @@ export function registerDreamingRoutes(app: express.Application): void {
         source_spans?: unknown;
       };
 
-      // Event-based capture is durable and idempotent. The legacy transcript
-      // flow remains available when callers do not provide event_id.
       // Event-based capture is durable and idempotent. The legacy transcript
       // flow remains available when callers do not provide event_id.
       if (Object.hasOwn(req.body ?? {}, "event_id")) {

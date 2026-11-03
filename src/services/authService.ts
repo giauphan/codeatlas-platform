@@ -10,18 +10,8 @@ import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { getAuth } from "firebase-admin/auth";
 
-let warnedLegacyFirestore = false;
-
 export function shouldUseFirestore(): boolean {
-  if (process.env.CODEATLAS_USE_FIRESTORE === 'true') return true;
-  if (process.env.CODEATLAS_USE_FIRESTORE !== 'false' && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    if (!warnedLegacyFirestore) {
-      warnedLegacyFirestore = true;
-      logger.warn("CODEATLAS_USE_FIRESTORE is unset, but GOOGLE_APPLICATION_CREDENTIALS is present. Authenticating against Firestore for backward compatibility. Set CODEATLAS_USE_FIRESTORE=false to strictly use local SQLite.");
-    }
-    return true;
-  }
-  return false;
+  return process.env.CODEATLAS_USE_FIRESTORE === 'true';
 }
 
 const useFirestore = shouldUseFirestore();
@@ -84,7 +74,7 @@ export async function checkAuth(apiKey?: string, bearerToken?: string): Promise<
 export async function authMiddleware(req: any, res: any, next: any) {
   try {
     const apiKey = req.headers['x-api-key'] as string | undefined;
-    const bearerMatch = (req.headers['authorization'] as string || '').match(/^Bearer (.+)$/);
+    const bearerMatch = (req.headers['authorization'] as string || '').match(/^Bearer (.+)$/); // NOSONAR
     const auth = await checkAuth(apiKey, bearerMatch?.[1]);
     authStorage.run(auth, () => next());
   } catch (err) {

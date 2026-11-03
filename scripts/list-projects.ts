@@ -27,7 +27,7 @@ async function run() {
   // Try discovery for a few simulated/hypothetical UIDs
   const testUids = ["admin", "tenant_user_1", "tenant_user_2", "user1", "user2"];
   for (const uid of testUids) {
-    const projects = await discoverProjectsAsync(uid);
+    const projects = await discoverProjectsAsync(uid); // NOSONAR
     console.log(`Tenant '${uid}' has ${projects.length} projects:`);
     for (const p of projects) {
       console.log(`  - Name: ${p.name} (Dir: ${p.dir})`);

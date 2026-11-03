@@ -1,9 +1,8 @@
 import React from 'react';
 
-
 interface KbdHintProps {
   id?: string;
-  icon: '↵' | string;
+  icon: string;
   text: string;
   top?: string;
   right?: string;

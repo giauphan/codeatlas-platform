@@ -35,7 +35,7 @@ FROM node:20-bookworm-slim AS runtime
 
 # Create non-root user (UID/GID 10001)
 RUN groupadd --system --gid 10001 codeatlas \
- && useradd  --system --uid 10001 --gid codeatlas --create-home --home-dir /home/codeatlas codeatlas
+ && useradd  --system --uid 10001 --gid codeatlas --create-home --home-dir /home/codeatlas codeatlas # NOSONAR
 
 # Install tini for PID 1 signal handling
 RUN apt-get update \

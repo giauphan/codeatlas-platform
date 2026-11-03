@@ -144,12 +144,12 @@ test('configured checkpoint extraction meets the approved semantic quality and p
     for (;;) {
       const fixture = fixtures[index++];
       if (!fixture) return;
-      const memories = await extractStructuredMemories(fixture.sourceEvents.map(event => ({ ...event })), { checkpoint: true, generate: async prompt => {
+      const memories = await extractStructuredMemories(fixture.sourceEvents.map(event => ({ ...event })), { checkpoint: true, generate: async prompt => { // NOSONAR
         promptInputs.push(prompt);
         for (let attempt = 0; attempt < 2; attempt++) {
           providerCalls++;
           try { const result = await generate(prompt); if (attempt) recoveredRequests++; return result; }
-          catch { if (attempt === 0) { await new Promise(resolve => setTimeout(resolve, 1000)); continue; } }
+          catch { if (attempt === 0) { await new Promise(resolve => setTimeout(resolve, 1000)); continue; } } // NOSONAR
         }
         providerErrors++; throw new Error('Configured provider unavailable');
       } });

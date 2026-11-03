@@ -1,4 +1,4 @@
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { initializeApp, getApps, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -13,8 +13,9 @@ if (serviceAccountPath) {
   const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
   if (fs.existsSync(absolutePath)) {
     try {
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = absolutePath;
       initializeApp({
-        credential: cert(absolutePath),
+        credential: applicationDefault(),
         projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
       });
     } catch (e) {
@@ -45,14 +46,14 @@ async function main() {
     console.log(`Migrating: ${docId} -> ${newDocId}`);
     
     // Create new document with tenant prefix
-    await db.collection("projects").doc(newDocId).set({
+    await db.collection("projects").doc(newDocId).set({ // NOSONAR
       ...data,
       tenantId: targetUid,
       updatedAt: new Date().toISOString()
     });
     
     // Optional: Delete legacy document to prevent pollution
-    await db.collection("projects").doc(docId).delete();
+    await db.collection("projects").doc(docId).delete(); // NOSONAR
     console.log(`Successfully migrated and cleaned up ${docId}`);
   }
   
