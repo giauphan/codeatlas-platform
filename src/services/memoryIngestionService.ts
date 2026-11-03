@@ -108,11 +108,12 @@ export class MemoryIngestionService {
     // before the same pending events are extracted by the deterministic path.
     events.sort((left, right) => Number(right.checkpoint !== undefined) - Number(left.checkpoint !== undefined) || left.captureSequence - right.captureSequence || left.eventId.localeCompare(right.eventId));
     const completedInRun = new Set<string>();
-    for (const event of events) {
-      if (completedInRun.has(event.eventId)) continue;
+    // Checkpoint batches mark later events complete, so processing must remain ordered.
+    await events.reduce<Promise<void>>((previous, event) => previous.then(async () => {
+      if (completedInRun.has(event.eventId)) return;
       const eventAuth = { ...auth, uid: event.tenantId };
       await authStorage.run(eventAuth, () => this.processEvent(event, options, result, completedInRun));
-    }
+    }), Promise.resolve());
     result.memory_ids = [...new Set(result.memory_ids)];
     recordMetrics();
     return result;
@@ -132,14 +133,14 @@ export class MemoryIngestionService {
       if (outcome.mode === 'model') {
         await this.retireUnselectedBatchMemories(event, projectId, batch.map(source => source.eventId), memoryIds);
       }
-      await this.markBatchSources(event, projectId, batch, pendingSources, outcome, memoryIdsBySource, result, completedInRun);
+      await this.markBatchSources(event, projectId, batch, pendingSources, outcome, memoryIdsBySource, { result, completedInRun });
       result.memory_ids.push(...memoryIds);
     } catch {
       // A partially saved event stays pending. Unique receipts and evidence
       // keys let the next worker finish it without inflating counts.
       result.failed++;
       result.success = false;
-  }
+    }
   }
 
   private static async extractBatch(event: PendingCaptureEvent, projectId: string, batch: PendingCaptureEvent[], pendingSources: PendingCaptureEvent[], options: ReconciliationOptions): Promise<StructuredExtractionOutcome> {
@@ -168,12 +169,12 @@ export class MemoryIngestionService {
       }
     } else {
       outcome = await extractStructuredMemoriesWithOutcome(sourceEvents, { checkpoint: event.checkpoint, generate: generator });
-  }
-  if (event.checkpoint !== undefined && outcome.mode === 'deterministic') {
-    const pendingIds = new Set(pendingSources.map(source => source.eventId));
-    outcome = { ...outcome, memories: outcome.memories.filter(memory => memory.evidence.every(evidence => pendingIds.has(evidence.sourceEventId))) };
-  }
-  return outcome;
+    }
+    if (event.checkpoint !== undefined && outcome.mode === 'deterministic') {
+      const pendingIds = new Set(pendingSources.map(source => source.eventId));
+      outcome = { ...outcome, memories: outcome.memories.filter(memory => memory.evidence.every(evidence => pendingIds.has(evidence.sourceEventId))) };
+    }
+    return outcome;
   }
 
   private static async persistBatchMemories(event: PendingCaptureEvent, projectId: string, batch: PendingCaptureEvent[], outcome: StructuredExtractionOutcome, options: ReconciliationOptions, result: ReconciliationResult): Promise<{ memoryIds: string[]; memoryIdsBySource: Map<string, string[]> }> {
@@ -205,11 +206,11 @@ export class MemoryIngestionService {
       if (ack.status === 'stored') result.stored++;
       else result.duplicate++;
       memoryIds.push(ack.id);
-  }
-  return { memoryIds, memoryIdsBySource };
+    }
+    return { memoryIds, memoryIdsBySource };
   }
 
-  private static async markBatchSources(event: PendingCaptureEvent, projectId: string, batch: PendingCaptureEvent[], pendingSources: PendingCaptureEvent[], outcome: StructuredExtractionOutcome, memoryIdsBySource: Map<string, string[]>, result: ReconciliationResult, completedInRun: Set<string>): Promise<void> {
+  private static async markBatchSources(event: PendingCaptureEvent, projectId: string, batch: PendingCaptureEvent[], pendingSources: PendingCaptureEvent[], outcome: StructuredExtractionOutcome, memoryIdsBySource: Map<string, string[]>, run: { result: ReconciliationResult; completedInRun: Set<string> }): Promise<void> {
     if (outcome.mode === 'model') {
       for (const source of batch.filter(item => !pendingSources.some(pending => pending.eventId === item.eventId))) {
         const sourceMemoryIds = [...new Set(memoryIdsBySource.get(source.eventId) ?? [])];
@@ -219,23 +220,21 @@ export class MemoryIngestionService {
           { tenantId: event.tenantId, projectId, eventId: source.eventId, status: sourceMemoryIds.length ? 'processed' : 'filtered', memoryIds: JSON.stringify(sourceMemoryIds) },
         );
       }
-  }
-  // Every pending source in this exact checkpoint batch has now been
-  // fully extracted and its evidence persisted. Mark only rows that are
-  // still pending, with IDs that were actually acknowledged as persisted.
-  for (const source of pendingSources) {
-    const sourceMemoryIds = [...new Set(memoryIdsBySource.get(source.eventId) ?? [])];
-    const updated = await createDatabaseAdapter().execute(
-      `UPDATE dream_capture_events SET status = :status, memory_ids_json = :memoryIds
-       WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId AND status = 'pending'`,
-      { tenantId: event.tenantId, projectId, eventId: source.eventId, status: sourceMemoryIds.length ? 'processed' : 'filtered', memoryIds: JSON.stringify(sourceMemoryIds) },
-    );
-    completedInRun.add(source.eventId);
-    if (updated.rowsAffected > 0) {
-      if (sourceMemoryIds.length) result.events_processed++;
-      else result.events_filtered++;
     }
-  }
+    // Mark only pending rows with IDs acknowledged as persisted.
+    for (const source of pendingSources) {
+      const sourceMemoryIds = [...new Set(memoryIdsBySource.get(source.eventId) ?? [])];
+      const updated = await createDatabaseAdapter().execute(
+        `UPDATE dream_capture_events SET status = :status, memory_ids_json = :memoryIds
+         WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId AND status = 'pending'`,
+        { tenantId: event.tenantId, projectId, eventId: source.eventId, status: sourceMemoryIds.length ? 'processed' : 'filtered', memoryIds: JSON.stringify(sourceMemoryIds) },
+      );
+      run.completedInRun.add(source.eventId);
+      if (updated.rowsAffected > 0) {
+        if (sourceMemoryIds.length) run.result.events_processed++;
+        else run.result.events_filtered++;
+      }
+    }
   }
 
   private static async pendingBatchSources(event: PendingCaptureEvent, projectId: string, batch: PendingCaptureEvent[]): Promise<PendingCaptureEvent[]> {

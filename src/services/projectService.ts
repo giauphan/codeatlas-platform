@@ -6,6 +6,7 @@ import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
 import { indexingService } from "./indexingService.js";
+import pLimit from "p-limit";
 
 const FILE_EXISTS_CONCURRENCY = 50;
 
@@ -572,20 +573,17 @@ async function appendOtherTenants(tenantRoot: string, tenantId: string | undefin
   if (!await fileExists(tenantRoot)) return;
   try {
     const tenants = await fs.promises.readdir(tenantRoot, { withFileTypes: true });
-    for (let i = 0; i < tenants.length; i += FILE_EXISTS_CONCURRENCY) {
-      const chunk = tenants.slice(i, i + FILE_EXISTS_CONCURRENCY);
-      await Promise.all(chunk.map(async tenant => {
-        if (tenant.name === tenantId || !isValidDirectory(tenant)) return;
-        // The tenant was returned by readdir; preserve the original direct read.
-        const tenantDir = path.join(tenantRoot, tenant.name);
-        try {
-          const projects = await fs.promises.readdir(tenantDir, { withFileTypes: true });
-          for (const project of projects) {
-            if (isValidDirectory(project)) searchDirs.push(path.join(tenantDir, project.name));
-          }
-        } catch { /* Skip non-accessible directories */ }
-      }));
-    }
+    const limit = pLimit(FILE_EXISTS_CONCURRENCY);
+    await Promise.all(tenants.map(tenant => limit(async () => {
+      if (tenant.name === tenantId || !isValidDirectory(tenant)) return;
+      const tenantDir = path.join(tenantRoot, tenant.name);
+      try {
+        const projects = await fs.promises.readdir(tenantDir, { withFileTypes: true });
+        for (const project of projects) {
+          if (isValidDirectory(project)) searchDirs.push(path.join(tenantDir, project.name));
+        }
+      } catch { /* Skip non-accessible directories */ }
+    })));
   } catch { /* skip */ }
 }
 
@@ -643,7 +641,7 @@ async function appendRegisteredProjects(searchDirs: string[]): Promise<void> {
   } catch { /* skip */ }
 }
 
-async function collectLocalSearchDirs(searchDirs: string[]): Promise<void> {
+async function collectCommonLocalSearchDirs(searchDirs: string[]): Promise<void> {
   if (process.env.CODEATLAS_PROJECT_DIR) {
     searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
   }
@@ -659,19 +657,22 @@ async function collectLocalSearchDirs(searchDirs: string[]): Promise<void> {
 
   await appendProjectDirectories(path.join(process.cwd(), "projects"), searchDirs);
 
+}
+
+async function collectLocalSearchDirs(searchDirs: string[]): Promise<void> {
+  await collectCommonLocalSearchDirs(searchDirs);
   await appendRegisteredProjects(searchDirs);
 }
 
 async function inspectAnalysisProject(dir: string): Promise<AnalysisProject | null> {
-if (await isProjectDirectoryAsync(dir)) {
+  if (!await isProjectDirectoryAsync(dir)) return null;
   try {
     const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
     let modifiedAt: Date;
-    // ⚡ Bolt: Use EAFP pattern to avoid redundant fs.existsSync system call overhead before statSync
     try {
       modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
-    } catch (err: any) {
-      if (err.code === 'ENOENT') {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
         modifiedAt = (await fs.promises.stat(dir)).mtime;
       } else {
         throw err;
@@ -684,7 +685,6 @@ if (await isProjectDirectoryAsync(dir)) {
       modifiedAt,
     };
   } catch { /* skip */ }
-}
   return null;
 }
 
@@ -698,14 +698,14 @@ export async function discoverProjects(tenantId?: string): Promise<{ name: strin
   }
 
   const seen = new Set<string>();
-  for (const dir of searchDirs) {
-    if (seen.has(dir)) continue;
+  const uniqueDirs = searchDirs.filter(dir => {
+    if (seen.has(dir)) return false;
     seen.add(dir);
-    if (isSystemIdeDirectory(dir)) continue;
-
-    const project = await inspectAnalysisProject(dir);
-    if (project) projects.push(project);
-  }
+    return !isSystemIdeDirectory(dir);
+  });
+  const limit = pLimit(FILE_EXISTS_CONCURRENCY);
+  const inspected = await Promise.all(uniqueDirs.map(dir => limit(() => inspectAnalysisProject(dir))));
+  projects.push(...inspected.filter((project): project is AnalysisProject => project !== null));
 
   projects.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime());
   return projects;
@@ -809,21 +809,7 @@ async function appendRegisteredProjectsAsync(searchDirs: string[]): Promise<void
 }
 
 async function collectLocalSearchDirsAsync(searchDirs: string[]): Promise<void> {
-  if (process.env.CODEATLAS_PROJECT_DIR) {
-    searchDirs.push(process.env.CODEATLAS_PROJECT_DIR);
-  }
-
-  // Dynamically search process.cwd() for any projects configured with .codeatlas
-  const localProjects = await scanForCodeatlasProjectsAsync(process.cwd());
-  searchDirs.push(...localProjects);
-
-  // Fallback to process.cwd() if no subprojects were found with .codeatlas configuration
-  if (!searchDirs.includes(process.cwd())) {
-    searchDirs.push(process.cwd());
-  }
-
-  await appendProjectDirectories(path.join(process.cwd(), "projects"), searchDirs);
-
+  await collectCommonLocalSearchDirs(searchDirs);
   await appendRegisteredProjectsAsync(searchDirs);
 
   // Add all git repos discovered by the indexing service
@@ -857,30 +843,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
   for (let i = 0; i < uniqueDirs.length; i += chunkSize) {
     const chunk = uniqueDirs.slice(i, i + chunkSize);
     const results = await Promise.all(
-      chunk.map(async (dir) => {
-        if (await isProjectDirectoryAsync(dir)) {
-          try {
-            const analysisPath = path.join(dir, ".codeatlas", "analysis.json");
-            let modifiedAt: Date;
-            try {
-              modifiedAt = (await fs.promises.stat(analysisPath)).mtime;
-            } catch (err: any) {
-              if (err.code === 'ENOENT') {
-                modifiedAt = (await fs.promises.stat(dir)).mtime;
-              } else {
-                throw err;
-              }
-            }
-            return {
-              name: path.basename(dir),
-              dir,
-              analysisPath,
-              modifiedAt,
-            };
-          } catch { /* skip */ }
-        }
-        return null;
-      })
+      chunk.map(dir => inspectAnalysisProject(dir))
     );
     for (const res of results) {
       if (res) projects.push(res);

@@ -153,6 +153,24 @@ describe('llmService Unit Tests', () => {
   });
 
   describe('summarizeConversationForDreams', () => {
+    test('legacy rollback retains supported classified sentences and excludes unclassified facts', async () => {
+      const prior = process.env.CODEATLAS_STRUCTURED_MEMORY_EXTRACTION;
+      process.env.CODEATLAS_STRUCTURED_MEMORY_EXTRACTION = 'false';
+      try {
+        const transcript = [
+          '[USER]\nI prefer short progress summaries before detailed logs for this project.',
+          '[USER]\nThe database adapter uses connection pooling to handle concurrent queries safely.',
+        ].join('\n\n---\n\n');
+        const dreams = await summarizeConversationForDreams(transcript, 'claude', 'test-project', 'legacy-session');
+        assert.equal(dreams?.length, 1);
+        assert.equal(dreams?.[0].memoryType, 'PREFERENCE');
+        assert.match(dreams?.[0].content ?? '', /prefer short progress summaries/);
+      } finally {
+        if (prior === undefined) delete process.env.CODEATLAS_STRUCTURED_MEMORY_EXTRACTION;
+        else process.env.CODEATLAS_STRUCTURED_MEMORY_EXTRACTION = prior;
+      }
+    });
+
     test('extracts MISTAKE, PREFERENCE, and KNOWLEDGE dreams from valid transcript segments', async () => {
       const transcript = [
         '[USER]',

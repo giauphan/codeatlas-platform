@@ -264,6 +264,15 @@ export class WikiService {
       }
     }
 
+    const pagePaths = new Set(pages.map(page => page.path));
+    for (const [nodePath, node] of nodeMap) {
+      if (pagePaths.has(nodePath)) continue;
+      const parentPath = nodePath.slice(0, nodePath.lastIndexOf('/'));
+      const parent = nodeMap.get(parentPath);
+      if (parent) parent.children!.push(node);
+      else root.push(node);
+    }
+
     return root;
   }
 

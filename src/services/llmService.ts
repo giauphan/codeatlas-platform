@@ -6,6 +6,67 @@ import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 import { countMatching } from "../utils/array.js";
 import { extractStructuredMemoriesFromTranscript, redactMemoryText, STRUCTURED_EXTRACTION_SYSTEM_PROMPT, type StructuredExtractionOptions, type StructuredMemory } from "./structuredMemoryExtractor.js";
 
+function classifyLegacySentence(sl: string, role: string): { memoryType: string; importance: number } | null {
+  let memoryType: string | null = null;
+  let importance = 5;
+
+  // MISTAKE: error/fail/bug/wrong patterns
+  if (/\b(mistake|error|fail|bug|wrong|broken|crash|exception|regression|incorrect)\b/i.test(sl)) {
+    memoryType = "MISTAKE";
+    importance = /\b(critical|security|crash|data.loss|vulnerability)\b/i.test(sl) ? 8 : 6;
+  }
+  // PREFERENCE: user preferences and style
+  else if (/\b(prefer|like|want|would rather|style|convention|standard|best practice)\b/i.test(sl)) {
+    memoryType = "PREFERENCE";
+    importance = 6;
+  }
+  // PATTERN: recurring structures and approaches
+  else if (/\b(pattern|always|often|typically|recurring|whenever|common|standard way)\b/i.test(sl)) {
+    memoryType = "PATTERN";
+    importance = 6;
+  }
+  // FIX: fix/refactor/improve patterns
+  else if (/\b(fix|refactor|optimize|improve|migrate|replace|upgrade)\b/i.test(sl)) {
+    memoryType = "KNOWLEDGE";
+    importance = 5;
+  }
+  // KNOWLEDGE: general learnings (only from assistant, not user).
+  // Requires both minimum length AND information content — not just "assistant said something long".
+  // Matches sentences containing code-related, architecture, or decision content.
+  else if (
+    role === "ASSISTANT" &&
+    sl.length > 120 &&
+    /\b(code|function|class|module|api|method|pattern|approach|architectur|solution|implement|use\s|because|reason|cause|root|fix|change|config|deploy|error|issue|problem|prefer|better|worse|instead|recommend|learn|found|discover|notice|understand|see\s|need|should|must|require|support|handle|process|manag|build|create|design|structur|dependenc|interface|service|component|system|framework|library|database|query|request|response|endpoint|route|middleware|schema|migrat|test|deploy|version|releas|update|optimize|refactor)\b/i.test(sl)
+  ) {
+    memoryType = "KNOWLEDGE";
+    importance = 4;
+  }
+
+  return memoryType ? { memoryType, importance } : null;
+}
+
+function collectLegacySentences(text: string, role: string, seen: Set<string>, dreams: Array<{ memoryType: string; content: string; importance: number }>): void {
+  // Split into sentences for finer-grained extraction
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 30);
+
+  for (const sentence of sentences) {
+    const sl = sentence.toLowerCase().trim();
+    // Dedup: skip if content too similar to already extracted
+    const key = sl.slice(0, 60);
+    if (seen.has(key)) continue;
+
+    const classification = classifyLegacySentence(sl, role);
+    if (classification) {
+      seen.add(key);
+      dreams.push({
+        memoryType: classification.memoryType,
+        content: sentence.trim().slice(0, 300),
+        importance: classification.importance,
+      });
+    }
+  }
+}
+
 /**
  * Local keyword-based dream extraction from conversation transcripts.
  * No external API needed — uses pattern matching and sentence analysis.
@@ -29,62 +90,7 @@ async function summarizeLegacyConversationForDreams(
     const text = segment.replace(/^\[(USER|ASSISTANT)\]\n/, "").trim();
     if (!text || text.length < 30) continue;
 
-    // Classify based on keyword patterns
-    const lower = text.toLowerCase();
-
-    // Split into sentences for finer-grained extraction
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 30);
-
-    for (const sentence of sentences) {
-      const sl = sentence.toLowerCase().trim();
-      // Dedup: skip if content too similar to already extracted
-      const key = sl.slice(0, 60);
-      if (seen.has(key)) continue;
-
-      let memoryType: string | null = null;
-      let importance = 5;
-
-      // MISTAKE: error/fail/bug/wrong patterns
-      if (/\b(mistake|error|fail|bug|wrong|broken|crash|exception|regression|incorrect)\b/i.test(sl)) {
-        memoryType = "MISTAKE";
-        importance = /\b(critical|security|crash|data.loss|vulnerability)\b/i.test(sl) ? 8 : 6;
-      }
-      // PREFERENCE: user preferences and style
-      else if (/\b(prefer|like|want|would rather|style|convention|standard|best practice)\b/i.test(sl)) {
-        memoryType = "PREFERENCE";
-        importance = 6;
-      }
-      // PATTERN: recurring structures and approaches
-      else if (/\b(pattern|always|often|typically|recurring|whenever|common|standard way)\b/i.test(sl)) {
-        memoryType = "PATTERN";
-        importance = 6;
-      }
-      // FIX: fix/refactor/improve patterns
-      else if (/\b(fix|refactor|optimize|improve|migrate|replace|upgrade)\b/i.test(sl)) {
-        memoryType = "KNOWLEDGE";
-        importance = 5;
-      }
-      // KNOWLEDGE: general learnings (only from assistant, not user).
-      // Requires both minimum length AND information content — not just "assistant said something long".
-      // Matches sentences containing code-related, architecture, or decision content.
-      else if (
-        role === "ASSISTANT" &&
-        sl.length > 120 &&
-        /\b(code|function|class|module|api|method|pattern|approach|architectur|solution|implement|use\s|because|reason|cause|root|fix|change|config|deploy|error|issue|problem|prefer|better|worse|instead|recommend|learn|found|discover|notice|understand|see\s|need|should|must|require|support|handle|process|manag|build|create|design|structur|dependenc|interface|service|component|system|framework|library|database|query|request|response|endpoint|route|middleware|schema|migrat|test|deploy|version|releas|update|optimize|refactor)\b/i.test(sl)
-      ) {
-        memoryType = "KNOWLEDGE";
-        importance = 4;
-      }
-
-      if (memoryType) {
-        seen.add(key);
-        dreams.push({
-          memoryType,
-          content: sentence.trim().slice(0, 300),
-          importance,
-        });
-      }
-    }
+    collectLegacySentences(text, role, seen, dreams);
   }
 
   // Limit to top 10 by importance

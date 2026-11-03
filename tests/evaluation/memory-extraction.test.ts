@@ -36,6 +36,23 @@ mock.module(new URL('../../src/services/wikiService.js', import.meta.url).href, 
 
 const { summarizeConversationForDreams } = await import('../../src/services/llmService.js');
 
+test('evaluation runs extractors in fixture order without concurrent calls', async () => {
+  const fixtures = corpus.cases.slice(0, 3);
+  const calls: string[] = [];
+  let active = false;
+  const extract: typeof summarizeConversationForDreams = async (_transcript, _provider, _project, sessionId) => {
+    assert.equal(active, false);
+    active = true;
+    calls.push(sessionId);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    active = false;
+    return null;
+  };
+  const summary = await evaluateFixtures(fixtures, extract);
+  assert.deepEqual(calls, fixtures.map(fixture => fixture.id));
+  assert.deepEqual(summary.outcomes.map(outcome => outcome.id), calls);
+});
+
 function assertCorpusShape(): void {
   assert.equal(corpus.datasetVersion, 2, 'development annotation corrections must be versioned');
   assert.equal(corpus.caseCount, corpus.cases.length);

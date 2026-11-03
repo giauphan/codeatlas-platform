@@ -241,11 +241,8 @@ describe('WikiService', () => {
 
     // Look for `/modules` which should contain children like `/modules/services`
     const modulesNode = tree.root.find((n) => n.path === '/modules');
-    // If not synthesized at root, check if it's there
-    if (modulesNode) {
-      assert.ok(Array.isArray(modulesNode.children));
-      assert.ok(modulesNode.children.length > 0);
-    }
+    assert.ok(modulesNode, 'the synthesized modules parent must be reachable');
+    assert.deepStrictEqual(modulesNode.children?.map(child => child.path), ['/modules/services', '/modules/database']);
   });
 
   test('should export generated pages to disk when exportToDisk is true', async () => {

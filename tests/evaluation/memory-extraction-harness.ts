@@ -263,9 +263,10 @@ export async function evaluateFixtures(
   const byLocale: Record<string, EvaluationBreakdown> = {};
   const byKind: Record<string, EvaluationBreakdown> = {};
 
-  for (const fixture of fixtures) {
+  // Extractors may share provider state, so retain fixture order and avoid concurrent calls.
+  await fixtures.reduce<Promise<void>>((previous, fixture) => previous.then(async () => {
     outcomes.push(await evaluateFixture(fixture, extract, options, byLocale, byKind));
-  }
+  }), Promise.resolve());
 
   const truePositives = outcomes.reduce((sum, item) => sum + item.truePositives, 0);
   const falseNegatives = outcomes.reduce((sum, item) => sum + item.falseNegatives, 0);
