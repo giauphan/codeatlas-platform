@@ -36,11 +36,10 @@ import { mountConsolidationRoutes } from "./consolidationRoutes.js";
 import { mountGenomeRoutes } from "./genomeRoutes.js";
 import { mountA2ARoutes } from "./a2a/a2aRoutes.js";
 import { mountHeartbeatRoutes } from "./a2a/heartbeatRoutes.js";
-import { mountCronSettingsRoutes } from "./cronSettingsRoute.js";
+
 import { authProxyRouter } from "../routes/authProxy.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { a2aOrchestrationService } from "../services/a2aOrchestrationService.js";
-import { indexingService } from "../services/indexingService.js";
 import { logger } from "../utils/logger.js";
 import * as crypto from "node:crypto";
 import { loadSettings } from "./cronSettingsRoute.js";
@@ -168,6 +167,7 @@ export const syncQueue = new TaskQueue(1);
 
 // Setup Express app to serve as both MCP SSE and REST API
 export const app = express();
+import { mountCronSettingsRoutes } from "./cronSettingsRoute.js";
 app.set("trust proxy", 1);
 // Use helmet for standard security headers
 app.use(helmet({

@@ -3,7 +3,7 @@ import { registerCheckpointRoutes } from "./checkpointRoutes.js";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { checkAuth, logActivity } from "../services/authService.js";
-import { DreamingService, DreamMemoryType } from "../services/dreamingService.js";
+import { DreamingService } from "../services/dreamingService.js";
 import { loadAnalysisAsync } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";

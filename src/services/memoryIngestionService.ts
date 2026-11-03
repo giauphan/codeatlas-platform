@@ -214,7 +214,7 @@ export class MemoryIngestionService {
     if (outcome.mode === 'model') {
       for (const source of batch.filter(item => !pendingSources.some(pending => pending.eventId === item.eventId))) {
         const sourceMemoryIds = [...new Set(memoryIdsBySource.get(source.eventId) ?? [])];
-        await createDatabaseAdapter().execute(
+        void createDatabaseAdapter().execute(
           `UPDATE dream_capture_events SET status = :status, memory_ids_json = :memoryIds
            WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId AND status IN ('processed', 'filtered')`,
           { tenantId: event.tenantId, projectId, eventId: source.eventId, status: sourceMemoryIds.length ? 'processed' : 'filtered', memoryIds: JSON.stringify(sourceMemoryIds) },
@@ -256,7 +256,7 @@ export class MemoryIngestionService {
   }
 
   private static async ensureModelReceiptTable(): Promise<void> {
-    await createDatabaseAdapter().execute(`CREATE TABLE IF NOT EXISTS dream_extraction_receipts (
+    void createDatabaseAdapter().execute(`CREATE TABLE IF NOT EXISTS dream_extraction_receipts (
       tenant_id TEXT NOT NULL,
       project_id TEXT NOT NULL,
       marker_event_id TEXT NOT NULL,
@@ -336,7 +336,7 @@ export class MemoryIngestionService {
     );
     for (const row of candidates) {
       if (retained.has(row.id)) continue;
-      await createDatabaseAdapter().execute(
+      void createDatabaseAdapter().execute(
         `UPDATE ai_dreaming_memory SET status = 'superseded', updated_at = :now
          WHERE tenant_id = :tenantId AND project_id = :projectId AND id = :memoryId AND status = 'active'`,
         { tenantId: event.tenantId, projectId, memoryId: row.id, now: new Date().toISOString() },

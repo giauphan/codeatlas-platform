@@ -101,4 +101,6 @@ if (isMain) {
 }
 
 // Re-export core modules/helpers to maintain compatibility with test suite
-export { server, app, checkAuth, getStats, discoverProjects, loadAnalysis, discoverProjectsAsync, loadAnalysisAsync };
+export { app } from './presentation/httpServer.js';
+export { checkAuth } from './services/authService.js';
+export { getStats, discoverProjects, loadAnalysis, discoverProjectsAsync, loadAnalysisAsync } from './services/projectService.js';

@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import * as fs from "node:fs";
+
 import * as path from "node:path";
 import { checkAuth, logActivity } from "../services/authService.js";
 import {
@@ -10,11 +10,11 @@ import {
 } from "../services/projectService.js";
 import { loadAnalysisAsync, AnalysisResultLocal } from "../services/projectService.js";
 import { MemoryService } from "../services/memoryService.js";
-import { DreamingService, DreamMemoryType } from "../services/dreamingService.js";
+import { DreamingService } from "../services/dreamingService.js";
 import { SecurityScanner } from "../services/scanner/securityScanner.js";
 import { GenomeService } from "../services/genomeService.js";
 import { SecondBrainService } from "../services/secondBrainService.js";
-import { ConsolidationEngine, consolidationEngine } from "../services/consolidationEngine.js";
+import { ConsolidationEngine } from "../services/consolidationEngine.js";
 import { loadContextAtSessionStart, triggerContextReload } from "../services/llmService.js";
 import { logger } from "../utils/logger.js";
 import { registerTool } from "./a2a/agentCard.js";
@@ -708,7 +708,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         entities: nodes.map((n) => ({
           name: n.label,
           type: n.type,
-          filePath: (() => { if (!n.filePath) return null; return path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath); })(),
+          filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
           line: n.line || null,
         })),
       };
@@ -853,7 +853,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       // Pre-calculate adjacency lists for O(1) lookup
       const linksByTarget = new Map<string, Array<{ from: string; type: string }>>();
-      const linksBySource = new Map<string, Array<{ to: string; type: string }>>();
+      const linksBySource = new Map<string, Array<{ readonly to: string; readonly type: string }>>();
       for (const l of links) {
         const byTarget = linksByTarget.get(l.target) ?? [];
         byTarget.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
@@ -874,7 +874,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           return {
             name: n.label,
             type: n.type,
-            filePath: (() => { if (!n.filePath) return null; return path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath); })(),
+            filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
             line: n.line || null,
             incomingRelationships: incomingLinks,
             outgoingRelationships: outgoingLinks,
@@ -912,7 +912,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
 
       // Pre-calculate adjacency lists for O(1) lookup
-      const linksBySource = new Map<string, Array<{ to: string; type: string }>>();
+      const linksBySource = new Map<string, Array<{ readonly to: string; readonly type: string }>>();
       for (const l of links) {
         const bySource = linksBySource.get(l.source) ?? [];
         bySource.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
