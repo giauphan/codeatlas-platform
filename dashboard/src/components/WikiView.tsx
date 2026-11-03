@@ -483,41 +483,48 @@ export const WikiView: React.FC<WikiViewProps> = ({
           }
 
           // Render regular text paragraphs/headers
+          let seenParagraphs = 0;
           return (
             <div key={`${part.substring(0, 32)}-${index}`} style={{ margin: '1rem 0' }}>
               {part.split('\n\n').map((paragraph) => {
+                seenParagraphs += 1;
+                const pKey = `${seenParagraphs}-${paragraph.slice(0, 32)}`;
                 if (paragraph.startsWith('# ')) {
                   return (
-                    <h1 key={paragraph} className="tech-font" style={{ fontSize: '1.8rem', color: '#fff', margin: '1.5rem 0 1rem 0', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
+                    <h1 key={pKey} className="tech-font" style={{ fontSize: '1.8rem', color: '#fff', margin: '1.5rem 0 1rem 0', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
                       {paragraph.replace('# ', '')}
                     </h1>
                   );
                 }
                 if (paragraph.startsWith('## ')) {
                   return (
-                    <h2 key={paragraph} className="tech-font" style={{ fontSize: '1.4rem', color: 'var(--primary-neon)', margin: '1.25rem 0 0.75rem 0' }}>
+                    <h2 key={pKey} className="tech-font" style={{ fontSize: '1.4rem', color: 'var(--primary-neon)', margin: '1.25rem 0 0.75rem 0' }}>
                       {paragraph.replace('## ', '')}
                     </h2>
                   );
                 }
                 if (paragraph.startsWith('### ')) {
                   return (
-                    <h3 key={paragraph} style={{ fontSize: '1.1rem', color: '#fff', margin: '1rem 0 0.5rem 0' }}>
+                    <h3 key={pKey} style={{ fontSize: '1.1rem', color: '#fff', margin: '1rem 0 0.5rem 0' }}>
                       {paragraph.replace('### ', '')}
                     </h3>
                   );
                 }
                 if (paragraph.startsWith('- ')) {
+                  let seenItems = 0;
                   return (
-                    <ul key={paragraph} style={{ paddingLeft: '1.5rem', margin: '0.5rem 0' }}>
-                      {paragraph.split('\n').map((item) => (
-                        <li key={item} style={{ margin: '0.25rem 0' }}>{item.replace(/^- /, '')}</li>
-                      ))}
+                    <ul key={pKey} style={{ paddingLeft: '1.5rem', margin: '0.5rem 0' }}>
+                      {paragraph.split('\n').map((item) => {
+                        seenItems += 1;
+                        return (
+                          <li key={`${seenItems}-${item.slice(0, 32)}`} style={{ margin: '0.25rem 0' }}>{item.replace(/^- /, '')}</li>
+                        );
+                      })}
                     </ul>
                   );
                 }
                 return (
-                  <p key={paragraph} style={{ margin: '0.75rem 0' }}>
+                  <p key={pKey} style={{ margin: '0.75rem 0' }}>
                     {paragraph}
                   </p>
                 );

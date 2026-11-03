@@ -57,6 +57,20 @@ function resolveIndexingEnabled(val: unknown): number {
   return 1;
 }
 
+async function runSequential<T, R>(
+  items: readonly T[],
+  worker: (item: T) => Promise<R>
+): Promise<R[]> {
+  return items.reduce<Promise<R[]>>(
+    async (prevPromise, item) => {
+      const results = await prevPromise;
+      results.push(await worker(item));
+      return results;
+    },
+    Promise.resolve([])
+  );
+}
+
 async function migrateUserKeyDoc(
   db: DatabaseAdapter,
   uid: string,
@@ -155,10 +169,8 @@ async function migrateSingleUserDoc(
   console.log(`  ✓ User migrated: ${uid} (${email || "no-email"}, role=${role}, tier=${tier})`);
 
   const keysSnapshot = await userDoc.ref.collection("keys").get(); // NOSONAR
-  const keyResults = await Promise.all(
-    keysSnapshot.docs.map((keyDoc) =>
-      migrateUserKeyDoc(db, uid, tier, keyDoc.id, keyDoc.data() || {})
-    )
+  const keyResults = await runSequential(keysSnapshot.docs, (keyDoc) =>
+    migrateUserKeyDoc(db, uid, tier, keyDoc.id, keyDoc.data() || {})
   );
   const keysMigrated = keyResults.filter(Boolean).length;
 
@@ -281,8 +293,8 @@ export async function migrateFirestoreToSqlite(): Promise<void> {
   try {
     console.log("\n=== 1. Migrating Firestore Users & API Keys to SQLite ===");
     const usersSnapshot = await firestore.collection("users").get();
-    const userResults = await Promise.all(
-      usersSnapshot.docs.map((userDoc) => migrateSingleUserDoc(db, userDoc))
+    const userResults = await runSequential(usersSnapshot.docs, (userDoc) =>
+      migrateSingleUserDoc(db, userDoc)
     );
 
     const tenantsCount = userResults.length;
@@ -295,10 +307,8 @@ export async function migrateFirestoreToSqlite(): Promise<void> {
     console.log("\n=== 2. Migrating Firestore Projects to SQLite ===");
     const projectsSnapshot = await firestore.collection("projects").get();
     const defaultTenantId = primaryAdminUid || "admin";
-    await Promise.all(
-      projectsSnapshot.docs.map((projDoc) =>
-        migrateSingleProjectDoc(db, projDoc, defaultTenantId)
-      )
+    await runSequential(projectsSnapshot.docs, (projDoc) =>
+      migrateSingleProjectDoc(db, projDoc, defaultTenantId)
     );
     const projectsCount = projectsSnapshot.docs.length;
 

@@ -190,10 +190,11 @@ test('technical file names and a negated caveat remain in the same evidence quot
 });
 
 test('quoted JSON credentials and credential query parameters are redacted', async () => {
-  const text = 'The API request failed with {"api_key":"fakeJsonCredential654321"}, https://example.test?access_token=fakeQueryCredential123456, and postgresql://fixture_user:fakeUrlPassword765432@127.0.0.1:5432/test because credentials expired.';
+  const text = 'The API request failed with {"api_key":"fakeJsonCredential654321"}, Authorization: Bearer fakeBearerHeaderToken998877, https://example.test?access_token=fakeQueryCredential123456, and postgresql://fixture_user:fakeUrlPassword765432@127.0.0.1:5432/test because credentials expired.';
   const memories = await extractStructuredMemories([{ id: 'json-secret', role: 'USER', text }]);
   assert.ok(memories.length > 0);
   assert.ok(!JSON.stringify(memories).includes('fakeJsonCredential654321'));
+  assert.ok(!JSON.stringify(memories).includes('fakeBearerHeaderToken998877'));
   assert.ok(!JSON.stringify(memories).includes('fakeQueryCredential123456'));
   assert.ok(!JSON.stringify(memories).includes('fakeUrlPassword765432'));
 });
