@@ -300,6 +300,25 @@ test('heartbeat failure fences the in-flight worker and leaves recovery to a lat
   assert.ok(after.scheduler_duration_ms_total > before.scheduler_duration_ms_total);
 });
 
+test('keeps renewing the lease while a failed run is recorded', async () => {
+  const { ledger } = await openLedger();
+  let heartbeatObserved = false;
+  let notifyHeartbeat: (() => void) | undefined;
+  const heartbeat = new Promise<void>((resolve) => { notifyHeartbeat = resolve; });
+  ledger.heartbeat = async () => { heartbeatObserved = true; notifyHeartbeat?.(); return true; };
+  ledger.failRun = async () => {
+    await Promise.race([heartbeat, new Promise<void>((resolve) => setTimeout(resolve, 50))]);
+    return true;
+  };
+  const scheduler = new DreamScheduler({
+    ledger, ownerId: 'worker-a', heartbeatMs: 5,
+    now: () => new Date('2026-10-19T09:00:02.000Z'),
+    executeJob: async () => { throw new Error('job failed'); },
+  });
+  assert.equal(await scheduler.runSlot({ ...baseClaim }), 'retryable');
+  assert.equal(heartbeatObserved, true);
+});
+
 test('stale completion is counted as lease loss without changing the fenced ledger row', async () => {
   const { adapter, ledger } = await openLedger();
   const before = DreamDiagnostics.snapshot();

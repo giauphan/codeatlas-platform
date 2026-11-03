@@ -76,3 +76,15 @@ test('deduplication bounds each merged-status update to 900 IDs across many proj
   assert.deepEqual(updates.map(call => Object.keys(call.arguments[1]!).filter(key => key.startsWith('id')).length), [900, 1]);
   for (const call of updates) assert.equal((call.arguments[1] as Record<string, unknown>).tenantId, auth.uid);
 });
+
+test('deduplication does not merge memories when vector similarity is not a number', async () => {
+  await insertDreams([
+    { id: 'invalid-vector', project: 'a', embedding: Buffer.from(new Float32Array([NaN, 0]).buffer) },
+    { id: 'valid-vector', project: 'a' },
+  ]);
+  const report = await authStorage.run(auth, () => new ConsolidationEngine().run({ operations: ['dedup'] }));
+  assert.equal(report.dreamsMerged, 0);
+  assert.deepEqual(await adapter.query('SELECT id, status FROM ai_dreaming_memory ORDER BY id'), [
+    { id: 'invalid-vector', status: 'active' }, { id: 'valid-vector', status: 'active' },
+  ]);
+});

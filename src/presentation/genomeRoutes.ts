@@ -15,6 +15,38 @@ const genomeRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+type GenomeListFilters = { limit: number; offset: number; project?: string; category?: string };
+type GenomeListFilterResult = { valid: true; filters: GenomeListFilters } | { valid: false; status: number; error: string };
+
+function parseGenomeListFilters(req: express.Request): GenomeListFilterResult {
+  const rawLimitParam = req.query.limit;
+  const rawOffsetParam = req.query.offset;
+  const rawLimit = rawLimitParam !== undefined && rawLimitParam !== '' ? Number(rawLimitParam) : undefined;
+  const rawOffset = rawOffsetParam !== undefined && rawOffsetParam !== '' ? Number(rawOffsetParam) : undefined;
+  if ((rawLimit !== undefined && Number.isNaN(rawLimit)) || (rawOffset !== undefined && Number.isNaN(rawOffset))) {
+    return { valid: false, status: 400, error: "Bad Request: limit and offset must be valid numbers" };
+  }
+  const normalizedLimit = rawLimit ?? 50;
+  if (normalizedLimit < 1 || !Number.isFinite(normalizedLimit)) {
+    return { valid: false, status: 400, error: "Bad Request: limit must be at least 1 and finite" };
+  }
+  const project = normalizeGenomeFilter(req.query.project);
+  if (!project.valid) return { valid: false, status: 400, error: "Bad Request: project parameter too long" };
+  const category = normalizeGenomeFilter(req.query.category);
+  if (!category.valid) return { valid: false, status: 400, error: "Bad Request: category parameter too long" };
+  const limit = Math.min(normalizedLimit, 100);
+  const offset = Math.max(0, rawOffset ?? 0);
+  if (offset > 10000) return { valid: false, status: 400, error: "Bad Request: offset cannot exceed 10000" };
+  return { valid: true, filters: { limit, offset, project: project.value, category: category.value } };
+}
+
+function normalizeGenomeFilter(value: unknown): { valid: boolean; value?: string } {
+  const normalized = typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  return normalized !== undefined && normalized.length > 255
+    ? { valid: false }
+    : { valid: true, value: normalized };
+}
+
 export function mountGenomeRoutes(app: express.Application): void {
   // POST /api/genome/gene — Create or update a gene
   app.post("/api/genome/gene", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
@@ -106,48 +138,14 @@ export function mountGenomeRoutes(app: express.Application): void {
         return;
       }
 
-      // Clean query parameter parsing, converting to strict numbers
-      const rawLimitParam = req.query.limit;
-      const rawOffsetParam = req.query.offset;
-
-      // Treat empty string explicitly as undefined to trigger defaults, avoid 0 coercion
-      const rawLimit = rawLimitParam !== undefined && rawLimitParam !== '' ? Number(rawLimitParam) : undefined;
-      const rawOffset = rawOffsetParam !== undefined && rawOffsetParam !== '' ? Number(rawOffsetParam) : undefined;
-
-      if ((rawLimit !== undefined && Number.isNaN(rawLimit)) || (rawOffset !== undefined && Number.isNaN(rawOffset))) {
-        res.status(400).json({ error: "Bad Request: limit and offset must be valid numbers" });
+      const filterResult = parseGenomeListFilters(req);
+      if (!filterResult.valid) {
+        res.status(filterResult.status).json({ error: filterResult.error });
         return;
       }
-
-      const normalizedLimit = rawLimit ?? 50;
-      if (normalizedLimit < 1 || !Number.isFinite(normalizedLimit)) {
-        res.status(400).json({ error: "Bad Request: limit must be at least 1 and finite" });
-        return;
-      }
+      const { limit, offset, project, category } = filterResult.filters;
 
       const adapter = await initAdapter();
-      // Filter params explicitly allow empty strings to skip WHERE clauses cleanly as a UI affordance
-      const projectRaw = req.query.project;
-      const project = typeof projectRaw === 'string' ? (projectRaw.trim() === '' ? undefined : projectRaw.trim()) : undefined;
-      if (project !== undefined && project.length > 255) {
-        res.status(400).json({ error: "Bad Request: project parameter too long" });
-        return;
-      }
-
-      const categoryRaw = req.query.category;
-      const category = typeof categoryRaw === 'string' ? (categoryRaw.trim() === '' ? undefined : categoryRaw.trim()) : undefined;
-      if (category !== undefined && category.length > 255) {
-        res.status(400).json({ error: "Bad Request: category parameter too long" });
-        return;
-      }
-
-      const limit = Math.min(normalizedLimit, 100);
-      const offset = Math.max(0, rawOffset ?? 0);
-
-      if (offset > 10000) {
-        res.status(400).json({ error: "Bad Request: offset cannot exceed 10000" });
-        return;
-      }
 
       const binds: Record<string, any> = { limit, offset, tenantId };
       const whereParts = ["tenant_id = :tenantId"];

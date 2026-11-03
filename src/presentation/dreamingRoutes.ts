@@ -12,6 +12,7 @@ import { rejectArrayParams } from "../middleware/validation.js";
 import { DreamPipelineService } from "../services/dreamPipelineService.js";
 import { DreamDiagnostics } from "../services/dreamDiagnostics.js";
 import { DreamCaptureStore } from "../services/dreamCaptureStore.js";
+import type { CaptureEventAck, CaptureEventInput } from "../services/dreamCaptureStore.js";
 import { MemoryIngestionService } from "../services/memoryIngestionService.js";
 import rateLimit from "express-rate-limit";
 
@@ -60,6 +61,167 @@ function handleError(res: express.Response, err: unknown, context: string) {
     logger.error(`[Dreaming ${context}] Error:`, msg);
     res.status(500).json({ error: msg });
   }
+}
+
+type SaveValidationResult = { valid: true; idempotencyKey?: string } | { valid: false; reason: string };
+
+function validateSaveRequest(body: Record<string, unknown>, headerKey: string | undefined): SaveValidationResult {
+  const bodyKey = body.idempotency_key;
+  if (bodyKey !== undefined && typeof bodyKey !== "string") return { valid: false, reason: "invalid_idempotency_key" };
+  if (headerKey && bodyKey && headerKey !== bodyKey) return { valid: false, reason: "idempotency_key_mismatch" };
+  if (!VALID_MEMORY_TYPES.includes(body.memory_type as typeof VALID_MEMORY_TYPES[number])) return { valid: false, reason: "invalid_memory_type" };
+  if (typeof body.content !== "string" || !body.content) return { valid: false, reason: "invalid_content" };
+  if (body.scope && (typeof body.scope !== "string" || !/^[a-z0-9][a-z0-9/-]{0,499}$/.test(body.scope))) {
+    return { valid: false, reason: "invalid_scope" };
+  }
+  if (body.tags && (!Array.isArray(body.tags) || body.tags.some(t => typeof t !== "string" || t.length > 100) || body.tags.length > 100)) {
+    return { valid: false, reason: "invalid_tags" };
+  }
+  if (body.related_ids && (!Array.isArray(body.related_ids) || body.related_ids.some(id => typeof id !== "string" || id.length > 100) || body.related_ids.length > 100)) {
+    return { valid: false, reason: "invalid_related_ids" };
+  }
+  return { valid: true, idempotencyKey: headerKey || bodyKey as string | undefined };
+}
+
+function parseQueryDate(value?: string): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function parseMemoryTags(value?: string): string[] | undefined {
+  if (!value) return undefined;
+  try {
+    return value.startsWith("[") ? JSON.parse(value) as string[] : value.split(",").map(tag => tag.trim()).filter(Boolean);
+  } catch {
+    return undefined;
+  }
+}
+
+function parseMemoryQueryPagination(limitRaw?: string, offsetRaw?: string):
+  { valid: true; limit: number; offset: number } | { valid: false; error: string } {
+  const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 10;
+  if (Number.isNaN(limit) || limit < 1 || limit > 100) return { valid: false, error: "limit must be a number between 1 and 100" };
+  const offset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
+  if (Number.isNaN(offset) || offset < 0) return { valid: false, error: "offset must be a non-negative number" };
+  return { valid: true, limit, offset };
+}
+
+function isValidSourceSpans(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every(span => {
+    if (!span || typeof span !== "object") return false;
+    const range = span as Record<string, unknown>;
+    return typeof range.start === "number" && typeof range.end === "number";
+  }));
+}
+
+function validateCaptureEventBody(body: Record<string, unknown>): boolean {
+  const actorRole = body.actor_role;
+  const memoryType = body.memory_type_hint ?? body.memory_type;
+  const projectId = body.project_id;
+  const displayProject = body.project ?? body.display_name ?? projectId;
+  return typeof body.event_id === "string" && typeof body.session_id === "string" && typeof displayProject === "string" &&
+    (actorRole === undefined || actorRole === "USER" || actorRole === "ASSISTANT" || actorRole === "TOOL") &&
+    (memoryType === undefined || typeof memoryType === "string") &&
+    (body.tool_name === undefined || typeof body.tool_name === "string") &&
+    (projectId === undefined || typeof projectId === "string") &&
+    (body.occurred_at === undefined || typeof body.occurred_at === "string") &&
+    isValidSourceSpans(body.source_spans);
+}
+
+function createCaptureEventInput(body: Record<string, unknown>, content: string): CaptureEventInput {
+  const eventId = body.event_id as string;
+  const projectId = body.project_id;
+  return {
+    eventId,
+    sessionId: body.session_id as string,
+    actorRole: body.actor_role as "USER" | "ASSISTANT" | "TOOL" | undefined,
+    memoryTypeHint: (body.memory_type_hint ?? body.memory_type) as CaptureEventInput["memoryTypeHint"],
+    toolName: body.tool_name as string | undefined,
+    project: String(body.project ?? body.display_name ?? projectId),
+    projectId: typeof projectId === "string" ? projectId : undefined,
+    displayName: typeof body.display_name === "string" ? body.display_name : undefined,
+    workspacePath: typeof body.workspace_path === "string" ? body.workspace_path : undefined,
+    content,
+    checkpoint: body.checkpoint,
+    occurredAt: typeof body.occurred_at === "string" ? body.occurred_at : undefined,
+    sourceSpans: body.source_spans as Array<{ start: number; end: number }> | undefined,
+  };
+}
+
+function invalidCaptureAcknowledgement(body: Record<string, unknown>, requestId: string) {
+  return {
+    success: false,
+    status: "rejected",
+    persisted: false,
+    acknowledged: false,
+    event_id: typeof body.event_id === "string" ? body.event_id : "",
+    memory_ids: [],
+    reason_code: "invalid_event",
+    request_id: requestId,
+  };
+}
+
+function acceptCaptureEvent(body: Record<string, unknown>, content: unknown, auth: NonNullable<ReturnType<typeof authStorage.getStore>>): Promise<CaptureEventAck> {
+  return authStorage.run(auth, () => DreamCaptureStore.accept(createCaptureEventInput(body, content as string)));
+}
+
+async function completeCaptureAcknowledgement(
+  body: Record<string, unknown>,
+  result: CaptureEventAck,
+  auth: NonNullable<ReturnType<typeof authStorage.getStore>>,
+  requestId: string,
+  content: unknown,
+): Promise<{ extractionStatus: "pending" | "processed" | "filtered" | undefined; httpStatus: number }> {
+  const projectId = body.project_id;
+  const displayProject = body.project ?? body.display_name ?? projectId;
+  if (result.acknowledged && body.checkpoint !== undefined) {
+    await authStorage.run(auth, () => SessionCheckpointService.latest(typeof projectId === "string" ? projectId : String(displayProject)));
+  }
+  let extractionStatus: "pending" | "processed" | "filtered" | undefined = result.extraction_status;
+  if (result.acknowledged && body.checkpoint === undefined && result.extraction_status === "pending" && process.env.CODEATLAS_MEMORY_PROCESSING_ENABLED !== "false") {
+    const extraction = await authStorage.run(auth, () => MemoryIngestionService.processPending({
+      projectId: typeof projectId === "string" ? projectId : String(displayProject),
+      eventId: body.event_id as string,
+      useModel: false,
+    }));
+    if (extraction.success) {
+      result.memory_ids = extraction.memory_ids;
+      extractionStatus = result.memory_ids.length ? "processed" : "filtered";
+    }
+  }
+  await logActivity(auth, "ingest_capture_event", {
+    request_id: requestId,
+    content_length: typeof content === "string" ? content.length : 0,
+    status: result.status,
+  });
+  DreamDiagnostics.recordCapture(result.status);
+  let httpStatus = 200;
+  if (result.status === "rejected") httpStatus = 400;
+  else if (result.status === "error") httpStatus = 500;
+  return { extractionStatus, httpStatus };
+}
+
+async function handleEventCapture(
+  body: Record<string, unknown>,
+  content: unknown,
+  auth: NonNullable<ReturnType<typeof authStorage.getStore>>,
+  requestId: string,
+  res: express.Response,
+): Promise<void> {
+  DreamDiagnostics.recordCaptureReceived();
+  if (!validateCaptureEventBody(body)) {
+    DreamDiagnostics.recordCapture("rejected");
+    res.status(400).json(invalidCaptureAcknowledgement(body, requestId));
+    return;
+  }
+  const result = await acceptCaptureEvent(body, content, auth);
+  const acknowledgement = await completeCaptureAcknowledgement(body, result, auth, requestId, content);
+  res.status(acknowledgement.httpStatus).json({
+    ...result,
+    ...(acknowledgement.extractionStatus ? { extraction_status: acknowledgement.extractionStatus } : {}),
+    request_id: requestId,
+  });
 }
 
 export function registerDreamingRoutes(app: express.Application): void {
@@ -131,35 +293,10 @@ export function registerDreamingRoutes(app: express.Application): void {
         display_name?: string;
         workspace_path?: string;
       };
-      const bodyIdempotencyKey = (req.body as { idempotency_key?: unknown }).idempotency_key;
       const headerIdempotencyKey = req.header("Idempotency-Key");
-      if (bodyIdempotencyKey !== undefined && typeof bodyIdempotencyKey !== "string") {
-        return sendSaveAck({ status: "rejected", persisted: false, reason_code: "invalid_idempotency_key" }, 400);
-      }
-      if (headerIdempotencyKey && bodyIdempotencyKey && headerIdempotencyKey !== bodyIdempotencyKey) {
-        return sendSaveAck({ status: "rejected", persisted: false, reason_code: "idempotency_key_mismatch" }, 400);
-      }
-      const idempotencyKey = headerIdempotencyKey || bodyIdempotencyKey as string | undefined;
-
-      if (!VALID_MEMORY_TYPES.includes(memory_type)) {
-        return sendSaveAck({ status: "rejected", persisted: false, reason_code: "invalid_memory_type" }, 400);
-      }
-      if (!content || typeof content !== "string") {
-        return sendSaveAck({ status: "rejected", persisted: false, reason_code: "invalid_content" }, 400);
-      }
-
-      // Validate scope format: alphanumeric + slash, max 500 chars
-      if (scope && !/^[a-z0-9][a-z0-9/-]{0,499}$/.test(scope)) {
-        return sendSaveAck({ status: "rejected", persisted: false, reason_code: "invalid_scope" }, 400);
-      }
-
-      // Validate tags and related_ids: arrays of strings, max 100 items, max 100 chars per item
-      if (tags && (!Array.isArray(tags) || tags.some(t => typeof t !== "string" || t.length > 100) || tags.length > 100)) {
-        return sendSaveAck({ status: "rejected", persisted: false, reason_code: "invalid_tags" }, 400);
-      }
-      if (related_ids && (!Array.isArray(related_ids) || related_ids.some(id => typeof id !== "string" || id.length > 100) || related_ids.length > 100)) {
-        return sendSaveAck({ status: "rejected", persisted: false, reason_code: "invalid_related_ids" }, 400);
-      }
+      const validation = validateSaveRequest(req.body as Record<string, unknown>, headerIdempotencyKey);
+      if (!validation.valid) return sendSaveAck({ status: "rejected", persisted: false, reason_code: validation.reason }, 400);
+      const idempotencyKey = validation.idempotencyKey;
 
       const importanceVal = typeof importance === "number" ? Math.min(9, Math.max(1, importance)) : 5;
       const projectId = typeof req.body?.project_id === "string" ? req.body.project_id : undefined;
@@ -221,35 +358,14 @@ export function registerDreamingRoutes(app: express.Application): void {
       const startDateRaw = req.query.start_date as string | undefined;
       const endDateRaw = req.query.end_date as string | undefined;
 
-      // Parse and validate date filters — accept ISO 8601 or YYYY-MM-DD
-      const parseDate = (d?: string): Date | undefined => {
-        if (!d) return undefined;
-        const parsed = new Date(d);
-        if (Number.isNaN(parsed.getTime())) return undefined;
-        return parsed;
-      };
-      const startDate = parseDate(startDateRaw);
-      const endDate = parseDate(endDateRaw);
+      const startDate = parseQueryDate(startDateRaw);
+      const endDate = parseQueryDate(endDateRaw);
 
       const scope = req.query.scope as string | undefined;
-      let tags: string[] | undefined;
-      const tagsRaw = req.query.tags as string | undefined;
-      if (tagsRaw) {
-        try {
-          // Allow comma-separated string or JSON array
-          if (tagsRaw.startsWith('[')) tags = JSON.parse(tagsRaw);
-          else tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
-        } catch {}
-      }
-
-      const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 10;
-      if (Number.isNaN(limit) || limit < 1 || limit > 100) {
-        return res.status(400).json({ error: "limit must be a number between 1 and 100" });
-      }
-      const offset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
-      if (Number.isNaN(offset) || offset < 0) {
-        return res.status(400).json({ error: "offset must be a non-negative number" });
-      }
+      const tags = parseMemoryTags(req.query.tags as string | undefined);
+      const pagination = parseMemoryQueryPagination(limitRaw, offsetRaw);
+      if (!pagination.valid) return res.status(400).json({ error: pagination.error });
+      const { limit, offset } = pagination;
 
       const projectName = await resolveProjectName(project);
       await logActivity(auth, "query_dream_memories", {
@@ -343,80 +459,12 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       // Event-based capture is durable and idempotent. The legacy transcript
       // flow remains available when callers do not provide event_id.
+      // Event-based capture is durable and idempotent. The legacy transcript
+      // flow remains available when callers do not provide event_id.
       if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "event_id")) {
         isEventCapture = true;
-        DreamDiagnostics.recordCaptureReceived();
-        const body = req.body as Record<string, unknown>;
-        const eventId = body.event_id;
-        const sessionId = body.session_id;
-        const actorRole = body.actor_role;
-        const memoryTypeHint = body.memory_type_hint ?? body.memory_type;
-        const toolName = body.tool_name;
-        const projectId = body.project_id;
-        const displayProject = body.project ?? body.display_name ?? projectId;
-        const sourceSpans = body.source_spans;
-        if (typeof eventId !== "string" || typeof sessionId !== "string" ||
-            typeof displayProject !== "string" ||
-            (actorRole !== undefined && actorRole !== "USER" && actorRole !== "ASSISTANT" && actorRole !== "TOOL") ||
-            (memoryTypeHint !== undefined && typeof memoryTypeHint !== "string") ||
-            (toolName !== undefined && typeof toolName !== "string") ||
-            (projectId !== undefined && typeof projectId !== "string") ||
-            (body.occurred_at !== undefined && typeof body.occurred_at !== "string") ||
-            (sourceSpans !== undefined && (!Array.isArray(sourceSpans) || sourceSpans.some((span) =>
-              !span || typeof span !== "object" || typeof (span as Record<string, unknown>).start !== "number" || typeof (span as Record<string, unknown>).end !== "number")))) {
-          DreamDiagnostics.recordCapture('rejected');
-          const invalid = {
-            success: false,
-            status: "rejected",
-            persisted: false,
-            acknowledged: false,
-            event_id: typeof eventId === "string" ? eventId : "",
-            memory_ids: [],
-            reason_code: "invalid_event",
-            request_id: requestId,
-          };
-          return res.status(400).json(invalid);
-        }
-        const result = await authStorage.run(auth, () => DreamCaptureStore.accept({
-          eventId,
-          sessionId,
-          actorRole: actorRole as "USER" | "ASSISTANT" | "TOOL" | undefined,
-          memoryTypeHint: memoryTypeHint as "MISTAKE" | "PREFERENCE" | "KNOWLEDGE" | "PATTERN" | "SESSION_SUMMARY" | undefined,
-          toolName: toolName as string | undefined,
-          project: String(displayProject),
-          projectId: typeof projectId === "string" ? projectId : undefined,
-          displayName: typeof body.display_name === 'string' ? body.display_name : undefined,
-          workspacePath: typeof body.workspace_path === 'string' ? body.workspace_path : undefined,
-          content,
-          checkpoint: body.checkpoint,
-          occurredAt: typeof body.occurred_at === "string" ? body.occurred_at : undefined,
-          sourceSpans: sourceSpans as Array<{ start: number; end: number }> | undefined,
-        }));
-        if (result.acknowledged && body.checkpoint !== undefined) {
-          // Materialize progress before source evidence can be reconciled or expire.
-          await authStorage.run(auth, () => SessionCheckpointService.latest(typeof projectId === "string" ? projectId : String(displayProject)));
-        }
-        let extractionStatus: 'pending' | 'processed' | 'filtered' | undefined = result.extraction_status;
-        // Checkpoint batches are reconciled by the model-capable worker. The
-        // hook ACK only promises durable source storage; deterministic startup
-        // progress was materialized above and is immediately available.
-        if (result.acknowledged && body.checkpoint === undefined && result.extraction_status === 'pending' && process.env.CODEATLAS_MEMORY_PROCESSING_ENABLED !== 'false') {
-          const extraction = await authStorage.run(auth, () => MemoryIngestionService.processPending({
-            projectId: typeof projectId === 'string' ? projectId : String(displayProject), eventId, useModel: false,
-          }));
-          if (extraction.success) {
-            result.memory_ids = extraction.memory_ids;
-            extractionStatus = result.memory_ids.length ? 'processed' : 'filtered';
-          }
-        }
-        await logActivity(auth, "ingest_capture_event", {
-          request_id: requestId,
-          content_length: typeof content === "string" ? content.length : 0,
-          status: result.status,
-        });
-        DreamDiagnostics.recordCapture(result.status);
-        const httpStatus = result.status === "rejected" ? 400 : result.status === "error" ? 500 : 200;
-        return res.status(httpStatus).json({ ...result, ...(extractionStatus ? { extraction_status: extractionStatus } : {}), request_id: requestId });
+        await handleEventCapture(req.body as Record<string, unknown>, content, auth, requestId, res);
+        return;
       }
 
       if (!content || typeof content !== "string") {

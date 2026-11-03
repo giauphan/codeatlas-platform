@@ -22,7 +22,7 @@ import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { indexingService } from "../services/indexingService.js";
 import { authStorage } from "../utils/context.js";
 import { isToolEnabled } from "../config/env.js";
-import { GraphNode } from "../types/index.js";
+import { GraphNode, GraphLink } from "../types/index.js";
 import {
   loadMemoryManually,
   getMemoryStatus,
@@ -48,6 +48,530 @@ function countByTypes<T extends GraphNode['type']>(nodes: GraphNode[], types: T[
     if (counts[type] !== undefined) counts[type]++;
   }
   return counts;
+}
+
+async function syncKnowledgeGraphMemory(
+  projectName: string,
+  nodes: GraphNode[],
+  links: GraphLink[],
+  businessRule?: string,
+  changeDescription?: string,
+): Promise<{ success: boolean; error?: string; businessRuleSaved: boolean; changeDescriptionSaved: boolean }> {
+  let businessRuleSaved = false;
+  let changeDescriptionSaved = false;
+  try {
+    logger.info(`Syncing Knowledge Graph for ${projectName} to the database...`);
+    await MemoryService.saveSemanticMemory(projectName, nodes);
+    await MemoryService.saveRelationalMemory(projectName, links);
+    if (businessRule) {
+      await MemoryService.saveEpisodicMemory(projectName, "BUSINESS_RULE", { text: businessRule });
+      businessRuleSaved = true;
+    }
+    if (changeDescription) {
+      await MemoryService.saveEpisodicMemory(projectName, "CHANGE_LOG", { text: changeDescription });
+      changeDescriptionSaved = true;
+    }
+    return { success: true, businessRuleSaved, changeDescriptionSaved };
+  } catch (error: unknown) {
+    logger.error("Failed to sync to database:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      businessRuleSaved,
+      changeDescriptionSaved,
+    };
+  }
+}
+
+function selectSystemFlowNodes(
+  graphNodes: GraphNode[],
+  links: GraphLink[],
+  scope: string,
+  feature: string | undefined,
+): { nodes: GraphNode[]; linkTypeFilter: string | null } {
+  if (scope === "modules-only") {
+    return {
+      nodes: graphNodes.filter(node => node.type === "module" && (node.filePath || node.id.startsWith("external:"))),
+      linkTypeFilter: "import",
+    };
+  }
+  if (scope !== "feature" || !feature) return { nodes: graphNodes, linkTypeFilter: null };
+
+  const query = feature.toLowerCase();
+  const matchingNodes = new Set<string>();
+  for (const node of graphNodes) {
+    if (node.label.toLowerCase().includes(query) || node.filePath?.toLowerCase().includes(query)) {
+      matchingNodes.add(node.id);
+    }
+  }
+  for (const link of links) {
+    if (matchingNodes.has(link.source)) matchingNodes.add(link.target);
+    if (matchingNodes.has(link.target)) matchingNodes.add(link.source);
+  }
+  return { nodes: graphNodes.filter(node => matchingNodes.has(node.id)), linkTypeFilter: null };
+}
+
+function limitSystemFlowNodes(nodes: GraphNode[], maxNodes: number): GraphNode[] {
+  if (nodes.length <= maxNodes) return nodes;
+  nodes.sort((left, right) => (NODE_PRIORITY_ORDER.get(left.type) ?? 99) - (NODE_PRIORITY_ORDER.get(right.type) ?? 99));
+  return nodes.slice(0, maxNodes);
+}
+
+function filterSystemFlowLinks(links: GraphLink[], nodes: GraphNode[], linkType: string | null): GraphLink[] {
+  const nodeIds = new Set(nodes.map(node => node.id));
+  const linkIds = new Set<string>();
+  const filtered: GraphLink[] = [];
+  for (const link of links) {
+    if ((linkType && link.type !== linkType) || !nodeIds.has(link.source) || !nodeIds.has(link.target)) continue;
+    const id = `${link.source}|${link.target}|${link.type}`;
+    if (linkIds.has(id)) continue;
+    linkIds.add(id);
+    filtered.push(link);
+  }
+  return filtered;
+}
+
+function renderSystemFlowNode(node: GraphNode, id: string): string {
+  const label = node.label.replaceAll('"', "'");
+  let icon = "📦";
+  if (node.type === "module") icon = "📄";
+  else if (node.type === "class") icon = "🏗️";
+  else if (node.type === "function") icon = "⚡";
+  if (node.type === "module") return `    ${id}["${icon} ${label}"]`;
+  if (node.type === "class") return `    ${id}[["${icon} ${label}"]]`;
+  return `    ${id}("${icon} ${label}")`;
+}
+
+function renderSystemFlowLink(link: GraphLink, source: string, target: string): string {
+  const arrows: Record<string, string> = { import: "-->", call: "-.->", contains: "-->", implements: "-.->|implements|" };
+  const labels: Record<string, string> = { import: "imports", call: "calls", contains: "contains", implements: "implements" };
+  const arrow = arrows[link.type] || "-->";
+  return link.type === "contains"
+    ? `    ${source} ${arrow} ${target}`
+    : `    ${source} ${arrow}|${labels[link.type] || link.type}| ${target}`;
+}
+
+function buildSystemFlowDiagram(
+  graphNodes: GraphNode[],
+  graphLinks: GraphLink[],
+  scope: string,
+  feature: string | undefined,
+  maxNodes: number,
+): { nodes: GraphNode[]; links: GraphLink[]; mermaid: string; truncated: boolean } {
+  const selected = selectSystemFlowNodes(graphNodes, graphLinks, scope, feature);
+  const nodes = limitSystemFlowNodes(selected.nodes, maxNodes);
+  const links = filterSystemFlowLinks(graphLinks, nodes, selected.linkTypeFilter);
+  const mermaidIds = new Map<string, string>();
+  const idFor = (nodeId: string): string => {
+    if (!mermaidIds.has(nodeId)) mermaidIds.set(nodeId, `n${mermaidIds.size}`);
+    return mermaidIds.get(nodeId)!;
+  };
+  const lines = ["graph TD"];
+  for (const node of nodes) lines.push(renderSystemFlowNode(node, idFor(node.id)));
+  for (const link of links) lines.push(renderSystemFlowLink(link, idFor(link.source), idFor(link.target)));
+  return { nodes, links, mermaid: lines.join("\n"), truncated: graphNodes.length > maxNodes };
+}
+
+type LoadedProjectAnalysis = NonNullable<Awaited<ReturnType<typeof loadAnalysisAsync>>>;
+type FeatureNode = GraphNode;
+type FeatureLink = GraphLink;
+
+function findFeatureSeeds(nodes: FeatureNode[], keyword: string): Set<string> {
+  const query = keyword.toLowerCase();
+  const seeds = new Set<string>();
+  for (const node of nodes) {
+    if (node.id.startsWith("external:") || isDependencyNode(node)) continue;
+    if (node.label.toLowerCase().includes(query) || node.filePath?.toLowerCase().includes(query) || node.id.toLowerCase().includes(query)) {
+      seeds.add(node.id);
+    }
+  }
+  return seeds;
+}
+
+function isDependencyNode(node: FeatureNode): boolean {
+  const filePath = node.filePath;
+  return Boolean(filePath && ["/venv/", "/.venv/", "/node_modules/", "/vendor/", "/site-packages/"].some(part => filePath.includes(part)));
+}
+
+function createUndirectedAdjacency(links: FeatureLink[]): Map<string, string[]> {
+  const adjacency = new Map<string, string[]>();
+  for (const link of links) {
+    appendNeighbor(adjacency, link.source, link.target);
+    appendNeighbor(adjacency, link.target, link.source);
+  }
+  return adjacency;
+}
+
+function appendNeighbor(adjacency: Map<string, string[]>, source: string, target: string): void {
+  const neighbors = adjacency.get(source) ?? [];
+  neighbors.push(target);
+  adjacency.set(source, neighbors);
+}
+
+function expandFeatureNeighbors(seeds: Set<string>, adjacency: Map<string, string[]>, depth: number): Set<string> {
+  const visited = new Set(seeds);
+  let frontier = new Set(seeds);
+  for (let level = 0; level < depth; level++) {
+    const next = new Set<string>();
+    for (const current of frontier) {
+      for (const neighbor of adjacency.get(current) ?? []) {
+        if (visited.has(neighbor)) continue;
+        next.add(neighbor);
+        visited.add(neighbor);
+      }
+    }
+    frontier = next;
+    if (next.size === 0) break;
+  }
+  return visited;
+}
+
+function relativeProjectFile(projectDir: string, filePath?: string): string | null {
+  if (!filePath) return null;
+  return path.isAbsolute(filePath) ? path.relative(projectDir, filePath) : filePath;
+}
+
+function noFeatureMatchResult(keyword: string, nodes: FeatureNode[], suggestions: string[]): Record<string, unknown> {
+  return {
+    keyword,
+    matchCount: 0,
+    message: `No entities found matching '${keyword}'. Try a broader keyword.`,
+    suggestions,
+  };
+}
+
+function buildFeatureTraceData(loaded: LoadedProjectAnalysis, keyword: string, depth: number): Record<string, unknown> {
+  const nodes = loaded.analysis.graph.nodes;
+  const links = loaded.analysis.graph.links;
+  const seeds = findFeatureSeeds(nodes, keyword);
+  if (seeds.size === 0) {
+    const suggestions = nodes.filter(node => node.type === "module" && node.filePath).map(node => node.label).slice(0, 10);
+    return noFeatureMatchResult(keyword, nodes, suggestions);
+  }
+
+  const visited = expandFeatureNeighbors(seeds, createUndirectedAdjacency(links), depth);
+  const nodeMap = new Map(nodes.map(node => [node.id, node]));
+  const traceNodes = nodes.filter(node => visited.has(node.id));
+  const traceLinks = links.filter(link => visited.has(link.source) && visited.has(link.target));
+  const files = new Map<string, Array<{ name: string; type: string; isSeed: boolean; line: number | null }>>();
+  for (const node of traceNodes) {
+    const filePath = node.filePath || "external";
+    const entities = files.get(filePath) ?? [];
+    entities.push({ name: node.label, type: node.type, isSeed: seeds.has(node.id), line: node.line || null });
+    files.set(filePath, entities);
+  }
+  const filesArray = Array.from(files.entries()).map(([filePath, entities]) => {
+    const isExternal = filePath === "external";
+    const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(loaded.projectDir, filePath);
+    return {
+      filePath: isExternal ? "external" : relativeProjectFile(loaded.projectDir, filePath),
+      absolutePath: isExternal ? "external" : absolutePath,
+      entities,
+      hasSeedMatch: entities.some(entity => entity.isSeed),
+      entityCount: entities.length,
+    };
+  }).sort((left, right) => {
+    if (left.hasSeedMatch && !right.hasSeedMatch) return -1;
+    if (!left.hasSeedMatch && right.hasSeedMatch) return 1;
+    return right.entityCount - left.entityCount;
+  });
+
+  return {
+    keyword,
+    project: loaded.projectName,
+    seedMatches: seeds.size,
+    totalConnected: visited.size,
+    depth,
+    files: filesArray.filter(file => file.filePath !== "external").slice(0, 30),
+    externalDeps: filesArray.find(file => file.filePath === "external")?.entities.map(entity => entity.name) || [],
+    relationships: traceLinks.slice(0, 50).map(link => ({ from: nodeMap.get(link.source)?.label || link.source, to: nodeMap.get(link.target)?.label || link.target, type: link.type })),
+    readingOrder: filesArray.filter(file => file.hasSeedMatch && file.filePath !== "external").map(file => file.filePath),
+    message: `Found ${seeds.size} direct matches and ${visited.size - seeds.size} connected entities for '${keyword}'. Start reading from the files in 'readingOrder'.`,
+  };
+}
+
+function selectFeatureDiagramNodes(
+  nodes: FeatureNode[],
+  links: FeatureLink[],
+  seeds: Set<string>,
+  maxDepth: number,
+  maxNodes: number,
+): FeatureNode[] {
+  const callLinks = links.filter(link => link.type === "call" || link.type === "contains");
+  const visited = expandFeatureNeighbors(seeds, createUndirectedAdjacency(callLinks), maxDepth);
+  const selected = nodes.filter(node => visited.has(node.id) && (node.type === "function" || node.type === "class"));
+  if (selected.length <= maxNodes) return selected;
+  const connections = new Map<string, number>();
+  for (const link of links) {
+    if (link.type !== "call") continue;
+    connections.set(link.source, (connections.get(link.source) || 0) + 1);
+    connections.set(link.target, (connections.get(link.target) || 0) + 1);
+  }
+  selected.sort((left, right) => {
+    if (seeds.has(left.id) && !seeds.has(right.id)) return -1;
+    if (!seeds.has(left.id) && seeds.has(right.id)) return 1;
+    return (connections.get(right.id) || 0) - (connections.get(left.id) || 0);
+  });
+  return selected.slice(0, maxNodes);
+}
+
+function uniqueCallLinks(links: FeatureLink[], nodeIds: Set<string>): FeatureLink[] {
+  const seen = new Set<string>();
+  const result: FeatureLink[] = [];
+  for (const link of links) {
+    if (!nodeIds.has(link.source) || !nodeIds.has(link.target) || link.type !== "call") continue;
+    const key = `${link.source}|${link.target}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(link);
+  }
+  return result;
+}
+
+function createFeatureEntryPoints(nodes: FeatureNode[], links: FeatureLink[], seeds: Set<string>): FeatureNode[] {
+  const incoming = new Set(links.map(link => link.target));
+  return nodes.filter(node => !incoming.has(node.id) || seeds.has(node.id));
+}
+
+function sanitizeMermaidLabel(label: string): string {
+  return label.replaceAll('"', "'").replace(/[<>]/g, "");
+}
+
+function renderSequenceFeatureDiagram(nodes: FeatureNode[], links: FeatureLink[]): string {
+  const lines = ["sequenceDiagram"];
+  const participantIds = new Map<string, string>();
+  for (const [index, node] of nodes.entries()) {
+    const id = `P${index}`;
+    participantIds.set(node.id, id);
+    const icon = node.type === "class" ? "🏗️" : "⚡";
+    const fileSuffix = node.filePath ? ` (${path.basename(node.filePath)})` : "";
+    lines.push(`    participant ${id} as ${icon} ${sanitizeMermaidLabel(node.label)}${fileSuffix}`);
+  }
+  for (const link of links) {
+    const source = participantIds.get(link.source);
+    const target = participantIds.get(link.target);
+    if (source && target && source !== target) {
+      lines.push(`    ${source}->>+${target}: calls`, `    ${target}-->>-${source}: returns`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function renderFlowchartFeatureDiagram(
+  nodes: FeatureNode[],
+  links: FeatureLink[],
+  entries: FeatureNode[],
+  seeds: Set<string>,
+): string {
+  const lines = [
+    "graph TD",
+    "    classDef entry fill:#4CAF50,stroke:#388E3C,color:#fff,stroke-width:2px",
+    "    classDef seed fill:#2196F3,stroke:#1565C0,color:#fff,stroke-width:2px",
+    "    classDef cls fill:#FF9800,stroke:#E65100,color:#fff",
+    "    classDef func fill:#607D8B,stroke:#37474F,color:#fff",
+  ];
+  const entryIds = new Set(entries.map(node => node.id));
+  const incomingIds = new Set(links.map(link => link.target));
+  const mermaidIds = new Map<string, string>();
+  for (const [index, node] of nodes.entries()) {
+    const id = `f${index}`;
+    mermaidIds.set(node.id, id);
+    const label = sanitizeMermaidLabel(node.label);
+    const fileSuffix = node.filePath ? `<br/>${path.basename(node.filePath)}` : "";
+    lines.push(node.type === "class"
+      ? `    ${id}[["🏗️ ${label}${fileSuffix}"]]`
+      : `    ${id}("⚡ ${label}${fileSuffix}")`,
+      classifyFeatureNode(node, id, entryIds, incomingIds, seeds));
+  }
+  for (const link of links) {
+    const source = mermaidIds.get(link.source);
+    const target = mermaidIds.get(link.target);
+    if (source && target) lines.push(`    ${source} -->|calls| ${target}`);
+  }
+  lines.push("", "    subgraph Legend", '        L1("🟢 Entry Point"):::entry', '        L2("🔵 Keyword Match"):::seed', '        L3("🟠 Class"):::cls', '        L4("⬜ Function"):::func', "    end");
+  return lines.join("\n");
+}
+
+function classifyFeatureNode(
+  node: FeatureNode,
+  id: string,
+  entries: Set<string>,
+  incoming: Set<string>,
+  seeds: Set<string>,
+): string {
+  if (entries.has(node.id) && !incoming.has(node.id)) return `    class ${id} entry`;
+  if (seeds.has(node.id)) return `    class ${id} seed`;
+  return `    class ${id} ${node.type === "class" ? "cls" : "func"}`;
+}
+
+function renderFeatureDiagram(
+  type: "flowchart" | "sequence",
+  nodes: FeatureNode[],
+  links: FeatureLink[],
+  entries: FeatureNode[],
+  seeds: Set<string>,
+): string {
+  return type === "sequence"
+    ? renderSequenceFeatureDiagram(nodes, links)
+    : renderFlowchartFeatureDiagram(nodes, links, entries, seeds);
+}
+
+type OrderedFeatureCall = {
+  step: number;
+  name: string;
+  type: string;
+  file: string | null;
+  line: number | null;
+  callsTo: string[];
+  calledBy: string[];
+};
+
+type FeatureExecutionIndexes = {
+  nodeById: Map<string, FeatureNode>;
+  incomingCount: Map<string, number>;
+  callsTo: Map<string, string[]>;
+  calledBy: Map<string, string[]>;
+  outgoing: Map<string, string[]>;
+};
+
+function buildFeatureExecutionIndexes(nodes: FeatureNode[], links: FeatureLink[]): FeatureExecutionIndexes {
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const incomingCount = new Map(nodes.map(node => [node.id, 0]));
+  const callsTo = new Map<string, string[]>();
+  const calledBy = new Map<string, string[]>();
+  const outgoing = new Map<string, string[]>();
+  for (const link of links) {
+    incomingCount.set(link.target, (incomingCount.get(link.target) || 0) + 1);
+    appendNeighbor(outgoing, link.source, link.target);
+    appendNeighbor(callsTo, link.source, nodeById.get(link.target)?.label || link.target);
+    appendNeighbor(calledBy, link.target, nodeById.get(link.source)?.label || link.source);
+  }
+  return { nodeById, incomingCount, callsTo, calledBy, outgoing };
+}
+
+function appendTopoTargets(current: string, indexes: FeatureExecutionIndexes, ordered: Set<string>, queue: string[]): void {
+  for (const target of indexes.outgoing.get(current) ?? []) {
+    const degree = (indexes.incomingCount.get(target) || 1) - 1;
+    indexes.incomingCount.set(target, degree);
+    if (degree <= 0 && !ordered.has(target)) queue.push(target);
+  }
+}
+
+function createFeatureExecutionOrder(
+  nodes: FeatureNode[],
+  links: FeatureLink[],
+  projectDir: string,
+  maxNodes: number,
+): OrderedFeatureCall[] {
+  const indexes = buildFeatureExecutionIndexes(nodes, links);
+  const queue = Array.from(indexes.incomingCount.entries()).filter(([, degree]) => degree === 0).map(([id]) => id);
+  const ordered = new Set<string>();
+  const result: OrderedFeatureCall[] = [];
+  let step = 1;
+  while (queue.length > 0 && step <= maxNodes) {
+    const current = queue.shift()!;
+    if (ordered.has(current)) continue;
+    ordered.add(current);
+    const node = indexes.nodeById.get(current);
+    if (node) result.push(toOrderedFeatureCall(node, step++, projectDir, indexes.callsTo, indexes.calledBy));
+    appendTopoTargets(current, indexes, ordered, queue);
+  }
+  for (const node of nodes) {
+    if (!ordered.has(node.id)) result.push(toOrderedFeatureCall(node, step++, projectDir, indexes.callsTo, indexes.calledBy));
+  }
+  return result;
+}
+
+function toOrderedFeatureCall(
+  node: FeatureNode,
+  step: number,
+  projectDir: string,
+  callsTo: Map<string, string[]>,
+  calledBy: Map<string, string[]>,
+): OrderedFeatureCall {
+  return {
+    step,
+    name: node.label,
+    type: node.type,
+    file: relativeProjectFile(projectDir, node.filePath),
+    line: node.line || null,
+    callsTo: callsTo.get(node.id) || [],
+    calledBy: calledBy.get(node.id) || [],
+  };
+}
+
+function buildFeatureDiagramData(
+  loaded: LoadedProjectAnalysis,
+  keyword: string,
+  type: "flowchart" | "sequence",
+  depth: number,
+  maxNodes: number,
+): Record<string, unknown> {
+  const nodes = loaded.analysis.graph.nodes;
+  const links = loaded.analysis.graph.links;
+  const seeds = findFeatureSeeds(nodes, keyword);
+  if (seeds.size === 0) {
+    const suggestions = Array.from(new Set(nodes.filter(node => node.type === "function" || node.type === "class").map(node => node.label))).slice(0, 15);
+    return noFeatureMatchResult(keyword, nodes, suggestions);
+  }
+  const traceNodes = selectFeatureDiagramNodes(nodes, links, seeds, depth, maxNodes);
+  const nodeIds = new Set(traceNodes.map(node => node.id));
+  const traceLinks = uniqueCallLinks(links, nodeIds);
+  const entryPoints = createFeatureEntryPoints(traceNodes, traceLinks, seeds);
+  const executionOrder = createFeatureExecutionOrder(traceNodes, traceLinks, loaded.projectDir, maxNodes);
+  return {
+    keyword,
+    project: loaded.projectName,
+    diagramType: type,
+    seedMatches: seeds.size,
+    nodesInDiagram: traceNodes.length,
+    callRelationships: traceLinks.length,
+    entryPoints: entryPoints.map(node => ({ name: node.label, type: node.type, file: relativeProjectFile(loaded.projectDir, node.filePath) })),
+    mermaidDiagram: renderFeatureDiagram(type, traceNodes, traceLinks, entryPoints, seeds),
+    executionOrder,
+    readingOrder: Array.from(new Set(executionOrder.filter(item => item.file).map(item => item.file!))),
+    message: `Generated ${type} diagram for '${keyword}': ${traceNodes.length} nodes, ${traceLinks.length} call relationships. Entry points: ${entryPoints.map(node => node.label).join(", ")}`,
+  };
+}
+
+interface ProjectScanSummary {
+  project: string;
+  riskLevel?: string;
+  securityScore?: number | string;
+  vulnerabilities?: number;
+  circularDependencies?: number;
+  deadCode?: number;
+  adminInsights?: string | null;
+  details?: Record<string, unknown>;
+  error?: string;
+}
+
+async function scanProjectAnalysis(projectName: string, isEnterprise: boolean): Promise<ProjectScanSummary | undefined> {
+  try {
+    const loaded = await loadAnalysisAsync(projectName);
+    if (!loaded) return undefined;
+    const vulnerabilities = SecurityScanner.scan(loaded.analysis);
+    const stats = getStats(loaded.analysis as AnalysisResultLocal);
+    const circularDeps = stats.circularDeps || 0;
+    const deadCode = stats.deadCode || 0;
+    let riskLevel = "LOW";
+    if (vulnerabilities.length > 10) riskLevel = "CRITICAL";
+    else if (vulnerabilities.length > 0) riskLevel = "HIGH";
+    const securityScore = Math.max(0, 100 - vulnerabilities.length * 5 - circularDeps * 2);
+    const health = securityScore > 80 ? "EXCELLENT" : "NEEDS ATTENTION";
+    return {
+      project: projectName,
+      riskLevel,
+      securityScore: isEnterprise ? securityScore : "Upgrade to view",
+      vulnerabilities: vulnerabilities.length,
+      circularDependencies: circularDeps,
+      deadCode,
+      adminInsights: isEnterprise ? `Project health is ${health}. Priority: ${riskLevel}.` : null,
+      details: { vulnerabilities },
+    };
+  } catch (error: unknown) {
+    return { project: projectName, error: `Scan failed: ${error instanceof Error ? error.message : String(error)}` };
+  }
 }
 
 /** Auto-register tool metadata for A2A Agent Card AND register handler on executor (Stub) */
@@ -450,112 +974,23 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       const max = maxNodes || 60;
       const diagramScope = scope || "modules-only";
-      let nodes = loaded.analysis.graph.nodes;
-      let links = loaded.analysis.graph.links;
-      const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-
-      // Filter by scope
-      let linkTypeFilter: string | null = null;
-      if (diagramScope === "modules-only") {
-        nodes = nodes.filter((n) => n.type === "module" && (n.filePath || n.id.startsWith("external:")));
-        linkTypeFilter = "import";
-      } else if (diagramScope === "feature" && feature) {
-        const q = feature.toLowerCase();
-        const matchingNodes = new Set<string>();
-        nodes.forEach((n) => {
-          if (n.label.toLowerCase().includes(q) || (n.filePath && n.filePath.toLowerCase().includes(q))) {
-            matchingNodes.add(n.id);
-          }
-        });
-        links.forEach((l) => {
-          if (matchingNodes.has(l.source)) matchingNodes.add(l.target);
-          if (matchingNodes.has(l.target)) matchingNodes.add(l.source);
-        });
-        nodes = nodes.filter((n) => matchingNodes.has(n.id));
-      }
-
-      // Truncate if too many nodes
-      if (nodes.length > max) {
-        // Use Map for O(1) priority lookup
-        nodes.sort((a, b) => {
-          const ia = NODE_PRIORITY_ORDER.get(a.type) ?? 99;
-          const ib = NODE_PRIORITY_ORDER.get(b.type) ?? 99;
-          return ia - ib;
-        });
-        nodes = nodes.slice(0, max);
-      }
-
-      const truncatedNodeIds = new Set(nodes.map((n) => n.id));
-
-      // Combine multiple link filtering passes (node inclusion, deduplication, scope filtering) into a single pass
-      // This avoids O(N * passes) execution overhead on large graph arrays.
-      const linkSet = new Set<string>();
-      const finalLinks = [];
-      for (const l of links) {
-        if (linkTypeFilter && l.type !== linkTypeFilter) continue;
-        if (!truncatedNodeIds.has(l.source) || !truncatedNodeIds.has(l.target)) continue;
-
-        const key = `${l.source}|${l.target}|${l.type}`;
-        if (linkSet.has(key)) continue;
-
-        linkSet.add(key);
-        finalLinks.push(l);
-      }
-      links = finalLinks;
-
-      // Mermaid syntax generation for the feature flow — not a real diagram tool.
-      const nodeIdMap = new Map<string, string>();
-      let counter = 0;
-
-      const getMermaidId = (nodeId: string) => {
-        if (!nodeIdMap.has(nodeId)) {
-          nodeIdMap.set(nodeId, `n${counter++}`);
-        }
-        return nodeIdMap.get(nodeId)!;
-      };
-
-      const lines: string[] = ["graph TD"];
-
-      for (const node of nodes) {
-        const mid = getMermaidId(node.id);
-        const label = node.label.replaceAll('"', "'");
-        const typeIcon = node.type === "module" ? "📄" : node.type === "class" ? "🏗️" : node.type === "function" ? "⚡" : "📦";
-        if (node.type === "module") {
-          lines.push(`    ${mid}["${typeIcon} ${label}"]`);
-        } else if (node.type === "class") {
-          lines.push(`    ${mid}[["${typeIcon} ${label}"]]`);
-        } else {
-          lines.push(`    ${mid}("${typeIcon} ${label}")`);
-        }
-      }
-
-      const arrowMap: Record<string, string> = { import: "-->", call: "-.->", contains: "-->", implements: "-.->|implements|" };
-      const labelMap: Record<string, string> = { import: "imports", call: "calls", contains: "contains", implements: "implements" };
-      for (const link of links) {
-        const src = getMermaidId(link.source);
-        const tgt = getMermaidId(link.target);
-        if (src && tgt) {
-          const arrow = arrowMap[link.type] || "-->";
-          if (link.type === "contains") {
-            lines.push(`    ${src} ${arrow} ${tgt}`);
-          } else {
-            lines.push(`    ${src} ${arrow}|${labelMap[link.type] || link.type}| ${tgt}`);
-          }
-        }
-      }
-
-      const mermaid = lines.join("\n");
-
-      const typeCounts = countByTypes(nodes, ["module", "class", "function"]);
+      const diagram = buildSystemFlowDiagram(
+        loaded.analysis.graph.nodes,
+        loaded.analysis.graph.links,
+        diagramScope,
+        feature,
+        max,
+      );
+      const typeCounts = countByTypes(diagram.nodes, ["module", "class", "function"]);
       const result = {
         project: loaded.projectName,
         scope: diagramScope,
         feature: feature || null,
-        nodeCount: nodes.length,
-        linkCount: links.length,
-        truncated: loaded.analysis.graph.nodes.length > max,
-        mermaidDiagram: mermaid,
-        summary: `System flow for ${loaded.projectName}: ${typeCounts.module} modules, ${typeCounts.class} classes, ${typeCounts.function} functions connected by ${links.length} relationships.`,
+        nodeCount: diagram.nodes.length,
+        linkCount: diagram.links.length,
+        truncated: diagram.truncated,
+        mermaidDiagram: diagram.mermaid,
+        summary: `System flow for ${loaded.projectName}: ${typeCounts.module} modules, ${typeCounts.class} classes, ${typeCounts.function} functions connected by ${diagram.links.length} relationships.`,
       };
 
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
@@ -590,23 +1025,11 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       // Persist to the SQLite knowledge graph
       if (enableEnterpriseSync !== false) {
-        try {
-          logger.info(`Syncing Knowledge Graph for ${loaded.projectName} to the database...`);
-          await MemoryService.saveSemanticMemory(loaded.projectName, nodes);
-          await MemoryService.saveRelationalMemory(loaded.projectName, links);
-          if (businessRule) {
-            await MemoryService.saveEpisodicMemory(loaded.projectName, "BUSINESS_RULE", { text: businessRule });
-            businessRuleSaved = true;
-          }
-          if (changeDescription) {
-            await MemoryService.saveEpisodicMemory(loaded.projectName, "CHANGE_LOG", { text: changeDescription });
-            changeDescriptionSaved = true;
-          }
-          syncSuccess = true;
-        } catch (dbErr: unknown) {
-          syncError = dbErr instanceof Error ? dbErr.message : String(dbErr);
-          logger.error("Failed to sync to database:", dbErr);
-        }
+        const sync = await syncKnowledgeGraphMemory(loaded.projectName, nodes, links, businessRule, changeDescription);
+        syncSuccess = sync.success;
+        syncError = sync.error;
+        businessRuleSaved = sync.businessRuleSaved;
+        changeDescriptionSaved = sync.changeDescriptionSaved;
       } else {
         if (businessRule || changeDescription) {
           syncError = "Sync skipped (enableEnterpriseSync is false), cannot save episodic memory.";
@@ -961,146 +1384,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
       }
 
-      const maxDepth = depth || 2;
-      const q = keyword.toLowerCase();
-      const nodes = loaded.analysis.graph.nodes;
-      const links = loaded.analysis.graph.links;
-      const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-
-      const seedNodes = new Set<string>();
-      for (const node of nodes) {
-        if (node.id.startsWith('external:')) continue;
-        if (node.filePath && (
-          node.filePath.includes('/venv/') ||
-          node.filePath.includes('/.venv/') ||
-          node.filePath.includes('/node_modules/') ||
-          node.filePath.includes('/vendor/') ||
-          node.filePath.includes('/site-packages/')
-        )) continue;
-
-        if (
-          node.label.toLowerCase().includes(q) ||
-          (node.filePath && node.filePath.toLowerCase().includes(q)) ||
-          node.id.toLowerCase().includes(q)
-        ) {
-          seedNodes.add(node.id);
-        }
-      }
-
-      if (seedNodes.size === 0) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                keyword,
-                matchCount: 0,
-                message: `No entities found matching '${keyword}'. Try a broader keyword.`,
-                suggestions: nodes
-                  .filter((n) => n.type === "module" && n.filePath)
-                  .map((n) => n.label)
-                  .slice(0, 10),
-              }, null, 2),
-            },
-          ],
-        };
-      }
-
-      const visited = new Set<string>(seedNodes);
-      let frontier = new Set<string>(seedNodes);
-
-      // ⚡ Bolt Optimization: Pre-calculate adjacency lists to replace O(V*E) BFS iteration
-      // with O(V+E) lookup based on previous performance learnings.
-      const adjList = new Map<string, string[]>();
-      for (const link of links) {
-        let srcList = adjList.get(link.source);
-        if (!srcList) {
-          srcList = [];
-          adjList.set(link.source, srcList);
-        }
-        srcList.push(link.target);
-
-        let tgtList = adjList.get(link.target);
-        if (!tgtList) {
-          tgtList = [];
-          adjList.set(link.target, tgtList);
-        }
-        tgtList.push(link.source);
-      }
-
-      for (let d = 0; d < maxDepth; d++) {
-        const nextFrontier = new Set<string>();
-        for (const current of frontier) {
-          const neighbors = adjList.get(current) || [];
-          for (const neighbor of neighbors) {
-            if (!visited.has(neighbor)) {
-              nextFrontier.add(neighbor);
-              visited.add(neighbor);
-            }
-          }
-        }
-        frontier = nextFrontier;
-        if (nextFrontier.size === 0) break;
-      }
-
-      const traceNodes = nodes.filter((n) => visited.has(n.id));
-      const traceLinks = links.filter((l) => visited.has(l.source) && visited.has(l.target));
-
-      const byFile = new Map<string, Array<{ name: string; type: string; isSeed: boolean; line: number | null }>>();
-      for (const node of traceNodes) {
-        const filePath = node.filePath || "external";
-        // ⚡ Bolt: Optimize map population to avoid redundant Map writes
-        let arr = byFile.get(filePath);
-        if (!arr) {
-          arr = [];
-          byFile.set(filePath, arr);
-        }
-        arr.push({
-          name: node.label,
-          type: node.type,
-          isSeed: seedNodes.has(node.id),
-          line: node.line || null,
-        });
-      }
-
-      const filesArray = Array.from(byFile.entries())
-        .map(([filePath, entities]) => {
-          const isExt = filePath === "external";
-          const relPath = isExt ? "external" : (path.isAbsolute(filePath) ? path.relative(loaded.projectDir, filePath) : filePath);
-          const absPath = isExt ? "external" : (path.isAbsolute(filePath) ? filePath : path.resolve(loaded.projectDir, filePath));
-          return {
-            filePath: relPath,
-            absolutePath: absPath,
-            entities,
-            hasSeedMatch: entities.some((e) => e.isSeed),
-            entityCount: entities.length,
-          };
-        })
-        .sort((a, b) => {
-          if (a.hasSeedMatch && !b.hasSeedMatch) return -1;
-          if (!a.hasSeedMatch && b.hasSeedMatch) return 1;
-          return b.entityCount - a.entityCount;
-        });
-
-      const result = {
-        keyword,
-        project: loaded.projectName,
-        seedMatches: seedNodes.size,
-        totalConnected: visited.size,
-        depth: maxDepth,
-        files: filesArray.filter((f) => f.filePath !== "external").slice(0, 30),
-        externalDeps: filesArray.find((f) => f.filePath === "external")?.entities.map((e) => e.name) || [],
-        relationships: traceLinks.slice(0, 50).map((l) => ({
-          from: nodeMap.get(l.source)?.label || l.source,
-          to: nodeMap.get(l.target)?.label || l.target,
-          type: l.type,
-        })),
-        readingOrder: filesArray
-          .filter((f) => f.hasSeedMatch && f.filePath !== "external")
-          .map((f) => f.filePath),
-        message: `Found ${seedNodes.size} direct matches and ${visited.size - seedNodes.size} connected entities for '${keyword}'. Start reading from the files in 'readingOrder'.`,
-      };
-
+      const result = buildFeatureTraceData(loaded, keyword, depth || 2);
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }
   );
@@ -1124,329 +1408,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         return { content: [{ type: "text" as const, text: "No analysis data found. Run 'analyze' tool first." }] };
       }
 
-      const q = keyword.toLowerCase();
-      const maxDepth = depth || 3;
-      const maxN = maxNodes || 40;
-      const dType = diagramType || "flowchart";
-      const nodes = loaded.analysis.graph.nodes;
-      const links = loaded.analysis.graph.links;
-      const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-      const nodeNameMap = new Map(nodes.map((n) => [n.id, n.label]));
-
-      const seedNodes = new Set<string>();
-      for (const node of nodes) {
-        if (node.id.startsWith('external:')) continue;
-        if (node.filePath && (
-          node.filePath.includes('/venv/') ||
-          node.filePath.includes('/.venv/') ||
-          node.filePath.includes('/node_modules/') ||
-          node.filePath.includes('/vendor/') ||
-          node.filePath.includes('/site-packages/')
-        )) continue;
-
-        if (
-          node.label.toLowerCase().includes(q) ||
-          (node.filePath && node.filePath.toLowerCase().includes(q)) ||
-          node.id.toLowerCase().includes(q)
-        ) {
-          seedNodes.add(node.id);
-        }
-      }
-
-      if (seedNodes.size === 0) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: JSON.stringify({
-              keyword,
-              matchCount: 0,
-              message: `No entities found matching '${keyword}'. Try a broader keyword.`,
-              suggestions: Array.from(new Set(
-                nodes
-                  .filter((n) => n.type === "function" || n.type === "class")
-                  .map((n) => n.label)
-              )).slice(0, 15),
-            }, null, 2),
-          }],
-        };
-      }
-
-      const visited = new Set<string>(seedNodes);
-      let frontier = new Set<string>(seedNodes);
-      const callAndContainsLinks = links.filter((l) => l.type === "call" || l.type === "contains");
-
-      // ⚡ Bolt Optimization: Pre-calculate adjacency lists to replace O(V*E) BFS iteration
-      // with O(V+E) lookup based on previous performance learnings.
-      const callAdjList = new Map<string, string[]>();
-      for (const link of callAndContainsLinks) {
-        let srcList = callAdjList.get(link.source);
-        if (!srcList) {
-          srcList = [];
-          callAdjList.set(link.source, srcList);
-        }
-        srcList.push(link.target);
-
-        let tgtList = callAdjList.get(link.target);
-        if (!tgtList) {
-          tgtList = [];
-          callAdjList.set(link.target, tgtList);
-        }
-        tgtList.push(link.source);
-      }
-
-      for (let d = 0; d < maxDepth; d++) {
-        const nextFrontier = new Set<string>();
-        for (const current of frontier) {
-          const neighbors = callAdjList.get(current) || [];
-          for (const neighbor of neighbors) {
-            if (!visited.has(neighbor)) {
-              nextFrontier.add(neighbor);
-              visited.add(neighbor);
-            }
-          }
-        }
-        frontier = nextFrontier;
-        if (nextFrontier.size === 0) break;
-      }
-
-      let traceNodes = nodes.filter((n) => visited.has(n.id) && (n.type === "function" || n.type === "class"));
-
-      if (traceNodes.length > maxN) {
-        const callConnections = new Map<string, number>();
-        for (const link of links) {
-          if (link.type === "call") {
-            callConnections.set(link.source, (callConnections.get(link.source) || 0) + 1);
-            callConnections.set(link.target, (callConnections.get(link.target) || 0) + 1);
-          }
-        }
-        traceNodes.sort((a, b) => {
-          if (seedNodes.has(a.id) && !seedNodes.has(b.id)) return -1;
-          if (!seedNodes.has(a.id) && seedNodes.has(b.id)) return 1;
-          return (callConnections.get(b.id) || 0) - (callConnections.get(a.id) || 0);
-        });
-        traceNodes = traceNodes.slice(0, maxN);
-      }
-
-      const traceNodeIds = new Set(traceNodes.map((n) => n.id));
-
-      // Combine traceLinks filtering and deduplication into a single loop pass
-      // This avoids O(N * passes) execution overhead on large graph arrays.
-      const linkSet = new Set<string>();
-      const dedupLinks = [];
-      for (const l of links) {
-        if (!traceNodeIds.has(l.source) || !traceNodeIds.has(l.target) || l.type !== "call") continue;
-
-        const key = `${l.source}|${l.target}`;
-        if (linkSet.has(key)) continue;
-
-        linkSet.add(key);
-        dedupLinks.push(l);
-      }
-
-      const traceLinks = dedupLinks; // Maintain backwards compatibility for references below
-
-      const hasIncoming = new Set<string>();
-      for (const link of dedupLinks) {
-        hasIncoming.add(link.target);
-      }
-      const entryPoints = traceNodes.filter(
-        (n) => !hasIncoming.has(n.id) || seedNodes.has(n.id)
-      );
-
-      let mermaid = "";
-      const sanitizeLabel = (s: string) => s.replaceAll('"', "'").replace(/[<>]/g, "");
-
-      if (dType === "sequence") {
-        const seqLines: string[] = ["sequenceDiagram"];
-        const participantMap = new Map<string, string>();
-        let pCounter = 0;
-        for (const node of traceNodes) {
-          const pid = `P${pCounter++}`;
-          participantMap.set(node.id, pid);
-          const icon = node.type === "class" ? "🏗️" : "⚡";
-          const fileSuffix = node.filePath ? ` (${path.basename(node.filePath)})` : "";
-          seqLines.push(`    participant ${pid} as ${icon} ${sanitizeLabel(node.label)}${fileSuffix}`);
-        }
-
-        for (const link of dedupLinks) {
-          const src = participantMap.get(link.source);
-          const tgt = participantMap.get(link.target);
-          if (src && tgt && src !== tgt) {
-            seqLines.push(`    ${src}->>+${tgt}: calls`);
-            seqLines.push(`    ${tgt}-->>-${src}: returns`);
-          }
-        }
-
-        mermaid = seqLines.join("\n");
-      } else {
-        const flowLines: string[] = ["graph TD"];
-        flowLines.push("    classDef entry fill:#4CAF50,stroke:#388E3C,color:#fff,stroke-width:2px");
-        flowLines.push("    classDef seed fill:#2196F3,stroke:#1565C0,color:#fff,stroke-width:2px");
-        flowLines.push("    classDef cls fill:#FF9800,stroke:#E65100,color:#fff");
-        flowLines.push("    classDef func fill:#607D8B,stroke:#37474F,color:#fff");
-
-        const mermaidIdMap = new Map<string, string>();
-        // ⚡ Bolt Optimization: Replace O(N) array includes with O(1) Set lookup
-        const entryPointIds = new Set(entryPoints.map(n => n.id));
-        let nCounter = 0;
-        for (const node of traceNodes) {
-          const mid = `f${nCounter++}`;
-          mermaidIdMap.set(node.id, mid);
-          const label = sanitizeLabel(node.label);
-          const fileSuffix = node.filePath ? `<br/>${path.basename(node.filePath)}` : "";
-
-          if (node.type === "class") {
-            flowLines.push(`    ${mid}[["🏗️ ${label}${fileSuffix}"]]`);
-          } else {
-            flowLines.push(`    ${mid}("⚡ ${label}${fileSuffix}")`);
-          }
-
-          if (entryPointIds.has(node.id) && !hasIncoming.has(node.id)) {
-            flowLines.push(`    class ${mid} entry`);
-          } else if (seedNodes.has(node.id)) {
-            flowLines.push(`    class ${mid} seed`);
-          } else if (node.type === "class") {
-            flowLines.push(`    class ${mid} cls`);
-          } else {
-            flowLines.push(`    class ${mid} func`);
-          }
-        }
-
-        for (const link of dedupLinks) {
-          const src = mermaidIdMap.get(link.source);
-          const tgt = mermaidIdMap.get(link.target);
-          if (src && tgt) {
-            flowLines.push(`    ${src} -->|calls| ${tgt}`);
-          }
-        }
-
-        flowLines.push("");
-        flowLines.push(`    subgraph Legend`);
-        flowLines.push(`        L1("🟢 Entry Point"):::entry`);
-        flowLines.push(`        L2("🔵 Keyword Match"):::seed`);
-        flowLines.push(`        L3("🟠 Class"):::cls`);
-        flowLines.push(`        L4("⬜ Function"):::func`);
-        flowLines.push(`    end`);
-
-        mermaid = flowLines.join("\n");
-      }
-
-      const executionOrder: Array<{
-        step: number;
-        name: string;
-        type: string;
-        file: string | null;
-        line: number | null;
-        callsTo: string[];
-        calledBy: string[];
-      }> = [];
-
-      // ⚡ Bolt Optimization: Pre-calculate relationship arrays to avoid O(V*E) nested loops
-      // Replaces O(N^2) array filtering inside the topological sort with O(1) map lookups.
-      const inDegree = new Map<string, number>();
-      const callsToMap = new Map<string, string[]>();
-      const calledByMap = new Map<string, string[]>();
-      const outgoingEdgesMap = new Map<string, string[]>();
-
-      for (const node of traceNodes) {
-        inDegree.set(node.id, 0);
-      }
-
-      for (const link of dedupLinks) {
-        inDegree.set(link.target, (inDegree.get(link.target) || 0) + 1);
-
-        const sourceName = nodeNameMap.get(link.source) || link.source;
-        const targetName = nodeNameMap.get(link.target) || link.target;
-
-        const toArr = callsToMap.get(link.source) ?? [];
-        toArr.push(targetName);
-        callsToMap.set(link.source, toArr);
-
-        const outgoing = outgoingEdgesMap.get(link.source) ?? [];
-        outgoing.push(link.target);
-        outgoingEdgesMap.set(link.source, outgoing);
-
-        const byArr = calledByMap.get(link.target) ?? [];
-        byArr.push(sourceName);
-        calledByMap.set(link.target, byArr);
-      }
-
-      const queue: string[] = [];
-      for (const [id, deg] of inDegree) {
-        if (deg === 0) queue.push(id);
-      }
-
-      let step = 1;
-      const ordered = new Set<string>();
-      while (queue.length > 0 && step <= maxN) {
-        const current = queue.shift()!;
-        if (ordered.has(current)) continue;
-        ordered.add(current);
-
-        const node = nodeMap.get(current);
-        if (node) {
-          const callsTo = callsToMap.get(current) || [];
-          const calledBy = calledByMap.get(current) || [];
-
-          executionOrder.push({
-            step: step++,
-            name: node.label,
-            type: node.type,
-            file: node.filePath ? (path.isAbsolute(node.filePath) ? path.relative(loaded.projectDir, node.filePath) : node.filePath) : null,
-            line: node.line || null,
-            callsTo,
-            calledBy,
-          });
-        }
-
-        for (const targetId of outgoingEdgesMap.get(current) ?? []) {
-          const newDeg = (inDegree.get(targetId) || 1) - 1;
-          inDegree.set(targetId, newDeg);
-          if (newDeg <= 0 && !ordered.has(targetId)) {
-            queue.push(targetId);
-          }
-        }
-      }
-
-      for (const node of traceNodes) {
-        if (!ordered.has(node.id)) {
-          const callsTo = callsToMap.get(node.id) || [];
-          const calledBy = calledByMap.get(node.id) || [];
-
-          executionOrder.push({
-            step: step++,
-            name: node.label,
-            type: node.type,
-            file: node.filePath ? (path.isAbsolute(node.filePath) ? path.relative(loaded.projectDir, node.filePath) : node.filePath) : null,
-            line: node.line || null,
-            callsTo,
-            calledBy,
-          });
-        }
-      }
-
-      const result = {
-        keyword,
-        project: loaded.projectName,
-        diagramType: dType,
-        seedMatches: seedNodes.size,
-        nodesInDiagram: traceNodes.length,
-        callRelationships: dedupLinks.length,
-        entryPoints: entryPoints.map((n) => ({
-          name: n.label,
-          type: n.type,
-          file: n.filePath ? (path.isAbsolute(n.filePath) ? path.relative(loaded.projectDir, n.filePath) : n.filePath) : null,
-        })),
-        mermaidDiagram: mermaid,
-        executionOrder,
-        readingOrder: Array.from(new Set(
-          executionOrder
-            .filter((e) => e.file)
-            .map((e) => e.file!)
-        )),
-        message: `Generated ${dType} diagram for '${keyword}': ${traceNodes.length} nodes, ${dedupLinks.length} call relationships. Entry points: ${entryPoints.map((n) => n.label).join(", ")}`,
-      };
-
+      const result = buildFeatureDiagramData(loaded, keyword, diagramType || "flowchart", depth || 3, maxNodes || 40);
       return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
     }
   );
@@ -1519,53 +1481,14 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
 
       const isEnterprise = auth.tier === 'enterprise';
-      // Project scan summary (not individual SecurityFinding)
-      interface ProjectScanSummary {
-        project: string;
-        riskLevel?: string;
-        securityScore?: number | string;
-        vulnerabilities?: number;
-        circularDependencies?: number;
-        deadCode?: number;
-        adminInsights?: string | null;
-        details?: Record<string, unknown>;
-        error?: string;
-      }
       const scanResults: ProjectScanSummary[] = [];
 
       const limit = maxProjects || (isEnterprise ? projects.length : 3);
       const projectsToScan = projects.slice(0, limit);
 
       for (const p of projectsToScan) {
-        try {
-          const loaded = await loadAnalysisAsync(p.name);
-          if (!loaded) continue;
-
-          const vulnerabilities = SecurityScanner.scan(loaded.analysis);
-          
-          const stats = getStats(loaded.analysis as AnalysisResultLocal);
-          const circularDeps = stats.circularDeps || 0;
-          const deadCode = stats.deadCode || 0;
-          
-          const riskLevel = vulnerabilities.length > 10 ? "CRITICAL" : (vulnerabilities.length > 0 ? "HIGH" : "LOW");
-          const securityScore = Math.max(0, 100 - (vulnerabilities.length * 5) - (circularDeps * 2));
-
-          scanResults.push({
-            project: p.name,
-            riskLevel,
-            securityScore: isEnterprise ? securityScore : "Upgrade to view",
-            vulnerabilities: vulnerabilities.length,
-            circularDependencies: circularDeps,
-            deadCode: deadCode,
-            adminInsights: isEnterprise ? `Project health is ${securityScore > 80 ? 'EXCELLENT' : 'NEEDS ATTENTION'}. Priority: ${riskLevel}.` : null,
-            details: { vulnerabilities }
-          });
-        } catch (err: unknown) {
-          scanResults.push({ 
-            project: p.name, 
-            error: `Scan failed: ${(err instanceof Error ? err.message : String(err))}`
-          });
-        }
+        const scan = await scanProjectAnalysis(p.name, isEnterprise); // NOSONAR -- bound concurrent project scans and preserve their order.
+        if (scan) scanResults.push(scan);
       }
 
       const finalReport = {

@@ -159,7 +159,7 @@ export class GenomeService {
       const queryBinds: Record<string, unknown> = { tenantId };
       ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
@@ -241,7 +241,7 @@ export class GenomeService {
     try {
       await setSessionContext(connection);
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
@@ -295,7 +295,7 @@ export class GenomeService {
       let memoryType = "lesson";
 
       if (req.sourceType === "dream") {
-        const dreams = await connection.execute<any[]>(
+        const dreams = await connection.execute<unknown[]>(
           `SELECT id, content, memory_type, project FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
           { id: req.sourceId, tenantId: getTenantId() } as any,
         );
@@ -306,7 +306,7 @@ export class GenomeService {
         memoryType = String(d[2]);
         req.project = req.project || String(d[3]);
       } else if (req.sourceType === "concept") {
-        const concepts = await connection.execute<any[]>(
+        const concepts = await connection.execute<unknown[]>(
           `SELECT id, label, description, project FROM codeatlas_concepts WHERE id = :id AND tenant_id = :tenantId`,
           { id: req.sourceId, tenantId: getTenantId() } as any,
         );
@@ -506,7 +506,7 @@ export class GenomeService {
     try {
       await setSessionContext(connection);
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture, category, confidence
          FROM codeatlas_genome WHERE id = :id AND tenant_id = :tenantId`,
         { id: sourceGeneId, tenantId: getTenantId() } as any,
@@ -610,7 +610,7 @@ export class GenomeService {
     try {
       await setSessionContext(connection);
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, problem, solution, confidence, version, success_rate, usage_count
          FROM codeatlas_genome WHERE id = :id AND tenant_id = :tenantId`,
         { id: geneId, tenantId: getTenantId() } as any,
@@ -791,7 +791,7 @@ export class GenomeService {
       const queryBinds: Record<string, unknown> = { tenantId };
       ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
@@ -938,7 +938,7 @@ export class GenomeService {
       const queryBinds: Record<string, unknown> = { tenantId };
       ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate,embedding, status,
@@ -1089,7 +1089,7 @@ Apply this knowledge when encountering similar problems.
       const queryBinds: Record<string, unknown> = { tenantId };
       ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
 
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
@@ -1128,130 +1128,9 @@ Apply this knowledge when encountering similar problems.
       // Sort by score descending
       genes.sort((a, b) => b.score - a.score);
 
-      let inherited = 0;
-      if (genes.length > 0) {
-        // ⚡ Bolt Optimization: Batch updates and inserts instead of querying inside loop (avoids N+1 DB roundtrips)
-        const nameList = genes.map((g) => g.name);
-        let existingRows: any[] = [];
-
-        // SQLite limits bound parameters, so batch the IN clause
-        const chunkSize = 900;
-        for (let i = 0; i < nameList.length; i += chunkSize) {
-          const chunk = nameList.slice(i, i + chunkSize);
-          const { clause: inClause, binds: nameBinds } = buildInClause(chunk, {
-            newProject,
-            tenantId: getTenantId(),
-          });
-
-          const existingQuery = await connection.execute<any[]>(
-            `SELECT id, name, version FROM codeatlas_genome WHERE name IN (${inClause}) AND project = :newProject AND tenant_id = :tenantId`,
-            nameBinds,
-          );
-          if (existingQuery.rows) {
-            existingRows.push(...existingQuery.rows);
-          }
-        }
-        const existingMap = new Map(
-          existingRows.map((r) => [
-            String(r[1]),
-            { id: String(r[0]), version: Number(r[2]) },
-          ]),
-        );
-
-        const toInsert: any[] = [];
-        const toUpdate: any[] = [];
-        const mutations: any[] = [];
-
-        for (let i = 0; i < genes.length; i++) {
-          const gene = genes[i];
-          const rawEmbedding = rowValue(rows[i], "embedding");
-          const existing = existingMap.get(gene.name);
-
-          if (existing) {
-            const newVersion = existing.version + 1;
-            mutations.push({
-              id: `mut-${randomUUID().slice(0, 8)}`,
-              geneId: existing.id,
-              oldVer: existing.version,
-              newVer: newVersion,
-              changes: JSON.stringify({
-                description: gene.description,
-                solution: gene.solution,
-              }),
-            });
-            toUpdate.push({
-              id: existing.id,
-              desc: gene.description,
-              problem: gene.problem,
-              solution: gene.solution,
-              arch: gene.architecture || "",
-              cat: gene.category,
-              conf: gene.confidence * 0.9,
-              ver: newVersion,
-              emb: rawEmbedding,
-              tenantId,
-            });
-          } else {
-            toInsert.push({
-              id: `gene-${randomUUID().slice(0, 8)}`,
-              name: gene.name,
-              desc: gene.description,
-              problem: gene.problem,
-              solution: gene.solution,
-              arch: gene.architecture || "",
-              cat: gene.category,
-              project: newProject,
-              conf: gene.confidence * 0.9,
-              emb: rawEmbedding,
-              srcType: "inherited",
-              srcId: gene.id,
-              deps: JSON.stringify(gene.dependencies || []),
-              tenantId,
-            });
-          }
-        }
-
-        if (mutations.length > 0) {
-          await connection.executeMany(
-            `INSERT INTO gene_mutations (id, gene_id, old_version, new_version, changes, created_at)
-             VALUES (:id, :geneId, :oldVer, :newVer, :changes, CURRENT_TIMESTAMP)`,
-            mutations as any,
-            { autoCommit: false, batchErrors: true },
-          );
-        }
-
-        if (toUpdate.length > 0) {
-          await connection.executeMany(
-            `UPDATE codeatlas_genome SET
-             description = :desc, problem = :problem, solution = :solution,
-             architecture = :arch, category = :cat, confidence = :conf,
-             version = :ver, evolution_score = evolution_score + 1,
-             embedding = :emb, status = 'active', updated_at = CURRENT_TIMESTAMP
-             WHERE id = :id AND tenant_id = :tenantId`,
-            toUpdate as any,
-            { autoCommit: false, batchErrors: true },
-          );
-        }
-
-        if (toInsert.length > 0) {
-          await connection.executeMany(
-            `INSERT INTO codeatlas_genome (
-               id, name, description, problem, solution, architecture,
-               category, project, confidence, version, evolution_score,
-               usage_count, success_rate, embedding, status, source_type,
-               source_id, dependencies, created_at, updated_at, tenant_id
-             ) VALUES (
-               :id, :name, :desc, :problem, :solution, :arch,
-               :cat, :project, :conf, 1, 1, 0, 0.50, :emb, 'active',
-               :srcType, :srcId, :deps, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :tenantId
-             )`,
-            toInsert as any,
-            { autoCommit: false, batchErrors: true },
-          );
-        }
-
-        inherited = toUpdate.length + toInsert.length;
-      }
+      const inherited = genes.length > 0
+        ? await this.persistInheritedGenes(connection, genes, rows, newProject, tenantId)
+        : 0;
 
       return { inherited, genes };
     } catch (err) {
@@ -1262,6 +1141,133 @@ Apply this knowledge when encountering similar problems.
         await connection.close();
       } catch {}
     }
+  }
+
+  private static async persistInheritedGenes(
+    connection: Awaited<ReturnType<Awaited<ReturnType<typeof initPool>>["getConnection"]>>,
+    genes: GeneSearchResult[], rows: unknown[], newProject: string, tenantId: string,
+  ): Promise<number> {
+    // ⚡ Bolt Optimization: Batch updates and inserts instead of querying inside loop (avoids N+1 DB roundtrips)
+    const nameList = genes.map((g) => g.name);
+    const existingRows: unknown[][] = [];
+
+    // SQLite limits bound parameters, so batch the IN clause
+    const chunkSize = 900;
+    for (let i = 0; i < nameList.length; i += chunkSize) {
+      const chunk = nameList.slice(i, i + chunkSize);
+      const { clause: inClause, binds: nameBinds } = buildInClause(chunk, {
+        newProject,
+        tenantId: getTenantId(),
+      });
+
+      const existingQuery = await connection.execute<unknown[]>( // NOSONAR -- reuse the connection for one bounded query at a time.
+        `SELECT id, name, version FROM codeatlas_genome WHERE name IN (${inClause}) AND project = :newProject AND tenant_id = :tenantId`,
+        nameBinds,
+      );
+      if (existingQuery.rows) {
+        existingRows.push(...existingQuery.rows);
+      }
+    }
+    const existingMap = new Map(
+      existingRows.map((r) => [
+        String(r[1]),
+        { id: String(r[0]), version: Number(r[2]) },
+      ]),
+    );
+
+    const toInsert: Record<string, unknown>[] = [];
+    const toUpdate: Record<string, unknown>[] = [];
+    const mutations: Record<string, unknown>[] = [];
+
+    for (let i = 0; i < genes.length; i++) {
+      const gene = genes[i];
+      const rawEmbedding = rowValue(rows[i], "embedding");
+      const existing = existingMap.get(gene.name);
+
+      if (existing) {
+        const newVersion = existing.version + 1;
+        mutations.push({
+          id: `mut-${randomUUID().slice(0, 8)}`,
+          geneId: existing.id,
+          oldVer: existing.version,
+          newVer: newVersion,
+          changes: JSON.stringify({
+            description: gene.description,
+            solution: gene.solution,
+          }),
+        });
+        toUpdate.push({
+          id: existing.id,
+          desc: gene.description,
+          problem: gene.problem,
+          solution: gene.solution,
+          arch: gene.architecture || "",
+          cat: gene.category,
+          conf: gene.confidence * 0.9,
+          ver: newVersion,
+          emb: rawEmbedding,
+          tenantId,
+        });
+      } else {
+        toInsert.push({
+          id: `gene-${randomUUID().slice(0, 8)}`,
+          name: gene.name,
+          desc: gene.description,
+          problem: gene.problem,
+          solution: gene.solution,
+          arch: gene.architecture || "",
+          cat: gene.category,
+          project: newProject,
+          conf: gene.confidence * 0.9,
+          emb: rawEmbedding,
+          srcType: "inherited",
+          srcId: gene.id,
+          deps: JSON.stringify(gene.dependencies || []),
+          tenantId,
+        });
+      }
+    }
+
+    if (mutations.length > 0) {
+      await connection.executeMany(
+        `INSERT INTO gene_mutations (id, gene_id, old_version, new_version, changes, created_at)
+         VALUES (:id, :geneId, :oldVer, :newVer, :changes, CURRENT_TIMESTAMP)`,
+        mutations,
+        { autoCommit: false, batchErrors: true },
+      );
+    }
+
+    if (toUpdate.length > 0) {
+      await connection.executeMany(
+        `UPDATE codeatlas_genome SET
+         description = :desc, problem = :problem, solution = :solution,
+         architecture = :arch, category = :cat, confidence = :conf,
+         version = :ver, evolution_score = evolution_score + 1,
+         embedding = :emb, status = 'active', updated_at = CURRENT_TIMESTAMP
+         WHERE id = :id AND tenant_id = :tenantId`,
+        toUpdate,
+        { autoCommit: false, batchErrors: true },
+      );
+    }
+
+    if (toInsert.length > 0) {
+      await connection.executeMany(
+        `INSERT INTO codeatlas_genome (
+           id, name, description, problem, solution, architecture,
+           category, project, confidence, version, evolution_score,
+           usage_count, success_rate, embedding, status, source_type,
+           source_id, dependencies, created_at, updated_at, tenant_id
+         ) VALUES (
+           :id, :name, :desc, :problem, :solution, :arch,
+           :cat, :project, :conf, 1, 1, 0, 0.50, :emb, 'active',
+           :srcType, :srcId, :deps, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :tenantId
+         )`,
+        toInsert,
+        { autoCommit: false, batchErrors: true },
+      );
+    }
+
+    return toUpdate.length + toInsert.length;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -1279,7 +1285,7 @@ Apply this knowledge when encountering similar problems.
     const connection = await (await initPool()).getConnection();
     try {
       await setSessionContext(connection);
-      const result = await connection.execute<any[]>(
+      const result = await connection.execute<unknown[]>(
         `SELECT id, name, description, problem, solution, architecture,
                 category, project, confidence, version, evolution_score,
                 usage_count, success_rate, embedding, status,
@@ -1419,22 +1425,7 @@ Apply this knowledge when encountering similar problems.
       }
       sets.push("updated_at = CURRENT_TIMESTAMP");
 
-      // Regenerate embedding if content changed
-      const shouldReEmbed =
-        fields.name !== undefined ||
-        fields.description !== undefined ||
-        fields.solution !== undefined;
-      if (shouldReEmbed) {
-        const embedText =
-          `${fields.name || ""} ${fields.description || ""} ${fields.solution || ""}`.trim();
-        if (embedText) {
-          const embedding = await generateEmbedding(embedText, "passage");
-          if (embedding) {
-            sets.push("embedding = :emb");
-            binds.emb = new Uint8Array(new Float32Array(embedding).buffer);
-          }
-        }
-      }
+      await this.addUpdatedEmbedding(fields, sets, binds);
 
       if (sets.length === 1) return; // nothing to update
       const sql = `UPDATE codeatlas_genome SET ${sets.join(", ")} WHERE id = :id AND tenant_id = :tenantId`;
@@ -1448,4 +1439,26 @@ Apply this knowledge when encountering similar problems.
       } catch {}
     }
   }
+  private static async addUpdatedEmbedding(
+    fields: { name?: string; description?: string; solution?: string },
+    sets: string[], binds: Record<string, unknown>,
+  ): Promise<void> {
+  // Regenerate embedding if content changed
+  const shouldReEmbed =
+    fields.name !== undefined ||
+    fields.description !== undefined ||
+    fields.solution !== undefined;
+  if (shouldReEmbed) {
+    const embedText =
+      `${fields.name || ""} ${fields.description || ""} ${fields.solution || ""}`.trim();
+    if (embedText) {
+      const embedding = await generateEmbedding(embedText, "passage");
+      if (embedding) {
+        sets.push("embedding = :emb");
+        binds.emb = new Uint8Array(new Float32Array(embedding).buffer);
+      }
+    }
+  }
+  }
+
 }

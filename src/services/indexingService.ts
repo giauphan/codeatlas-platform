@@ -307,32 +307,8 @@ export class IndexingService {
       let compiled = this.patternCache.get(pat);
 
       if (compiled === undefined) {
-        if (pat.startsWith("!")) {
-          // Negation pattern — skip (we only exclude)
-          compiled = { skip: true };
-          this.patternCache.set(pat, compiled);
-        } else {
-          const p = pat.replaceAll("\\", "/");
-          const dirOnly = p.endsWith("/");
-          const cleanPat = dirOnly ? p.slice(0, -1) : p;
-
-          const cleanTrimmed = cleanPat.replace(/^\//, "");
-          const anchored = cleanPat.includes("/");
-          const partsPattern = (anchored && cleanPat.startsWith("/"))
-            ? `^${this.toRegex(cleanTrimmed)}(?:/|$)`
-            : anchored
-              ? `^${this.toRegex(cleanPat)}`
-              : `(?:^|/)${this.toRegex(cleanPat)}$`;
-
-          const re = new RegExp(partsPattern);
-          let bareRe = null;
-          if (!anchored && !dirOnly) {
-            bareRe = new RegExp(`^${this.toRegex(cleanPat)}$`);
-          }
-
-          compiled = { skip: false, dirOnly, re, anchored, bareRe, cleanPat };
-          this.patternCache.set(pat, compiled);
-        }
+        compiled = this.compileIgnorePattern(pat);
+        this.patternCache.set(pat, compiled);
       }
 
       if (compiled.skip) continue;
@@ -340,13 +316,27 @@ export class IndexingService {
       const target = compiled.dirOnly ? normalized + "/" : normalized;
       if (compiled.re.test(target)) return true;
 
-      if (!compiled.anchored && !compiled.dirOnly && compiled.bareRe) {
-        for (const part of parts) {
-          if (part === compiled.cleanPat || compiled.bareRe.test(part)) return true;
-        }
-      }
+      if (!compiled.anchored && !compiled.dirOnly && compiled.bareRe &&
+          parts.some(part => part === compiled.cleanPat || compiled.bareRe!.test(part))) return true;
     }
     return false;
+  }
+
+  private compileIgnorePattern(pat: string): CompiledPattern {
+    if (pat.startsWith("!")) return { skip: true };
+    const p = pat.replaceAll("\\", "/");
+    const dirOnly = p.endsWith("/");
+    const cleanPat = dirOnly ? p.slice(0, -1) : p;
+    const cleanTrimmed = cleanPat.replace(/^\//, "");
+    const anchored = cleanPat.includes("/");
+    const partsPattern = (anchored && cleanPat.startsWith("/"))
+      ? `^${this.toRegex(cleanTrimmed)}(?:/|$)`
+      : anchored
+        ? `^${this.toRegex(cleanPat)}`
+        : `(?:^|/)${this.toRegex(cleanPat)}$`;
+    const re = new RegExp(partsPattern);
+    const bareRe = !anchored && !dirOnly ? new RegExp(`^${this.toRegex(cleanPat)}$`) : null;
+    return { skip: false, dirOnly, re, anchored, bareRe, cleanPat };
   }
 
   private async scanFiles(rootDir: string): Promise<string[]> {
@@ -391,11 +381,7 @@ export class IndexingService {
           if (entry.isDirectory()) {
             await walk(fullPath, localPatterns);
           } else if (entry.isFile()) {
-            const ext = path.extname(entry.name).toLowerCase();
-            if (ALLOWED_EXTENSIONS.has(ext)) {
-              const stat = await fs.promises.stat(fullPath);
-              if (stat.size > 0 && stat.size < 500000) files.push(fullPath);
-            }
+            await this.addIndexableFile(fullPath, entry.name, files); // NOSONAR -- preserve traversal order and bound filesystem reads.
           }
         }
       } catch (err) {
@@ -404,6 +390,13 @@ export class IndexingService {
     };
     await walk(rootDir, rootPatterns);
     return files;
+  }
+
+  private async addIndexableFile(fullPath: string, name: string, files: string[]): Promise<void> {
+    const ext = path.extname(name).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) return;
+    const stat = await fs.promises.stat(fullPath);
+    if (stat.size > 0 && stat.size < 500000) files.push(fullPath);
   }
 
   private parseTSJS(code: string, relPath: string, moduleId: string, nodes: GraphNode[], links: GraphLink[]) {
@@ -430,15 +423,15 @@ export class IndexingService {
         nodes.push({ id: funcId, label: funcMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });
         links.push({ source: moduleId, target: funcId, type: "contains" });
       }
-      const callMatch = line.match(TS_CALL_REGEX);
-      if (callMatch) {
-        for (const call of callMatch) {
-          const callName = call.slice(0, -1);
-          // ⚡ Bolt Optimization: Replace O(N) array includes with O(1) Set lookup
-          if (IGNORED_CALLS.has(callName)) continue;
-          links.push({ source: moduleId, target: `function:module:${relPath}:${callName}`, type: "call" });
-        }
-      }
+      this.addTSCalls(line, moduleId, relPath, links);
+    }
+  }
+
+  private addTSCalls(line: string, moduleId: string, relPath: string, links: GraphLink[]): void {
+    for (const call of line.match(TS_CALL_REGEX) || []) {
+      const callName = call.slice(0, -1);
+      if (IGNORED_CALLS.has(callName)) continue;
+      links.push({ source: moduleId, target: `function:module:${relPath}:${callName}`, type: "call" });
     }
   }
 

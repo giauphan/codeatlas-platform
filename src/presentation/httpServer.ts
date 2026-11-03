@@ -9,7 +9,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import * as fs from "fs";
 import * as path from "path";
 import { getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, type DocumentReference } from "firebase-admin/firestore";
 import { checkAuth, logActivity, shouldUseFirestore } from "../services/authService.js";
 import { authMiddleware } from "../middleware/auth.js";
 import {
@@ -298,42 +298,10 @@ async function cleanUpEmptyTenantProjectFolder(
   }
 }
 
-// REST API: Remove project and its associated data
-app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "force"), async (req, res) => {
-  try {
-    const auth = authStorage.getStore();
-    const tenantId = auth ? auth.uid : undefined;
-    
-    const rawProjectDir = req.query.projectDir;
-    if (typeof rawProjectDir !== "string" || !rawProjectDir.trim()) {
-      return res.status(400).json({ error: "Invalid or missing projectDir parameter. It must be a non-empty string." });
-    }
-    const projectDir = rawProjectDir.trim();
-    
-    const resolved = await resolveProjectDir(projectDir, tenantId, true);
-    if (!resolved) {
-      return res.status(403).json({ error: "Access denied or project not found" });
-    }
-    
-    const { cleanProjectName, fullProjectDir } = resolved;
-    
-    // Derive target owner tenant from project path
-    let ownerTenantId = tenantId;
-    let isInsideTenantRoot = false;
-    const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
-    const normalizedTenantRoot = path.resolve(tenantRoot);
-    
-    // Resolve the real canonical path of the project to securely handle symlinks
-    let realProjectDir: string;
-    try {
-      realProjectDir = await fs.promises.realpath(fullProjectDir);
-    } catch {
-      realProjectDir = path.resolve(fullProjectDir);
-    }
-    
-    if (process.env.CODEATLAS_MULTI_TENANT === "true") {
+function validateTenantDeletionScope(normalizedTenantRoot: string, realProjectDir: string, tenantId: string | undefined, auth: express.Request["auth"], res: express.Response): { ownerTenantId: string | undefined; isInsideTenantRoot: boolean } | null {
+      let ownerTenantId = tenantId;
       const relativePath = path.relative(normalizedTenantRoot, realProjectDir);
-      isInsideTenantRoot = !!relativePath && !(relativePath === ".." || relativePath.startsWith(".." + path.sep)) && !path.isAbsolute(relativePath);
+      const isInsideTenantRoot = !!relativePath && !(relativePath === ".." || relativePath.startsWith(".." + path.sep)) && !path.isAbsolute(relativePath);
       
       const isSystemAdmin = auth
         ? (auth.uid === "admin" || auth.role === "admin")
@@ -341,14 +309,16 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
         
       if (!isSystemAdmin) {
         if (!isInsideTenantRoot) {
-          return res.status(403).json({ error: "Access denied: Project directory is outside the tenant root sandbox." });
+          res.status(403).json({ error: "Access denied: Project directory is outside the tenant root sandbox." });
+          return null;
         }
         if (tenantId) {
           const tenantRootPath = path.resolve(path.join(normalizedTenantRoot, tenantId));
           const relToTenant = path.relative(tenantRootPath, realProjectDir);
           const isInsideTenant = !!relToTenant && !(relToTenant === ".." || relToTenant.startsWith(".." + path.sep)) && !path.isAbsolute(relToTenant);
           if (!isInsideTenant) {
-            return res.status(403).json({ error: "Access denied: Project directory is outside your tenant sandbox." });
+            res.status(403).json({ error: "Access denied: Project directory is outside your tenant sandbox." });
+            return null;
           }
         }
       }
@@ -359,22 +329,35 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
           ownerTenantId = parts[0];
         }
       }
+      return { ownerTenantId, isInsideTenantRoot };
+}
+
+async function resolveDeletionScope(fullProjectDir: string, tenantId: string | undefined, auth: express.Request["auth"], res: express.Response): Promise<{
+  ownerTenantId: string | undefined; isInsideTenantRoot: boolean; normalizedTenantRoot: string; realProjectDir: string;
+} | null> {
+    // Derive target owner tenant from project path
+    let ownerTenantId = tenantId;
+    let isInsideTenantRoot = false;
+    const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+    const normalizedTenantRoot = path.resolve(tenantRoot);
+
+    // Resolve the real canonical path of the project to securely handle symlinks
+    let realProjectDir: string;
+    try {
+      realProjectDir = await fs.promises.realpath(fullProjectDir);
+    } catch {
+      realProjectDir = path.resolve(fullProjectDir);
     }
     
-    const errors: string[] = [];
+    if (process.env.CODEATLAS_MULTI_TENANT === "true") {
+      const scope = validateTenantDeletionScope(normalizedTenantRoot, realProjectDir, tenantId, auth, res);
+      if (!scope) return null;
+      ({ ownerTenantId, isInsideTenantRoot } = scope);
+    }
+    return { ownerTenantId, isInsideTenantRoot, normalizedTenantRoot, realProjectDir };
+}
 
-    // 1. Remove telemetry data from Firestore (if Firebase is configured)
-    if (shouldUseFirestore()) {
-      try {
-        const apps = firebaseClient.getApps();
-        if (apps.length) {
-          const db = firebaseClient.getFirestore();
-          const docId = ownerTenantId ? `${ownerTenantId}_${cleanProjectName}` : cleanProjectName;
-          await db.collection('projects').doc(docId).delete();
-          logger.info(`[Delete Project] Deleted Firestore document: ${docId}`);
-
-          // Securely handle legacy unscoped document cleanup if it exists
-          if (ownerTenantId) {
+async function removeLegacyProjectRecord(db: ReturnType<typeof firebaseClient.getFirestore>, cleanProjectName: string, ownerTenantId: string): Promise<void> {
             const legacyDocId = cleanProjectName;
             const legacyRef = db.collection('projects').doc(legacyDocId);
             const legacyDoc = await legacyRef.get();
@@ -386,7 +369,20 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
                 logger.info(`[Delete Project] Cleaned up legacy Firestore document: ${legacyDocId}`);
               }
             }
-          }
+}
+
+async function removeProjectRecords(cleanProjectName: string, ownerTenantId: string | undefined, errors: string[]): Promise<void> {
+    // 1. Remove telemetry data from Firestore (if Firebase is configured)
+    if (shouldUseFirestore()) {
+      try {
+        const apps = firebaseClient.getApps();
+        if (apps.length) {
+          const db = firebaseClient.getFirestore();
+          const docId = ownerTenantId ? `${ownerTenantId}_${cleanProjectName}` : cleanProjectName;
+          await db.collection('projects').doc(docId).delete();
+          logger.info(`[Delete Project] Deleted Firestore document: ${docId}`);
+
+          if (ownerTenantId) await removeLegacyProjectRecord(db, cleanProjectName, ownerTenantId);
         }
       } catch (firebaseErr: unknown) {
         logger.error(`[Delete Project] Failed to delete from Firestore: ${firebaseErr}`);
@@ -394,6 +390,11 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
       }
     }
 
+    await removeLocalProjectRecord(cleanProjectName, ownerTenantId);
+
+}
+
+async function removeLocalProjectRecord(cleanProjectName: string, ownerTenantId: string | undefined): Promise<void> {
     // 1b. Remove project entry from local database
     try {
       const db = createDatabaseAdapter();
@@ -414,29 +415,9 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
     } catch (localDbErr: unknown) {
       logger.error(`[Delete Project] Failed to delete from local database: ${localDbErr}`);
     }
+}
 
-    // 2. Remove semantic/relational/episodic memory from the database
-    try {
-      const { MemoryService } = await import("../services/memoryService.js");
-      await MemoryService.deleteProjectMemory(cleanProjectName);
-    } catch (dbErr: unknown) {
-      logger.error(`[Delete Project] Failed to delete from database: ${dbErr}`);
-      const errMsg = dbErr instanceof Error ? dbErr.message : String(dbErr);
-      errors.push(`Database cleanup failed: ${errMsg}`);
-    }
-
-    const isForce = req.query.force === "true";
-
-    // If remote cleanups fail, abort before deleting local files so the project remains discoverable and retryable
-    // unless force=true is requested to allow recovery under DB connection failures
-    if (errors.length > 0 && !isForce) {
-      return res.status(500).json({
-        success: false,
-        error: "Remote cleanup failure. Local files and project registry were not modified to allow retries.",
-        details: errors
-      });
-    }
-
+async function removeProjectIndex(realProjectDir: string, fullProjectDir: string, normalizedTenantRoot: string, isInsideTenantRoot: boolean, errors: string[]): Promise<void> {
     // 3. Remote cleanups succeeded (or force=true). Now clean up local index directory and empty tenant sandboxes
     try {
       const codeatlasDir = path.join(realProjectDir, ".codeatlas");
@@ -463,6 +444,21 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
       errors.push(`Failed to clean up index directory: ${dirErr instanceof Error ? dirErr.message : String(dirErr)}`);
     }
 
+}
+
+async function removeProjectMemory(cleanProjectName: string, errors: string[]): Promise<void> {
+    // 2. Remove semantic/relational/episodic memory from the database
+    try {
+      const { MemoryService } = await import("../services/memoryService.js");
+      await MemoryService.deleteProjectMemory(cleanProjectName);
+    } catch (dbErr: unknown) {
+      logger.error(`[Delete Project] Failed to delete from database: ${dbErr}`);
+      const errMsg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      errors.push(`Database cleanup failed: ${errMsg}`);
+    }
+}
+
+async function unregisterDeletedProject(fullProjectDir: string, errors: string[], isForce: boolean): Promise<void> {
     // 4. Unregister project from local registered list only if local cleanup was successful, or if force is enabled
     if (errors.length === 0 || isForce) {
       try {
@@ -471,6 +467,52 @@ app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams(
         errors.push(`Failed to unregister project: ${regErr instanceof Error ? regErr.message : String(regErr)}`);
       }
     }
+}
+
+// REST API: Remove project and its associated data
+app.delete("/api/projects", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "force"), async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+
+    const rawProjectDir = req.query.projectDir;
+    if (typeof rawProjectDir !== "string" || !rawProjectDir.trim()) {
+      return res.status(400).json({ error: "Invalid or missing projectDir parameter. It must be a non-empty string." });
+    }
+    const projectDir = rawProjectDir.trim();
+
+    const resolved = await resolveProjectDir(projectDir, tenantId, true);
+    if (!resolved) {
+      return res.status(403).json({ error: "Access denied or project not found" });
+    }
+
+    const { cleanProjectName, fullProjectDir } = resolved;
+
+    const deletionScope = await resolveDeletionScope(fullProjectDir, tenantId, auth, res);
+    if (!deletionScope) return;
+    const { ownerTenantId, isInsideTenantRoot, normalizedTenantRoot, realProjectDir } = deletionScope;
+
+    const errors: string[] = [];
+
+    await removeProjectRecords(cleanProjectName, ownerTenantId, errors);
+
+    await removeProjectMemory(cleanProjectName, errors);
+
+    const isForce = req.query.force === "true";
+
+    // If remote cleanups fail, abort before deleting local files so the project remains discoverable and retryable
+    // unless force=true is requested to allow recovery under DB connection failures
+    if (errors.length > 0 && !isForce) {
+      return res.status(500).json({
+        success: false,
+        error: "Remote cleanup failure. Local files and project registry were not modified to allow retries.",
+        details: errors
+      });
+    }
+
+    await removeProjectIndex(realProjectDir, fullProjectDir, normalizedTenantRoot, isInsideTenantRoot, errors);
+
+    await unregisterDeletedProject(fullProjectDir, errors, isForce);
 
     if (errors.length > 0 && !isForce) {
       return res.status(500).json({
@@ -530,38 +572,7 @@ app.get("/api/projects/memory", authMiddleware, localRateLimiter, rejectArrayPar
   }
 });
 
-// REST API: Get indexing settings for a project
-app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "projectName"), async (req, res) => {
-  try {
-    const auth = authStorage.getStore();
-    const tenantId = auth ? auth.uid : undefined;
-    
-    const projectDir = req.query.projectDir;
-    const projectName = req.query.projectName;
-    
-    if (projectDir !== undefined && (typeof projectDir !== "string" || !projectDir.trim())) {
-      return res.status(400).json({ error: "Invalid projectDir parameter" });
-    }
-    if (projectName !== undefined && (typeof projectName !== "string" || !projectName.trim())) {
-      return res.status(400).json({ error: "Invalid projectName parameter" });
-    }
-    
-    if (!projectDir && !projectName) {
-      return res.status(400).json({ error: "Missing projectDir or projectName query parameter" });
-    }
-    
-    let resolved;
-    if (projectDir) {
-      resolved = await resolveProjectDir(projectDir.trim(), tenantId, true);
-    } else if (projectName) {
-      resolved = await resolveProjectDir(projectName.trim(), tenantId, false);
-    }
-    
-    if (!resolved) {
-      return res.status(404).json({ error: "Project not found" });
-    }
-    
-    const { cleanProjectName, fullProjectDir } = resolved;
+async function readLocalIndexingSettings(fullProjectDir: string, res: express.Response): Promise<{ indexingEnabled: boolean; checkedLocal: boolean } | null> {
     let indexingEnabled = true;
     let checkedLocal = false;
     
@@ -584,11 +595,19 @@ app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayP
     } catch (e: unknown) {
       logger.error("[Settings API] Error reading settings file:", e);
       if (e instanceof Error && (e as NodeJS.ErrnoException).code !== "ENOENT") {
-        return res.status(500).json({ error: `Failed to read local settings: ${e.message}` });
+        res.status(500).json({ error: `Failed to read local settings: ${e.message}` });
+        return null;
       }
     }
     
-    if (!checkedLocal && shouldUseFirestore()) {
+    return { indexingEnabled, checkedLocal };
+}
+
+async function readFirestoreIndexingSetting(cleanProjectName: string, tenantId: string | undefined, initial: boolean): Promise<boolean> {
+    let indexingEnabled = initial;
+    if (!shouldUseFirestore()) {
+      return initial;
+    }
       // Fallback: check Firestore
       try {
         const apps = firebaseClient.getApps();
@@ -607,13 +626,69 @@ app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayP
           (e.message.includes('UNAVAILABLE') || e.message.includes('NOT_FOUND'));
         logger[isAvailabilityError ? 'warn' : 'error']("[Settings API] Firestore fallback unavailable:", e instanceof Error ? e.message : String(e));
       }
+    return indexingEnabled;
+}
+
+// REST API: Get indexing settings for a project
+app.get("/api/projects/settings", authMiddleware, localRateLimiter, rejectArrayParams("projectDir", "projectName"), async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+
+    const projectDir = req.query.projectDir;
+    const projectName = req.query.projectName;
+
+    if (projectDir !== undefined && (typeof projectDir !== "string" || !projectDir.trim())) {
+      return res.status(400).json({ error: "Invalid projectDir parameter" });
+    }
+    if (projectName !== undefined && (typeof projectName !== "string" || !projectName.trim())) {
+      return res.status(400).json({ error: "Invalid projectName parameter" });
+    }
+
+    if (!projectDir && !projectName) {
+      return res.status(400).json({ error: "Missing projectDir or projectName query parameter" });
+    }
+
+    let resolved;
+    if (projectDir) {
+      resolved = await resolveProjectDir(projectDir.trim(), tenantId, true);
+    } else if (projectName) {
+      resolved = await resolveProjectDir(projectName.trim(), tenantId, false);
     }
     
+    if (!resolved) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    const { cleanProjectName, fullProjectDir } = resolved;
+    const local = await readLocalIndexingSettings(fullProjectDir, res);
+    if (!local) return;
+    const indexingEnabled = local.checkedLocal ? local.indexingEnabled :
+      await readFirestoreIndexingSetting(cleanProjectName, tenantId, local.indexingEnabled);
+
     res.json({ indexingEnabled });
   } catch (err: unknown) {
     res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
+
+async function writeFirestoreIndexingSetting(cleanProjectName: string, tenantId: string | undefined, indexingEnabled: boolean): Promise<void> {
+    // Save to Firestore
+    if (shouldUseFirestore()) {
+      try {
+        const apps = firebaseClient.getApps();
+        if (apps.length) {
+          const db = firebaseClient.getFirestore();
+          const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
+          const docRef = db.collection('projects').doc(docId);
+          await docRef.set({ indexingEnabled }, { merge: true });
+        }
+      } catch (e: unknown) {
+        // Local settings were already persisted above; Firestore is only a backup mirror
+        logger.warn("[Settings API] Firestore settings backup unavailable:", e instanceof Error ? e.message : String(e));
+      }
+    }
+}
 
 // REST API: Update indexing settings for a project
 app.post("/api/projects/settings", authMiddleware, localRateLimiter, async (req, res) => {
@@ -637,12 +712,9 @@ app.post("/api/projects/settings", authMiddleware, localRateLimiter, async (req,
       return res.status(400).json({ error: "Missing projectDir or projectName parameter" });
     }
     
-    let resolved;
-    if (projectDir) {
-      resolved = await resolveProjectDir(projectDir.trim(), tenantId, true);
-    } else if (projectName) {
-      resolved = await resolveProjectDir(projectName.trim(), tenantId, false);
-    }
+    const resolved = projectDir
+      ? await resolveProjectDir(projectDir.trim(), tenantId, true)
+      : await resolveProjectDir(projectName.trim(), tenantId, false);
     
     if (!resolved) {
       return res.status(404).json({ error: "Project not found" });
@@ -665,21 +737,7 @@ app.post("/api/projects/settings", authMiddleware, localRateLimiter, async (req,
     }
     await fs.promises.writeFile(settingsPath, JSON.stringify({ indexingEnabled }, null, 2));
     
-    // Save to Firestore
-    if (shouldUseFirestore()) {
-      try {
-        const apps = firebaseClient.getApps();
-        if (apps.length) {
-          const db = firebaseClient.getFirestore();
-          const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
-          const docRef = db.collection('projects').doc(docId);
-          await docRef.set({ indexingEnabled }, { merge: true });
-        }
-      } catch (e: unknown) {
-        // Local settings were already persisted above; Firestore is only a backup mirror
-        logger.warn("[Settings API] Firestore settings backup unavailable:", e instanceof Error ? e.message : String(e));
-      }
-    }
+    await writeFirestoreIndexingSetting(cleanProjectName, tenantId, indexingEnabled);
 
     res.json({ success: true, indexingEnabled });
   } catch (err: unknown) {
@@ -823,43 +881,9 @@ app.get("/api/orchestration/tasks", authMiddleware, localRateLimiter, async (req
 });
 
 // REST API: Securely sync local AST analysis from Local-First gateway and sync telemetry
-app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res) => {
-  try {
-    const auth = authStorage.getStore();
-    const tenantId = auth ? auth.uid : undefined;
-    
-    if (!tenantId) {
-      return res.status(401).json({ error: "Unauthorized: Missing tenant identification" });
-    }
-    
-    const { projectName, analysis, businessRule, changeDescription } = req.body;
-    if (!projectName || !analysis) {
-      return res.status(400).json({ error: "Missing projectName or analysis data" });
-    }
-
-    // Queue the heavy file write & database sync operations to prevent connection pool starvation/conflicts
-    const result = await syncQueue.enqueue(async () => {
-      const executeTask = async () => {
-        // Clean project name to avoid directory traversal
-        const cleanProjectName = path.basename(projectName);
-        
-        // Resolve project directory on the VPS
-        let projectDir: string;
-        if (process.env.CODEATLAS_MULTI_TENANT === "true") {
-          const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
-          projectDir = path.join(tenantRoot, tenantId, cleanProjectName);
-        } else {
-          projectDir = path.join(process.cwd(), "projects", cleanProjectName);
-        }
-        
-        const codeatlasDir = path.join(projectDir, ".codeatlas");
-        if (!(await fileExists(codeatlasDir))) {
-          await fs.promises.mkdir(codeatlasDir, { recursive: true });
-        }
-        
-        const analysisPath = path.join(codeatlasDir, "analysis.json");
-        await fs.promises.writeFile(analysisPath, JSON.stringify(analysis, null, 2));
-        
+async function syncProjectTelemetry(cleanProjectName: string, projectDir: string, tenantId: string, analysis: {
+  stats?: unknown; entityCounts?: unknown; graph?: { nodes?: unknown[]; links?: unknown[] };
+}): Promise<void> {
         // Securely sync telemetry / database stats on server-side
         if (shouldUseFirestore()) {
           try {
@@ -869,6 +893,33 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
               const docId = tenantId ? `${tenantId}_${cleanProjectName}` : cleanProjectName;
               const docRef = db.collection('projects').doc(docId);
 
+              await migrateLegacyProjectTelemetry(db, docRef, cleanProjectName, docId, tenantId);
+
+              await docRef.set({
+                name: cleanProjectName,
+                path: projectDir,
+                stats: (analysis as { stats?: unknown; entityCounts?: unknown }).stats || analysis.entityCounts || {},
+                lastIndexed: new Date().toISOString(),
+                nodesCount: analysis.graph?.nodes?.length || 0,
+                linksCount: analysis.graph?.links?.length || 0,
+                status: 'synced',
+                tenantId: tenantId
+              }, { merge: true });
+              logger.info(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
+            }
+          } catch (e) {
+            logger.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
+          }
+        } else {
+          await syncLocalProjectRecord(cleanProjectName, tenantId);
+        }
+}
+
+async function migrateLegacyProjectTelemetry(
+  db: ReturnType<typeof firebaseClient.getFirestore>,
+  docRef: DocumentReference,
+  cleanProjectName: string, docId: string, tenantId: string,
+): Promise<void> {
               // Runtime migration fallback: if docId is different from cleanProjectName, check if a legacy doc exists to migrate historical telemetry
               if (tenantId) {
                 const legacyDocId = cleanProjectName;
@@ -891,23 +942,9 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
                   logger.error(`[Sync API] Runtime migration check failed: ${migrateErr}`);
                 }
               }
+}
 
-              await docRef.set({
-                name: cleanProjectName,
-                path: projectDir,
-                stats: (analysis as { stats?: unknown; entityCounts?: unknown }).stats || analysis.entityCounts || {},
-                lastIndexed: new Date().toISOString(),
-                nodesCount: analysis.graph?.nodes?.length || 0,
-                linksCount: analysis.graph?.links?.length || 0,
-                status: 'synced',
-                tenantId: tenantId
-              }, { merge: true });
-              logger.info(`[Sync API] Securely synced ${cleanProjectName} telemetry to Firestore for tenant: ${tenantId}`);
-            }
-          } catch (e) {
-            logger.error(`[Sync API] Secure Firestore Sync Failed: ${e}`);
-          }
-        } else {
+async function syncLocalProjectRecord(cleanProjectName: string, tenantId: string): Promise<void> {
           // Local Mode: Upsert to local SQLite db
           try {
             const db = createDatabaseAdapter();
@@ -936,7 +973,53 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
           } catch (localDbErr: unknown) {
              logger.error(`[Sync API] Local SQLite sync failed: ${localDbErr}`);
           }
+}
+
+async function prepareProjectSyncDirectory(cleanProjectName: string, tenantId: string): Promise<string> {
+        // Resolve project directory on the VPS
+        let projectDir: string;
+        if (process.env.CODEATLAS_MULTI_TENANT === "true") {
+          const tenantRoot = process.env.CODEATLAS_PROJECTS_ROOT || path.join(process.cwd(), "tenants");
+          projectDir = path.join(tenantRoot, tenantId, cleanProjectName);
+        } else {
+          projectDir = path.join(process.cwd(), "projects", cleanProjectName);
         }
+
+        const codeatlasDir = path.join(projectDir, ".codeatlas");
+        if (!(await fileExists(codeatlasDir))) {
+          await fs.promises.mkdir(codeatlasDir, { recursive: true });
+        }
+
+        return projectDir;
+}
+
+app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res) => {
+  try {
+    const auth = authStorage.getStore();
+    const tenantId = auth ? auth.uid : undefined;
+
+    if (!tenantId) {
+      return res.status(401).json({ error: "Unauthorized: Missing tenant identification" });
+    }
+
+    const { projectName, analysis, businessRule, changeDescription } = req.body;
+    if (!projectName || !analysis) {
+      return res.status(400).json({ error: "Missing projectName or analysis data" });
+    }
+
+    // Queue the heavy file write & database sync operations to prevent connection pool starvation/conflicts
+    const result = await syncQueue.enqueue(async () => {
+      const executeTask = async () => {
+        // Clean project name to avoid directory traversal
+        const cleanProjectName = path.basename(projectName);
+
+        const projectDir = await prepareProjectSyncDirectory(cleanProjectName, tenantId);
+        const codeatlasDir = path.join(projectDir, ".codeatlas");
+
+        const analysisPath = path.join(codeatlasDir, "analysis.json");
+        await fs.promises.writeFile(analysisPath, JSON.stringify(analysis, null, 2));
+
+        await syncProjectTelemetry(cleanProjectName, projectDir, tenantId, analysis);
 
         let businessRuleSaved = false;
         let changeDescriptionSaved = false;
@@ -982,10 +1065,8 @@ app.post("/api/projects/sync", authMiddleware, localRateLimiter, async (req, res
             logger.error(`[Sync API] Failed to sync to database: ${e}`);
             syncError = e instanceof Error ? e.message : String(e);
           }
-        } else {
-          if (businessRule || changeDescription) {
-            syncError = "Not authenticated — cannot save episodic memory.";
-          }
+        } else if (businessRule || changeDescription) {
+          syncError = "Not authenticated — cannot save episodic memory.";
         }
 
         const sanitizedProjectDir = path.relative(process.cwd(), projectDir);
@@ -1067,23 +1148,7 @@ const sessionServers = new Map<string, McpServer>();
 const sessionOwnership = new Map<string, string>();
 const sessionGenerations = new Map<string, number>();
 
-app.get("/sse", async (req, res) => {
-  logger.info("[SSE] New connection request");
-  
-  // Critical for Cloudflare/Nginx/Proxies to prevent buffering
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  
-  const apiKey = (req.headers["x-api-key"] as string) || "";
-  const messagesUrl = "/messages";
-  const transport = new SSEServerTransport(messagesUrl, res);
-  
-  // Store transport by sessionId immediately to prevent race conditions during initialize
-  const sessionId = transport.sessionId;
-  
-  if (sessionId) {
+async function closeExistingSession(sessionId: string): Promise<void> {
     // If a session with this ID already exists, clean up its server and transport first to avoid conflicts
     if (transports.has(sessionId)) {
       logger.warn(`[SSE] Session ${sessionId} already exists. Cleaning up the old connection before establishing new one.`);
@@ -1108,6 +1173,54 @@ app.get("/sse", async (req, res) => {
         }
       }
     }
+}
+
+async function expireSession(sessionId: string, myGen: number, transport: SSEServerTransport): Promise<void> {
+
+        // Only clean up if the current generation of this session matches the one that closed
+        if (sessionGenerations.get(sessionId) === myGen) {
+          logger.info(`[SSE] Grace period expired. Cleaning up session: ${sessionId} (generation: ${myGen})`);
+          transports.delete(sessionId);
+          const oldServer = sessionServers.get(sessionId);
+          sessionServers.delete(sessionId);
+          sessionOwnership.delete(sessionId);
+          sessionGenerations.delete(sessionId);
+          if (oldServer) {
+            try {
+              await oldServer.close();
+            } catch (err) {
+              // Ignore
+            }
+          }
+          try {
+            await transport.close();
+          } catch (err) {
+            // Ignore
+          }
+        } else {
+          logger.info(`[SSE] Skip cleanup for session: ${sessionId} (current generation: ${sessionGenerations.get(sessionId) || 'none'} newer than closed generation: ${myGen})`);
+        }
+
+}
+
+app.get("/sse", async (req, res) => {
+  logger.info("[SSE] New connection request");
+
+  // Critical for Cloudflare/Nginx/Proxies to prevent buffering
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  const apiKey = (req.headers["x-api-key"] as string) || "";
+  const messagesUrl = "/messages";
+  const transport = new SSEServerTransport(messagesUrl, res);
+
+  // Store transport by sessionId immediately to prevent race conditions during initialize
+  const sessionId = transport.sessionId;
+
+  if (sessionId) {
+    await closeExistingSession(sessionId);
 
     // Dynamically create a session-specific server to isolate state and support concurrent clients
     const auth = req.auth;
@@ -1154,31 +1267,7 @@ app.get("/sse", async (req, res) => {
       logger.info(`[SSE] Session connection closed: ${sessionId} (generation: ${myGen}). Keeping session alive for 3-minute grace period.`);
       
       // Keep the session in the map for a 3-minute grace period to prevent immediate 404 errors
-      setTimeout(async () => {
-        // Only clean up if the current generation of this session matches the one that closed
-        if (sessionGenerations.get(sessionId) === myGen) {
-          logger.info(`[SSE] Grace period expired. Cleaning up session: ${sessionId} (generation: ${myGen})`);
-          transports.delete(sessionId);
-          const oldServer = sessionServers.get(sessionId);
-          sessionServers.delete(sessionId);
-          sessionOwnership.delete(sessionId);
-          sessionGenerations.delete(sessionId);
-          if (oldServer) {
-            try {
-              await oldServer.close();
-            } catch (err) {
-              // Ignore
-            }
-          }
-          try {
-            await transport.close();
-          } catch (err) {
-            // Ignore
-          }
-        } else {
-          logger.info(`[SSE] Skip cleanup for session: ${sessionId} (current generation: ${sessionGenerations.get(sessionId) || 'none'} newer than closed generation: ${myGen})`);
-        }
-      }, 180000); // 3 minutes
+      setTimeout(() => { void expireSession(sessionId, myGen, transport); }, 180000); // 3 minutes
     });
 
     await sessionServer.connect(transport);
@@ -1314,37 +1403,7 @@ export function createSchedulerTickRunner(runTick: () => Promise<void>): () => v
   };
 }
 
-export function startHttpServer(port: number, retries = 5): Promise<void> {
-  mountSecondBrainRoutes(app);
-  mountConsolidationRoutes(app);
-  mountGenomeRoutes(app);
-  mountA2ARoutes(app, a2aExecutor, `http://localhost:${port}`);
-  mountHeartbeatRoutes(app);
-  mountCronSettingsRoutes(app);
-
-  let schedulerTimer: NodeJS.Timeout | undefined;
-
-  return new Promise((resolve, reject) => {
-    function attempt(remaining: number) {
-      const serverInstance = app.listen(port)
-        .on('listening', () => {
-          logger.info(`CodeAtlas MCP SSE server running on port ${port}`);
-          logger.info(`- SSE endpoint: http://localhost:${port}/sse`);
-          logger.info(`- Message endpoint: http://localhost:${port}/messages`);
-          logger.info(`- A2A Agent Card: http://localhost:${port}/.well-known/agent-card.json`);
-          logger.info(`- A2A JSON-RPC: http://localhost:${port}/a2a/jsonrpc`);
-          if (process.env.CODEATLAS_API_KEY) {
-            logger.info(`- Security: API Key enabled`);
-          } else {
-            logger.info(`- Authenticated HTTP operations require a configured API key`);
-            logger.warn(`[DreamCron] Scheduler disabled: CODEATLAS_API_KEY is not configured`);
-          }
-
-          const runSchedulerTick = createSchedulerTickRunner(() => runDreamSchedulerTick(port));
-          runSchedulerTick();
-          schedulerTimer = setInterval(runSchedulerTick, 60 * 1000);
-          schedulerTimer.unref();
-
+function registerShutdownHandlers(serverInstance: Server, schedulerTimer: NodeJS.Timeout | undefined): void {
           // Define shutdown handler
           let isShuttingDown = false;
           const shutdown = (signal: string, server: Server) => {
@@ -1392,6 +1451,40 @@ export function startHttpServer(port: number, retries = 5): Promise<void> {
               process.kill(process.pid, 'SIGUSR2');
             });
           });
+}
+
+export function startHttpServer(port: number, retries = 5): Promise<void> {
+  mountSecondBrainRoutes(app);
+  mountConsolidationRoutes(app);
+  mountGenomeRoutes(app);
+  mountA2ARoutes(app, a2aExecutor, `http://localhost:${port}`);
+  mountHeartbeatRoutes(app);
+  mountCronSettingsRoutes(app);
+
+  let schedulerTimer: NodeJS.Timeout | undefined;
+
+  return new Promise((resolve, reject) => {
+    function attempt(remaining: number) {
+      const serverInstance = app.listen(port)
+        .on('listening', () => {
+          logger.info(`CodeAtlas MCP SSE server running on port ${port}`);
+          logger.info(`- SSE endpoint: http://localhost:${port}/sse`);
+          logger.info(`- Message endpoint: http://localhost:${port}/messages`);
+          logger.info(`- A2A Agent Card: http://localhost:${port}/.well-known/agent-card.json`);
+          logger.info(`- A2A JSON-RPC: http://localhost:${port}/a2a/jsonrpc`);
+          if (process.env.CODEATLAS_API_KEY) {
+            logger.info(`- Security: API Key enabled`);
+          } else {
+            logger.info(`- Authenticated HTTP operations require a configured API key`);
+            logger.warn(`[DreamCron] Scheduler disabled: CODEATLAS_API_KEY is not configured`);
+          }
+
+          const runSchedulerTick = createSchedulerTickRunner(() => runDreamSchedulerTick(port));
+          runSchedulerTick();
+          schedulerTimer = setInterval(runSchedulerTick, 60 * 1000);
+          schedulerTimer.unref();
+
+          registerShutdownHandlers(serverInstance, schedulerTimer);
 
           resolve();
         })

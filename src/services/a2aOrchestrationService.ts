@@ -109,18 +109,10 @@ export class A2AOrchestrationService {
     task.updatedAt = new Date().toISOString();
     task.stateHistory.push({ state: newState, timestamp: task.updatedAt });
 
-    if (updates) {
-      if (updates.artifacts !== undefined) task.artifacts = updates.artifacts;
-      if (updates.feedback !== undefined) {
-         task.feedback = updates.feedback === null ? undefined : updates.feedback;
-      }
-      if (updates.prUrl !== undefined) {
-         task.prUrl = updates.prUrl === null ? undefined : updates.prUrl;
-      }
-      if (updates.reviewBotFindings !== undefined) {
-         task.reviewBotFindings = updates.reviewBotFindings === null ? undefined : updates.reviewBotFindings;
-      }
-    }
+    if (updates?.artifacts !== undefined) task.artifacts = updates.artifacts;
+    if (updates?.feedback !== undefined) task.feedback = updates.feedback ?? undefined;
+    if (updates?.prUrl !== undefined) task.prUrl = updates.prUrl ?? undefined;
+    if (updates?.reviewBotFindings !== undefined) task.reviewBotFindings = updates.reviewBotFindings ?? undefined;
 
     orchestrationTaskStore.set(orchestrationTaskId, task);
     logger.info(`[A2A Orchestration] Task ${orchestrationTaskId} state updated to: ${newState}`);

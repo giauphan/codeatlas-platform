@@ -229,55 +229,16 @@ export class DreamPipelineService {
       };
     }
 
-    const savedDreams: Array<{ id: string; memory_type: string; content: string }> = [];
-    const skipped: string[] = [];
-
-    // Structured extraction retains source events and evidence on the legacy
-    // transcript endpoint too. Unstructured legacy candidates keep the direct
-    // save compatibility path.
     const structured = candidateDreams.every(dream => Array.isArray(dream.evidence) && dream.evidence.length > 0);
-    if (structured) {
-      const segments = options.content.split(/\n\n---\n\n/);
-      const eventIds: string[] = [];
-      for (const segment of segments) {
-        const match = segment.match(/^\[(USER|ASSISTANT|TOOL)\]\n([\s\S]*)$/);
-        if (!match) continue;
-        const actorRole = match[1] as PendingCaptureEvent['actorRole'];
-        const content = match[2].trim();
-        const eventId = `legacy_${createHash('sha256').update(JSON.stringify([auth.uid, project, sessId, actorRole, content])).digest('hex')}`;
-        const ack = await DreamCaptureStore.accept({ eventId, sessionId: sessId, project, actorRole, content });
-        if (!ack.acknowledged) throw new Error('Transcript source persistence failed');
-        eventIds.push(eventId);
-      }
-
-      for (const eventId of eventIds) {
-        const result = await MemoryIngestionService.processPending({ projectId: project, eventId, limit: 1 });
-        if (!result.success) throw new Error('Transcript extraction remains pending for retry');
-        for (const id of result.memory_ids) {
-          const rows = await createDatabaseAdapter().query<{ id: string; memory_type: string; content: string }>(
-            'SELECT id, memory_type, content FROM ai_dreaming_memory WHERE tenant_id = :tenantId AND id = :id', { tenantId: auth.uid, id });
-          savedDreams.push(...rows);
-        }
-        for (let i = 0; i < result.events_filtered; i++) skipped.push('filtered');
-      }
-    }
-
-    for (const dream of structured ? [] : candidateDreams) {
-      const memId = await authStorage.run(auth, () =>
-        DreamingService.saveDreamMemory(
-          project,
-          sessId,
-          dream.memoryType as DreamMemoryType,
-          dream.content,
-          dream.importance,
-          provider
-        )
-      );
-      if (memId === "__noise_blocked__") {
-        skipped.push(dream.content.slice(0, 60));
-      } else {
-        savedDreams.push({ id: memId, memory_type: dream.memoryType, content: dream.content });
-      }
+    const structuredResult = structured
+      ? await this.persistStructuredCandidates(options.content, sessId, project, auth.uid)
+      : { saved: [] as Array<{ id: string; memory_type: string; content: string }>, skipped: [] as string[] };
+    const savedDreams = structuredResult.saved;
+    const skipped = structuredResult.skipped;
+    if (!structured) {
+      const legacy = await this.persistLegacyCandidates(candidateDreams, project, sessId, provider, auth);
+      savedDreams.push(...legacy.saved);
+      skipped.push(...legacy.skipped);
     }
 
     const geneResults = await Promise.allSettled(
@@ -294,22 +255,7 @@ export class DreamPipelineService {
     );
     const genesSaved = geneResults.filter((r) => r.status === "fulfilled").length;
 
-    let wikiUpdated = false;
-    if (savedDreams.length > 0 && project !== "global") {
-      try {
-        const wikiService = WikiService.getInstance();
-        const context = savedDreams
-          .map((dream) => `[${dream.memory_type}] ${dream.content}`)
-          .join("\n\n");
-        const wikiTree = await wikiService.updateProjectWiki(project, context, {
-          tenantId: auth.uid,
-          provider: normalizeWikiProvider(provider),
-        });
-        wikiUpdated = wikiTree.totalPages > 0;
-      } catch (err) {
-        logger.warn(`[Dreaming Pipeline] Wiki auto-update failed for project="${project}": ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
+    const wikiUpdated = await this.updateWikiForDreams(savedDreams, project, provider, auth.uid);
 
     const totalMs = Date.now() - ingestStartTime;
     const completedAt = new Date().toISOString();
@@ -330,6 +276,77 @@ export class DreamPipelineService {
       completedAt,
       durationMs: totalMs,
     };
+  }
+
+  private static async persistStructuredCandidates(
+    transcript: string,
+    sessionId: string,
+    project: string,
+    tenantId: string,
+  ): Promise<{ saved: Array<{ id: string; memory_type: string; content: string }>; skipped: string[] }> {
+    const saved: Array<{ id: string; memory_type: string; content: string }> = [];
+    const skipped: string[] = [];
+    for (const eventId of await this.persistTranscriptEvents(transcript, tenantId, project, sessionId)) {
+      const result = await MemoryIngestionService.processPending({ projectId: project, eventId, limit: 1 });
+      if (!result.success) throw new Error('Transcript extraction remains pending for retry');
+      for (const id of result.memory_ids) {
+        const rows = await createDatabaseAdapter().query<{ id: string; memory_type: string; content: string }>(
+          'SELECT id, memory_type, content FROM ai_dreaming_memory WHERE tenant_id = :tenantId AND id = :id', { tenantId, id });
+        saved.push(...rows);
+      }
+      for (let index = 0; index < result.events_filtered; index++) skipped.push('filtered');
+    }
+    return { saved, skipped };
+  }
+
+  private static async persistTranscriptEvents(transcript: string, tenantId: string, project: string, sessionId: string): Promise<string[]> {
+    const eventIds: string[] = [];
+    for (const segment of transcript.split(/\n\n---\n\n/)) {
+      const match = segment.match(/^\[(USER|ASSISTANT|TOOL)\]\n([\s\S]*)$/);
+      if (!match) continue;
+      const actorRole = match[1] as PendingCaptureEvent['actorRole'];
+      const content = match[2].trim();
+      const eventId = `legacy_${createHash('sha256').update(JSON.stringify([tenantId, project, sessionId, actorRole, content])).digest('hex')}`;
+      const ack = await DreamCaptureStore.accept({ eventId, sessionId, project, actorRole, content }); // NOSONAR -- stop at the first failed source write.
+      if (!ack.acknowledged) throw new Error('Transcript source persistence failed');
+      eventIds.push(eventId);
+    }
+    return eventIds;
+  }
+
+  private static async persistLegacyCandidates(
+    candidates: NonNullable<Awaited<ReturnType<typeof summarizeConversationForDreams>>>,
+    project: string,
+    sessionId: string,
+    provider: string,
+    auth: NonNullable<ReturnType<typeof authStorage.getStore>>,
+  ): Promise<{ saved: Array<{ id: string; memory_type: string; content: string }>; skipped: string[] }> {
+    const saved: Array<{ id: string; memory_type: string; content: string }> = [];
+    const skipped: string[] = [];
+    for (const dream of candidates) {
+      const memId = await authStorage.run(auth, () => DreamingService.saveDreamMemory( // NOSONAR -- preserve write order and stop on failure.
+        project, sessionId, dream.memoryType as DreamMemoryType, dream.content, dream.importance, provider,
+      ));
+      if (memId === "__noise_blocked__") skipped.push(dream.content.slice(0, 60));
+      else saved.push({ id: memId, memory_type: dream.memoryType, content: dream.content });
+    }
+    return { saved, skipped };
+  }
+
+  private static async updateWikiForDreams(
+    dreams: Array<{ id: string; memory_type: string; content: string }>, project: string, provider: string, tenantId: string,
+  ): Promise<boolean> {
+    if (!dreams.length || project === "global") return false;
+    try {
+      const context = dreams.map((dream) => `[${dream.memory_type}] ${dream.content}`).join("\n\n");
+      const wikiTree = await WikiService.getInstance().updateProjectWiki(project, context, {
+        tenantId, provider: normalizeWikiProvider(provider),
+      });
+      return wikiTree.totalPages > 0;
+    } catch (err) {
+      logger.warn(`[Dreaming Pipeline] Wiki auto-update failed for project="${project}": ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
   }
 
   /**
