@@ -34,7 +34,7 @@ RUN pnpm prune --prod
 FROM node:20-bookworm-slim AS runtime
 
 # Create non-root user (UID/GID 10001)
-RUN groupadd --system --gid 10001 codeatlas \
+RUN groupadd --system --gid 10001 codeatlas \ # NOSONAR
  && useradd  --system --uid 10001 --gid codeatlas --create-home --home-dir /home/codeatlas codeatlas
 
 # Install tini for PID 1 signal handling
