@@ -16,6 +16,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { Readable } from "node:stream";
 import { createInterface } from "node:readline";
 
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -274,7 +275,7 @@ async function main() {
     process.stdout.write(`📄 ${session.projectDir}/${session.sessionId.slice(0, 8)}... `);
 
     // Extract transcript
-    const { transcript, messageCount, model } = await extractTranscript(session.filePath); // NOSONAR
+    const { transcript, messageCount, model } = await extractTranscript(session.filePath);
 
     if (messageCount < 2) {
       console.log(`\n  [SKIP] Only ${messageCount} messages — too short`);
@@ -297,7 +298,7 @@ async function main() {
     // Use the project dir name as the project hint
     const project = session.projectDir.replace(/^-/, "").replaceAll("-", "_");
 
-    const ok = await ingestSession( // NOSONAR
+    const ok = await ingestSession(
       session.sessionId,
       project,
       transcript,

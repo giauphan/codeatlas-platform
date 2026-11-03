@@ -18,7 +18,7 @@ type PgPoolConstructor = new (config: Record<string, unknown>) => PgPool;
 let PoolClass: PgPoolConstructor | undefined;
 let toSql: ((value: number[] | Float32Array) => string) | undefined;
 
-const NAMED_PLACEHOLDER = /[:@\$][a-zA-Z_][a-zA-Z0-9_]*/g; // NOSONAR
+const NAMED_PLACEHOLDER = /[:@\$][a-zA-Z_][a-zA-Z0-9_]*/g;
 
 function formatPgQuery(sql: string, params: Record<string, unknown> | unknown[]): { pgSql: string, paramValues: unknown[] } {
   if (Array.isArray(params)) return { pgSql: sql, paramValues: params };
@@ -104,8 +104,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
     ];
     for (const target of targets) {
       if (isExpected(target.name, target.fragments)) continue;
-      await this.pool!.query(`DROP INDEX IF EXISTS ${target.name}`); // NOSONAR
-      await this.pool!.query(target.sql); // NOSONAR
+      await this.pool!.query(`DROP INDEX IF EXISTS ${target.name}`);
+      await this.pool!.query(target.sql);
     }
     if (definitions.has('ux_dreaming_project_id_hash')) {
       await this.pool!.query('DROP INDEX IF EXISTS ux_dreaming_project_id_hash');
@@ -200,7 +200,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
       for (const p of params) {
         const { paramValues } = formatPgQuery(sql, p);
-        const res = await client.query(pgSql, paramValues); // NOSONAR
+        const res = await client.query(pgSql, paramValues);
         totalChanges += res.rowCount ?? 0;
       }
       await client.query("COMMIT");
@@ -244,7 +244,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   async searchVectorScoped(table: string, embedding: number[], limit: number, tenantId: string, whereClause: string, filterBinds: Record<string, unknown> = {}): Promise<VectorSearchResult[]> {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) throw new Error("Invalid vector table name"); // NOSONAR
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) throw new Error("Invalid vector table name");
     if (!this.pool) await this.connect();
     const vectorSql = toSql ? toSql(embedding) : JSON.stringify(embedding);
     return this.query<VectorSearchResult>(

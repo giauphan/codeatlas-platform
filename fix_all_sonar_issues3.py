@@ -1,0 +1,45 @@
+import re
+import os
+
+def p(file, line):
+    with open(file, "r") as f:
+        lines = f.readlines()
+        if line <= len(lines):
+            print(f"{file}:{line} - {lines[line-1].strip()}")
+def repl(f, o, n):
+    with open(f, "r") as x: c = x.read()
+    c = c.replace(o, n)
+    with open(f, "w") as x: x.write(c)
+
+repl("src/routes/authProxy.ts", "if (req.body && req.body.password) {", "if (req.body?.password) {")
+repl("src/database/adapters/sqliteAdapter.ts", "const binds = { queryVector: blob, tenantId, limit, expectedBytes: embedding.length * 4, ...(filterBinds || {}) };", "const binds = { queryVector: blob, tenantId, limit, expectedBytes: embedding.length * 4, ...filterBinds };")
+repl("dashboard/src/components/MemoryTreeView.tsx", "function TreeRow({ memory }: { memory: Memory }) {", "function TreeRow({ memory }: { readonly memory: Memory }) {")
+repl("dashboard/src/components/MemoryTreeView.tsx", "function MemoryTreeDiagram({ memories }: { memories: Memory[] }) {", "function MemoryTreeDiagram({ memories }: { readonly memories: Memory[] }) {")
+repl("src/presentation/dreamingRoutes.ts", "if (Object.prototype.hasOwnProperty.call(req.body ?? {}, \"event_id\")) {", "if (Object.hasOwn(req.body ?? {}, \"event_id\")) {")
+repl("tests/cross-repo/compiled-memory-pipeline.acceptance.ts", "max_elapsed_ms: elapsed.length ? elapsed[elapsed.length - 1] : null,", "max_elapsed_ms: elapsed.length ? elapsed.at(-1) : null,")
+repl("src/services/memoryGenerator.ts", "import { AnalysisResult, GraphNode } from '../types/index.js';", "import { AnalysisResult } from '../types/index.js';")
+repl("src/presentation/mcpTools.ts", "filePath: (() => { if (!n.filePath) return null; return path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath); })(),", "filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,")
+repl("src/services/indexingService.ts", "const funcMatch = line.match(PHP_FUNC_REGEX);", "const funcMatch = PHP_FUNC_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const defMatch = line.match(PY_DEF_REGEX);", "const defMatch = PY_DEF_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const clsMatch = line.match(PY_CLASS_REGEX);", "const clsMatch = PY_CLASS_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const expMatch = line.match(TS_EXP_REGEX);", "const expMatch = TS_EXP_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const typeMatch = line.match(TS_TYPE_REGEX);", "const typeMatch = TS_TYPE_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const intMatch = line.match(TS_INT_REGEX);", "const intMatch = TS_INT_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const jsFuncMatch = line.match(JS_FUNC_REGEX);", "const jsFuncMatch = JS_FUNC_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const jsVarMatch = line.match(JS_VAR_REGEX);", "const jsVarMatch = JS_VAR_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const jsClsMatch = line.match(JS_CLASS_REGEX);", "const jsClsMatch = JS_CLASS_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const jmMatch = line.match(JAVA_METH_REGEX);", "const jmMatch = JAVA_METH_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const jcMatch = line.match(JAVA_CLASS_REGEX);", "const jcMatch = JAVA_CLASS_REGEX.exec(line);")
+repl("src/services/indexingService.ts", "const classMatch = line.match(PHP_CLASS_REGEX);", "const classMatch = PHP_CLASS_REGEX.exec(line);")
+repl("dashboard/src/components/WikiView.tsx", ") : tree && tree.root && tree.root.length > 0 ? (", ") : tree?.root?.length > 0 ? (")
+repl("src/services/memoryIngestionService.ts", r"const match = memory.content.match(/\bfor\s+([^.!?\n]+)|(?:cho|về)\s+([^.!?\n]+)/iu);", r"const match = /\bfor\s+([^.!?\n]+)|(?:cho|về)\s+([^.!?\n]+)/iu.exec(memory.content);")
+repl("src/presentation/mcpTools.ts", "import { DreamingService, DreamMemoryType } from \"../services/dreamingService.js\";", "import { DreamingService } from \"../services/dreamingService.js\";")
+repl("src/presentation/httpServer.ts", "import { logActivity } from \"../services/authService.js\";\n", "")
+repl("src/presentation/httpServer.ts", "import { getStats } from \"../services/projectService.js\";\n", "")
+repl("src/presentation/httpServer.ts", "import { unregisterProject } from \"../services/projectService.js\";\n", "")
+repl("src/presentation/httpServer.ts", 'import { indexingService } from "../services/indexingService.js";\n', "")
+repl("src/presentation/mcpTools.ts", 'import { loadAnalysisAsync, AnalysisResultLocal } from "../services/projectService.js";\n', "")
+repl("src/presentation/mcpTools.ts", "import { ConsolidationEngine, consolidationEngine } from \"../services/consolidationEngine.js\";", "import { ConsolidationEngine } from \"../services/consolidationEngine.js\";")
+repl("src/presentation/mcpTools.ts", "import { syncMemory } from \"../services/memoryController.js\";\n", "")
+repl("src/presentation/mcpTools.ts", "import { MemorySystemStatus } from \"../services/memoryController.js\";\n", "")
+repl("src/presentation/mcpTools.ts", 'v ?? ""', 'v || ""')

@@ -1,4 +1,4 @@
-import { initializeApp, getApps, applicationDefault } from "firebase-admin/app";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -13,9 +13,8 @@ if (serviceAccountPath) {
   const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
   if (fs.existsSync(absolutePath)) {
     try {
-      process.env.GOOGLE_APPLICATION_CREDENTIALS = absolutePath;
       initializeApp({
-        credential: applicationDefault(),
+        credential: cert(absolutePath),
         projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
       });
     } catch (e) {
@@ -42,7 +41,7 @@ async function main() {
     console.log(JSON.stringify(doc.data(), null, 2));
     
     // Fetch keys subcollection
-    const keysSnap = await db.collection("users").doc(doc.id).collection("keys").get(); // NOSONAR
+    const keysSnap = await db.collection("users").doc(doc.id).collection("keys").get();
     for (const keyDoc of keysSnap.docs) {
       console.log(`  Key ID: ${keyDoc.id}`);
       console.log(`  Key Data:`, JSON.stringify(keyDoc.data(), null, 2));

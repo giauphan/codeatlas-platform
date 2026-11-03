@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as https from "node:https";
 import * as os from "node:os";
 import { AnalysisResult } from "../types/index.js";
 import { authStorage } from "../utils/context.js";
@@ -522,7 +523,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
             // and prevent massive Promise.all spikes that could exhaust OS resources on massive repos.
             for (let i = 0; i < subEntries.length; i += concurrencyLimit) {
               const chunk = subEntries.slice(i, i + concurrencyLimit);
-              await Promise.all(chunk.map(async (subEntry) => { // NOSONAR
+              await Promise.all(chunk.map(async (subEntry) => {
                 if (isScanableDirectory(subEntry)) {
                   const subSubPath = path.join(subPath, subEntry.name);
                   if (await fileExists(path.join(subSubPath, ".codeatlas"))) {
@@ -550,7 +551,7 @@ export async function scanForCodeatlasProjectsAsync(parentDir: string): Promise<
 
     for (let i = 0; i < entries.length; i += concurrencyLimit) {
       const chunk = entries.slice(i, i + concurrencyLimit);
-      await Promise.all(chunk.map(entry => processDirEntry(entry, parentDir, discovered))); // NOSONAR
+      await Promise.all(chunk.map(entry => processDirEntry(entry, parentDir, discovered)));
     }
   } catch (err) {
     logger.error(`[Project-Discovery] ❌ Failed to read parent directory during scan: ${extractErrorMessage(err)}`);
@@ -631,7 +632,7 @@ async function appendRegisteredProjects(searchDirs: string[]): Promise<void> {
       if (Array.isArray(registered)) {
         const filtered = await filterRegisteredProjects(registered, regPath);
         for (const dir of filtered) {
-          if (await fileExists(dir)) { // NOSONAR
+          if (await fileExists(dir)) {
             searchDirs.push(dir);
           }
         }
@@ -797,7 +798,7 @@ async function appendRegisteredProjectsAsync(searchDirs: string[]): Promise<void
         // Chunked to avoid EMFILE while reducing sequential I/O latency
         for (let i = 0; i < filtered.length; i += FILE_EXISTS_CONCURRENCY) {
           const chunk = filtered.slice(i, i + FILE_EXISTS_CONCURRENCY);
-          const results = await Promise.all( // NOSONAR
+          const results = await Promise.all(
             chunk.map((dir) => fileExists(dir).then((ok) => (ok ? dir : null)))
           );
           searchDirs.push(...results.filter((result): result is string => result !== null));
@@ -841,7 +842,7 @@ export async function discoverProjectsAsync(tenantId?: string): Promise<{ name: 
   const chunkSize = FILE_EXISTS_CONCURRENCY; // Batch file system operations to prevent EMFILE
   for (let i = 0; i < uniqueDirs.length; i += chunkSize) {
     const chunk = uniqueDirs.slice(i, i + chunkSize);
-    const results = await Promise.all( // NOSONAR
+    const results = await Promise.all(
       chunk.map(dir => inspectAnalysisProject(dir))
     );
     for (const res of results) {

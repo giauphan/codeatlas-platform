@@ -14,7 +14,7 @@
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 } as const;
 type Level = keyof typeof LOG_LEVELS;
 
-const currentLevel: Level = Object.prototype.hasOwnProperty.call( // NOSONAR
+const currentLevel: Level = Object.prototype.hasOwnProperty.call(
   LOG_LEVELS,
   process.env.LOG_LEVEL ?? "",
 )
@@ -33,7 +33,7 @@ function formatMeta(args: unknown[]): Record<string, unknown> | undefined {
   // message body, once as JSON metadata). This is safe because log() uses rest
   // params, so args is always a local Array, never the caller's arguments.
   if (args.length > 1) {
-    const last = args[args.length - 1]; // NOSONAR
+    const last = args[args.length - 1];
     if (typeof last === "object" && last !== null && !(last instanceof Error)) {
       return args.pop() as Record<string, unknown>;
     }
@@ -49,7 +49,7 @@ function stringify(val: unknown): string {
     try {
       return JSON.stringify(val, null, isJson ? 0 : 2);
     } catch {
-      return String(val); // NOSONAR
+      return String(val);
     }
   }
   return String(val);
@@ -66,7 +66,7 @@ function jsonOutput(level: Level, ts: string, message: string, meta: Record<stri
   try {
     output = JSON.stringify(entry);
   } catch {
-    entry.meta = String(meta); // NOSONAR
+    entry.meta = String(meta);
     output = JSON.stringify(entry);
   }
   return output;
@@ -79,7 +79,7 @@ function prettyOutput(level: Level, ts: string, message: string, meta: Record<st
     try {
       output += ` ${JSON.stringify(meta)}`;
     } catch {
-      output += ` ${String(meta)}`; // NOSONAR
+      output += ` ${String(meta)}`;
     }
   }
   return output;

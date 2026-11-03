@@ -29,7 +29,7 @@ async function runBenchmark() {
   // Warmup
   for (let i = 0; i < 100; i++) {
     getVersionSync();
-    await getVersionAsync(); // NOSONAR
+    await getVersionAsync();
   }
 
   // Sync test
@@ -44,7 +44,7 @@ async function runBenchmark() {
   // Async test
   const startAsync = performance.now();
   for (let i = 0; i < iterations; i++) {
-    await getVersionAsync(); // NOSONAR
+    await getVersionAsync();
   }
   const endAsync = performance.now();
   const timeAsync = endAsync - startAsync;

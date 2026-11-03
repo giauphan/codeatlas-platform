@@ -1,4 +1,4 @@
-import { initializeApp, applicationDefault, getApps } from "firebase-admin/app";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -17,11 +17,10 @@ if (!fs.existsSync(absolutePath)) {
   console.error(`Credentials file not found at: ${absolutePath}`);
   process.exit(1);
 }
-process.env.GOOGLE_APPLICATION_CREDENTIALS = absolutePath;
 
 if (!getApps().length) {
   initializeApp({
-    credential: applicationDefault(),
+    credential: cert(absolutePath),
     projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
   });
 }
@@ -38,7 +37,7 @@ async function run() {
       console.log(`User ID: ${userDoc.id}`);
       console.log(`User Data:`, userDoc.data());
       
-      const keysSnapshot = await userDoc.ref.collection("keys").get(); // NOSONAR
+      const keysSnapshot = await userDoc.ref.collection("keys").get();
       if (keysSnapshot.empty) {
         console.log(`  -> No API keys found for this user.`);
       } else {

@@ -9,6 +9,7 @@
  * - Auto-mark stale agents offline
  */
 
+import { randomUUID } from "node:crypto";
 import { logger } from "../utils/logger.js";
 import { authStorage } from "../utils/context.js";
 

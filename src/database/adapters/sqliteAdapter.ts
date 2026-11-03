@@ -1,5 +1,6 @@
 // src/database/adapters/sqliteAdapter.ts
 import { IDatabaseAdapter, VectorSearchResult, WikiPageRecord } from "./interface.js";
+import { authStorage } from "../../utils/context.js";
 import { hashApiKey } from "../../utils/apiKey.js";
 import { logger } from "../../utils/logger.js";
 import * as path from "node:path";
@@ -23,7 +24,7 @@ type SqliteVecLoad = (db: unknown) => void;
 
 type SqliteParams = Record<string, unknown> | unknown[];
 
-const NAMED_PLACEHOLDER = /[:@$][a-zA-Z_]\w*/;
+const NAMED_PLACEHOLDER = /[:@$][a-zA-Z_][a-zA-Z0-9_]*/;
 
 function sanitizeParam(val: unknown): unknown {
   if (typeof val === 'boolean') {
@@ -79,7 +80,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
           const sqliteVecModule = await import("sqlite-vec");
           sqliteVecLoad = (sqliteVecModule as unknown as { load: SqliteVecLoad }).load;
         }
-      } catch (err) { // NOSONAR
+      } catch (err) {
         this.connectPromise = null;
         throw new Error(
           "SQLite adapter requires 'better-sqlite3' and 'sqlite-vec'. Install: pnpm add better-sqlite3 sqlite-vec @types/better-sqlite3"
@@ -180,7 +181,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
   }
 
   async searchVectorScoped(table: string, embedding: number[], limit: number, tenantId: string, whereClause: string, filterBinds: Record<string, unknown> = {}): Promise<VectorSearchResult[]> {
-    if (!/^[A-Za-z_]\w*$/.test(table)) throw new Error("Invalid vector table name");
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) throw new Error("Invalid vector table name");
     if (!this.db) await this.connect();
     const blob = new Uint8Array(new Float32Array(embedding).buffer);
     const sql = `
@@ -428,13 +429,6 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         tenant_id TEXT NOT NULL REFERENCES tenants(id),
         name TEXT NOT NULL,
         description TEXT,
-        path TEXT,
-        status TEXT DEFAULT 'synced',
-        nodes_count INTEGER DEFAULT 0,
-        links_count INTEGER DEFAULT 0,
-        last_indexed TEXT,
-        stats_json TEXT,
-        indexing_enabled INTEGER DEFAULT 1,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );
@@ -560,13 +554,6 @@ export class SQLiteAdapter implements IDatabaseAdapter {
     addColumnIfMissing("ai_dreaming_memory", "request_hash", "TEXT");
     addColumnIfMissing("ai_dreaming_memory", "project_id", "TEXT");
     addColumnIfMissing("codeatlas_concepts", "project_id", "TEXT");
-    addColumnIfMissing("projects", "path", "TEXT");
-    addColumnIfMissing("projects", "status", "TEXT DEFAULT 'synced'");
-    addColumnIfMissing("projects", "nodes_count", "INTEGER DEFAULT 0");
-    addColumnIfMissing("projects", "links_count", "INTEGER DEFAULT 0");
-    addColumnIfMissing("projects", "last_indexed", "TEXT");
-    addColumnIfMissing("projects", "stats_json", "TEXT");
-    addColumnIfMissing("projects", "indexing_enabled", "INTEGER DEFAULT 1");
     addColumnIfMissing("dream_capture_events", "actor_role", "TEXT");
     addColumnIfMissing("dream_capture_events", "memory_type_hint", "TEXT");
     addColumnIfMissing("dream_capture_events", "tool_name", "TEXT");
@@ -595,7 +582,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
         const legacyKeys = this.db!.prepare("SELECT id, key FROM keys WHERE key_hash IS NULL").all() as Array<{ id: string; key: string }>;
         const updateKeyHash = this.db!.prepare("UPDATE keys SET key_hash = ? WHERE id = ?");
         for (const legacyKey of legacyKeys) {
-          updateKeyHash.run(await hashApiKey(legacyKey.key), legacyKey.id); // NOSONAR
+          updateKeyHash.run(await hashApiKey(legacyKey.key), legacyKey.id);
         }
         keyColumns = this.db!.pragma("table_info(keys)") as Array<{ name: string }>;
       }

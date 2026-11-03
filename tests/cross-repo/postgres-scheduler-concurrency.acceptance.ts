@@ -115,7 +115,7 @@ test('Postgres scheduler claims one concurrent owner, fences stale lease, and pe
   assert.equal(await otherLedger.completeRun(reclaimed, { success: true, counts: { processed: 1 } }, completeAt), true);
   const jobKey = reclaimed.jobKey;
 
-  for (const adapter of adapters) await adapter.disconnect(); // NOSONAR
+  for (const adapter of adapters) await adapter.disconnect();
   restartPostgres();
 
   const reopened = await openAdapter();

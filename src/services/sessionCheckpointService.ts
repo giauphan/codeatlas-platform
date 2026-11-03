@@ -81,7 +81,7 @@ function derive(rows: CaptureRow[]): Pick<SessionCheckpoint, 'active_task' | 'co
   const user = rows.filter(row => row.actor_role === 'USER' && safeText(row.content_redacted).length >= 20 && !checkNoiseBlocklist(row.content_redacted).isNoise);
   const unique = (items: string[]): string[] => [...new Set(items)].slice(-8);
   return {
-    active_task: user.length ? safeText(user[user.length - 1].content_redacted) : '', // NOSONAR
+    active_task: user.length ? safeText(user[user.length - 1].content_redacted) : '',
     completed: unique(rows.filter(successfulTool).map(row => safeText(row.content_redacted))),
     decisions: unique(user.filter(row => /\b(decision|decided|chose|chosen|agreed)\b|quyết định|đã chọn/iu.test(row.content_redacted)).map(row => safeText(row.content_redacted))),
     blockers: unique(rows.filter(row =>

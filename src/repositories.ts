@@ -35,7 +35,7 @@ function sanitizeActivityParams(params: ActivityParams): string {
       return serialized.slice(0, 2000) + '... [truncated]';
     }
     return serialized;
-  } catch (e) { // NOSONAR
+  } catch (e) {
     return '{"error": "Failed to serialize params"}';
   }
 }

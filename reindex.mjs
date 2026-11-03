@@ -7,7 +7,7 @@ for (const dir of dirs) {
   console.log(`\n=== Indexing: ${dir} ===`);
   try {
     const start = Date.now();
-    const success = await indexingService.indexProject(dir); // NOSONAR
+    const success = await indexingService.indexProject(dir);
     const secs = ((Date.now()-start)/1000).toFixed(1);
     console.log(`[${secs}s] Result: ${success ? "OK" : "FAIL"}`);
   } catch(e) {

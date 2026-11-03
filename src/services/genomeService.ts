@@ -210,7 +210,7 @@ export class GenomeService {
             for (let i = 0; i < geneIds.length; i += chunkSize) {
               const chunk = geneIds.slice(i, i + chunkSize);
               const { clause: inClause, binds: inBinds } = buildInClause(chunk, { tenantId: capturedTenantId });
-              await bgConn.execute( // NOSONAR
+              await bgConn.execute(
                 `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
                  updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
                 inBinds,
@@ -408,7 +408,7 @@ export class GenomeService {
       const tenantId = getTenantId();
       for (let offset = 0; offset < sourceIds.length; offset += batchSize) {
         const { clause, binds } = buildInClause(sourceIds.slice(offset, offset + batchSize), { tenantId });
-        const result = await connection.execute<Record<string, unknown>>( // NOSONAR
+        const result = await connection.execute<Record<string, unknown>>(
           `SELECT id, name, description, problem, solution, architecture,
                 category, confidence, version, embedding
            FROM codeatlas_genome WHERE tenant_id = :tenantId AND id IN (${clause})`,
@@ -454,7 +454,7 @@ export class GenomeService {
         for (let k = 0; k < updateIds.length; k += batchSize) {
           const chunk = updateIds.slice(k, k + batchSize);
           const { clause, binds } = buildInClause(chunk, { tenantId });
-          await connection.execute( // NOSONAR
+          await connection.execute(
             `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id IN (${clause})`,
             binds,
             { autoCommit: true }
@@ -521,7 +521,7 @@ export class GenomeService {
       const childIds: string[] = [];
       const relBinds: Record<string, any>[] = [];
       for (let i = 0; i < childNames.length; i++) {
-        const childId = await this.upsertGene({ // NOSONAR
+        const childId = await this.upsertGene({
           name: childNames[i],
           description: `Split from: ${String(rowValue(g, "name"))} (part ${i + 1}/${childNames.length})`,
           problem: String(rowValue(g, "problem") || ""),
@@ -720,7 +720,7 @@ export class GenomeService {
         for (let k = 0; k < geneIds.length; k += BATCH_CHUNK_SIZE) {
           const chunk = geneIds.slice(k, k + BATCH_CHUNK_SIZE);
           const { clause, binds } = buildInClause(chunk, { tenantId: getTenantId() });
-          const result = await connection.execute( // NOSONAR
+          const result = await connection.execute(
             `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
              WHERE status != 'retired' AND tenant_id = :tenantId AND id IN (${clause})`,
             binds,
@@ -879,9 +879,9 @@ export class GenomeService {
     const parts = ["\n# ⚠️ Immune System: Previously encountered failures\n"];
     for (const g of genes) {
       parts.push(`### ${g.name}`);
-      parts.push(`**Failure**: ${g.problem}`); // NOSONAR
-      parts.push(`**Prevention**: ${g.solution}`); // NOSONAR
-      parts.push( // NOSONAR
+      parts.push(`**Failure**: ${g.problem}`);
+      parts.push(`**Prevention**: ${g.solution}`);
+      parts.push(
         `**Confidence**: ${(g.confidence * 100).toFixed(0)}% | Success rate: ${(g.successRate * 100).toFixed(0)}%\n`,
       );
     }
@@ -994,18 +994,18 @@ export class GenomeService {
 
     const parts: string[] = [];
     parts.push(`# Skill: ${gene.name}\n`);
-    parts.push(`**Description**: ${gene.description}\n`); // NOSONAR
-    parts.push(`## Problem\n${gene.problem}\n`); // NOSONAR
-    parts.push(`## Solution\n${gene.solution}\n`); // NOSONAR
+    parts.push(`**Description**: ${gene.description}\n`);
+    parts.push(`## Problem\n${gene.problem}\n`);
+    parts.push(`## Solution\n${gene.solution}\n`);
     if (gene.architecture) {
       parts.push(`## Architecture\n${gene.architecture}\n`);
     }
     parts.push(`## Metadata`);
-    parts.push(`- Category: ${gene.category}`); // NOSONAR
-    parts.push(`- Confidence: ${(gene.confidence * 100).toFixed(0)}%`); // NOSONAR
-    parts.push(`- Version: ${gene.version}`); // NOSONAR
-    parts.push(`- Usage count: ${gene.usageCount}`); // NOSONAR
-    parts.push(`- Success rate: ${(gene.successRate * 100).toFixed(0)}%\n`); // NOSONAR
+    parts.push(`- Category: ${gene.category}`);
+    parts.push(`- Confidence: ${(gene.confidence * 100).toFixed(0)}%`);
+    parts.push(`- Version: ${gene.version}`);
+    parts.push(`- Usage count: ${gene.usageCount}`);
+    parts.push(`- Success rate: ${(gene.successRate * 100).toFixed(0)}%\n`);
     parts.push(`## Instructions
 Apply this knowledge when encountering similar problems.
 1. Analyze the current context against the problem description

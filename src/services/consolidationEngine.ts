@@ -228,22 +228,22 @@ export class ConsolidationEngine {
     for (const op of job.operations) {
       const stepStart = Date.now();
       try {
-        await this.assertRunCurrent(); // NOSONAR
+        await this.assertRunCurrent();
         switch (op) {
           case "dedup":
-            await this.deduplicateDreams(job.project, job.projectId, job.provider, report); // NOSONAR
+            await this.deduplicateDreams(job.project, job.projectId, job.provider, report);
             break;
           case "extract_concepts":
-            await this.extractConcepts(job.project, job.projectId, job.provider, report); // NOSONAR
+            await this.extractConcepts(job.project, job.projectId, job.provider, report);
             break;
           case "score":
-            await this.scoreConcepts(job.project, job.projectId, report); // NOSONAR
+            await this.scoreConcepts(job.project, job.projectId, report);
             break;
           case "score_dreams":
-            await this.scoreDreams(job.project, job.projectId, job.provider, report, runAt); // NOSONAR
+            await this.scoreDreams(job.project, job.projectId, job.provider, report, runAt);
             break;
         }
-        await this.assertRunCurrent(); // NOSONAR
+        await this.assertRunCurrent();
         logger.info(`[Consolidation Pipeline] Step '${op}' completed in ${Date.now() - stepStart}ms (processed: ${report.dreamsProcessed}, merged: ${report.dreamsMerged}, concepts: ${report.conceptsCreated})`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -650,7 +650,7 @@ export class ConsolidationEngine {
     for (let offset = 0; offset < values.length; offset += 900) {
       const chunk = values.slice(offset, offset + 900);
       const { clause, binds } = buildInClause(chunk, { tid: tenantId, ...scope.binds });
-      const result = await db.execute( // NOSONAR
+      const result = await db.execute(
         `UPDATE ai_dreaming_memory SET status = 'superseded' WHERE id IN (${clause}) AND tenant_id = :tid${scope.sql} AND ${this.fencePredicate()}`,
         { ...(binds as Record<string, unknown>), ...this.fenceParameters() },
       );
@@ -674,7 +674,7 @@ export class ConsolidationEngine {
     // reduces to a simple dot product, eliminating expensive O(N^2) Math.sqrt/division.
     if (process.env.NODE_ENV !== 'production' && vecA.length > 0) {
       // Cheap debug-only heuristic to warn if vectors somehow bypassed normalization
-      const heuristicNormSq = vecA[0] * vecA[0] + vecA[vecA.length - 1] * vecA[vecA.length - 1]; // NOSONAR
+      const heuristicNormSq = vecA[0] * vecA[0] + vecA[vecA.length - 1] * vecA[vecA.length - 1];
       const HEURISTIC_UNNORMALIZED_THRESHOLD = 1.01;
       if (heuristicNormSq > HEURISTIC_UNNORMALIZED_THRESHOLD) {
          logger.warn(`[Consolidation] Un-normalized vector detected in cosineSimilarity! Optimization may yield incorrect results.`);

@@ -16,7 +16,7 @@ FROM nginx:1.27-alpine AS runtime
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY <<EOF /etc/nginx/conf.d/default.conf
 server {
-    listen 8080;
+    listen 80;
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
@@ -27,11 +27,5 @@ server {
 }
 EOF
 
-# Configure writable runtime paths for nginx user
-RUN touch /var/run/nginx.pid \
- && chown -R nginx:nginx /var/run/nginx.pid /var/cache/nginx /var/log/nginx
-
-USER nginx
-
-EXPOSE 8080
+EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

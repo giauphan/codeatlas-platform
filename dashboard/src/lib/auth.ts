@@ -24,7 +24,7 @@ function isFirebaseToken(token: string): boolean {
 function isTokenExpired(token: string): boolean {
   if (!isFirebaseToken(token)) return false;
   const payload = decodeJwtPayload(token);
-  if (!payload || !payload.exp) return false; // NOSONAR
+  if (!payload || !payload.exp) return false;
   // Refresh 5 min before actual expiry to avoid race conditions
   return (payload.exp * 1000) - 300_000 < Date.now();
 }
@@ -86,7 +86,7 @@ export async function ensureValidToken(): Promise<boolean> {
   }
 
   // Dedup concurrent refresh calls
-  if (!refreshPromise) { // NOSONAR
+  if (!refreshPromise) {
     refreshPromise = (async () => {
       try {
         const result = await refreshFirebaseToken(refreshToken);
@@ -163,6 +163,6 @@ export async function fetchWithAuth(
   const headers = await getAuthHeaders();
   return fetch(url, {
     ...options,
-    headers: { ...headers, ...(options.headers as Record<string, string> || {}) }, // NOSONAR
+    headers: { ...headers, ...(options.headers as Record<string, string> || {}) },
   });
 }

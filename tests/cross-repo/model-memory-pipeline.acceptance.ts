@@ -59,14 +59,14 @@ test('configured model extraction persists grounded SQLite memories, retrieval, 
 
     const networkFetch: typeof fetch = globalThis.fetch;
     globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input) === endpointUrl) providerRequests += 1; // NOSONAR
+      if (String(input) === endpointUrl) providerRequests += 1;
       return networkFetch(input, init);
     }) as typeof fetch;
 
     const saved = await authStorage.run(tenant, async () => {
       for (const [eventId, content] of sourceTexts) {
         const actorRole = eventId.endsWith('failure') || eventId.endsWith('fix') ? 'TOOL' as const : 'USER' as const;
-        const ack = await DreamCaptureStore.accept({ eventId, sessionId, projectId, project, actorRole, content }); // NOSONAR
+        const ack = await DreamCaptureStore.accept({ eventId, sessionId, projectId, project, actorRole, content });
         assert.equal(ack.source_persisted, true);
       }
       const checkpointAck = await DreamCaptureStore.accept({

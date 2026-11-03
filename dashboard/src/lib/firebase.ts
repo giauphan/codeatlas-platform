@@ -1,12 +1,13 @@
 /**
  * Firebase Web SDK initialization — only loads if VITE_FIREBASE_API_KEY is set.
  * If not configured, the app runs in API-key-only mode.
- * Note: Firestore has been migrated to backend SQLite; only Auth is initialized when configured.
  */
 import { initializeApp } from "firebase/app";
 import type { FirebaseApp } from "firebase/app";
 import type { Auth } from "firebase/auth";
 import { getAuth } from "firebase/auth";
+import type { Firestore } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
@@ -22,7 +23,7 @@ const isRealKey = Boolean(firebaseConfig.apiKey) &&
   !firebaseConfig.apiKey.startsWith('dummy') &&
   !firebaseConfig.apiKey.startsWith('placeholder');
 
-const initializeFirebase = (): { app?: FirebaseApp; auth?: Auth; db?: undefined } => {
+const initializeFirebase = (): { app?: FirebaseApp; auth?: Auth; db?: Firestore } => {
   if (!isRealKey) {
     console.warn("[Firebase] VITE_FIREBASE_API_KEY not set — Firebase disabled, API key mode only");
     return {};
@@ -30,7 +31,7 @@ const initializeFirebase = (): { app?: FirebaseApp; auth?: Auth; db?: undefined 
 
   try {
     const app = initializeApp(firebaseConfig);
-    return { app, auth: getAuth(app), db: undefined };
+    return { app, auth: getAuth(app), db: getFirestore(app) };
   } catch {
     console.warn("[Firebase] init failed — Firebase disabled");
     return {};

@@ -48,7 +48,7 @@ export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, base
     const body = req.body as JsonRpcRequest;
 
     // Validate JSON-RPC envelope
-    if (!body || body.jsonrpc !== "2.0") { // NOSONAR
+    if (!body || body.jsonrpc !== "2.0") {
       res.status(400).json({
         jsonrpc: "2.0",
         error: { code: -32600, message: "Invalid Request: not JSON-RPC 2.0" },
@@ -84,7 +84,7 @@ export function mountA2ARoutes(app: express.Express, executor: A2AExecutor, base
   app.post("/a2a/rest/message", a2aRateLimiter, authMiddleware, async (req, res) => {
     const { message, taskId } = req.body || {};
 
-    if (!message || !message.parts) { // NOSONAR
+    if (!message || !message.parts) {
       res.status(400).json({ error: "Missing 'message' with 'parts' array" });
       return;
     }

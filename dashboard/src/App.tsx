@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import Auth from './components/Auth';
 import { Dashboard } from './components/Dashboard';
-import {  Shield } from 'lucide-react'; // NOSONAR
+import { Loader2, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
-import {  safeSessionStorageGetItem, safeSessionStorageRemoveItem } from './lib/safeSessionStorage'; // NOSONAR
+import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from './lib/safeSessionStorage';
 import { storeAuthTokens } from './lib/auth';
 
 function App() {
@@ -83,7 +83,7 @@ function App() {
         let errMsg = 'Invalid API Key or Token';
         try {
           const errData = await resp.json();
-          if (errData && errData.error) errMsg = errData.error; // NOSONAR
+          if (errData && errData.error) errMsg = errData.error;
         } catch {}
         throw new Error(errMsg);
       }

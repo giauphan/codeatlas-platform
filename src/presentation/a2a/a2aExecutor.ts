@@ -205,7 +205,7 @@ export class A2AExecutor {
 
     // Fallback: if text matches a registered tool name, use it
     const words = text.trim().split(/\s+/);
-    const maybeTool = words[0]?.replace(/[^a-zA-Z0-9_]/g, ""); // NOSONAR
+    const maybeTool = words[0]?.replace(/[^a-zA-Z0-9_]/g, "");
     if (maybeTool && this.toolHandlers.has(maybeTool)) {
       return { toolName: maybeTool, toolParams: { query: words.slice(1).join(" ") } };
     }

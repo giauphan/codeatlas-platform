@@ -285,7 +285,7 @@ function classifyTool(normalized: string, lower: string): Classification {
   if (hypotheticalFailure(normalized) || /\b(?:when|if|unless)\b[^.!?;]{0,140}\b(?:fails?|returns? non[- ]?zero|exits? non[- ]?zero|is unavailable)\b|\breturns? non[- ]?zero\b[^.!?;]{0,80}\bif\b|(?:nếu|khi)[^.!?;]{0,140}(?:trả về mã khác không|không khả dụng)/iu.test(normalized)) return { kind: 'FACT', certainty: 'reported', confidence: 0.74 };
   const success = /\b(exit_code\s*=\s*0|\d+\s+tests?\s+passed|completed successfully|saved successfully|passed all \d+ tests?)\b|(?:chạy qua đủ \d+ bài|đạt đủ \d+ bài kiểm thử|kiểm thử thành công)/iu.test(lower);
   if (success) return { kind: 'TASK_STATUS', certainty: 'reported', confidence: 0.8 };
-  const structuredEvidence = /(?:^|\s)(?:[\w@.-]+\/)+[\w@./-]+|\b[A-Za-z_$][\w$]*(?:<[^>]+>)?\s*\(|\b[A-Z][A-Z\d_]{1,}\b|\b(?:\d{1,3}\.){3}\d{1,3}:?\d*\b|\b(?:HTTP|SQLITE|ECONN|RangeError|TypeError)[-_ ]?\d*\b/u.test(normalized); // NOSONAR
+  const structuredEvidence = /(?:^|\s)(?:[\w@.-]+\/)+[\w@./-]+|\b[A-Za-z_$][\w$]*(?:<[^>]+>)?\s*\(|\b[A-Z][A-Z\d_]{1,}\b|\b(?:\d{1,3}\.){3}\d{1,3}:?\d*\b|\b(?:HTTP|SQLITE|ECONN|RangeError|TypeError)[-_ ]?\d*\b/u.test(normalized);
   const observation = /\b(?:log|trace|response|output|manifest|documentation|report)\b[^.!?;]{0,120}\b(?:shows?|lists?|contains?|records?|reports?|states?)\b|(?:log|dấu vết|phản hồi|tài liệu|báo cáo)[^.!?;]{0,120}(?:cho thấy|ghi nhận|liệt kê|nêu rõ)/iu.test(normalized);
   return structuredEvidence || observation ? { kind: 'FACT', certainty: 'reported', confidence: 0.76 } : null;
 
@@ -312,7 +312,7 @@ function classifyReported(normalized: string, lower: string): Classification {
   ])) {
     return { kind: 'DECISION', certainty: 'explicit', confidence: 0.88 };
   }
-  const codeOrPath = /(?:^|\s)(?:[\w@.-]+\/)+[\w@./-]+|\b[A-Za-z_$][\w$]*(?:<[^>]+>)?\s*\(|\b[A-Z][A-Z\d_]{1,}\b|\b(?:\d{1,3}\.){3}\d{1,3}:?\d*\b|\b(?:HTTP|SQLITE|ECONN|RangeError|TypeError)[-_ ]?\d*\b/u.test(normalized); // NOSONAR
+  const codeOrPath = /(?:^|\s)(?:[\w@.-]+\/)+[\w@./-]+|\b[A-Za-z_$][\w$]*(?:<[^>]+>)?\s*\(|\b[A-Z][A-Z\d_]{1,}\b|\b(?:\d{1,3}\.){3}\d{1,3}:?\d*\b|\b(?:HTTP|SQLITE|ECONN|RangeError|TypeError)[-_ ]?\d*\b/u.test(normalized);
   const technicalContext = /\b(api|endpoint|route|project|tenant|schema|migration|database|sqlite|postgres(?:ql)?|query|memory|vector|token|cursor|tests?|hooks?|persist|persisted|returns?|supports?|stores?|uses?|requires?|worker|server|client|request|response|queue|transaction|gateway|handler|profile|chart|load|scheduler|variable|configuration|manifest|checksum|file|socket|connection|table|column|webhook|invoice|upload|archive|release|branch|proxy|header|health|integration|credential|environment|smoke|assistant)\b/i.test(lower) ||
     /\b(project_id|tenant_id|exit_code|test-concurrency|api_key|global top-k|mcp|tag\s*:|finished_at)\b/i.test(lower);
   return (codeOrPath || technicalContext) && normalized.length >= 20
@@ -713,7 +713,7 @@ export async function extractStructuredMemoriesFromTranscript(
   const segments = transcript.split(/\n\n---\n\n/);
   const events: ExtractionSourceEvent[] = [];
   for (const segment of segments) {
-    const match = segment.match(/^\[(USER|ASSISTANT|TOOL)\]\n([\s\S]*)$/); // NOSONAR
+    const match = segment.match(/^\[(USER|ASSISTANT|TOOL)\]\n([\s\S]*)$/);
     if (!match) continue;
     events.push({ id: `${sessionId}:event-${String(events.length + 1).padStart(2, '0')}`, role: match[1] as SourceRole, text: match[2].trim() });
   }

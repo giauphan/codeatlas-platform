@@ -1,4 +1,16 @@
-import React, { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react'; // NOSONAR
+import React, { Suspense, lazy, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { db } from '../lib/firebase';
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp
+} from 'firebase/firestore';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LogOut, 
   Globe, 

@@ -135,11 +135,8 @@ function MemoryTreeDiagram({ memories }: { readonly memories: Memory[] }) {
         {edges.map(([from, to]) => <path key={`${from.id}-${to.id}`} d={`M ${from.x + 42} ${from.y} C ${(from.x + to.x) / 2} ${from.y}, ${(from.x + to.x) / 2} ${to.y}, ${to.x - 42} ${to.y}`} fill="none" stroke={to.color} strokeOpacity="0.35" strokeWidth="1.5" />)}
         {nodes.map(node => {
           let width = 150;
-          if (node.kind === 'memory') {
-            width = 190;
-          } else if (node.kind === 'root') {
-            width = 84;
-          }
+          if (node.kind === 'memory') width = 190;
+          else if (node.kind === 'root') width = 84;
           return <g key={node.id}>
             <rect x={node.x - width / 2} y={node.y - 17} width={width} height={34} rx="17" fill="rgba(5,8,15,0.95)" stroke={node.color} strokeWidth={node.kind === 'root' ? 2 : 1} filter={node.kind === 'root' ? 'url(#memory-tree-glow)' : undefined} />
             <text x={node.x} y={node.y + 4} textAnchor="middle" fill={node.color} fontSize={node.kind === 'memory' ? 10 : 11} fontWeight={node.kind === 'root' ? 800 : 600}>{node.label}</text>

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'; // NOSONAR
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -93,7 +93,7 @@ test('real isolated native installer registers quoted compiled CLI routes', () =
       PostToolUseFailure: 'brain-save', Stop: 'brain-save', PreCompact: 'brain-save',
     })) {
       const commands = installed.hooks[event].flatMap(group => group.hooks || []).map(hook => hook.command || '');
-      assert.ok(commands.some(command => command.includes(cli) && new RegExp(`\\bhook\\s+${route}$`).test(command)), `${event} did not register ${route}`); // NOSONAR
+      assert.ok(commands.some(command => command.includes(cli) && new RegExp(`\\bhook\\s+${route}$`).test(command)), `${event} did not register ${route}`);
     }
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -108,7 +108,7 @@ test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, 
 
     const ingestSession = async (items: Capture[], project: TelemetryProject) => {
       const result = await authStorage.run(tenant, async () => {
-        for (const item of items) await capture(item); // NOSONAR
+        for (const item of items) await capture(item);
         return MemoryIngestionService.processPending({ projectId: project.id });
       });
       assert.equal(result.success, true, 'synthetic source events must reconcile successfully');
@@ -119,23 +119,23 @@ test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, 
     const sessionAResult = await ingestSession(firstSession, projectA);
     const sessionACheckpoint = await authStorage.run(tenant, () => SessionCheckpointService.latest(projectA.id));
     assert.ok(sessionACheckpoint);
-    assert.ok(sessionACheckpoint.decisions.some(value => value === repeatedDecision)); // NOSONAR
-    assert.ok(sessionACheckpoint.completed.some(value => value === toolOutcomeA)); // NOSONAR
+    assert.ok(sessionACheckpoint.decisions.some(value => value === repeatedDecision));
+    assert.ok(sessionACheckpoint.completed.some(value => value === toolOutcomeA));
     assert.ok(sessionACheckpoint.source_event_ids.includes('telemetry-a-decision'));
 
     const sessionBResult = await ingestSession(secondSession, projectA);
     const sessionBCheckpoint = await authStorage.run(tenant, () => SessionCheckpointService.latest(projectA.id));
     assert.ok(sessionBCheckpoint);
-    assert.ok(sessionBCheckpoint.decisions.some(value => value === repeatedDecision)); // NOSONAR
-    assert.ok(sessionBCheckpoint.completed.some(value => value === toolOutcomeB)); // NOSONAR
-    assert.ok(sessionBCheckpoint.next_actions.some(value => value === nextAction)); // NOSONAR
+    assert.ok(sessionBCheckpoint.decisions.some(value => value === repeatedDecision));
+    assert.ok(sessionBCheckpoint.completed.some(value => value === toolOutcomeB));
+    assert.ok(sessionBCheckpoint.next_actions.some(value => value === nextAction));
     assert.ok(sessionBCheckpoint.source_event_ids.includes('telemetry-b-next'));
 
     const projectBResult = await ingestSession(thirdSession, projectB);
     const projectBCheckpoint = await authStorage.run(tenant, () => SessionCheckpointService.latest(projectB.id));
     assert.ok(projectBCheckpoint);
-    assert.ok(projectBCheckpoint.decisions.some(value => value === otherProjectDecision)); // NOSONAR
-    assert.ok(projectBCheckpoint.completed.some(value => value === otherProjectTool)); // NOSONAR
+    assert.ok(projectBCheckpoint.decisions.some(value => value === otherProjectDecision));
+    assert.ok(projectBCheckpoint.completed.some(value => value === otherProjectTool));
     assert.ok(projectBCheckpoint.source_event_ids.includes('telemetry-c-decision'));
 
     const memoryRows = await adapter.query<{ id: string; content: string; project_id: string }>(
@@ -169,7 +169,7 @@ test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, 
     const reciprocalRanks: number[] = [];
     let projectLeakCount = 0;
     for (const search of retrievalQueries) {
-      const result = await authStorage.run(tenant, () => DreamingService.queryDreamMemoriesWithStatus( // NOSONAR
+      const result = await authStorage.run(tenant, () => DreamingService.queryDreamMemoriesWithStatus(
         projectA.display, search.query, 20, 0, undefined, undefined, undefined, undefined, undefined, undefined, projectA.id,
       ));
       const ids = result.memories.map(memory => String((memory as Record<string, unknown>).id ?? (memory as Record<string, unknown>).ID));
@@ -203,7 +203,7 @@ test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, 
     );
     const idsByEventBeforeReplay = new Map<string, string[]>();
     for (const event of persistedCaptures) {
-      const rows = await adapter.query<{ memory_ids_json: string }>( // NOSONAR
+      const rows = await adapter.query<{ memory_ids_json: string }>(
         `SELECT memory_ids_json FROM dream_capture_events WHERE tenant_id = :tenantId AND project_id = :projectId AND event_id = :eventId`,
         { tenantId: tenant.uid, projectId: event.project.id, eventId: event.eventId },
       );

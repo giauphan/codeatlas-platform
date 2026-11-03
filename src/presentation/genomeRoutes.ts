@@ -292,10 +292,10 @@ export function mountGenomeRoutes(app: express.Application): void {
         const sp = path.join(skillsDir, dir, "SKILL.md");
         if (!fs.existsSync(sp)) continue;
         try {
-          const c = await fs.promises.readFile(sp, "utf-8"); // NOSONAR
+          const c = await fs.promises.readFile(sp, "utf-8");
           const desc = c.match(/^description: "(.+)"$/m)?.[1] || "";
           const cat = c.match(/^category: (.+)$/m)?.[1] || "workflow";
-          await GenomeService.upsertGene({ name: dir, description: desc, problem: "Need " + dir, solution: desc || dir, category: cat, project: "codeatlas-genome", sourceType: "skill", confidence: 0.70 }); // NOSONAR
+          await GenomeService.upsertGene({ name: dir, description: desc, problem: "Need " + dir, solution: desc || dir, category: cat, project: "codeatlas-genome", sourceType: "skill", confidence: 0.70 });
           synced++;
         } catch { failed++; }
       }

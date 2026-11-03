@@ -1,4 +1,4 @@
-const NAMED_PLACEHOLDER = /[:@\$][a-zA-Z_][a-zA-Z0-9_]*/g; // NOSONAR
+const NAMED_PLACEHOLDER = /[:@\$][a-zA-Z_][a-zA-Z0-9_]*/g;
 
 function formatPgQueryRegex(sql, params) {
   if (Array.isArray(params)) return { pgSql: sql, paramValues: params };

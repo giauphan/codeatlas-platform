@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Brain, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react'; // NOSONAR
+import { Brain, Search, Lightbulb, TrendingUp, Archive, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
 import { SearchInputWithHint } from './ui/SearchInputWithHint';
@@ -156,7 +156,7 @@ export function SecondBrainView() {
             hasClearButton={true}
           />
         </div>
-        <fieldset aria-label="Filter concepts by category" style={{ border: 'none', padding: 0, margin: 0, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <fieldset aria-label="Filter concepts by category" style={{ border: "none", padding: 0, margin: 0, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {categories.map(cat => (
             <button
               key={cat}

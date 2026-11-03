@@ -60,8 +60,6 @@ export interface DreamJobResult {
   counts?: Record<string, number>;
 }
 
-type NullableTimestamp = string | Date | null;
-
 interface RawRun {
   job_key: string;
   run_id: string;
@@ -74,17 +72,17 @@ interface RawRun {
   owner_id: string | null;
   owner_token: string | null;
   fencing_token: number;
-  lease_until: NullableTimestamp;
+  lease_until: string | Date | null;
   attempt: number;
   max_attempts: number;
-  next_attempt_at: NullableTimestamp;
+  next_attempt_at: string | Date | null;
   operation_stats: string | Record<string, number> | null;
   error_reason: string | null;
-  started_at: NullableTimestamp;
-  finished_at: NullableTimestamp;
+  started_at: string | Date | null;
+  finished_at: string | Date | null;
 }
 
-function asIso(value: NullableTimestamp): string | null {
+function asIso(value: string | Date | null): string | null {
   if (value === null) return null;
   if (value instanceof Date) return value.toISOString();
   return value;
@@ -135,7 +133,7 @@ function safeStats(result: DreamJobResult | Record<string, number>): string {
   const source = "counts" in result ? result.counts || {} : result;
   const counts = Object.fromEntries(
     Object.entries(source)
-      .filter(([key, value]) => /^[a-zA-Z]\w{0,63}$/.test(key) && typeof value === "number" && Number.isFinite(value))
+      .filter(([key, value]) => /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key) && typeof value === "number" && Number.isFinite(value))
       .slice(0, 32),
   );
   return JSON.stringify(counts);
@@ -493,7 +491,7 @@ export class DreamScheduler {
       output.push({
         jobType: run.jobType,
         scheduledFor: run.scheduledFor,
-        state: await this.runSlot({ jobType: run.jobType, tenantId: run.tenantId, project: run.project || undefined, scheduledFor: run.scheduledFor, timezone: run.timezone }), // NOSONAR
+        state: await this.runSlot({ jobType: run.jobType, tenantId: run.tenantId, project: run.project || undefined, scheduledFor: run.scheduledFor, timezone: run.timezone }),
       });
     }
 
@@ -508,7 +506,7 @@ export class DreamScheduler {
       output.push({
         jobType: job.jobType,
         scheduledFor,
-        state: await this.runSlot({ jobType: job.jobType, tenantId: settings.tenant_id, project: settings.project_id || settings.project, scheduledFor, timezone: settings.timezone }), // NOSONAR
+        state: await this.runSlot({ jobType: job.jobType, tenantId: settings.tenant_id, project: settings.project_id || settings.project, scheduledFor, timezone: settings.timezone }),
       });
     }
     return output;
