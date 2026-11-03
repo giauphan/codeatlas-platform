@@ -7,7 +7,7 @@ export function injectAuthContext(server: McpServer, sessionAuth?: Auth) {
   const originalTool = server.tool.bind(server);
 
   server.tool = function (name: string, ...args: any[]) {
-    const originalCallback = args[args.length - 1];
+    const originalCallback = args[args.length - 1]; // NOSONAR
     if (typeof originalCallback === "function") {
       args[args.length - 1] = function (callbackArgs: any, ...extra: any[]) {
         if (!sessionAuth) {

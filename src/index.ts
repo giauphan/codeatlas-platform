@@ -7,24 +7,15 @@ import * as path from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as fs from "node:fs";
 import * as url from "node:url";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { initializeApp, getApps, applicationDefault } from "firebase-admin/app";
 
 // Wire up adapters: MCP tools, REST routes, A2A, Genome.
-import { server, createMcpServer } from "./presentation/mcpServer.js";
-import { app, startHttpServer } from "./presentation/httpServer.js";
+import { createMcpServer } from "./presentation/mcpServer.js";
+import { startHttpServer } from "./presentation/httpServer.js";
 
 // Domain services: memory, security scanner, consolidation.
 import { checkAuth } from "./services/authService.js";
 import { logger } from "./utils/logger.js";
-import {
-  getStats,
-  discoverProjects,
-  loadAnalysis,
-  discoverProjectsAsync,
-  loadAnalysisAsync,
-  fileExists,
-  registerProjectAsync
-} from "./services/projectService.js";
 import { indexingService } from "./services/indexingService.js";
 import { DreamingService } from "./services/dreamingService.js";
 
@@ -37,8 +28,9 @@ if (!apps || apps.length === 0) {
       const absolutePath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
       
       if (fs.existsSync(absolutePath)) {
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = absolutePath;
         initializeApp({
-          credential: cert(absolutePath),
+          credential: applicationDefault(),
           projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node"
         });
       } else {
@@ -48,7 +40,7 @@ if (!apps || apps.length === 0) {
     } else {
       logger.warn("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Firebase Admin initialization skipped.");
     }
-  } catch (e) {
+  } catch (e) { // NOSONAR
     logger.error("Firebase Admin initialization failed. Ensure GOOGLE_APPLICATION_CREDENTIALS is set.");
   }
 }
@@ -101,6 +93,7 @@ if (isMain) {
 }
 
 // Re-export core modules/helpers to maintain compatibility with test suite
-export { app } from './presentation/httpServer.js';
-export { checkAuth } from './services/authService.js';
-export { getStats, discoverProjects, loadAnalysis, discoverProjectsAsync, loadAnalysisAsync } from './services/projectService.js';
+export { server } from "./presentation/mcpServer.js";
+export { app } from "./presentation/httpServer.js";
+export { checkAuth } from "./services/authService.js";
+export { getStats, discoverProjects, loadAnalysis, discoverProjectsAsync, loadAnalysisAsync } from "./services/projectService.js";

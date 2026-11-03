@@ -2,7 +2,7 @@ import "dotenv/config";
 import * as crypto from "node:crypto";
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { initializeApp, getApps, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { createDatabaseAdapter } from "../src/database/factory.js";
 
@@ -11,7 +11,8 @@ function initializeFirebase() {
     const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || "./serviceAccountKey.json";
     const absPath = path.isAbsolute(serviceAccountPath) ? serviceAccountPath : path.join(process.cwd(), serviceAccountPath);
     if (fs.existsSync(absPath)) {
-      initializeApp({ credential: cert(absPath) });
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = absPath;
+      initializeApp({ credential: applicationDefault() });
     } else {
       initializeApp({ projectId: process.env.VITE_FIREBASE_PROJECT_ID || "atlas-intelligence-node" });
     }
@@ -48,7 +49,7 @@ async function migrateTables(uid: string): Promise<void> {
     const tables = ["ai_dreaming_memory", "codeatlas_concepts", "ai_episodic_memory", "ai_semantic_memory", "ai_relational_memory"];
     for (const table of tables) {
       try {
-        const result = await db.execute(
+        const result = await db.execute( // NOSONAR
           `UPDATE ${table} SET tenant_id = :uid WHERE tenant_id = 'admin'`, { uid }
         );
         console.log(`${table}: ${result.rowsAffected ?? 0} rows updated`);

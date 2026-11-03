@@ -1,5 +1,4 @@
 import { AnalysisResult, GraphNode } from "../../types/index.js";
-import * as path from "node:path";
 
 
 const UNSAFE_FUNCS = new Set([

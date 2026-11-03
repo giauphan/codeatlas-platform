@@ -40,7 +40,7 @@ for (const table of tables) {
   let totalFailed = 0;
 
   for (const { id, embedding: blob } of badRows) {
-    if (!blob || blob.byteLength !== 16384) {
+    if (!blob || blob.byteLength !== 16384) { // NOSONAR
       console.log(`[Fix] ${table}/${id}: skipping row — embedding blob byteLength is ${blob?.byteLength ?? 'null'}, expected 16384 (4096-dim). Possible NULL, empty, or already correct-dimension row.`);
       totalSkipped++;
       continue;

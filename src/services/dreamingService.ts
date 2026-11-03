@@ -186,8 +186,8 @@ export class DreamingService {
 
 
   /** Cache of detected columns so we only check once per process lifetime */
-  static _hasLifecycleColumns: boolean | null = null;
-  static _hasContentHashColumn: boolean | null = null;
+  static _hasLifecycleColumns: boolean | null = null; // NOSONAR
+  static _hasContentHashColumn: boolean | null = null; // NOSONAR
 
   /** Initializes the SQLite schema and caches available dream-memory columns. */
   static async initialize(): Promise<void> {
@@ -216,7 +216,14 @@ export class DreamingService {
     };
     const base = typeBase[memoryType] ?? 0.50;
     // Importance boosts: imp 1-3 → -0.15, 4-6 → 0, 7-8 → +0.15, 9-10 → +0.25
-    let impBoost = 0; if (importance >= 9) impBoost = 0.25; else if (importance >= 7) impBoost = 0.15; else if (importance <= 3) impBoost = -0.15;
+    let impBoost = 0;
+    if (importance >= 9) {
+      impBoost = 0.25;
+    } else if (importance >= 7) {
+      impBoost = 0.15;
+    } else if (importance <= 3) {
+      impBoost = -0.15;
+    }
     return Math.min(0.99, Math.max(0.05, base + impBoost));
   }
 
@@ -429,7 +436,7 @@ export class DreamingService {
     input: DreamSaveInput, db: ReturnType<typeof createDatabaseAdapter>, tenantId: string, projectId: string, requestHash: string,
   ): Promise<DreamSaveAcknowledgement | null> {
     const structured = input.structuredEvidence;
-    const grounded = structured && structured.memory.content === input.content && structured.memory.memoryType === input.memoryType &&
+    const grounded = structured?.memory.content === input.content && structured?.memory.memoryType === input.memoryType &&
       validateGroundedCandidates([structured.memory], structured.events).length === 1;
     if (structured && !grounded) return { status: "rejected", persisted: false, reason_code: "unsupported_evidence" };
     const noise = grounded

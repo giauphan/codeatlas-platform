@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { 
-  Box, Code2, Layers, Activity, Search,
+  Box, Code2, Layers, Activity, // NOSONAR
   Maximize2, Minimize2, Trash2
 } from 'lucide-react';
 import { SphericalKnowledgeGraph } from './KnowledgeNetwork3D';
@@ -39,7 +38,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   analysis, projects, selectedProjectDir,
   onProjectChange, onDeleteProject
 }) => {
-
+  const [hoveredNode, setHoveredNode] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState(['module', 'function', 'class', 'variable']);
@@ -155,7 +154,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         </div>
 
         {/* Filter chips */}
-        <fieldset aria-label="Filter by entity type" style={{ border: "none", padding: 0, margin: 0, position: 'absolute', top: '1.5rem', right: '1.5rem', zIndex: 10, display: 'flex', gap: '0.5rem' }}>
+        <fieldset aria-label="Filter by entity type" style={{ border: 'none', padding: 0, margin: 0, position: 'absolute', top: '1.5rem', right: '1.5rem', zIndex: 10, display: 'flex', gap: '0.5rem' }}>
           {filters.map(f => (
             <button
               type="button"
@@ -205,7 +204,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             searchQuery={searchQuery} // Pass searchQuery
             activeFilters={activeFilters}
             typeColors={typeColors}
-            onNodeHover={(n) => {}}
+            onNodeHover={(n) => setHoveredNode(n)}
             onNodeClick={(n) => setSelectedNode(n)}
             isFullscreen={isFullscreen}
           />

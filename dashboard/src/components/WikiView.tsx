@@ -4,17 +4,12 @@ import {
   BookOpen,
   Folder,
   FileText,
-  ChevronRight,
-  ChevronDown,
   Sparkles,
   Send,
   RefreshCw,
   Loader2,
   Bot,
-  HelpCircle,
-  Code,
   Layers,
-  CheckCircle,
   AlertCircle,
   Settings,
   Save,
@@ -86,6 +81,32 @@ const modalLabelStyle: React.CSSProperties = {
   marginBottom: '6px',
 };
 
+const ALLOWED_WIKI_PROVIDERS = new Set(['mock', 'anthropic', 'openai', 'openai-compatible']);
+
+function sanitizeWikiProvider(value: unknown): string {
+  return typeof value === 'string' && ALLOWED_WIKI_PROVIDERS.has(value) ? value : 'mock';
+}
+
+function sanitizeProfileId(value: unknown): string {
+  return typeof value === 'string' && /^[\w-]{0,64}$/.test(value) ? value : '';
+}
+
+function sanitizeModelName(value: unknown): string {
+  if (typeof value !== 'string') return 'default';
+  const trimmed = value.trim().slice(0, 128);
+  return /^[\w.:/-]*$/.test(trimmed) ? trimmed : 'default';
+}
+
+function sanitizeBaseUrl(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  try {
+    const parsed = new URL(value.trim());
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
 export const WikiView: React.FC<WikiViewProps> = ({
   projects = [],
   selectedProjectDir = '',
@@ -119,10 +140,10 @@ export const WikiView: React.FC<WikiViewProps> = ({
 
   // Generation Modal State
   const [showGenModal, setShowGenModal] = useState(false);
-  const [genProvider, setGenProvider] = useState(() => localStorage.getItem('ca_wiki_provider') || 'mock');
-  const [genModel, setGenModel] = useState(() => localStorage.getItem('ca_wiki_model') || 'default');
+  const [genProvider, setGenProvider] = useState(() => sanitizeWikiProvider(localStorage.getItem('ca_wiki_provider')));
+  const [genModel, setGenModel] = useState(() => sanitizeModelName(localStorage.getItem('ca_wiki_model') || 'default'));
   const [genApiKey, setGenApiKey] = useState('');
-  const [genBaseUrl, setGenBaseUrl] = useState(() => localStorage.getItem('ca_wiki_base_url') || '');
+  const [genBaseUrl, setGenBaseUrl] = useState(() => sanitizeBaseUrl(localStorage.getItem('ca_wiki_base_url')));
 
 
   // Saved Config Profiles
@@ -132,11 +153,11 @@ export const WikiView: React.FC<WikiViewProps> = ({
     } catch { return []; }
   });
   const [activeProfileId, setActiveProfileId] = useState(() => {
-    const stored = localStorage.getItem('ca_wiki_active_profile_id');
+    const stored = sanitizeProfileId(localStorage.getItem('ca_wiki_active_profile_id'));
     if (stored) return stored;
     try {
       const parsed = JSON.parse(localStorage.getItem('ca_wiki_saved_profiles') || '[]');
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
+      if (Array.isArray(parsed) && parsed.length > 0) return sanitizeProfileId(parsed[0].id);
     } catch {}
     return '';
   });
@@ -145,11 +166,15 @@ export const WikiView: React.FC<WikiViewProps> = ({
   // Persist config to localStorage in a debounced effect to avoid excessive synchronous writes
   useEffect(() => {
     const timeout = setTimeout(() => {
+      const safeProfileId = sanitizeProfileId(activeProfileId);
+      const safeProvider = sanitizeWikiProvider(genProvider);
+      const safeModel = sanitizeModelName(genModel);
+      const safeBaseUrl = sanitizeBaseUrl(genBaseUrl);
       localStorage.setItem('ca_wiki_saved_profiles', JSON.stringify(profiles));
-      localStorage.setItem('ca_wiki_active_profile_id', activeProfileId);
-      localStorage.setItem('ca_wiki_provider', genProvider);
-      localStorage.setItem('ca_wiki_model', genModel);
-      localStorage.setItem('ca_wiki_base_url', genBaseUrl);
+      localStorage.setItem('ca_wiki_active_profile_id', safeProfileId); // NOSONAR
+      localStorage.setItem('ca_wiki_provider', safeProvider); // NOSONAR
+      localStorage.setItem('ca_wiki_model', safeModel); // NOSONAR
+      localStorage.setItem('ca_wiki_base_url', safeBaseUrl); // NOSONAR
     }, 500);
     return () => clearTimeout(timeout);
   }, [profiles, activeProfileId, genProvider, genModel, genBaseUrl]);
@@ -375,6 +400,24 @@ export const WikiView: React.FC<WikiViewProps> = ({
     );
   };
 
+  const renderHierarchyContent = () => {
+    if (loadingTree) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', padding: '1rem' }}>
+          <Loader2 size={16} className="animate-spin" /> Loading hierarchy...
+        </div>
+      );
+    }
+    if (tree?.root?.length) {
+      return tree.root.map(node => renderTreeNode(node));
+    }
+    return (
+      <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+        No wiki pages found. Click "Rebuild Wiki" to generate documentation!
+      </div>
+    );
+  };
+
   // Simple Markdown & Code Segment Parser
   const renderMarkdownContent = (content: string) => {
     if (!content) return <div style={{ color: 'var(--text-muted)' }}>No content available.</div>;
@@ -386,7 +429,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
       <div style={{ lineHeight: '1.7', color: 'var(--text-main)', fontSize: '0.95rem' }}>
         {parts.map((part, index) => {
           if (part.startsWith('```')) {
-            const match = part.match(/^```(\w+)?\n([\s\S]*?)```$/);
+            const match = /^```(\w+)?\n([\s\S]*?)```$/.exec(part);
             const lang = match ? match[1] || '' : '';
             const code = match ? match[2] : part.slice(3, -3);
 
@@ -616,17 +659,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            {loadingTree ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', padding: '1rem' }}>
-                <Loader2 size={16} className="animate-spin" /> Loading hierarchy...
-              </div>
-            ) : tree && tree.root && tree.root.length > 0 ? (
-              tree.root.map(node => renderTreeNode(node))
-            ) : (
-              <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                No wiki pages found. Click "Rebuild Wiki" to generate documentation!
-              </div>
-            )}
+            {renderHierarchyContent()}
           </div>
         </div>
 

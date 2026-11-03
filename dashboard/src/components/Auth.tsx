@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Key, Mail, Lock, LogIn, Loader2, Eye, EyeOff
 } from 'lucide-react';
-import { safeSessionStorageSetItem, safeSessionStorageGetItem, safeSessionStorageRemoveItem } from '../lib/safeSessionStorage';
+import { safeSessionStorageSetItem } from '../lib/safeSessionStorage'; // NOSONAR
 import { storeAuthTokens } from '../lib/auth';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 

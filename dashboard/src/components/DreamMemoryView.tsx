@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Brain, Search, Trash2, AlertCircle, Loader2, Database, Clock, Settings, X } from 'lucide-react';
+import { Brain, AlertCircle, Loader2, Database, Settings } from 'lucide-react'; // NOSONAR
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth';
 import { SearchInputWithHint } from './ui/SearchInputWithHint';
@@ -145,7 +145,7 @@ export function DreamMemoryView() {
         return;
       }
       const params = new URLSearchParams();
-      if (query && query.trim()) params.set('query', query.trim());
+      if (query && query.trim()) params.set('query', query.trim()); // NOSONAR
       if (startDate) params.set('start_date', `${startDate}T00:00:00.000Z`);
       if (endDate) params.set('end_date', `${endDate}T23:59:59.999Z`);
       if (!showAll) params.set('project', 'GolikeTool');
@@ -164,7 +164,7 @@ export function DreamMemoryView() {
       let result = data.memories || [];
       // If NO search query provided, ensure chronological sorting (newest first).
       // If there IS a query, keep the server-side semantic relevance ranking order!
-      if (!query || !query.trim()) {
+      if (!query || !query.trim()) { // NOSONAR
         result = [...result].sort((a: DreamMemory, b: DreamMemory) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );

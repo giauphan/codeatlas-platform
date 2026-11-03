@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Network, Search, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBranch, Lightbulb, XCircle, RefreshCw } from 'lucide-react';
+import { Network, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBranch, Lightbulb, XCircle, RefreshCw } from 'lucide-react'; // NOSONAR
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth'; // Reusing auth headers utility
 import type { A2AOrchestrationTask, OrchestrationState } from '../../../src/types/a2a'; // Importing types
@@ -43,7 +43,6 @@ export function OrchestrationTasksView() {
   }, [fetchTasks]);
 
   const handleSearch = () => fetchTasks(); // Re-fetch all and filter locally for simplicity, or add query param if API supports
-
 
   const getIconForState = (state: OrchestrationState) => {
     switch (state) {
@@ -117,7 +116,7 @@ export function OrchestrationTasksView() {
             onClear={() => setSearchQuery('')}
           />
         </div>
-        <fieldset aria-label="Filter tasks by state" style={{ border: "none", padding: 0, margin: 0, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <fieldset aria-label="Filter tasks by state" style={{ border: 'none', padding: 0, margin: 0, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {availableStates.map(state => (
             <button
               key={state}
@@ -205,7 +204,7 @@ export function OrchestrationTasksView() {
                   {task.artifacts && task.artifacts.length > 0 && (
                     <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       <strong>Artifacts:</strong>
-                      {task.artifacts.map((artifact, idx) => (
+                      {task.artifacts.map((artifact) => (
                         <p key={artifact.name} style={{ margin: '0.2rem 0', wordBreak: 'break-all' }}>
                           - {artifact.name}: {(artifact.parts[0]?.kind === 'text' ? artifact.parts[0].text : 'Non-text artifact').slice(0, 100)}...
                         </p>

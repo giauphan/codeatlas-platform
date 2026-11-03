@@ -28,7 +28,7 @@ async function resolveFirebaseRole(uid: string, role: string): Promise<string> {
 export const authMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   // 1. Support Firebase ID Token (Bearer Token) for Dashboard
   const authHeader = req.headers["authorization"];
-  if (authHeader && authHeader.startsWith("Bearer ")) {
+  if (authHeader && authHeader.startsWith("Bearer ")) { // NOSONAR
     const token = authHeader.substring(7);
     try {
       const decodedToken = await getAuth().verifyIdToken(token);

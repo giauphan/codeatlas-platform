@@ -1,14 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-
 import * as path from "node:path";
 import { checkAuth, logActivity } from "../services/authService.js";
 import {
   discoverProjectsAsync,
-  fileExists,
   getStats,
+  loadAnalysisAsync,
+  type AnalysisResultLocal,
 } from "../services/projectService.js";
-import { loadAnalysisAsync, AnalysisResultLocal } from "../services/projectService.js";
 import { MemoryService } from "../services/memoryService.js";
 import { DreamingService } from "../services/dreamingService.js";
 import { SecurityScanner } from "../services/scanner/securityScanner.js";
@@ -26,7 +25,6 @@ import { GraphNode, GraphLink } from "../types/index.js";
 import {
   loadMemoryManually,
   getMemoryStatus,
-  syncMemory,
   disableMemoryAutoLoad,
   enableMemoryAutoLoad,
   resetMemory,
@@ -35,6 +33,13 @@ import {
 import { isLLMProviderType, WikiService, LLMProviderType } from "../services/wikiService.js";
 import { DreamPipelineService } from "../services/dreamPipelineService.js";
 import { SessionCheckpointService } from "../services/sessionCheckpointService.js";
+
+function resolveEntityFilePath(projectDir: string, filePath?: string | null): string | null {
+  if (!filePath) {
+    return null;
+  }
+  return path.isAbsolute(filePath) ? filePath : path.resolve(projectDir, filePath);
+}
 
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
@@ -707,7 +712,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         entities: nodes.map((n) => ({
           name: n.label,
           type: n.type,
-          filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
+          filePath: resolveEntityFilePath(loaded.projectDir, n.filePath),
           line: n.line || null,
         })),
       };
@@ -852,7 +857,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
 
       // Pre-calculate adjacency lists for O(1) lookup
       const linksByTarget = new Map<string, Array<{ from: string; type: string }>>();
-      const linksBySource = new Map<string, Array<{ readonly to: string; readonly type: string }>>();
+      const linksBySource = new Map<string, Array<{ to: string; type: string }>>();
       for (const l of links) {
         const byTarget = linksByTarget.get(l.target) ?? [];
         byTarget.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
@@ -873,7 +878,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           return {
             name: n.label,
             type: n.type,
-            filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
+            filePath: resolveEntityFilePath(loaded.projectDir, n.filePath),
             line: n.line || null,
             incomingRelationships: incomingLinks,
             outgoingRelationships: outgoingLinks,
@@ -911,7 +916,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const nodeMap = new Map(loaded.analysis.graph.nodes.map((n) => [n.id, n.label]));
 
       // Pre-calculate adjacency lists for O(1) lookup
-      const linksBySource = new Map<string, Array<{ readonly to: string; readonly type: string }>>();
+      const linksBySource = new Map<string, Array<{ to: string; type: string }>>();
       for (const l of links) {
         const bySource = linksBySource.get(l.source) ?? [];
         bySource.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
@@ -939,7 +944,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         showing: filesEntries.length,
         truncated: byFile.size > filesEntries.length,
         files: filesEntries.map(([fp, entities]) => ({
-          filePath: (() => { if (fp === "unknown") return "unknown"; return path.isAbsolute(fp) ? fp : path.resolve(loaded.projectDir, fp); })(),
+          filePath: fp === "unknown" ? "unknown" : (resolveEntityFilePath(loaded.projectDir, fp) ?? "unknown"),
           entities: entities.map((e) => ({
             name: e.label,
             type: e.type,
@@ -1167,7 +1172,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
             memory_type: get('MEMORY_TYPE', 'memory_type'),
             content: get('CONTENT', 'content'),
             importance: get('IMPORTANCE', 'importance'),
-            created_at: (() => { const v = get('CREATED_AT', 'created_at'); return v instanceof Date ? v.toISOString() : String(v ?? ''); })(),
+            created_at: (() => {
+              const v = get('CREATED_AT', 'created_at');
+              if (v instanceof Date) {
+                return v.toISOString();
+              }
+              return typeof v === 'string' || typeof v === 'number' ? String(v) : '';
+            })(),
           };
         });
         return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, count: memories.length, memories }, null, 2) }] };
@@ -1831,7 +1842,9 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const ops: ("dedup" | "extract_concepts" | "score" | "score_dreams")[] = [];
       if (dedup) ops.push("dedup");
       if (extractConcepts) ops.push("extract_concepts");
-      if (score) { ops.push("score", "score_dreams"); }
+      if (score) {
+        ops.push("score", "score_dreams");
+      }
       if (ops.length === 0) {
         return { content: [{ type: "text" as const, text: "No operations requested. At least one of dedup, extractConcepts, or score must be enabled." }], isError: true as const };
       }
@@ -2141,9 +2154,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   };
 
   const getWikiService = () => {
-    if (!wikiServiceCache) {
-      wikiServiceCache = WikiService.getInstance();
-    }
+    wikiServiceCache ??= WikiService.getInstance();
     return wikiServiceCache;
   };
 
@@ -2346,7 +2357,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         throw new TypeError("'project' and 'query' must be strings");
       }
       if (params.limit !== undefined && (typeof params.limit !== "number" || !Number.isFinite(params.limit))) {
-        throw new Error("'limit' must be a finite number");
+        throw new TypeError("'limit' must be a finite number");
       }
       const service = getWikiService();
       return service.searchWiki(params.project, params.query, {
