@@ -37,7 +37,7 @@ const digest = (value: string) => createHash('sha256').update(value).digest('hex
 // named topic, and a newer user source are all required. Other facts stay active.
 function preferenceTopic(memory: StructuredMemory): string | null {
   if (memory.kind !== 'PREFERENCE' && memory.kind !== 'DECISION') return null;
-  const match = memory.content.match(/\bfor\s+([^.!?\n]+)|(?:cho|về)\s+([^.!?\n]+)/iu); // NOSONAR
+  const match = /\bfor\s+([^.!?\n]+)|(?:cho|về)\s+([^.!?\n]+)/iu.exec(memory.content);
   return match ? `${memory.kind}:${(match[1] || match[2]).normalize('NFC').toLowerCase().trim()}` : null;
 }
 function isExplicitChange(memory: StructuredMemory, event: PendingCaptureEvent): boolean {
@@ -186,9 +186,12 @@ export class MemoryIngestionService {
       const sources = batch.filter(source => memory.evidence.some(item => item.sourceEventId === source.eventId));
       if (!sources.length) throw new Error('Missing source evidence');
       const source = sources[0];
-      const key = digest(`${EXTRACTOR_VERSION}\0${sources.map(item => item.eventId).sort((left, right) =>
-        left < right ? -1 : left > right ? 1 : 0,
-      ).join('\0')}\0${memory.kind}\0${memory.content}`);
+      const sortedEventIds = sources.map(item => item.eventId).sort((left, right) => {
+        if (left < right) return -1;
+        if (left > right) return 1;
+        return 0;
+      });
+      const key = digest(`${EXTRACTOR_VERSION}\0${sortedEventIds.join('\0')}\0${memory.kind}\0${memory.content}`);
       const ack = await DreamingService.saveDreamMemoryWithAck({ // NOSONAR
         project: event.project, projectId, displayName: event.displayName, workspacePath: event.workspacePath,
         sessionId: source.sessionId, memoryType: memory.memoryType, content: memory.content, importance: memory.importance,
@@ -366,9 +369,17 @@ export class MemoryIngestionService {
       const text = String(row.content_redacted);
       if (text.length > budget) continue;
       budget -= text.length;
-      result.push({ ...event, eventId: String(row.event_id), captureSequence: Number(row.capture_sequence), createdAt: String(row.created_at), actorRole: row.actor_role === 'TOOL' || row.actor_role === 'ASSISTANT' ? row.actor_role : 'USER', content: text,
-        toolName: row.tool_name == null ? undefined : String(row.tool_name), occurredAt: row.occurred_at == null ? undefined : String(row.occurred_at), // NOSONAR
-        sourceSpans: row.source_spans_json ? JSON.parse(String(row.source_spans_json)) : undefined }); // NOSONAR
+      result.push({
+        ...event,
+        eventId: String(row.event_id),
+        captureSequence: Number(row.capture_sequence),
+        createdAt: String(row.created_at),
+        actorRole: row.actor_role === 'TOOL' || row.actor_role === 'ASSISTANT' ? row.actor_role : 'USER',
+        content: text,
+        toolName: typeof row.tool_name === 'string' ? row.tool_name : undefined,
+        occurredAt: typeof row.occurred_at === 'string' ? row.occurred_at : undefined,
+        sourceSpans: typeof row.source_spans_json === 'string' && row.source_spans_json ? JSON.parse(row.source_spans_json) : undefined,
+      });
     }
     return result.reverse();
   }

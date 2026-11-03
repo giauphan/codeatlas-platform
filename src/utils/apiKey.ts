@@ -1,4 +1,4 @@
-import * as crypto from "crypto";
+import * as crypto from "node:crypto";
 import { logger } from "./logger.js";
 
 export const DEFAULT_API_KEY_PEPPER = 'codeatlas-api-key-pepper-v1';

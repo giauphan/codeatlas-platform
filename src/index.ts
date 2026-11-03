@@ -1,30 +1,21 @@
 #!/usr/bin/env node
 
 import "./env.js";
-import * as path from "path";
+import * as path from "node:path";
 
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import * as fs from "fs";
-import * as url from "url";
-import { initializeApp, getApps, applicationDefault, cert } from "firebase-admin/app";
+import * as fs from "node:fs";
+import * as url from "node:url";
+import { initializeApp, getApps, applicationDefault } from "firebase-admin/app";
 
 // Wire up adapters: MCP tools, REST routes, A2A, Genome.
-import { server, createMcpServer } from "./presentation/mcpServer.js";
-import { app, startHttpServer } from "./presentation/httpServer.js";
+import { createMcpServer } from "./presentation/mcpServer.js";
+import { startHttpServer } from "./presentation/httpServer.js";
 
 // Domain services: memory, security scanner, consolidation.
 import { checkAuth } from "./services/authService.js";
 import { logger } from "./utils/logger.js";
-import { 
-  getStats, 
-  discoverProjects, 
-  loadAnalysis, 
-  discoverProjectsAsync, 
-  loadAnalysisAsync, 
-   // NOSONAR
-  registerProjectAsync // NOSONAR
-} from "./services/projectService.js";
 import { indexingService } from "./services/indexingService.js";
 import { DreamingService } from "./services/dreamingService.js";
 
@@ -102,4 +93,7 @@ if (isMain) {
 }
 
 // Re-export core modules/helpers to maintain compatibility with test suite
-export { server, app, checkAuth, getStats, discoverProjects, loadAnalysis, discoverProjectsAsync, loadAnalysisAsync }; // NOSONAR
+export { server } from "./presentation/mcpServer.js";
+export { app } from "./presentation/httpServer.js";
+export { checkAuth } from "./services/authService.js";
+export { getStats, discoverProjects, loadAnalysis, discoverProjectsAsync, loadAnalysisAsync } from "./services/projectService.js";

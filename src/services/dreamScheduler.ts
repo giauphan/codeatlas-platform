@@ -60,6 +60,8 @@ export interface DreamJobResult {
   counts?: Record<string, number>;
 }
 
+type NullableTimestamp = string | Date | null;
+
 interface RawRun {
   job_key: string;
   run_id: string;
@@ -72,17 +74,17 @@ interface RawRun {
   owner_id: string | null;
   owner_token: string | null;
   fencing_token: number;
-  lease_until: string | Date | null; // NOSONAR
+  lease_until: NullableTimestamp;
   attempt: number;
   max_attempts: number;
-  next_attempt_at: string | Date | null;
+  next_attempt_at: NullableTimestamp;
   operation_stats: string | Record<string, number> | null;
   error_reason: string | null;
-  started_at: string | Date | null;
-  finished_at: string | Date | null;
+  started_at: NullableTimestamp;
+  finished_at: NullableTimestamp;
 }
 
-function asIso(value: string | Date | null): string | null {
+function asIso(value: NullableTimestamp): string | null {
   if (value === null) return null;
   if (value instanceof Date) return value.toISOString();
   return value;
@@ -133,7 +135,7 @@ function safeStats(result: DreamJobResult | Record<string, number>): string {
   const source = "counts" in result ? result.counts || {} : result;
   const counts = Object.fromEntries(
     Object.entries(source)
-      .filter(([key, value]) => /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key) && typeof value === "number" && Number.isFinite(value)) // NOSONAR
+      .filter(([key, value]) => /^[a-zA-Z]\w{0,63}$/.test(key) && typeof value === "number" && Number.isFinite(value))
       .slice(0, 32),
   );
   return JSON.stringify(counts);
@@ -174,9 +176,11 @@ export class DreamRunLedger {
     if (auth.uid !== 'admin' && auth.tier !== 'admin' && auth.role !== 'admin') return [auth.uid];
     const rows = await this.db.query<{ tenant_id: string }>(
       'SELECT DISTINCT tenant_id FROM dream_capture_events UNION SELECT DISTINCT tenant_id FROM ai_dreaming_memory');
-    return [...new Set([auth.uid, ...rows.map(row => row.tenant_id)])].sort((left, right) =>
-      left < right ? -1 : left > right ? 1 : 0,
-    );
+    return [...new Set([auth.uid, ...rows.map(row => row.tenant_id)])].sort((left, right) => {
+      if (left < right) return -1;
+      if (left > right) return 1;
+      return 0;
+    });
   }
 
   async claimRun(input: ClaimRunInput): Promise<DreamRunClaim | null> {

@@ -56,8 +56,8 @@ const authRateLimiter = rateLimit({
 // Use the same service account as Firebase Admin for Google Cloud APIs
 // Load from dotenv if not already set — dist/index.js loads .env but the module may read before dotenv
 import * as dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import * as path from "path";
+import { fileURLToPath } from "node:url";
+import * as path from "node:path";
 const __dirname_auth = path.dirname(fileURLToPath(import.meta.url));
 // dist/src/routes/ → project root (/home/ubuntu/codeatlas-platform/.env)
 dotenv.config({ path: path.resolve(__dirname_auth, "../../../.env") });
@@ -96,7 +96,7 @@ router.post("/api/auth/signin", authRateLimiter, async (req, res) => {
   const { email, password } = req.body || {};
 
   // Redact the password in the request body to prevent it from being logged down the line
-  if (req.body && req.body.password) { // NOSONAR
+  if (req.body?.password) {
     req.body.password = "[REDACTED]";
   }
 

@@ -156,7 +156,7 @@ export function SecondBrainView() {
             hasClearButton={true}
           />
         </div>
-        <div role="group" aria-label="Filter concepts by category" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <fieldset aria-label="Filter concepts by category" style={{ border: 'none', padding: 0, margin: 0, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {categories.map(cat => (
             <button
               key={cat}
@@ -175,7 +175,7 @@ export function SecondBrainView() {
               {cat === 'all' ? 'All' : cat}
             </button>
           ))}
-        </div>
+        </fieldset>
       </div>
 
       {/* Loading */}
@@ -238,11 +238,16 @@ export function SecondBrainView() {
                     <strong style={{ fontSize: '1.1rem' }}>{concept.label}</strong>
                     <span style={{
                       fontSize: '0.75rem', padding: '0.2rem 0.6rem', borderRadius: '6px',
-                      background: concept.category === 'lesson' ? 'rgba(124,58,237,0.2)' :
-                                   concept.category === 'pattern' ? 'rgba(0,240,255,0.2)' :
-                                   'rgba(255,200,0,0.2)',
-                      color: concept.category === 'lesson' ? '#a78bfa' :
-                             concept.category === 'pattern' ? '#00f0ff' : '#fbbf24',
+                      background: (() => {
+                        if (concept.category === 'lesson') return 'rgba(124,58,237,0.2)';
+                        if (concept.category === 'pattern') return 'rgba(0,240,255,0.2)';
+                        return 'rgba(255,200,0,0.2)';
+                      })(),
+                      color: (() => {
+                        if (concept.category === 'lesson') return '#a78bfa';
+                        if (concept.category === 'pattern') return '#00f0ff';
+                        return '#fbbf24';
+                      })(),
                       fontWeight: 700, textTransform: 'uppercase'
                     }}>
                       {concept.category}

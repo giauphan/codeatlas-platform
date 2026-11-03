@@ -1,6 +1,6 @@
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { logger } from "../utils/logger.js";
 import pLimit from "p-limit";
 
@@ -68,8 +68,6 @@ export class IndexingService {
   private isIndexing = false;
   // Cache for compiled ignore patterns to avoid expensive regex recompilations during scanning
   private patternCache = new Map<string, CompiledPattern>();
-
-  constructor() {} // NOSONAR
 
   getProjectDirs(): string[] {
     return this.projectDirs;
@@ -235,8 +233,8 @@ export class IndexingService {
     let funcCount = 0;
     let classCount = 0;
     let varCount = 0;
-    for (let i = 0; i < nodes.length; i++) { // NOSONAR
-      const type = nodes[i].type;
+    for (const node of nodes) {
+      const type = node.type;
       if (type === "module") moduleCount++;
       else if (type === "function") funcCount++;
       else if (type === "class") classCount++;
@@ -244,8 +242,8 @@ export class IndexingService {
     }
 
     let depCount = 0;
-    for (let i = 0; i < links.length; i++) { // NOSONAR
-      const type = links[i].type;
+    for (const link of links) {
+      const type = link.type;
       if (type === "import" || type === "call") depCount++;
     }
 
@@ -294,7 +292,7 @@ export class IndexingService {
         i += 2;
       } else if (c === "*") r += "[^/]*";
       else if (c === "?") r += "[^/]";
-      else r += c.replace(/[.+^${}()|[\]\\]/g, "\\$&"); // NOSONAR
+      else r += c.replace(/[.+^${}()|[\]\\]/g, String.raw`\$&`);
     }
     return r;
   }
@@ -405,20 +403,20 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const importMatch = line.match(TS_IMPORT_REGEX); // NOSONAR
+      const importMatch = TS_IMPORT_REGEX.exec(line);
       if (importMatch) {
         const target = importMatch[1] || importMatch[2];
         if (target.startsWith(".") || target.startsWith("/")) {
           links.push({ source: moduleId, target: `module:${this.resolveImportPath(relPath, target)}`, type: "import" });
         }
       }
-      const classMatch = line.match(TS_CLASS_REGEX); // NOSONAR
+      const classMatch = TS_CLASS_REGEX.exec(line);
       if (classMatch) {
         const classId = `class:${moduleId}:${classMatch[1]}`;
         nodes.push({ id: classId, label: classMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
         links.push({ source: moduleId, target: classId, type: "contains" });
       }
-      const funcMatch = line.match(TS_FUNC_REGEX); // NOSONAR
+      const funcMatch = TS_FUNC_REGEX.exec(line);
       if (funcMatch) {
         const funcId = `function:${moduleId}:${funcMatch[1]}`;
         nodes.push({ id: funcId, label: funcMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });
@@ -441,18 +439,18 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const importMatch = line.match(PY_IMPORT_REGEX); // NOSONAR
+      const importMatch = PY_IMPORT_REGEX.exec(line);
       if (importMatch) {
         const target = importMatch[1] || importMatch[2].split(",")[0].trim();
         if (target.startsWith(".")) links.push({ source: moduleId, target: `module:${this.resolveImportPath(relPath, target.replaceAll(".", "/"))}`, type: "import" });
       }
-      const classMatch = line.match(PY_CLASS_REGEX); // NOSONAR
+      const classMatch = PY_CLASS_REGEX.exec(line);
       if (classMatch) {
         const classId = `class:${moduleId}:${classMatch[1]}`;
         nodes.push({ id: classId, label: classMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
         links.push({ source: moduleId, target: classId, type: "contains" });
       }
-      const defMatch = line.match(PY_DEF_REGEX); // NOSONAR
+      const defMatch = PY_DEF_REGEX.exec(line);
       if (defMatch && defMatch[1] !== "__init__") {
         const funcId = `function:${moduleId}:${defMatch[1]}`;
         nodes.push({ id: funcId, label: defMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });
@@ -466,13 +464,13 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const funcMatch = line.match(GO_FUNC_REGEX); // NOSONAR
+      const funcMatch = GO_FUNC_REGEX.exec(line);
       if (funcMatch && funcMatch[1][0] >= 'A' && funcMatch[1][0] <= 'Z') {
         const funcId = `function:${moduleId}:${funcMatch[1]}`;
         nodes.push({ id: funcId, label: funcMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });
         links.push({ source: moduleId, target: funcId, type: "contains" });
       }
-      const structMatch = line.match(GO_STRUCT_REGEX); // NOSONAR
+      const structMatch = GO_STRUCT_REGEX.exec(line);
       if (structMatch) {
         const classId = `class:${moduleId}:${structMatch[1]}`;
         nodes.push({ id: classId, label: structMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
@@ -486,13 +484,13 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const classMatch = line.match(PHP_CLASS_REGEX); // NOSONAR
+      const classMatch = PHP_CLASS_REGEX.exec(line);
       if (classMatch) {
         const classId = `class:${moduleId}:${classMatch[1]}`;
         nodes.push({ id: classId, label: classMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
         links.push({ source: moduleId, target: classId, type: "contains" });
       }
-      const funcMatch = line.match(PHP_FUNC_REGEX); // NOSONAR
+      const funcMatch = PHP_FUNC_REGEX.exec(line);
       if (funcMatch) {
         const funcId = `function:${moduleId}:${funcMatch[1]}`;
         nodes.push({ id: funcId, label: funcMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });

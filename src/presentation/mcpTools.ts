@@ -1,19 +1,19 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import * as path from "path";
+import * as path from "node:path";
 import { checkAuth, logActivity } from "../services/authService.js";
 import {
   discoverProjectsAsync,
-   // NOSONAR
   getStats,
-} from "../services/projectService.js"; // NOSONAR
-import { loadAnalysisAsync, AnalysisResultLocal } from "../services/projectService.js"; // NOSONAR
+  loadAnalysisAsync,
+  type AnalysisResultLocal,
+} from "../services/projectService.js";
 import { MemoryService } from "../services/memoryService.js";
-import { DreamingService } from "../services/dreamingService.js"; // NOSONAR
+import { DreamingService } from "../services/dreamingService.js";
 import { SecurityScanner } from "../services/scanner/securityScanner.js";
 import { GenomeService } from "../services/genomeService.js";
 import { SecondBrainService } from "../services/secondBrainService.js";
-import { ConsolidationEngine } from "../services/consolidationEngine.js"; // NOSONAR
+import { ConsolidationEngine } from "../services/consolidationEngine.js";
 import { loadContextAtSessionStart, triggerContextReload } from "../services/llmService.js";
 import { logger } from "../utils/logger.js";
 import { registerTool } from "./a2a/agentCard.js";
@@ -25,16 +25,21 @@ import { GraphNode, GraphLink } from "../types/index.js";
 import {
   loadMemoryManually,
   getMemoryStatus,
-   // NOSONAR
   disableMemoryAutoLoad,
   enableMemoryAutoLoad,
   resetMemory,
   reloadMemory,
-  MemorySystemStatus // NOSONAR
 } from "../services/memoryController.js";
 import { isLLMProviderType, WikiService, LLMProviderType } from "../services/wikiService.js";
 import { DreamPipelineService } from "../services/dreamPipelineService.js";
 import { SessionCheckpointService } from "../services/sessionCheckpointService.js";
+
+function resolveEntityFilePath(projectDir: string, filePath?: string | null): string | null {
+  if (!filePath) {
+    return null;
+  }
+  return path.isAbsolute(filePath) ? filePath : path.resolve(projectDir, filePath);
+}
 
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
@@ -707,7 +712,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         entities: nodes.map((n) => ({
           name: n.label,
           type: n.type,
-          filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
+          filePath: resolveEntityFilePath(loaded.projectDir, n.filePath),
           line: n.line || null,
         })),
       };
@@ -873,7 +878,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           return {
             name: n.label,
             type: n.type,
-            filePath: n.filePath ? (path.isAbsolute(n.filePath) ? n.filePath : path.resolve(loaded.projectDir, n.filePath)) : null,
+            filePath: resolveEntityFilePath(loaded.projectDir, n.filePath),
             line: n.line || null,
             incomingRelationships: incomingLinks,
             outgoingRelationships: outgoingLinks,
@@ -939,7 +944,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         showing: filesEntries.length,
         truncated: byFile.size > filesEntries.length,
         files: filesEntries.map(([fp, entities]) => ({
-          filePath: fp === "unknown" ? "unknown" : (path.isAbsolute(fp) ? fp : path.resolve(loaded.projectDir, fp)),
+          filePath: fp === "unknown" ? "unknown" : (resolveEntityFilePath(loaded.projectDir, fp) ?? "unknown"),
           entities: entities.map((e) => ({
             name: e.label,
             type: e.type,
@@ -1167,7 +1172,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
             memory_type: get('MEMORY_TYPE', 'memory_type'),
             content: get('CONTENT', 'content'),
             importance: get('IMPORTANCE', 'importance'),
-            created_at: (() => { const v = get('CREATED_AT', 'created_at'); return v instanceof Date ? v.toISOString() : String(v ?? ''); })(), // NOSONAR
+            created_at: (() => {
+              const v = get('CREATED_AT', 'created_at');
+              if (v instanceof Date) {
+                return v.toISOString();
+              }
+              return typeof v === 'string' || typeof v === 'number' ? String(v) : '';
+            })(),
           };
         });
         return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, count: memories.length, memories }, null, 2) }] };
@@ -1831,7 +1842,9 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const ops: ("dedup" | "extract_concepts" | "score" | "score_dreams")[] = [];
       if (dedup) ops.push("dedup");
       if (extractConcepts) ops.push("extract_concepts");
-      if (score) { ops.push("score"); ops.push("score_dreams"); } // NOSONAR
+      if (score) {
+        ops.push("score", "score_dreams");
+      }
       if (ops.length === 0) {
         return { content: [{ type: "text" as const, text: "No operations requested. At least one of dedup, extractConcepts, or score must be enabled." }], isError: true as const };
       }
@@ -2141,9 +2154,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   };
 
   const getWikiService = () => {
-    if (!wikiServiceCache) { // NOSONAR
-      wikiServiceCache = WikiService.getInstance();
-    }
+    wikiServiceCache ??= WikiService.getInstance();
     return wikiServiceCache;
   };
 
@@ -2343,14 +2354,14 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
     ["project", "query", "limit"],
     async (params: Record<string, unknown>) => {
       if (typeof params.project !== "string" || typeof params.query !== "string") {
-        throw new Error("'project' and 'query' must be strings"); // NOSONAR
+        throw new TypeError("'project' and 'query' must be strings");
       }
       if (params.limit !== undefined && (typeof params.limit !== "number" || !Number.isFinite(params.limit))) {
-        throw new Error("'limit' must be a finite number");
+        throw new TypeError("'limit' must be a finite number");
       }
       const service = getWikiService();
       return service.searchWiki(params.project, params.query, {
-        maxPages: params.limit === undefined ? 3 : params.limit, // NOSONAR
+        maxPages: params.limit ?? 3,
       });
     }
   );

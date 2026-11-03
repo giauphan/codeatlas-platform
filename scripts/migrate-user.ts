@@ -1,7 +1,7 @@
-import { initializeApp, getApps, applicationDefault, cert } from "firebase-admin/app";
+import { initializeApp, getApps, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import * as path from "path";
-import * as fs from "fs";
+import * as path from "node:path";
+import * as fs from "node:fs";
 import * as dotenv from "dotenv";
 
 dotenv.config();

@@ -3,7 +3,7 @@ import { registerCheckpointRoutes } from "./checkpointRoutes.js";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { checkAuth, logActivity } from "../services/authService.js";
-import { DreamingService } from "../services/dreamingService.js"; // NOSONAR
+import { DreamingService } from "../services/dreamingService.js";
 import { loadAnalysisAsync } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
 import { logger } from "../utils/logger.js";
@@ -35,7 +35,7 @@ function executionAuth(tenantId: unknown) {
 /** Extract auth from request headers — API key or Firebase Bearer token. */
 function extractAuth(req: express.Request) {
   const apiKey = req.headers["x-api-key"] as string | undefined;
-  const bearerMatch = (req.headers["authorization"] as string || "").match(/^Bearer (.+)$/); // NOSONAR
+  const bearerMatch = /^Bearer (.+)$/.exec(req.headers["authorization"] as string || "");
   return { apiKey, bearerToken: bearerMatch?.[1] };
 }
 
@@ -273,7 +273,13 @@ export function registerDreamingRoutes(app: express.Application): void {
         request_id: requestId,
         ...(result.id ? { memory_id: result.id } : {}),
       };
-      res.status(statusCode ?? (result.status === "rejected" ? 409 : result.status === "error" ? 500 : 200)).json(payload);
+      let code = 200;
+      if (result.status === "rejected") {
+        code = 409;
+      } else if (result.status === "error") {
+        code = 500;
+      }
+      res.status(statusCode ?? code).json(payload);
     };
     try {
       const { apiKey, bearerToken } = extractAuth(req);
@@ -459,9 +465,7 @@ export function registerDreamingRoutes(app: express.Application): void {
 
       // Event-based capture is durable and idempotent. The legacy transcript
       // flow remains available when callers do not provide event_id.
-      // Event-based capture is durable and idempotent. The legacy transcript
-      // flow remains available when callers do not provide event_id.
-      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "event_id")) { // NOSONAR
+      if (Object.hasOwn(req.body ?? {}, "event_id")) {
         isEventCapture = true;
         await handleEventCapture(req.body as Record<string, unknown>, content, auth, requestId, res);
         return;

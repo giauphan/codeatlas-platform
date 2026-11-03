@@ -44,17 +44,6 @@ export function OrchestrationTasksView() {
 
   const handleSearch = () => fetchTasks(); // Re-fetch all and filter locally for simplicity, or add query param if API supports
 
-  const getBadgeColor = (state: OrchestrationState) => {
-    switch (state) {
-      case 'created': return 'bg-blue-600';
-      case 'assigned': return 'bg-yellow-600';
-      case 'implemented': return 'bg-orange-600';
-      case 'fixes_needed': return 'bg-red-600';
-      case 'approved': return 'bg-green-600';
-      default: return 'bg-gray-600';
-    }
-  };
-
   const getIconForState = (state: OrchestrationState) => {
     switch (state) {
       case 'created': return <CircleDot size={16} />;
@@ -127,7 +116,7 @@ export function OrchestrationTasksView() {
             onClear={() => setSearchQuery('')}
           />
         </div>
-        <div role="group" aria-label="Filter tasks by state" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <fieldset aria-label="Filter tasks by state" style={{ border: 'none', padding: 0, margin: 0, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {availableStates.map(state => (
             <button
               key={state}
@@ -146,7 +135,7 @@ export function OrchestrationTasksView() {
               {state.charAt(0).toUpperCase() + state.slice(1).replace('_', ' ')}
             </button>
           ))}
-        </div>
+        </fieldset>
       </div>
 
       {/* Loading */}
@@ -215,8 +204,8 @@ export function OrchestrationTasksView() {
                   {task.artifacts && task.artifacts.length > 0 && (
                     <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       <strong>Artifacts:</strong>
-                      {task.artifacts.map((artifact, idx) => (
-                        <p key={idx} style={{ margin: '0.2rem 0', wordBreak: 'break-all' }}>
+                      {task.artifacts.map((artifact) => (
+                        <p key={artifact.name} style={{ margin: '0.2rem 0', wordBreak: 'break-all' }}>
                           - {artifact.name}: {(artifact.parts[0]?.kind === 'text' ? artifact.parts[0].text : 'Non-text artifact').slice(0, 100)}...
                         </p>
                       ))}

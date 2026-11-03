@@ -3,22 +3,20 @@ import helmet from "helmet";
 import compression from "compression";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
-import { IncomingMessage, Server } from "http";
+import { IncomingMessage, Server } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { getApps } from "firebase-admin/app";
 import { getFirestore, type DocumentReference } from "firebase-admin/firestore";
-import { checkAuth, shouldUseFirestore } from "../services/authService.js"; // NOSONAR
+import { checkAuth, shouldUseFirestore } from "../services/authService.js";
 import { authMiddleware } from "../middleware/auth.js";
 import {
   discoverProjectsAsync,
   loadAnalysisAsync,
-   // NOSONAR
   fileExists,
   resolveProjectDir,
-   // NOSONAR
   unregisterProjectAsync
 } from "../services/projectService.js";
 import { authStorage } from "../utils/context.js";
@@ -36,13 +34,12 @@ import { mountConsolidationRoutes } from "./consolidationRoutes.js";
 import { mountGenomeRoutes } from "./genomeRoutes.js";
 import { mountA2ARoutes } from "./a2a/a2aRoutes.js";
 import { mountHeartbeatRoutes } from "./a2a/heartbeatRoutes.js";
-import { mountCronSettingsRoutes } from "./cronSettingsRoute.js"; // NOSONAR
+import { mountCronSettingsRoutes, loadSettings } from "./cronSettingsRoute.js";
 import { authProxyRouter } from "../routes/authProxy.js";
 import { a2aExecutor } from "./a2a/a2aExecutor.js";
 import { a2aOrchestrationService } from "../services/a2aOrchestrationService.js";
 import { logger } from "../utils/logger.js";
-import * as crypto from "crypto";
-import { loadSettings } from "./cronSettingsRoute.js"; // NOSONAR
+import * as crypto from "node:crypto";
 import { DreamDiagnostics } from "../services/dreamDiagnostics.js";
 import { DreamRunLedger, DreamScheduler } from "../services/dreamScheduler.js";
 
@@ -1344,7 +1341,7 @@ app.get("/sse", async (req, res) => {
     transports.set(sessionId, transport);
     sessionServers.set(sessionId, sessionServer);
     
-    if (auth && auth.uid) { // NOSONAR
+    if (auth?.uid) {
       sessionOwnership.set(sessionId, auth.uid);
     }
     
@@ -1447,12 +1444,18 @@ async function runDreamSchedulerTick(port: number): Promise<void> {
         else leaseSignal.addEventListener("abort", abortOnLeaseLoss, { once: true });
         const timeout = setTimeout(() => controller.abort(), 90_000);
         try {
+          let resolvedProjectId: string | undefined;
+          if (settings.project_id) {
+            resolvedProjectId = settings.project_id;
+          } else if (reconciliation) {
+            resolvedProjectId = claim.project || undefined;
+          }
           const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json", "x-api-key": internalApiKey },
             body: JSON.stringify({
               project: settings.project || claim.project || undefined,
-              ...(settings.project_id ? { project_id: settings.project_id } : reconciliation ? { project_id: claim.project || undefined } : {}),
+              ...(resolvedProjectId ? { project_id: resolvedProjectId } : {}),
               tenant_id: claim.tenantId,
               ...(reconciliation ? {} : { provider: settings.dreams_provider }),
               run_id: claim.runId,

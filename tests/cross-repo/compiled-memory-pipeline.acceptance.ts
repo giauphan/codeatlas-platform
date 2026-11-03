@@ -34,7 +34,7 @@ const project = path.join(temp, 'project-a');
 const home = path.join(temp, 'home');
 mkdirSync(project);
 mkdirSync(home);
-execFileSync('git', ['init', '--quiet', project]); // NOSONAR
+execFileSync('git', ['init', '--quiet', project], { env: { ...process.env, PATH: '/usr/bin:/bin' } }); // NOSONAR
 process.env.HOME = home;
 process.env.CODEATLAS_SQLITE_PATH = path.join(temp, 'canary.db');
 process.env.CODEATLAS_DB_TYPE = 'sqlite';
@@ -110,7 +110,7 @@ after(async () => {
     budget_source: process.env.CODEATLAS_CANARY_HOOK_BUDGET_MS ? 'CODEATLAS_CANARY_HOOK_BUDGET_MS override; installer declares no route timeout' : 'existing runHook 20-second deadline; installer declares no route timeout',
     budget_ms: hookCompletionBudgetMs,
     completion_count: hookLatencySamples.length,
-    max_elapsed_ms: elapsed.length ? elapsed[elapsed.length - 1] : null, // NOSONAR
+    max_elapsed_ms: elapsed.length ? elapsed.at(-1) : null,
     p95_elapsed_ms: elapsed.length ? elapsed[p95Index] : null,
     completed_calls: hookLatencySamples,
   }));
@@ -137,7 +137,13 @@ async function runHook(command: string, event: Record<string, unknown>, override
       else {
         const elapsedMs = Math.round(performance.now() - startedAt);
         assert.ok(elapsedMs <= hookCompletionBudgetMs, `Compiled ${command} hook exceeded the ${hookCompletionBudgetMs} ms canary completion budget`);
-        hookLatencySamples.push({ command: command === 'brain-context' ? 'brain-context' : command === 'brain-save' ? 'brain-save' : 'unknown', event_type: eventType, elapsed_ms: elapsedMs });
+        let cmdType = 'unknown';
+        if (command === 'brain-context') {
+          cmdType = 'brain-context';
+        } else if (command === 'brain-save') {
+          cmdType = 'brain-save';
+        }
+        hookLatencySamples.push({ command: cmdType, event_type: eventType, elapsed_ms: elapsedMs });
         resolve({ stdout, stderr });
       }
     });
@@ -177,7 +183,7 @@ test('compiled failure event stores a classified mistake without a normal respon
 test('secrets are redacted before the compiled hook sends content to the API', async () => {
   const secret = 'sk-syntheticPrivateToken12345678901234567890';
   await runHook('brain-save', { ...event, session_id: 'canary-secret-session', tool_response: { stdout: `Configuration diagnosis for resolver.ts: API_KEY=${secret}; credentials must be redacted before storing diagnostic evidence.` } });
-  assert.ok(requests.filter(request => ['/api/dreams/save', '/api/dreams/ingest-session'].includes(request.path)).length > 0); // NOSONAR
+  assert.ok(requests.some(request => ['/api/dreams/save', '/api/dreams/ingest-session'].includes(request.path)));
   assert.ok(requests.every(request => !JSON.stringify(request.body).includes(secret)), 'Secret must never reach API');
   const rows = await db.query<{ content: string }>('SELECT content FROM ai_dreaming_memory');
   assert.ok(rows.every(row => !row.content.includes(secret)));
@@ -275,12 +281,22 @@ test('checkpoint API restores grounded evidence and rejects unsupported claims w
 });
 
 function quoteShell(value: string): string {
-  return "'" + value.replaceAll("'", "'\\''") + "'"; // NOSONAR
+  const escaped = value.replaceAll("'", String.raw`'\''`);
+  return `'${escaped}'`;
 }
 
 function claudeFailure(result: { result?: string; subtype?: string; errors?: unknown[] }, code: number | null, stderrBytes: number): Error {
   const description = String(result.result || '') + JSON.stringify(result.errors || []);
-  const reason = /login|authenticat|oauth|expired|credential|invalid.?token/i.test(description) ? 'authentication' : /credit|billing|balance|budget/i.test(description) ? 'billing_or_budget' : /network|connect|ENOTFOUND|fetch|timeout/i.test(description) ? 'transport' : /unknown option|invalid.*settings|configuration|permission|not allowed|model/i.test(description) ? 'configuration' : 'unclassified';
+  let reason = 'unclassified';
+  if (/login|authenticat|oauth|expired|credential|invalid.?token/i.test(description)) {
+    reason = 'authentication';
+  } else if (/credit|billing|balance|budget/i.test(description)) {
+    reason = 'billing_or_budget';
+  } else if (/network|connect|ENOTFOUND|fetch|timeout/i.test(description)) {
+    reason = 'transport';
+  } else if (/unknown option|invalid.*settings|configuration|permission|not allowed|model/i.test(description)) {
+    reason = 'configuration';
+  }
   const subtype = typeof result.subtype === 'string' && /^[a-zA-Z0-9_-]+$/.test(result.subtype) ? result.subtype : 'unknown';
   let safeDetail = description;
   for (const value of Object.values(providerEnv)) if (value) safeDetail = safeDetail.replaceAll(value, '[REDACTED]');
@@ -365,7 +381,8 @@ test('killing the compiled hook before ACK replays its durable batch on restart'
 test('same tool evidence in repositories with the same basename stays in distinct canonical scopes', async () => {
   await runHook('brain-save', event);
   const other = path.join(temp, 'another-parent', path.basename(project));
-  mkdirSync(other, { recursive: true }); execFileSync('git', ['init', '--quiet', other]); // NOSONAR
+  mkdirSync(other, { recursive: true });
+  execFileSync('git', ['init', '--quiet', other], { env: { ...process.env, PATH: '/usr/bin:/bin' } }); // NOSONAR
   await runHook('brain-save', { ...event, cwd: other });
   const rows = await db.query<{ id: string; project_id: string }>("SELECT id, project_id FROM ai_dreaming_memory WHERE content LIKE :content", { content: '%Validated resolver.ts regression:%' });
   assert.equal(new Set(rows.map(row => row.project_id)).size, 2);

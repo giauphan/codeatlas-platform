@@ -154,7 +154,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         </div>
 
         {/* Filter chips */}
-        <div role="group" aria-label="Filter by entity type" style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', zIndex: 10, display: 'flex', gap: '0.5rem' }}>
+        <fieldset aria-label="Filter by entity type" style={{ border: 'none', padding: 0, margin: 0, position: 'absolute', top: '1.5rem', right: '1.5rem', zIndex: 10, display: 'flex', gap: '0.5rem' }}>
           {filters.map(f => (
             <button
               type="button"
@@ -175,7 +175,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
               {f.icon} {f.label}
             </button>
           ))}
-        </div>
+        </fieldset>
 
         {/* Fullscreen toggle */}
         <div style={{ position: 'absolute', bottom: '1.5rem', right: '1.5rem', zIndex: 10 }}>

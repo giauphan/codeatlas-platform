@@ -1,6 +1,6 @@
 import { discoverProjectsAsync } from "../src/services/projectService.js";
 import * as dotenv from "dotenv";
-import * as path from "path";
+import * as path from "node:path";
 
 dotenv.config();
 

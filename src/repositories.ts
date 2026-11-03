@@ -1,5 +1,5 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import * as crypto from "crypto";
+import * as crypto from "node:crypto";
 import { logger } from "./utils/logger.js";
 import { createDatabaseAdapter } from "./database/factory.js";
 import { authStorage } from "./utils/context.js";

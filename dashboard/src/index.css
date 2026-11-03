@@ -64,7 +64,7 @@ h1, h2, h3, .tech-font {
   font-family: 'Space Grotesk', sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  transition: all 0.3s ease; /* NOSONAR */
+  transition: opacity 0.3s ease, transform 0.3s ease, background-color 0.3s ease; /* NOSONAR */
   box-shadow: var(--glow-primary);
   border: none;
   cursor: pointer;
@@ -84,7 +84,7 @@ h1, h2, h3, .tech-font {
   font-weight: 600;
   font-family: 'Space Grotesk', sans-serif;
   text-transform: uppercase;
-  transition: all 0.3s ease; /* NOSONAR */
+  transition: opacity 0.3s ease, transform 0.3s ease, background-color 0.3s ease; /* NOSONAR */
   cursor: pointer;
 }
 
@@ -100,7 +100,7 @@ h1, h2, h3, .tech-font {
   color: var(--text-main);
   padding: 1rem;
   border-radius: 12px;
-  transition: all 0.3s ease; /* NOSONAR */
+  transition: opacity 0.3s ease, transform 0.3s ease, background-color 0.3s ease; /* NOSONAR */
 }
 
 .glass-input:focus {
@@ -145,7 +145,7 @@ h1, h2, h3, .tech-font {
   display: flex;
   align-items: center;
   gap: 1rem;
-  color: #fff;
+  color: #ffffff;
   font-weight: 700;
   border-radius: 4px;
   transition: box-shadow 0.2s ease, border-radius 0.2s ease;
@@ -195,7 +195,10 @@ h1, h2, h3, .tech-font {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .search-kbd-hint-wrapper {
+  .search-kbd-hint-wrapper,
+  .btn-neon-cyan,
+  .btn-neon-violet,
+  .glass-input {
     transition: none;
   }
 }
@@ -233,8 +236,8 @@ h1, h2, h3, .tech-font {
   padding-bottom: 0.75rem;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: #14171f;
+  color: var(--text-main);
   font-size: 0.95rem;
   outline: none;
   box-sizing: border-box;
