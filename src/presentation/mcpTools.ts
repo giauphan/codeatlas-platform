@@ -2154,7 +2154,8 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   };
 
   const getWikiService = () => {
-    return (wikiServiceCache ??= WikiService.getInstance());
+    wikiServiceCache ??= WikiService.getInstance();
+    return wikiServiceCache;
   };
 
   server.tool(

@@ -24,6 +24,12 @@ export class SecondBrainService {
    * Record task outcome as FEEDBACK dream memory.
    */
   async recordOutcome(outcome: TaskOutcome): Promise<string> {
+    let importance = 3;
+    if (outcome.result === "failure") {
+      importance = 10;
+    } else if (outcome.result === "success") {
+      importance = 5;
+    }
     const dreamId = await DreamingService.saveDreamMemory(
       outcome.project || "default",
       randomUUID(),
@@ -34,7 +40,7 @@ export class SecondBrainService {
         learnings: outcome.learnings || [],
         timestamp: new Date().toISOString(),
       }),
-      outcome.result === "failure" ? 10 : (outcome.result === "success" ? 5 : 3)
+      importance
     );
     logger.info(`[SecondBrain] Outcome: ${outcome.task} → ${outcome.result}`);
     return dreamId;

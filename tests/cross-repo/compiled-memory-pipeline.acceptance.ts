@@ -281,7 +281,8 @@ test('checkpoint API restores grounded evidence and rejects unsupported claims w
 });
 
 function quoteShell(value: string): string {
-  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
+  const escaped = value.replaceAll("'", String.raw`'\''`);
+  return `'${escaped}'`;
 }
 
 function claudeFailure(result: { result?: string; subtype?: string; errors?: unknown[] }, code: number | null, stderrBytes: number): Error {
