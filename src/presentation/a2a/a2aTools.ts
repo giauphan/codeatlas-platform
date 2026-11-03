@@ -39,7 +39,13 @@ export function registerA2ATools(server: McpServer, sessionAuth?: { tier: string
         agentId: r.agentId, name: r.agentName, url: r.agentUrl,
         capabilities: r.capabilities, status: r.status,
         lastSeen: r.lastHeartbeat.toISOString(),
-      }))].filter(a => { if (seen.has(a.url)) return false; seen.add(a.url); return true; });
+      }))].filter(a => {
+        if (seen.has(a.url)) {
+          return false;
+        }
+        seen.add(a.url);
+        return true;
+      });
 
       for (const agent of agents) {
         a2aClientService.registerAgent(agent.url, agent);

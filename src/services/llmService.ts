@@ -5,6 +5,22 @@ import { WikiService } from "./wikiService.js";
 import { checkNoiseBlocklist } from "./noiseBlocklist.js";
 import { extractStructuredMemoriesFromTranscript, redactMemoryText, STRUCTURED_EXTRACTION_SYSTEM_PROMPT, type StructuredExtractionOptions, type StructuredMemory } from "./structuredMemoryExtractor.js";
 
+const LEGACY_KNOWLEDGE_KEYWORDS = [
+  "code", "function", "class", "module", "api", "method", "pattern", "approach",
+  "architectur", "solution", "implement", "use\\s", "because", "reason", "cause",
+  "root", "fix", "change", "config", "deploy", "error", "issue", "problem",
+  "prefer", "better", "worse", "instead", "recommend", "learn", "found", "discover",
+  "notice", "understand", "see\\s", "need", "should", "must", "require", "support",
+  "handle", "process", "manag", "build", "create", "design", "structur", "dependenc",
+  "interface", "service", "component", "system", "framework", "library", "database",
+  "query", "request", "response", "endpoint", "route", "middleware", "schema",
+  "migrat", "test", "version", "releas", "update", "optimize", "refactor",
+].map((kw) => new RegExp(`\\b${kw}\\b`, "i"));
+
+function hasLegacyKnowledgeKeyword(sl: string): boolean {
+  return LEGACY_KNOWLEDGE_KEYWORDS.some((re) => re.test(sl));
+}
+
 function classifyLegacySentence(sl: string, role: string): { memoryType: string; importance: number } | null {
   let memoryType: string | null = null;
   let importance = 5;
@@ -27,7 +43,6 @@ function classifyLegacySentence(sl: string, role: string): { memoryType: string;
   // FIX: fix/refactor/improve patterns
   else if (/\b(fix|refactor|optimize|improve|migrate|replace|upgrade)\b/i.test(sl)) {
     memoryType = "KNOWLEDGE";
-    importance = 5;
   }
   // KNOWLEDGE: general learnings (only from assistant, not user).
   // Requires both minimum length AND information content — not just "assistant said something long".
@@ -35,7 +50,7 @@ function classifyLegacySentence(sl: string, role: string): { memoryType: string;
   else if (
     role === "ASSISTANT" &&
     sl.length > 120 &&
-    /\b(code|function|class|module|api|method|pattern|approach|architectur|solution|implement|use\s|because|reason|cause|root|fix|change|config|deploy|error|issue|problem|prefer|better|worse|instead|recommend|learn|found|discover|notice|understand|see\s|need|should|must|require|support|handle|process|manag|build|create|design|structur|dependenc|interface|service|component|system|framework|library|database|query|request|response|endpoint|route|middleware|schema|migrat|test|deploy|version|releas|update|optimize|refactor)\b/i.test(sl)
+    hasLegacyKnowledgeKeyword(sl)
   ) {
     memoryType = "KNOWLEDGE";
     importance = 4;

@@ -51,7 +51,8 @@ const NOISE_PATTERNS: ReadonlyArray<readonly [RegExp | ((text: string) => boolea
   [/\blow-fat\s+milk\b|\bplain\s+yogurt\b|\bone\s+list\s+to\s+rule\s+them\s+all\b/i, "food note"],
 
   // Lifestyle / habit scraps
-  [/\bstay\s+at\s+home\b|\bmiss\s+breakfast\b|\brelax\s+by\s+reading\b|\bless\s+crowded\b|\bquiet\s+atmosphere\b|\bcharge[d]?\s+(?:my\s+)?phone\b|\bnot\s+to\s+act\b|\bsmart\s+goal\b|\bprocrastin/i, "lifestyle note"],
+  [/\bstay\s+at\s+home\b|\bmiss\s+breakfast\b|\brelax\s+by\s+reading\b|\bless\s+crowded\b/i, "lifestyle note"],
+  [/\bquiet\s+atmosphere\b|\bcharged?\s+(?:my\s+)?phone\b|\bnot\s+to\s+act\b|\bsmart\s+goal\b|\bprocrastin/i, "lifestyle note"],
 
   // Social-media scheduler retry noise
   [text => hasStuckScheduling(text) || /\b--retry-failed\b|\bscheduling\s+records\b|\bretry\s+(?:the\s+)?(?:failed|failure)\b/i.test(text), "scheduler retry note"],

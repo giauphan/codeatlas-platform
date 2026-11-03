@@ -260,7 +260,9 @@ async function seed() {
   }
 }
 
-seed().catch(err => {
+try {
+  await seed();
+} catch (err) {
   logger.error("Seeder error:", err);
   process.exit(1);
-});
+}

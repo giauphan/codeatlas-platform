@@ -156,11 +156,13 @@ function hashFile(file) {
 }
 
 function derivedEventId(projectId, sessionId, uuid) {
-  return `claude_${createHash('sha256').update(`${projectId}\0${sessionId}\0${uuid}`).digest('hex')}`;
+  const digest = createHash('sha256').update(`${projectId}\0${sessionId}\0${uuid}`).digest('hex');
+  return `claude_${digest}`;
 }
 
 function checkpointEventId(projectId, sessionId, trigger, cursor) {
-  return `claude_${createHash('sha256').update(`${projectId}\0${sessionId}\0checkpoint\0${trigger}\0${cursor}`).digest('hex')}`;
+  const digest = createHash('sha256').update(`${projectId}\0${sessionId}\0checkpoint\0${trigger}\0${cursor}`).digest('hex');
+  return `claude_${digest}`;
 }
 
 function transcriptRow(uuid, sessionId, cwd, type, content) {

@@ -73,10 +73,11 @@ export function mountHeartbeatRoutes(app: express.Express): void {
         registeredAt: r.registeredAt.toISOString(),
       }));
 
+      const sortedAgents = [...agents].sort((a, b) => (a.status === "online" ? -1 : 1));
       res.json({
         agentCount: agents.length,
         onlineCount: countMatching(agents, a => a.status === "online"),
-        agents: agents.sort((a, b) => a.status === "online" ? -1 : 1),
+        agents: sortedAgents,
       });
     } catch (err) {
       next(err);

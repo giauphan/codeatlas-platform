@@ -99,9 +99,9 @@ export const localRateLimiter = (req: express.Request, res: express.Response, ne
 
 // Task queue to serialize/control concurrency of heavy operations
 export class TaskQueue {
-  private queue: (() => Promise<any>)[] = [];
+  private readonly queue: (() => Promise<any>)[] = [];
   private activeCount = 0;
-  private maxConcurrency = 1; // Process at most 1 heavy sync task concurrently to prevent connection pool exhaustion
+  private readonly maxConcurrency: number; // Process at most 1 heavy sync task concurrently to prevent connection pool exhaustion
   private static readonly MAX_QUEUED = 50;
   private static readonly TASK_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -192,7 +192,7 @@ app.use(rateLimit({
 
 // Enable CORS for dashboard (restrict via ALLOWED_ORIGINS env var if needed)
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000';
-const allowedList = allowedOrigins.split(',').map(s => s.trim());
+const allowedList = new Set(allowedOrigins.split(',').map(s => s.trim()));
 
 app.use(cors((req, callback) => {
   const origin = req.headers.origin;
@@ -215,7 +215,7 @@ app.use(cors((req, callback) => {
     return callback(null, corsOptions);
   }
 
-  if (allowedList.includes('*')) {
+  if (allowedList.has('*')) {
     // Static wildcard: allow all origins without credentials
     corsOptions.origin = '*';
     corsOptions.credentials = false;
@@ -229,7 +229,7 @@ app.use(cors((req, callback) => {
       return callback(null, corsOptions);
     }
 
-    if (allowedList.includes(origin)) {
+    if (allowedList.has(origin)) {
       corsOptions.origin = true;
     } else {
       corsOptions.origin = false;
@@ -536,7 +536,6 @@ app.get("/api/projects/memory", authMiddleware, localRateLimiter, rejectArrayPar
     if (!auth) {
       return res.status(401).json({ error: "Unauthorized" });
     }
-    const tenantId = auth.uid;
 
     const { projectName, eventType } = req.query;
     if (!projectName || typeof projectName !== "string" || !projectName.trim()) {
@@ -1306,7 +1305,6 @@ app.get("/sse", async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
 
-  const apiKey = (req.headers["x-api-key"] as string) || "";
   const messagesUrl = "/messages";
   const transport = new SSEServerTransport(messagesUrl, res);
 

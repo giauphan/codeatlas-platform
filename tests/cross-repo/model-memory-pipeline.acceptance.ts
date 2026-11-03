@@ -87,6 +87,7 @@ test('configured model extraction persists grounded SQLite memories, retrieval, 
     assert.ok(saved.memory_ids.length > 0, 'the model must select at least one meaningful memory');
     const binds: Record<string, unknown> = { tenant: tenant.uid, projectId };
     saved.memory_ids.forEach((id, index) => { binds[`memory${index}`] = id; });
+    const memoryPlaceholders = saved.memory_ids.map((_, index) => `:memory${index}`).join(',');
     const persisted = await adapter.query<{
       id: string; content: string; status: string; kind: string; extractor_version: string;
       source_event_id: string; span: string;
@@ -95,7 +96,7 @@ test('configured model extraction persists grounded SQLite memories, retrieval, 
       FROM ai_dreaming_memory memory
       JOIN dream_memory_provenance provenance ON provenance.tenant_id = memory.tenant_id AND provenance.project_id = memory.project_id AND provenance.memory_id = memory.id
       JOIN dream_memory_evidence evidence ON evidence.tenant_id = memory.tenant_id AND evidence.project_id = memory.project_id AND evidence.memory_id = memory.id
-      WHERE memory.tenant_id = :tenant AND memory.project_id = :projectId AND memory.id IN (${saved.memory_ids.map((_, index) => `:memory${index}`).join(',')})`, binds);
+      WHERE memory.tenant_id = :tenant AND memory.project_id = :projectId AND memory.id IN (${memoryPlaceholders})`, binds);
     assert.ok(persisted.length > 0, 'selected memory IDs must have durable provenance and evidence');
     assert.ok(persisted.every(row => row.status === 'active' && row.extractor_version.endsWith(':model')));
     assert.ok(persisted.every(row => sourceTexts.has(row.source_event_id)));

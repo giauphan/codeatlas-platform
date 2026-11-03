@@ -178,9 +178,8 @@ export class SessionCheckpointService {
       ORDER BY created_at ASC, event_id ASC`, binds);
     if (rows.length !== ids.length) throw new Error('Checkpoint source evidence is missing or belongs to a different scope');
     const overrides = groundedOverrides(input, rows);
-    const sourceId = `explicit_${createHash('sha256').update(JSON.stringify([ids.sort((left, right) =>
-      left < right ? -1 : left > right ? 1 : 0,
-    ), overrides])).digest('hex')}`;
+    const sortedIds = [...ids].sort((left, right) => left.localeCompare(right));
+    const sourceId = `explicit_${createHash('sha256').update(JSON.stringify([sortedIds, overrides])).digest('hex')}`;
     return persist(input.projectId, input.sessionId, sourceId, rows, overrides);
   }
 }

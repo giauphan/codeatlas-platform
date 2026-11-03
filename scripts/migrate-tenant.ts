@@ -80,7 +80,9 @@ async function migrateTenant() {
   await migrateTables(uid);
 }
 
-migrateTenant().catch((err) => {
+try {
+  await migrateTenant();
+} catch (err) {
   console.error("Migration failed:", err);
   process.exit(1);
-});
+}

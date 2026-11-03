@@ -87,8 +87,8 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       }
 
       // Ensure directory exists
-      const path = await import("path");
-      const fs = await import("fs");
+      const path = await import("node:path");
+      const fs = await import("node:fs");
       const dir = path.dirname(this.dbPath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -215,7 +215,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       db.transaction(() => {
         if (rebuiltDefinition !== record.sql) {
           const objects = db.prepare("SELECT name, sql FROM sqlite_master WHERE tbl_name = 'ai_dreaming_memory' AND type IN ('index', 'trigger') AND sql IS NOT NULL").all() as Array<{ name: string; sql: string }>;
-          const definition = rebuiltDefinition.replace(/^CREATE TABLE(?: IF NOT EXISTS)?\s+[\"`\[]?ai_dreaming_memory[\"`\]]?/i, 'CREATE TABLE ai_dreaming_memory_identity_new');
+          const definition = rebuiltDefinition.replace(/^CREATE TABLE(?: IF NOT EXISTS)?\s+["`[]?ai_dreaming_memory["`\]]?/i, 'CREATE TABLE ai_dreaming_memory_identity_new');
           if (definition === rebuiltDefinition) throw new Error('Unsupported memory identity migration schema');
           const columns = (db.pragma('table_info(ai_dreaming_memory)') as Array<{ name: string }>).map(column => '"' + column.name.replaceAll('"', '""') + '"').join(', ');
           db.exec(definition);

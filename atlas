@@ -77,9 +77,9 @@ function handleGenerateKey(args) {
   const showOnly = args.includes("--show") || args.includes("--dry-run");
   const generateAll = args.includes("--all");
   const byteArg = args.find((a) => a.startsWith("--bytes="));
-  const byteCount = byteArg ? parseInt(byteArg.split("=")[1], 10) : 32;
+  const byteCount = byteArg ? Number.parseInt(byteArg.split("=")[1], 10) : 32;
 
-  if (isNaN(byteCount) || byteCount < 16) {
+  if (Number.isNaN(byteCount) || byteCount < 16) {
     console.error(`${c.red}Error: --bytes must be at least 16.${c.reset}`);
     process.exit(1);
   }

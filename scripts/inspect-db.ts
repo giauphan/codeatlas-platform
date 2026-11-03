@@ -55,4 +55,8 @@ async function run() {
   }
 }
 
-run().catch(console.error);
+try {
+  await run();
+} catch (err) {
+  console.error(err);
+}

@@ -6,7 +6,6 @@ dotenv.config();
 
 async function run() {
   console.log("=== Listing Discovered Projects (Multi-tenant = false) ===");
-  const originalMultiTenant = process.env.CODEATLAS_MULTI_TENANT;
   
   process.env.CODEATLAS_MULTI_TENANT = "false";
   const allProjects = await discoverProjectsAsync();
@@ -35,4 +34,8 @@ async function run() {
   }
 }
 
-run().catch(console.error);
+try {
+  await run();
+} catch (err) {
+  console.error(err);
+}

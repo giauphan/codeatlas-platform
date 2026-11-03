@@ -55,7 +55,7 @@ function redactAndNormalize(content: string): string {
     .replace(/[\t ]+/g, " ")
     .replace(/(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|authorization)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
     .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [REDACTED]")
-    .replace(/\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9]{20,})\b/g, "[REDACTED]")
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{12,}|gh[posru]_[A-Za-z0-9]{20,})\b/g, "[REDACTED]")
     .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]")
     .trim();
 }
@@ -100,7 +100,8 @@ function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
-    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
+    const pairs = entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",");
+    return `{${pairs}}`;
   }
   return JSON.stringify(value) ?? "null";
 }
@@ -240,21 +241,25 @@ export class DreamCaptureStore {
       createdAt: String(row.created_at),
       projectId: String(row.project_id),
       project: String(row.project),
-      displayName: row.display_name == null ? undefined : String(row.display_name), // NOSONAR
-      workspacePath: row.workspace_path == null ? undefined : String(row.workspace_path),
+      displayName: asOptionalString(row.display_name),
+      workspacePath: asOptionalString(row.workspace_path),
       eventId: String(row.event_id),
       sessionId: String(row.session_id),
       actorRole: row.actor_role === "USER" || row.actor_role === "ASSISTANT" || row.actor_role === "TOOL" ? row.actor_role : undefined,
       memoryTypeHint: ["MISTAKE", "PREFERENCE", "KNOWLEDGE", "PATTERN", "SESSION_SUMMARY"].includes(String(row.memory_type_hint)) ? row.memory_type_hint as PendingCaptureEvent["memoryTypeHint"] : undefined,
-      toolName: row.tool_name == null ? undefined : String(row.tool_name),
+      toolName: asOptionalString(row.tool_name),
       content: String(row.content_redacted),
-      checkpoint: row.checkpoint_json ? JSON.parse(String(row.checkpoint_json)) : undefined,
-      occurredAt: row.occurred_at == null ? undefined : String(row.occurred_at),
-      sourceSpans: row.source_spans_json ? JSON.parse(String(row.source_spans_json)) : undefined,
+      checkpoint: typeof row.checkpoint_json === "string" && row.checkpoint_json ? JSON.parse(row.checkpoint_json) : undefined,
+      occurredAt: asOptionalString(row.occurred_at),
+      sourceSpans: typeof row.source_spans_json === "string" && row.source_spans_json ? JSON.parse(row.source_spans_json) : undefined,
       status: "pending" as const,
       payloadRedacted: true as const,
     }));
   }
+}
+
+function isValidActorRole(role: CaptureEventInput["actorRole"]): boolean {
+  return role === undefined || role === "USER" || role === "ASSISTANT" || role === "TOOL";
 }
 
 function validateCaptureInput(input: CaptureEventInput, eventId: string): string | null {
@@ -274,8 +279,10 @@ function isInvalidBoundedText(value: string | undefined, maxLength: number): boo
   return value !== undefined && (value.length > maxLength || /[\r\n\0]/.test(value));
 }
 
-function isValidActorRole(role: CaptureEventInput["actorRole"]): boolean {
-  return role === undefined || role === "USER" || role === "ASSISTANT" || role === "TOOL";
+function asOptionalString(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return undefined;
 }
 
 function isInvalidSourceSpan(span: { start: number; end: number }): boolean {

@@ -50,4 +50,8 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+try {
+  await main();
+} catch (err) {
+  console.error(err);
+}

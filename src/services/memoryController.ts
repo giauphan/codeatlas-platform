@@ -133,7 +133,8 @@ export class MemoryController {
    * Use this when you want to explicitly load memory systems
    */
   static async manualInitialize(project?: string): Promise<MemorySystemStatus> {
-    logger.info(`[MemoryController] Manual memory initialization requested${project ? ` for project: ${project}` : ''}`);
+    const projectSuffix = project ? ` for project: ${project}` : '';
+    logger.info(`[MemoryController] Manual memory initialization requested${projectSuffix}`);
     
     try {
       if (project) {
@@ -263,14 +264,14 @@ export class MemoryController {
 // Auto-initialize on module import (AUTO-LOAD)
 // This ensures memory loads when the application starts
 if (process.env.MEMORY_AUTO_LOAD !== 'false') {
-  void Promise.resolve().then(() => {
-    // Delay slightly to allow logger to be ready
-    setTimeout(() => {
-      MemoryController.autoInitialize().catch(error => {
-        logger.error("[MemoryController] Auto-initialization failed:", error);
-      });
-    }, 100);
-  });
+  // Delay slightly to allow logger to be ready
+  setTimeout(async () => {
+    try {
+      await MemoryController.autoInitialize();
+    } catch (error) {
+      logger.error("[MemoryController] Auto-initialization failed:", error);
+    }
+  }, 100);
 }
 
 // Manual memory loading functions (for external use)

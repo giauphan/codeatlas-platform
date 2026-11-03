@@ -16,7 +16,8 @@ const EXT_COLORS: Record<string, string> = {
 
 const IGNORED_CALLS = new Set(["if", "while", "for", "switch", "catch", "then", "return", "throw", "console", "typeof"]);
 
-const TS_IMPORT_REGEX = /import\s+(?:\{[^}]*\}\s+from\s+)?["']([^"']+)["']|from\s+["']([^"']+)["']/;
+const TS_DIRECT_IMPORT_REGEX = /\bimport\s+["']([^"']+)["']/;
+const TS_FROM_IMPORT_REGEX = /\bfrom\s+["']([^"']+)["']/;
 const TS_CLASS_REGEX = /(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/;
 const TS_FUNC_REGEX = /(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(/;
 const TS_CALL_REGEX = /\b(\w+)\(/g;
@@ -67,7 +68,7 @@ export class IndexingService {
   private projectDirs: string[] = [];
   private isIndexing = false;
   // Cache for compiled ignore patterns to avoid expensive regex recompilations during scanning
-  private patternCache = new Map<string, CompiledPattern>();
+  private readonly patternCache = new Map<string, CompiledPattern>();
 
   getProjectDirs(): string[] {
     return this.projectDirs;
@@ -328,11 +329,12 @@ export class IndexingService {
     const cleanPat = dirOnly ? p.slice(0, -1) : p;
     const cleanTrimmed = cleanPat.replace(/^\//, "");
     const anchored = cleanPat.includes("/");
-    const partsPattern = (anchored && cleanPat.startsWith("/"))
-      ? `^${this.toRegex(cleanTrimmed)}(?:/|$)`
-      : anchored
-        ? `^${this.toRegex(cleanPat)}`
-        : `(?:^|/)${this.toRegex(cleanPat)}$`;
+    let partsPattern = `(?:^|/)${this.toRegex(cleanPat)}$`;
+    if (anchored && cleanPat.startsWith("/")) {
+      partsPattern = `^${this.toRegex(cleanTrimmed)}(?:/|$)`;
+    } else if (anchored) {
+      partsPattern = `^${this.toRegex(cleanPat)}`;
+    }
     const re = new RegExp(partsPattern);
     const bareRe = !anchored && !dirOnly ? new RegExp(`^${this.toRegex(cleanPat)}$`) : null;
     return { skip: false, dirOnly, re, anchored, bareRe, cleanPat };
@@ -403,9 +405,9 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const importMatch = TS_IMPORT_REGEX.exec(line);
+      const importMatch = TS_FROM_IMPORT_REGEX.exec(line) ?? TS_DIRECT_IMPORT_REGEX.exec(line);
       if (importMatch) {
-        const target = importMatch[1] || importMatch[2];
+        const target = importMatch[1];
         if (target.startsWith(".") || target.startsWith("/")) {
           links.push({ source: moduleId, target: `module:${this.resolveImportPath(relPath, target)}`, type: "import" });
         }
