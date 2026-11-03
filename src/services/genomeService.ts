@@ -320,18 +320,20 @@ export class GenomeService {
       }
 
       // Parse the structured content block into a gene object.
+      let geneCategory: "immune" | "pattern" | "lesson" = "lesson";
+      if (memoryType === "MISTAKE") {
+        geneCategory = "immune";
+      } else if (memoryType === "PATTERN") {
+        geneCategory = "pattern";
+      }
+
       const geneId = await this.upsertGene({
         name: this.generateGeneName(content),
         description: content.slice(0, 300),
         problem: this.extractProblem(content),
         solution: this.extractSolution(content),
         architecture: "",
-        category:
-          memoryType === "MISTAKE"
-            ? "immune"
-            : memoryType === "PATTERN"
-              ? "pattern"
-              : "lesson",
+        category: geneCategory,
         project: req.project,
         sourceType: req.sourceType,
         sourceId: req.sourceId,
@@ -992,26 +994,29 @@ export class GenomeService {
     const gene = await this.getGene(geneId);
     if (!gene) return null;
 
-    const parts: string[] = [];
-    parts.push(`# Skill: ${gene.name}\n`);
-    parts.push(`**Description**: ${gene.description}\n`); // NOSONAR
-    parts.push(`## Problem\n${gene.problem}\n`); // NOSONAR
-    parts.push(`## Solution\n${gene.solution}\n`); // NOSONAR
+    const parts: string[] = [
+      `# Skill: ${gene.name}\n`,
+      `**Description**: ${gene.description}\n`,
+      `## Problem\n${gene.problem}\n`,
+      `## Solution\n${gene.solution}\n`,
+    ];
     if (gene.architecture) {
       parts.push(`## Architecture\n${gene.architecture}\n`);
     }
-    parts.push(`## Metadata`);
-    parts.push(`- Category: ${gene.category}`); // NOSONAR
-    parts.push(`- Confidence: ${(gene.confidence * 100).toFixed(0)}%`); // NOSONAR
-    parts.push(`- Version: ${gene.version}`); // NOSONAR
-    parts.push(`- Usage count: ${gene.usageCount}`); // NOSONAR
-    parts.push(`- Success rate: ${(gene.successRate * 100).toFixed(0)}%\n`); // NOSONAR
-    parts.push(`## Instructions
+    parts.push(
+      `## Metadata`,
+      `- Category: ${gene.category}`,
+      `- Confidence: ${(gene.confidence * 100).toFixed(0)}%`,
+      `- Version: ${gene.version}`,
+      `- Usage count: ${gene.usageCount}`,
+      `- Success rate: ${(gene.successRate * 100).toFixed(0)}%\n`,
+      `## Instructions
 Apply this knowledge when encountering similar problems.
 1. Analyze the current context against the problem description
 2. If matched, apply the solution pattern
 3. Adapt to current project specifics
-4. Report outcome to improve the gene's success rate\n`);
+4. Report outcome to improve the gene's success rate\n`
+    );
     if (gene.dependencies && gene.dependencies.length > 0) {
       parts.push(`\n**Depends on**: ${gene.dependencies.join(", ")}`);
     }

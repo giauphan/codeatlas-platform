@@ -107,7 +107,7 @@ export class WikiService {
   }
 
   async generateProjectWiki(projectName: string, options: GenerateWikiOptions = {}): Promise<WikiTreeResponse> {
-    if (!projectName || !/^[a-zA-Z0-9_\-\.]+$/.test(projectName)) {
+    if (!projectName || !/^[a-zA-Z0-9_.-]+$/.test(projectName)) {
       throw new Error('Invalid project name: contains invalid or unsafe characters');
     }
 
@@ -153,7 +153,7 @@ export class WikiService {
     ];
 
     // Sanitize projectName to prevent directory traversal
-    const safeProjectName = path.basename(projectName).replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+    const safeProjectName = path.basename(projectName).replace(/[^a-zA-Z0-9_.-]/g, '_');
     const rootWikiDir = path.resolve(process.cwd(), '.codeatlas', 'wiki');
     const exportBaseDir = path.resolve(rootWikiDir, safeProjectName);
     if (!exportBaseDir.startsWith(rootWikiDir)) {
@@ -208,7 +208,7 @@ export class WikiService {
     // Sanitize path for file system: prevent traversal and ensure .md extension
     // e.g. /modules/services -> modules/services.md
     const normalizedPath = path.normalize(pagePath);
-    const safePath = normalizedPath.replace(/^([\\\/]|(\.\.[\/\\]))+/, '');
+    const safePath = normalizedPath.replace(/^([\\/]|(\.\.[\\/]))+/, '');
     const fullPath = path.resolve(exportBaseDir, `${safePath}.md`);
 
     if (!fullPath.startsWith(exportBaseDir)) {

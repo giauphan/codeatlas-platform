@@ -26,10 +26,9 @@ export interface A2ADiscoverFilter {
 
 export class A2AClientService {
   /** In-memory cache of discovered agents (tenantId → URL → AgentCard) */
-  private agentCache = new Map<string, Map<string, unknown>>();
+  private readonly agentCache = new Map<string, Map<string, unknown>>();
 
   private getTenantCache(): Map<string, unknown> {
-    const auth = authStorage.getStore();
     const tenantId = authStorage.getStore()!.uid;
     if (!this.agentCache.has(tenantId)) {
       this.agentCache.set(tenantId, new Map<string, unknown>());
@@ -148,15 +147,21 @@ export class A2AClientService {
     logger.info(`[A2A] Registered agent: ${url}`);
   }
 
+  private resolveJsonRpcUrl(agentUrl: string): string {
+    if (agentUrl.endsWith("/jsonrpc")) {
+      return agentUrl;
+    }
+    if (agentUrl.endsWith("/a2a")) {
+      return `${agentUrl}/jsonrpc`;
+    }
+    return `${agentUrl.replace(/\/$/, "")}/a2a/jsonrpc`;
+  }
+
   /**
    * Make a JSON-RPC 2.0 call to a remote agent.
    */
   private async jsonRpcCall(agentUrl: string, request: unknown): Promise<unknown> {
-    const jsonRpcUrl = agentUrl.endsWith("/jsonrpc")
-      ? agentUrl
-      : agentUrl.endsWith("/a2a")
-        ? `${agentUrl}/jsonrpc`
-        : `${agentUrl.replace(/\/$/, "")}/a2a/jsonrpc`;
+    const jsonRpcUrl = this.resolveJsonRpcUrl(agentUrl);
 
     const body = JSON.stringify(request);
 

@@ -182,7 +182,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
   // Q&A State
   const [queryInput, setQueryInput] = useState('');
   const [isQuerying, setIsQuerying] = useState(false);
-  const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'assistant'; text: string; citations?: string[] }>>([]);
+  const [chatHistory, setChatHistory] = useState<Array<{ id: string; role: 'user' | 'assistant'; text: string; citations?: string[] }>>([]);
 
   // Fetch Tree
   const fetchTree = useCallback(async (project: string) => {
@@ -309,7 +309,8 @@ export const WikiView: React.FC<WikiViewProps> = ({
     if (!queryInput.trim() || isQuerying || !currentProject) return;
 
     const userText = queryInput.trim();
-    setChatHistory(prev => [...prev, { role: 'user', text: userText }]);
+    const msgIdBase = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${chatHistory.length}`;
+    setChatHistory(prev => [...prev, { id: `user-${msgIdBase}`, role: 'user', text: userText }]);
     setQueryInput('');
     setIsQuerying(true);
 
@@ -340,6 +341,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
       setChatHistory(prev => [
         ...prev,
         {
+          id: `assistant-${msgIdBase}`,
           role: 'assistant',
           text: data.answer || 'No answer generated.',
           citations: data.sources || data.citations || []
@@ -348,7 +350,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
     } catch (err: unknown) {
       setChatHistory(prev => [
         ...prev,
-        { role: 'assistant', text: `Error: ${err instanceof Error ? err.message : String(err)}` }
+        { id: `error-${msgIdBase}`, role: 'assistant', text: `Error: ${err instanceof Error ? err.message : String(err)}` }
       ]);
     } finally {
       setIsQuerying(false);
@@ -481,41 +483,48 @@ export const WikiView: React.FC<WikiViewProps> = ({
           }
 
           // Render regular text paragraphs/headers
+          let seenParagraphs = 0;
           return (
             <div key={`${part.substring(0, 32)}-${index}`} style={{ margin: '1rem 0' }}>
-              {part.split('\n\n').map((paragraph, pIdx) => {
+              {part.split('\n\n').map((paragraph) => {
+                seenParagraphs += 1;
+                const pKey = `${seenParagraphs}-${paragraph.slice(0, 32)}`;
                 if (paragraph.startsWith('# ')) {
                   return (
-                    <h1 key={pIdx} className="tech-font" style={{ fontSize: '1.8rem', color: '#fff', margin: '1.5rem 0 1rem 0', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
+                    <h1 key={pKey} className="tech-font" style={{ fontSize: '1.8rem', color: '#fff', margin: '1.5rem 0 1rem 0', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
                       {paragraph.replace('# ', '')}
                     </h1>
                   );
                 }
                 if (paragraph.startsWith('## ')) {
                   return (
-                    <h2 key={pIdx} className="tech-font" style={{ fontSize: '1.4rem', color: 'var(--primary-neon)', margin: '1.25rem 0 0.75rem 0' }}>
+                    <h2 key={pKey} className="tech-font" style={{ fontSize: '1.4rem', color: 'var(--primary-neon)', margin: '1.25rem 0 0.75rem 0' }}>
                       {paragraph.replace('## ', '')}
                     </h2>
                   );
                 }
                 if (paragraph.startsWith('### ')) {
                   return (
-                    <h3 key={pIdx} style={{ fontSize: '1.1rem', color: '#fff', margin: '1rem 0 0.5rem 0' }}>
+                    <h3 key={pKey} style={{ fontSize: '1.1rem', color: '#fff', margin: '1rem 0 0.5rem 0' }}>
                       {paragraph.replace('### ', '')}
                     </h3>
                   );
                 }
                 if (paragraph.startsWith('- ')) {
+                  let seenItems = 0;
                   return (
-                    <ul key={pIdx} style={{ paddingLeft: '1.5rem', margin: '0.5rem 0' }}>
-                      {paragraph.split('\n').map((item, iIdx) => (
-                        <li key={iIdx} style={{ margin: '0.25rem 0' }}>{item.replace(/^- /, '')}</li>
-                      ))}
+                    <ul key={pKey} style={{ paddingLeft: '1.5rem', margin: '0.5rem 0' }}>
+                      {paragraph.split('\n').map((item) => {
+                        seenItems += 1;
+                        return (
+                          <li key={`${seenItems}-${item.slice(0, 32)}`} style={{ margin: '0.25rem 0' }}>{item.replace(/^- /, '')}</li>
+                        );
+                      })}
                     </ul>
                   );
                 }
                 return (
-                  <p key={pIdx} style={{ margin: '0.75rem 0' }}>
+                  <p key={pKey} style={{ margin: '0.75rem 0' }}>
                     {paragraph}
                   </p>
                 );
@@ -523,6 +532,48 @@ export const WikiView: React.FC<WikiViewProps> = ({
             </div>
           );
         })}
+      </div>
+    );
+  };
+
+  const renderPageReaderContent = () => {
+    if (loadingPage) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '8px', color: 'var(--primary-neon)' }}>
+          <Loader2 size={24} className="animate-spin" /> Loading document...
+        </div>
+      );
+    }
+    if (page) {
+      return (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem', color: 'var(--primary-neon)', fontSize: '0.85rem' }}>
+            <FileText size={16} /> {page.path}
+          </div>
+          <h1 className="tech-font" style={{ fontSize: '2rem', color: '#fff', margin: '0 0 1rem 0' }}>
+            {page.title}
+          </h1>
+          {page.summary && (
+            <div style={{
+              padding: '1rem',
+              background: 'rgba(0, 240, 255, 0.05)',
+              borderLeft: '4px solid var(--primary-neon)',
+              borderRadius: '0 8px 8px 0',
+              color: 'var(--text-muted)',
+              fontSize: '0.9rem',
+              marginBottom: '1.5rem'
+            }}>
+              {page.summary}
+            </div>
+          )}
+          {renderMarkdownContent(page.content)}
+        </div>
+      );
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', textAlign: 'center' }}>
+        <BookOpen size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
+        <p>Select a wiki page from the sidebar, or generate wiki documentation for this project.</p>
       </div>
     );
   };
@@ -673,39 +724,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
           display: 'flex',
           flexDirection: 'column'
         }}>
-          {loadingPage ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '8px', color: 'var(--primary-neon)' }}>
-              <Loader2 size={24} className="animate-spin" /> Loading document...
-            </div>
-          ) : page ? (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem', color: 'var(--primary-neon)', fontSize: '0.85rem' }}>
-                <FileText size={16} /> {page.path}
-              </div>
-              <h1 className="tech-font" style={{ fontSize: '2rem', color: '#fff', margin: '0 0 1rem 0' }}>
-                {page.title}
-              </h1>
-              {page.summary && (
-                <div style={{
-                  padding: '1rem',
-                  background: 'rgba(0, 240, 255, 0.05)',
-                  borderLeft: '4px solid var(--primary-neon)',
-                  borderRadius: '0 8px 8px 0',
-                  color: 'var(--text-muted)',
-                  fontSize: '0.9rem',
-                  marginBottom: '1.5rem'
-                }}>
-                  {page.summary}
-                </div>
-              )}
-              {renderMarkdownContent(page.content)}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', textAlign: 'center' }}>
-              <BookOpen size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-              <p>Select a wiki page from the sidebar, or generate wiki documentation for this project.</p>
-            </div>
-          )}
+          {renderPageReaderContent()}
         </div>
 
         {/* Right Sidebar: Wiki Interactive Q&A Drawer */}
@@ -731,9 +750,9 @@ export const WikiView: React.FC<WikiViewProps> = ({
                 Ask anything about the architecture, services, or endpoints in <strong>{currentProject}</strong>.
               </div>
             ) : (
-              chatHistory.map((msg, i) => (
+              chatHistory.map((msg) => (
                 <div
-                  key={i}
+                  key={msg.id}
                   style={{
                     alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
                     maxWidth: '90%',

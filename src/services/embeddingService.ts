@@ -49,7 +49,7 @@ const DEFAULT_MODELS = [
 
 // Mistral rejects `output_dimension` on the mistral-embed family (400 code 3051)
 // but requires it on codestral-embed* to down-project from 1536 to 1024.
-const MISTRAL_SUPPORTS_OUTPUT_DIMENSION = /^codestral-embed/;
+const MISTRAL_OUTPUT_DIMENSION_PREFIX = "codestral-embed";
 
 // Statuses where the key — not the model — is the problem, so retrying the same
 // model with the next key is worthwhile.
@@ -165,7 +165,7 @@ function buildBody(
   if (spec.provider === "mistral") {
     // Mistral has no input_type/encoding_format/truncate fields.
     const body: Record<string, unknown> = { model: spec.model, input };
-    if (MISTRAL_SUPPORTS_OUTPUT_DIMENSION.test(spec.model)) {
+    if (spec.model.startsWith(MISTRAL_OUTPUT_DIMENSION_PREFIX)) {
       body.output_dimension = dim;
     }
     return body;

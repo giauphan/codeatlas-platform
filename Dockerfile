@@ -33,16 +33,14 @@ RUN pnpm prune --prod
 # ─── Runtime stage ─────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS runtime
 
-# Create non-root user (UID/GID 10001)
+# Create non-root user (UID/GID 10001) and install tini for PID 1 signal handling
 RUN groupadd --system --gid 10001 codeatlas \
- && useradd  --system --uid 10001 --gid codeatlas --create-home --home-dir /home/codeatlas codeatlas # NOSONAR
-
-# Install tini for PID 1 signal handling
-RUN apt-get update \
+ && useradd  --system --uid 10001 --gid codeatlas --create-home --home-dir /home/codeatlas codeatlas \
+ && apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates \
       tini \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* # NOSONAR
 
 ENV NODE_ENV=production
 ENV PORT=3381

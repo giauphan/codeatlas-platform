@@ -233,11 +233,11 @@ interface CachedAuthEntry {
  * Use case: Validating client API keys
  */
 export class AuthenticateUserUseCase {
-  private authCache = new Map<string, CachedAuthEntry>();
+  private readonly authCache = new Map<string, CachedAuthEntry>();
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-  private adminFallbackTtl: number;
+  private readonly adminFallbackTtl: number;
 
-  constructor(private authRepo: IAuthRepository, adminFallbackTtlMs: number = 5 * 60 * 1000) {
+  constructor(private readonly authRepo: IAuthRepository, adminFallbackTtlMs: number = 5 * 60 * 1000) {
     this.adminFallbackTtl = adminFallbackTtlMs;
   }
 
@@ -304,7 +304,7 @@ export class AuthenticateUserUseCase {
  * Use case: Recording user telemetry and requests
  */
 export class LogTelemetryUseCase {
-  constructor(private activityLogger: IActivityLogger) {}
+  constructor(private readonly activityLogger: IActivityLogger) {}
 
   async execute(uid: string, keyId: string, tool: string, params: ActivityParams, success: boolean): Promise<void> {
     await this.activityLogger.logActivity(uid, keyId, tool, params, success);

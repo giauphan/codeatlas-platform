@@ -313,9 +313,7 @@ async function main() {
   }
 
   // 4. Save cache
-  cache.processedSessions = Array.from(processed).sort((a, b) =>
-    a < b ? -1 : a > b ? 1 : 0,
-  );
+  cache.processedSessions = Array.from(processed).sort((a, b) => a.localeCompare(b));
   writeCache(cache);
 
   console.log(`\n${"=".repeat(60)}`);
@@ -324,7 +322,9 @@ async function main() {
   console.log(`${"=".repeat(60)}`);
 }
 
-main().catch((err) => {
+try {
+  await main();
+} catch (err) {
   console.error("[ClaudeDreams] Fatal:", err);
   process.exit(1);
-});
+}

@@ -146,12 +146,28 @@ test('configured checkpoint extraction meets the approved semantic quality and p
       if (!fixture) return;
       const memories = await extractStructuredMemories(fixture.sourceEvents.map(event => ({ ...event })), { checkpoint: true, generate: async prompt => { // NOSONAR
         promptInputs.push(prompt);
-        for (let attempt = 0; attempt < 2; attempt++) {
+        const invokeAttempt = async (attempt: number): Promise<string> => {
           providerCalls++;
-          try { const result = await generate(prompt); if (attempt) recoveredRequests++; return result; }
-          catch { if (attempt === 0) { await new Promise(resolve => setTimeout(resolve, 1000)); continue; } } // NOSONAR
+          try {
+            const result = await generate(prompt);
+            if (attempt > 0) {
+              recoveredRequests++;
+            }
+            return result;
+          } catch (err) {
+            if (attempt === 0) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              return invokeAttempt(1);
+            }
+            throw err;
+          }
+        };
+        try {
+          return await invokeAttempt(0);
+        } catch {
+          providerErrors++;
+          throw new Error('Configured provider unavailable');
         }
-        providerErrors++; throw new Error('Configured provider unavailable');
       } });
       candidates.set(fixture.id, memories);
     }

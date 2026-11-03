@@ -109,34 +109,33 @@ const IDE_DIR_CACHE_MAX_SIZE = 1000;
 // TTL ensures entries that haven't been accessed for 60s expire
 const CACHE_TTL_MS = 60000;
 
-function detectSystemIdeDirectory(absPath: string): boolean {
-  let isIde = false;
+function hasIdeApplicationResources(absPath: string): boolean {
+  const extPath = path.join(absPath, "resources", "app", "extensions");
+  const relExt = path.relative(absPath, extPath);
+  const vsPath = path.join(absPath, "resources", "app", "out", "vs");
+  const relVs = path.relative(absPath, vsPath);
+  return (
+    (!relExt.startsWith("..") && !path.isAbsolute(relExt) && fs.existsSync(extPath)) ||
+    (!relVs.startsWith("..") && !path.isAbsolute(relVs) && fs.existsSync(vsPath))
+  );
+}
 
+function detectSystemIdeDirectory(absPath: string): boolean {
   if (absPath === "/config/Downloads/Antigravity" || absPath.startsWith("/config/Downloads/Antigravity/")) {
-    isIde = true;
-  } else if (absPath === cachedDynamicAntigravityPath || absPath.startsWith(cachedDynamicAntigravityPath + path.sep)) {
-    isIde = true;
-  } else if (absPath === cachedHomeDir || absPath === "/" || absPath === "/config") {
-    isIde = true;
-  } else {
-    const parts = absPath.split(path.sep);
-    if (parts.some(part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas' && part !== '.claude')) {
-      isIde = true;
-    } else if (
-      (() => {
-        const extPath = path.join(absPath, "resources", "app", "extensions");
-        const relExt = path.relative(absPath, extPath);
-        const vsPath = path.join(absPath, "resources", "app", "out", "vs");
-        const relVs = path.relative(absPath, vsPath);
-        return (!relExt.startsWith("..") && !path.isAbsolute(relExt) && fs.existsSync(extPath)) ||
-               (!relVs.startsWith("..") && !path.isAbsolute(relVs) && fs.existsSync(vsPath));
-      })()
-    ) {
-      isIde = true;
-    }
+    return true;
+  }
+  if (absPath === cachedDynamicAntigravityPath || absPath.startsWith(cachedDynamicAntigravityPath + path.sep)) {
+    return true;
+  }
+  if (absPath === cachedHomeDir || absPath === "/" || absPath === "/config") {
+    return true;
   }
 
-  return isIde;
+  const parts = absPath.split(path.sep);
+  const hasHiddenDirectory = parts.some(
+    part => part.startsWith('.') && !part.startsWith('..') && part !== '.codeatlas' && part !== '.claude'
+  );
+  return hasHiddenDirectory || hasIdeApplicationResources(absPath);
 }
 
 export function isSystemIdeDirectory(dir: string): boolean {

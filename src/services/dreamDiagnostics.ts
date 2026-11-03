@@ -74,7 +74,7 @@ export const DreamDiagnostics = {
     if (status === 'empty') counters.retrieval_empty += 1;
     else if (status === 'no_match') counters.retrieval_no_match += 1;
     else if (status === 'filtered') counters.retrieval_filtered += 1;
-    else if (/_error$/.test(status)) counters.retrieval_error += 1;
+    else if (status.endsWith('_error')) counters.retrieval_error += 1;
   },
 
   recordFailure(): void {

@@ -2,7 +2,7 @@
 
 # Check if tenant ID is provided
 if [[ -z "$1" ]]; then
-  echo "❌ Error: Please provide a Tenant ID (Firebase User UID)."
+  echo "❌ Error: Please provide a Tenant ID (Firebase User UID)." >&2
   echo "Usage: ./link_projects.sh <tenant_id> [project_name_1] [project_name_2] ..."
   echo "Example: ./link_projects.sh tenant_user_1 shopee-deal-sweeper gemini-openai-proxy"
   exit 1
@@ -35,7 +35,7 @@ for PROJECT_NAME in "$@"; do
   DEST_PATH="$USER_DIR/$PROJECT_NAME"
   
   if [[ ! -d "$SRC_PATH" ]]; then
-    echo "❌ Error: Project directory not found at $SRC_PATH"
+    echo "❌ Error: Project directory not found at $SRC_PATH" >&2
     continue
   fi
   

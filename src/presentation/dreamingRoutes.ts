@@ -32,6 +32,25 @@ function executionAuth(tenantId: unknown) {
   return { ...auth, uid: tenantId };
 }
 
+function parseSchedulerRunFence(
+  jobKey: unknown,
+  ownerToken: unknown,
+  fencingToken: unknown
+): { jobKey: string; ownerToken: string; fencingToken: number } | undefined | null {
+  const hasFence = jobKey !== undefined || ownerToken !== undefined || fencingToken !== undefined;
+  if (!hasFence) {
+    return undefined;
+  }
+  const isValid =
+    typeof jobKey === 'string' &&
+    /^[a-f0-9]{64}$/.test(jobKey) &&
+    typeof ownerToken === 'string' &&
+    /^[a-f0-9-]{36}$/.test(ownerToken) &&
+    Number.isSafeInteger(fencingToken) &&
+    Number(fencingToken) > 0;
+  return isValid ? { jobKey, ownerToken, fencingToken: Number(fencingToken) } : null;
+}
+
 /** Extract auth from request headers — API key or Firebase Bearer token. */
 function extractAuth(req: express.Request) {
   const apiKey = req.headers["x-api-key"] as string | undefined;
@@ -506,10 +525,7 @@ export function registerDreamingRoutes(app: express.Application): void {
           (body.limit !== undefined && (!Number.isSafeInteger(body.limit) || Number(body.limit) < 1 || Number(body.limit) > 500))) {
         return res.status(400).json({ success: false, error: 'Invalid reconciliation scope or limit' });
       }
-      const hasFence = body.job_key !== undefined || body.owner_token !== undefined || body.fencing_token !== undefined;
-      const runFence = !hasFence ? undefined : typeof body.job_key === 'string' && /^[a-f0-9]{64}$/.test(body.job_key) &&
-        typeof body.owner_token === 'string' && /^[a-f0-9-]{36}$/.test(body.owner_token) && Number.isSafeInteger(body.fencing_token) && Number(body.fencing_token) > 0
-        ? { jobKey: body.job_key, ownerToken: body.owner_token, fencingToken: Number(body.fencing_token) } : null;
+      const runFence = parseSchedulerRunFence(body.job_key, body.owner_token, body.fencing_token);
       if (runFence === null) return res.status(400).json({ success: false, error: 'Invalid scheduler lease fence' });
       const result = await authStorage.run(auth, () => DreamPipelineService.reconcilePendingIngests({
         projectId: typeof projectId === 'string' && projectId ? projectId : undefined,
@@ -542,14 +558,7 @@ export function registerDreamingRoutes(app: express.Application): void {
         return res.status(400).json({ success: false, error: "Invalid canonical project scope" });
       }
 
-      const hasFence = job_key !== undefined || owner_token !== undefined || fencing_token !== undefined;
-      const runFence = !hasFence
-        ? undefined
-        : typeof job_key === "string" && /^[a-f0-9]{64}$/.test(job_key)
-          && typeof owner_token === "string" && /^[a-f0-9-]{36}$/.test(owner_token)
-          && Number.isSafeInteger(fencing_token) && (fencing_token as number) > 0
-          ? { jobKey: job_key, ownerToken: owner_token, fencingToken: fencing_token as number }
-          : null;
+      const runFence = parseSchedulerRunFence(job_key, owner_token, fencing_token);
       if (runFence === null) return res.status(400).json({ success: false, error: "Invalid scheduler lease fence" });
 
       await logActivity(auth, "generate_daily_dreams", { project, provider });

@@ -40,9 +40,15 @@ function preferenceTopic(memory: StructuredMemory): string | null {
   const match = /\bfor\s+([^.!?\n]+)|(?:cho|về)\s+([^.!?\n]+)/iu.exec(memory.content);
   return match ? `${memory.kind}:${(match[1] || match[2]).normalize('NFC').toLowerCase().trim()}` : null;
 }
+const EXPLICIT_CHANGE_REGEXES = [
+  /\b(?:now prefer|now want|updated decision|instead of|no longer)\b/iu,
+  /\bchanged? (?:my|our|the) (?:preference|decision)\b/iu,
+  /(?:bây giờ|đổi quyết định|thay đổi|thay vì|không còn)/iu,
+];
+
 function isExplicitChange(memory: StructuredMemory, event: PendingCaptureEvent): boolean {
   return event.actorRole === 'USER' && memory.certainty === 'explicit' &&
-    /\b(now prefer|now want|changed? (?:my|our|the) (?:preference|decision)|updated decision|instead of|no longer)\b|(?:bây giờ|đổi quyết định|thay đổi|thay vì|không còn)/iu.test(memory.content);
+    EXPLICIT_CHANGE_REGEXES.some((re) => re.test(memory.content));
 }
 
 function validateSupersedes(value: unknown, sourceEvents: ExtractionSourceEvent[]): NonNullable<StructuredMemory['supersedes']> | null {

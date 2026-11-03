@@ -44,7 +44,7 @@ export function mountConsolidationRoutes(app: express.Application): void {
         return;
       }
 
-      const { initAdapter, setSessionContext } = await import("../database/connection.js");
+      const { initAdapter } = await import("../database/connection.js");
       const { generateEmbedding } = await import("../services/embeddingService.js");
       const { buildInClause } = await import("../database/utils.js");
 
@@ -55,7 +55,6 @@ export function mountConsolidationRoutes(app: express.Application): void {
       }
 
       const { authStorage } = await import("../utils/context.js");
-      const auth = authStorage.getStore();
       const tenantId = authStorage.getStore()!.uid;
 
       const adapter = await initAdapter();

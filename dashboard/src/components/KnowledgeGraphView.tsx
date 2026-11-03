@@ -38,7 +38,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   analysis, projects, selectedProjectDir,
   onProjectChange, onDeleteProject
 }) => {
-  const [hoveredNode, setHoveredNode] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState(['module', 'function', 'class', 'variable']);
@@ -204,7 +203,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             searchQuery={searchQuery} // Pass searchQuery
             activeFilters={activeFilters}
             typeColors={typeColors}
-            onNodeHover={(n) => setHoveredNode(n)}
+            onNodeHover={() => {}}
             onNodeClick={(n) => setSelectedNode(n)}
             isFullscreen={isFullscreen}
           />

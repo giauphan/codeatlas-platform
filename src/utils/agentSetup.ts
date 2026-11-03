@@ -5,7 +5,7 @@ import { loadContextAtSessionStart } from '../services/llmService.js';
  * Returns confirmation text for the configured agent.
  */
 export async function setupAgentCommand(agent: string): Promise<string> {
-  const loaded = await loadContextAtSessionStart('session', '', 'command-setup');
+  await loadContextAtSessionStart('session', '', 'command-setup');
 
   if (agent === 'claude') {
     return `Claude command setup complete`;

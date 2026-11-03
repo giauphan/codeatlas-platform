@@ -143,7 +143,7 @@ function safeStats(result: DreamJobResult | Record<string, number>): string {
 
 function safeError(reason: string): string {
   return reason
-    .replace(/(?:sk-[A-Za-z0-9_-]{12,}|Bearer\s+\S+|x-api-key[=: ]+\S+)/gi, "[redacted]")
+    .replace(/(?:sk-[A-Za-z0-9_-]{12,}|Bearer\s+\S+|x-api-key[:= ]+\S+)/gi, "[redacted]")
     .replace(/[\r\n\t]+/g, " ")
     .slice(0, 500);
 }

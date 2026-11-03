@@ -41,6 +41,25 @@ function resolveEntityFilePath(projectDir: string, filePath?: string | null): st
   return path.isAbsolute(filePath) ? filePath : path.resolve(projectDir, filePath);
 }
 
+/** Truncate large text — appends truncation notice for oversized JSON */
+function truncateJson(data: unknown, maxLen = 10_000): string {
+  const s = JSON.stringify(data, null, 2);
+  if (s.length <= maxLen) return s;
+  return s.slice(0, maxLen) + `\n... [truncated ${s.length - maxLen} more chars — not valid JSON]`;
+}
+
+/** Helper: wrap async handler with consistent error response */
+function mcpHandler<T>(fn: (args: T) => Promise<{ content: { type: "text"; text: string }[]; isError?: boolean; _meta?: Record<string, unknown> }>) {
+  return async (args: T) => {
+    try {
+      return await fn(args);
+    } catch (err) {
+      logger.error(`mcpHandler error: ${err instanceof Error ? err.message : String(err)}`);
+      return { content: [{ type: "text" as const, text: `Server error processing request` }], isError: true as const };
+    }
+  };
+}
+
 /**
  * Processes an array of GraphNodes in a single pass and returns the counts
  * for the requested node types as an object indexed by those types.
@@ -1034,12 +1053,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
         syncError = sync.error;
         businessRuleSaved = sync.businessRuleSaved;
         changeDescriptionSaved = sync.changeDescriptionSaved;
+      } else if (businessRule || changeDescription) {
+        syncError = "Sync skipped (enableEnterpriseSync is false), cannot save episodic memory.";
       } else {
-        if (businessRule || changeDescription) {
-          syncError = "Sync skipped (enableEnterpriseSync is false), cannot save episodic memory.";
-        } else {
-          syncSuccess = true; // No episodic memory requested, so no-op is successful
-        }
+        syncSuccess = true; // No episodic memory requested, so no-op is successful
       }
 
       const result = {
@@ -1710,27 +1727,6 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
   });
   a2a("sync_skills", "Auto-sync Hermes AI skills into CodeAtlas Genome.", []);
 
-
-
-  /** Truncate large text — appends truncation notice for oversized JSON */
-  function truncateJson(data: unknown, maxLen = 10_000): string {
-    const s = JSON.stringify(data, null, 2);
-    if (s.length <= maxLen) return s;
-    return s.slice(0, maxLen) + `\n... [truncated ${s.length - maxLen} more chars — not valid JSON]`;
-  }
-
-  /** Helper: wrap async handler with consistent error response */
-  function mcpHandler<T>(fn: (args: T) => Promise<{ content: { type: "text"; text: string }[]; isError?: boolean; _meta?: Record<string, unknown> }>) {
-    return async (args: T) => {
-      try {
-        return await fn(args);
-      } catch (err) {
-        logger.error(`mcpHandler error: ${err instanceof Error ? err.message : String(err)}`);
-        return { content: [{ type: "text" as const, text: `Server error processing request` }], isError: true as const };
-      }
-    };
-  }
-
   // ── Phase 1-2 Tools: Memory, Second Brain, Consolidation ──
 
   server.tool(
@@ -1896,9 +1892,10 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           return { content: [{ type: "text" as const, text: `No skills found for "${query}".` }] };
         }
         const list = filtered
-          .map((g, i) =>
-            `${i + 1}. **${g.name}** — ${g.description} (v${g.version})${(g.dependencies || []).length ? ` - Tags: ${g.dependencies!.join(", ")}` : ""}`
-          )
+          .map((g, i) => {
+            const tagsSuffix = (g.dependencies || []).length ? ` - Tags: ${g.dependencies!.join(", ")}` : "";
+            return `${i + 1}. **${g.name}** — ${g.description} (v${g.version})${tagsSuffix}`;
+          })
           .join("\n");
         return { content: [{ type: "text" as const, text: `Found ${filtered.length} skill(s):\n\n${list}` }] };
       } catch (err) {
@@ -1972,7 +1969,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
           resetMemory();
         }
         
-        const result = await loadMemoryManually(project);
+        await loadMemoryManually(project);
         const status = getMemoryStatus();
         
         return { content: [{

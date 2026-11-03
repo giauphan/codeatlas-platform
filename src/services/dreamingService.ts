@@ -325,12 +325,15 @@ export class DreamingService {
     memoryType: DreamMemoryType,
     content: string,
     importance: number,
-    aiModel?: string,
-    scope?: string,
-    tags?: string[],
-    relatedIds?: string[],
-    idempotencyKey?: string
+    ...optionalArgs: [
+      aiModel?: string,
+      scope?: string,
+      tags?: string[],
+      relatedIds?: string[],
+      idempotencyKey?: string,
+    ]
   ): Promise<string> {
+    const [aiModel, scope, tags, relatedIds, idempotencyKey] = optionalArgs;
     const result = await DreamingService.saveDreamMemoryWithAck({
       project,
       sessionId,
@@ -603,44 +606,50 @@ export class DreamingService {
    * against stored embeddings, returning the top relevant memories.
    */
   static async queryDreamMemories(
-    project: string = '',
+    project: string | undefined,
     queryText: string,
     limit: number = 10,
     offset: number = 0,
-    memoryType?: string,
-    provider?: string,
-    startDate?: Date,
-    endDate?: Date,
-    scope?: string,
-    tags?: string[],
-    projectId?: string,
+    ...optionalFilters: [
+      memoryType?: string,
+      provider?: string,
+      startDate?: Date,
+      endDate?: Date,
+      scope?: string,
+      tags?: string[],
+      projectId?: string,
+    ]
   ) {
     return (await DreamingService.queryDreamMemoriesWithStatus(
-      project, queryText, limit, offset, memoryType, provider, startDate, endDate, scope, tags, projectId,
+      project, queryText, limit, offset, ...optionalFilters,
     )).memories;
   }
 
   static async queryDreamMemoriesWithStatus(
-    project: string = '',
+    project: string | undefined,
     queryText: string,
     limit: number = 10,
     offset: number = 0,
-    memoryType?: string,
-    provider?: string,
-    startDate?: Date,
-    endDate?: Date,
-    scope?: string,
-    tags?: string[],
-    projectId?: string,
-    displayName?: string,
-    workspacePath?: string,
+    ...optionalFilters: [
+      memoryType?: string,
+      provider?: string,
+      startDate?: Date,
+      endDate?: Date,
+      scope?: string,
+      tags?: string[],
+      projectId?: string,
+      displayName?: string,
+      workspacePath?: string,
+    ]
   ) {
+    const [memoryType, provider, startDate, endDate, scope, tags, projectId] = optionalFilters;
+    const normalizedProject = project ?? '';
     queryText = redactMemoryText(queryText);
     const queryVector = await DreamingService.createQueryEmbedding(queryText);
     const tenantId = authStorage.getStore()!.uid;
     const db = createDatabaseAdapter();
     const aliases = projectId ? await DreamProjectIdentityService.getAliases(projectId) : [];
-    const filters = DreamingService.buildDreamQueryFilters({ tenantId, project, projectId, aliases, provider, startDate, endDate, scope, tags, memoryType });
+    const filters = DreamingService.buildDreamQueryFilters({ tenantId, project: normalizedProject, projectId, aliases, provider, startDate, endDate, scope, tags, memoryType });
     const vectorResult = await DreamingService.searchDreamVectors(db, queryVector, filters.filters, filters.binds, tenantId, limit + offset);
     const effectiveVector = vectorResult ? queryVector : null;
     DreamingService.addRetrievalTerms(filters, queryText, vectorResult?.ids ?? []);
@@ -689,12 +698,14 @@ export class DreamingService {
       binds.scopeLike = `${scope}/%`;
     }
     if (tags?.length) {
-      filters.push(`(${tags.map((_, index) => `tags LIKE :tagLike${index}`).join(" OR ")})`);
+      const tagConditions = tags.map((_, index) => `tags LIKE :tagLike${index}`).join(" OR ");
+      filters.push(`(${tagConditions})`);
       tags.forEach((tag, index) => { binds[`tagLike${index}`] = `%"${tag}"%`; });
     }
     const types = memoryType?.split(",").map((type) => type.trim().toUpperCase()).filter(Boolean) ?? [];
     if (types.length) {
-      filters.push(`memory_type IN (${types.map((_, index) => `:memoryType${index}`).join(", ")})`);
+      const typePlaceholders = types.map((_, index) => `:memoryType${index}`).join(", ");
+      filters.push(`memory_type IN (${typePlaceholders})`);
       types.forEach((type, index) => { binds[`memoryType${index}`] = type; });
     }
     filters.push("(status IS NULL OR status = 'active')");

@@ -22,9 +22,9 @@ import { logger } from "../../utils/logger.js";
 
 export class A2AExecutor {
   /** In-memory task store */
-  private tasks = new Map<string, Task>();
+  private readonly tasks = new Map<string, Task>();
   /** MCP tool dispatch map */
-  private toolHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>();
+  private readonly toolHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>();
 
   /**
    * Register an MCP tool handler so A2A can call it by name.

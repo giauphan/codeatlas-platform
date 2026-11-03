@@ -17,7 +17,9 @@ async function run(): Promise<void> {
   }
 }
 
-run().catch((err: unknown) => {
+try {
+  await run();
+} catch (err: unknown) {
   console.error("❌ Database initialization failed:", err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
-});
+}
