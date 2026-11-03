@@ -309,7 +309,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
     if (!queryInput.trim() || isQuerying || !currentProject) return;
 
     const userText = queryInput.trim();
-    const msgIdBase = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const msgIdBase = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${chatHistory.length}`;
     setChatHistory(prev => [...prev, { id: `user-${msgIdBase}`, role: 'user', text: userText }]);
     setQueryInput('');
     setIsQuerying(true);

@@ -7,15 +7,15 @@ import { extractStructuredMemoriesFromTranscript, redactMemoryText, STRUCTURED_E
 
 const LEGACY_KNOWLEDGE_KEYWORDS = [
   "code", "function", "class", "module", "api", "method", "pattern", "approach",
-  "architectur", "solution", "implement", "use\\s", "because", "reason", "cause",
+  "architectur", "solution", "implement", String.raw`use\s`, "because", "reason", "cause",
   "root", "fix", "change", "config", "deploy", "error", "issue", "problem",
   "prefer", "better", "worse", "instead", "recommend", "learn", "found", "discover",
-  "notice", "understand", "see\\s", "need", "should", "must", "require", "support",
+  "notice", "understand", String.raw`see\s`, "need", "should", "must", "require", "support",
   "handle", "process", "manag", "build", "create", "design", "structur", "dependenc",
   "interface", "service", "component", "system", "framework", "library", "database",
   "query", "request", "response", "endpoint", "route", "middleware", "schema",
   "migrat", "test", "version", "releas", "update", "optimize", "refactor",
-].map((kw) => new RegExp(`\\b${kw}\\b`, "i"));
+].map((kw) => new RegExp(String.raw`\b${kw}\b`, "i"));
 
 function hasLegacyKnowledgeKeyword(sl: string): boolean {
   return LEGACY_KNOWLEDGE_KEYWORDS.some((re) => re.test(sl));

@@ -24,12 +24,20 @@ function syntheticRedactionOnly(text: string): boolean {
   });
 }
 
-const REVIEW_PROMISE_PREFIX_RE = /^(?:(?:thanks|thank you)[,.!\s]*)*(?:i'll|i will|we'll|we will)\s+(?:review|look over|look at|check|read)\b/iu;
-const REVIEW_PROMISE_TIMING_RE = /\b(?:tomorrow|later|next week|next month|when i can|when we can)\b[.!?\s]*$/iu;
+const REVIEW_PROMISE_PREFIX_RE = /^(?:(?:thanks|thank you)[,.!\s]{1,4}){0,2}(?:i'll|i will|we'll|we will)\s+(?:review|look over|look at|check|read)\b/iu;
+const REVIEW_PROMISE_TIMING_RE = /\b(?:tomorrow|later|next week|next month|when i can|when we can)\b[.!?\s]{0,4}$/iu;
+
+function stripTrailingPunctuationAndSpace(value: string): string {
+  let end = value.length;
+  while (end > 0 && '.!? \t\r\n'.includes(value[end - 1])) {
+    end--;
+  }
+  return value.slice(0, end);
+}
 
 function reviewPromise(text: string): boolean {
-  const trimmed = text.trim().replace(/[.!?\s]+$/u, '');
-  const withoutPrefix = trimmed.replace(/^(?:(?:thanks|thank you)[,.!\s]*)+/iu, '');
+  const trimmed = stripTrailingPunctuationAndSpace(text.trim());
+  const withoutPrefix = trimmed.replace(/^(?:(?:thanks|thank you)[,.!\s]{1,4})+/iu, '');
   return !/[.!?]/u.test(withoutPrefix) && REVIEW_PROMISE_PREFIX_RE.test(trimmed) && REVIEW_PROMISE_TIMING_RE.test(text.trim());
 }
 
@@ -77,14 +85,18 @@ const WORKFLOW_TOPIC_PATTERNS = [
   /(?:ghi chú commit|bước tái hiện|hướng dẫn chạy thử|ví dụ|đánh giá|ghi chú bàn giao|tên nhánh|kho mã)/iu,
 ];
 
-const WORKFLOW_CLAUSE_EN_RE = /\b(?:when|if|for|while|in)\b[^.!?]{0,140}\b(?:you|i|we|suggest|propose|write|show|showing|local|repro|review|example|examples|guide|step|steps|repository|repo|command|commands|typescript|javascript|node|test runner|package manager|workflow)\b/iu;
+const WORKFLOW_CLAUSE_EN_PATTERNS = [
+  /\b(?:when|if|for|while|in)\b[^.!?]{0,140}\b(?:you|i|we|suggest|propose|write|show|showing|local|repro|review)\b/iu,
+  /\b(?:when|if|for|while|in)\b[^.!?]{0,140}\b(?:example|examples|guide|step|steps|repository|repo|command|commands)\b/iu,
+  /\b(?:when|if|for|while|in)\b[^.!?]{0,140}\b(?:typescript|javascript|node|test runner|package manager|workflow)\b/iu,
+];
 const WORKFLOW_CLAUSE_VI_RE = /(?:khi|nếu|với|trong)[^.!?]{0,140}(?:hãy|nên|muốn|thích|giả sử|dùng|nêu|ghi|đề xuất|ví dụ|hướng dẫn|kho mã)/iu;
 
 export function workflowPreference(text: string): boolean {
   const workflowTopic = containsAny(text, WORKFLOW_TOPIC_PATTERNS);
   if (!workflowTopic) return false;
   return (
-    WORKFLOW_CLAUSE_EN_RE.test(text) ||
+    containsAny(text, WORKFLOW_CLAUSE_EN_PATTERNS) ||
     WORKFLOW_CLAUSE_VI_RE.test(text) ||
     /^(?:please\s+)?(?:keep|use|prefer|run|write|show|choose)\b/iu.test(text)
   );
@@ -155,13 +167,17 @@ const NEXT_ACTION_SKIP_RE = /^(?:the )?next(?: step| task) is\b|^(?:việc|bư�
 const NEXT_ACTION_PREFIX_EN_RE = /^(?:(?:next(?:,| step)?|please|now|first|can you|could you|let['’]s|let us)\s+)?/iu;
 const NEXT_ACTION_VERB_EN_RE = /^(?:add|write|run|check|test|review|inspect|measure|verify|investigate|implement|update|change|fix|remove|confirm|compare|validate|try|rerun)\b/iu;
 const NEXT_ACTION_PREFIX_VI_RE = /^(?:(?:(?:bước tiếp theo|việc tiếp theo|tiếp theo)(?: là|,| bước)?|vui lòng|bây giờ|trước tiên|hãy)\s+)?/iu;
-const NEXT_ACTION_VERB_VI_RE = /^(?:thêm|bổ sung|viết|chạy|kiểm tra|xem xét|đo|xác minh|điều tra|triển khai|cập nhật|thay đổi|sửa|xóa|xác nhận|so sánh|kiểm chứng|thử|chạy lại)(?=\s|$)/iu;
+const NEXT_ACTION_VERB_VI_PATTERNS = [
+  /^(?:thêm|bổ sung|viết|chạy|kiểm tra|xem xét|đo|xác minh|điều tra|triển khai)(?=\s|$)/iu,
+  /^(?:cập nhật|thay đổi|sửa|xóa|xác nhận|so sánh|kiểm chứng|thử|chạy lại)(?=\s|$)/iu,
+];
 
 export function explicitNextAction(text: string): boolean {
   const trimmed = text.trim();
   if (NEXT_ACTION_SKIP_RE.test(trimmed)) return false;
   const enVerb = NEXT_ACTION_VERB_EN_RE.test(trimmed.replace(NEXT_ACTION_PREFIX_EN_RE, ''));
-  const viVerb = NEXT_ACTION_VERB_VI_RE.test(trimmed.replace(NEXT_ACTION_PREFIX_VI_RE, ''));
+  const viBody = trimmed.replace(NEXT_ACTION_PREFIX_VI_RE, '');
+  const viVerb = containsAny(viBody, NEXT_ACTION_VERB_VI_PATTERNS);
   return enVerb || viVerb;
 }
 
@@ -174,14 +190,23 @@ const REPORTED_PROGRESS_ACTOR_EN_RE = /^(?:i|we|the team|our team)\s+(?:(?:have|
 const REPORTED_PROGRESS_VERB_EN_RE = /^(?:implemented|configured|migrated|updated|enabled|disabled|modified|refactored|rolled out|added|removed|changed|replaced|fixed|finished|completed)\b/iu;
 const REPORTED_PROGRESS_ACTOR_VI_RE = /^(?:tôi|chúng tôi|nhóm)\s+(?:đã\s+)?/iu;
 const REPORTED_PROGRESS_VERB_VI_RE = /^(?:triển khai|cấu hình|di chuyển|cập nhật|bật|tắt|thêm|xóa|đổi|sửa|hoàn tất|hoàn thành|đã xong)\b/iu;
-const REPORTED_STATE_EN_SPLIT_RE = /\s+(?:now|currently|already)\s+(?:supports|support|accepts|accept|validates|validate|returns|return|handles|handle|routes|route|stores|store|uses|use|includes|include|allows|allow)\b/iu;
-const REPORTED_STATE_VI_SPLIT_RE = /\s+(?:hiện|đã)\s+(?:hỗ trợ|chấp nhận|kiểm tra|trả về|xử lý|lưu|đọc|ghi)\b/iu;
+const REPORTED_STATE_EN_SPLIT_PATTERNS = [
+  /\b(?:now|currently|already)\s+(?:supports|support|accepts|accept|validates|validate|returns|return|handles|handle)\b/iu,
+  /\b(?:now|currently|already)\s+(?:routes|route|stores|store|uses|use|includes|include|allows|allow)\b/iu,
+];
+const REPORTED_STATE_VI_SPLIT_PATTERNS = [
+  /(?<=^|\s)(?:hiện|đã)\s+(?:hỗ trợ|chấp nhận|kiểm tra|trả về|xử lý|lưu|đọc|ghi)(?=\s|$|[.!?;,])/iu,
+];
 const VALID_SUBJECT_RE = /^(?:the\s+|phần\s+)?[\p{L}\p{N}_-]+(?:\s+[\p{L}\p{N}_-]+){0,9}$/iu;
 
-function hasReportedSubjectVerbState(trimmed: string, splitRe: RegExp): boolean {
-  const match = splitRe.exec(trimmed);
-  if (!match || match.index <= 0) return false;
-  return VALID_SUBJECT_RE.test(trimmed.slice(0, match.index));
+function hasReportedSubjectVerbState(trimmed: string, splitPatterns: RegExp[]): boolean {
+  for (const splitRe of splitPatterns) {
+    const match = splitRe.exec(trimmed);
+    if (match && match.index > 0 && VALID_SUBJECT_RE.test(trimmed.slice(0, match.index).trim())) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function reportedImplementationProgress(text: string): boolean {
@@ -195,14 +220,17 @@ export function reportedImplementationProgress(text: string): boolean {
   return (
     enActorProgress ||
     viActorProgress ||
-    hasReportedSubjectVerbState(trimmed, REPORTED_STATE_EN_SPLIT_RE) ||
-    hasReportedSubjectVerbState(trimmed, REPORTED_STATE_VI_SPLIT_RE)
+    hasReportedSubjectVerbState(trimmed, REPORTED_STATE_EN_SPLIT_PATTERNS) ||
+    hasReportedSubjectVerbState(trimmed, REPORTED_STATE_VI_SPLIT_PATTERNS)
   );
 }
 
 const DIRECT_BEHAVIOR_CLAUSE_PREFIX_EN_RE = /^(?:(?:for|during|in|when|if)\s+[^,;]{1,110}[,;]\s*)?/iu;
 const DIRECT_BEHAVIOR_MODAL_PREFIX_EN_RE = /^(?:(?:let['’]s|let us|we should|we will|we must|we need to)\s+)?(?:please\s+)?/iu;
-const DIRECT_BEHAVIOR_VERB_EN_RE = /^(?:do not|don't|never|keep|use|choose|select|avoid|ensure|allow|configure|set|store|route|make|retry|require|only|move|leave|stop|send|retain|publish|run)\b/iu;
+const DIRECT_BEHAVIOR_VERB_EN_PATTERNS = [
+  /^(?:do not|don't|never|keep|use|choose|select|avoid|ensure|allow|configure|set|store)\b/iu,
+  /^(?:route|make|retry|require|only|move|leave|stop|send|retain|publish|run)\b/iu,
+];
 const DIRECT_BEHAVIOR_CLAUSE_PREFIX_VI_RE = /^(?:(?:với|trong|khi|nếu|dù)\s+[^,;]{1,110}[,;]\s*)?/iu;
 const DIRECT_BEHAVIOR_MODAL_PREFIX_VI_RE = /^(?:(?:hãy|nên|cần|vẫn)\s+)?/iu;
 const DIRECT_BEHAVIOR_VERB_VI_RE = /^(?:đừng|chỉ|giữ|dùng|chọn|bỏ|đổi|cứ|tránh|bật|tắt|gửi|chuyển|lưu|để|squash)(?=\s|$)/iu;
@@ -211,7 +239,7 @@ export function directBehaviorChoice(text: string): boolean {
   const trimmed = text.trim();
   const enBody = trimmed.replace(DIRECT_BEHAVIOR_CLAUSE_PREFIX_EN_RE, '').replace(DIRECT_BEHAVIOR_MODAL_PREFIX_EN_RE, '');
   const viBody = trimmed.replace(DIRECT_BEHAVIOR_CLAUSE_PREFIX_VI_RE, '').replace(DIRECT_BEHAVIOR_MODAL_PREFIX_VI_RE, '');
-  return DIRECT_BEHAVIOR_VERB_EN_RE.test(enBody) || DIRECT_BEHAVIOR_VERB_VI_RE.test(viBody);
+  return containsAny(enBody, DIRECT_BEHAVIOR_VERB_EN_PATTERNS) || DIRECT_BEHAVIOR_VERB_VI_RE.test(viBody);
 }
 
 const HYPOTHETICAL_RETENTION_ACTION_RE = /\b(?:retain|retains|keep|keeps|purge|purges|remove|removes|expire|expires|store|stores|archive|archives)\b/iu;
@@ -393,14 +421,17 @@ const REPORTED_MEASURED_PATTERNS = [
 ];
 
 const REPORTED_IMPERATIVE_PREFIX_EN_RE = /(?:^|[.;:]\s*)(?:please\s+)?/iu;
-const REPORTED_IMPERATIVE_VERB_EN_RE = /^(?:do not|don't|never|keep|use|choose|select|avoid|ensure|allow|configure|set|store|route|make|retry|require|only|cancel|move|put|leave)\b/iu;
+const REPORTED_IMPERATIVE_VERB_EN_PATTERNS = [
+  /^(?:do not|don't|never|keep|use|choose|select|avoid|ensure|allow|configure)\b/iu,
+  /^(?:set|store|route|make|retry|require|only|cancel|move|put|leave)\b/iu,
+];
 const REPORTED_IMPERATIVE_VI_RE = /(?:^|[.;,:]\s*)(?:đừng|chỉ|giữ|dùng|chọn|bỏ|đổi|cứ|hãy|tránh|bật|tắt)\b/iu;
 
 function hasReportedImperative(normalized: string): boolean {
   if (REPORTED_IMPERATIVE_VI_RE.test(normalized)) return true;
   return normalized
     .split(/[.;:]\s*/)
-    .some((clause) => REPORTED_IMPERATIVE_VERB_EN_RE.test(clause.replace(REPORTED_IMPERATIVE_PREFIX_EN_RE, '')));
+    .some((clause) => containsAny(clause.replace(REPORTED_IMPERATIVE_PREFIX_EN_RE, ''), REPORTED_IMPERATIVE_VERB_EN_PATTERNS));
 }
 
 const TECHNICAL_CONTEXT_PATTERNS = [

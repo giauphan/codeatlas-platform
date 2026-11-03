@@ -111,7 +111,7 @@ function redactPrivateKeyBlocks(value: string): string {
 
 function redactSensitiveKeyValuePairs(value: string): string {
   const keys = 'api_key|api-key|apikey|access_token|access-token|accesstoken|refresh_token|refresh-token|refreshtoken|aws_secret_access_key|aws-secret-access-key|awssecretaccesskey|aws_session_token|aws-session-token|awssessiontoken|password|secret|authorization';
-  const keyAssignment = new RegExp(`(["']?(?:${keys})["']?\\s*[:=]\\s*)("[^"\\r\\n]*"|'[^'\\r\\n]*'|[^\\s,;}&]+)`, 'gi');
+  const keyAssignment = new RegExp(String.raw`(["']?(?:${keys})["']?\s*[:=]\s*)("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)`, 'gi');
   return value.replace(
     keyAssignment,
     (_match, prefix: string) => `${prefix.replace(/["']/g, '').trimEnd().slice(0, -1).trimEnd()}=[REDACTED]`

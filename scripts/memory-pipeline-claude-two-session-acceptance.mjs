@@ -331,7 +331,7 @@ async function main() {
     const tokenDigest = createHash('sha256').update(`codeatlas-tool-receipt:${seed}`).digest('hex').slice(0, 20).toUpperCase();
     const toolToken = `CA${tokenDigest}`;
     const toolCommandSource = `const a=require('node:assert/strict');a.equal(2+2,4);const c=require('node:crypto');const t='CA'+c.createHash('sha256').update('codeatlas-tool-receipt:${seed}').digest('hex').slice(0,20).toUpperCase();console.log('accepted receipt '+t+'; checks=1')`;
-    const escapedCommandSource = toolCommandSource.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+    const escapedCommandSource = toolCommandSource.replaceAll('\\', String.raw`\\`).replaceAll('"', String.raw`\"`);
     const toolCommand = `${process.execPath} -e "${escapedCommandSource}"`; // NOSONAR
     const firstPrompt = `For the next project session, remember the exact receipt printed by the command result. Use Bash once to run this exact command, then say only that it completed: ${toolCommand}`;
     const secondPrompt = 'What exact receipt token and check count were printed by the command in the prior CodeAtlas project session? Use only startup historical context. Do not use tools. Return the receipt and count only.';

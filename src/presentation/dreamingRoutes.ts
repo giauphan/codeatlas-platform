@@ -32,6 +32,25 @@ function executionAuth(tenantId: unknown) {
   return { ...auth, uid: tenantId };
 }
 
+function parseSchedulerRunFence(
+  jobKey: unknown,
+  ownerToken: unknown,
+  fencingToken: unknown
+): { jobKey: string; ownerToken: string; fencingToken: number } | undefined | null {
+  const hasFence = jobKey !== undefined || ownerToken !== undefined || fencingToken !== undefined;
+  if (!hasFence) {
+    return undefined;
+  }
+  const isValid =
+    typeof jobKey === 'string' &&
+    /^[a-f0-9]{64}$/.test(jobKey) &&
+    typeof ownerToken === 'string' &&
+    /^[a-f0-9-]{36}$/.test(ownerToken) &&
+    Number.isSafeInteger(fencingToken) &&
+    Number(fencingToken) > 0;
+  return isValid ? { jobKey, ownerToken, fencingToken: Number(fencingToken) } : null;
+}
+
 /** Extract auth from request headers — API key or Firebase Bearer token. */
 function extractAuth(req: express.Request) {
   const apiKey = req.headers["x-api-key"] as string | undefined;
@@ -494,25 +513,6 @@ export function registerDreamingRoutes(app: express.Application): void {
       handleError(res, err, "IngestSession");
     }
   });
-
-function parseSchedulerRunFence(
-  jobKey: unknown,
-  ownerToken: unknown,
-  fencingToken: unknown
-): { jobKey: string; ownerToken: string; fencingToken: number } | undefined | null {
-  const hasFence = jobKey !== undefined || ownerToken !== undefined || fencingToken !== undefined;
-  if (!hasFence) {
-    return undefined;
-  }
-  const isValid =
-    typeof jobKey === 'string' &&
-    /^[a-f0-9]{64}$/.test(jobKey) &&
-    typeof ownerToken === 'string' &&
-    /^[a-f0-9-]{36}$/.test(ownerToken) &&
-    Number.isSafeInteger(fencingToken) &&
-    Number(fencingToken) > 0;
-  return isValid ? { jobKey, ownerToken, fencingToken: Number(fencingToken) } : null;
-}
 
   app.post('/api/dreams/reconcile-pending', reconcileRateLimiter, authMiddleware, async (req, res) => {
     try {
