@@ -37,7 +37,7 @@ const digest = (value: string) => createHash('sha256').update(value).digest('hex
 // named topic, and a newer user source are all required. Other facts stay active.
 function preferenceTopic(memory: StructuredMemory): string | null {
   if (memory.kind !== 'PREFERENCE' && memory.kind !== 'DECISION') return null;
-  const match = memory.content.match(/\bfor\s+([^.!?\n]+)|(?:cho|về)\s+([^.!?\n]+)/iu);
+  const match = /\bfor\s+([^.!?\n]+)|(?:cho|về)\s+([^.!?\n]+)/iu.exec(memory.content);
   return match ? `${memory.kind}:${(match[1] || match[2]).normalize('NFC').toLowerCase().trim()}` : null;
 }
 function isExplicitChange(memory: StructuredMemory, event: PendingCaptureEvent): boolean {

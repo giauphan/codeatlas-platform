@@ -452,7 +452,7 @@ export class IndexingService {
         nodes.push({ id: classId, label: classMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
         links.push({ source: moduleId, target: classId, type: "contains" });
       }
-      const defMatch = line.match(PY_DEF_REGEX);
+      const defMatch = PY_DEF_REGEX.exec(line);
       if (defMatch && defMatch[1] !== "__init__") {
         const funcId = `function:${moduleId}:${defMatch[1]}`;
         nodes.push({ id: funcId, label: defMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });
@@ -486,13 +486,13 @@ export class IndexingService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const lineNum = i + 1;
-      const classMatch = line.match(PHP_CLASS_REGEX);
+      const classMatch = PHP_CLASS_REGEX.exec(line);
       if (classMatch) {
         const classId = `class:${moduleId}:${classMatch[1]}`;
         nodes.push({ id: classId, label: classMatch[1], type: "class", filePath: relPath, line: lineNum, color: "#ffb74d" });
         links.push({ source: moduleId, target: classId, type: "contains" });
       }
-      const funcMatch = line.match(PHP_FUNC_REGEX);
+      const funcMatch = PHP_FUNC_REGEX.exec(line);
       if (funcMatch) {
         const funcId = `function:${moduleId}:${funcMatch[1]}`;
         nodes.push({ id: funcId, label: funcMatch[1], type: "function", filePath: relPath, line: lineNum, color: "#81c784" });

@@ -464,7 +464,7 @@ export function registerDreamingRoutes(app: express.Application): void {
       // flow remains available when callers do not provide event_id.
       // Event-based capture is durable and idempotent. The legacy transcript
       // flow remains available when callers do not provide event_id.
-      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "event_id")) {
+      if (Object.hasOwn(req.body ?? {}, "event_id")) {
         isEventCapture = true;
         await handleEventCapture(req.body as Record<string, unknown>, content, auth, requestId, res);
         return;

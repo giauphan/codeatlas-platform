@@ -34,7 +34,7 @@ const project = path.join(temp, 'project-a');
 const home = path.join(temp, 'home');
 mkdirSync(project);
 mkdirSync(home);
-execFileSync('git', ['init', '--quiet', project]);
+execFileSync('git', ['init', '--quiet', project], { env: { ...process.env, PATH: '/usr/bin:/bin' } });
 process.env.HOME = home;
 process.env.CODEATLAS_SQLITE_PATH = path.join(temp, 'canary.db');
 process.env.CODEATLAS_DB_TYPE = 'sqlite';
@@ -110,7 +110,7 @@ after(async () => {
     budget_source: process.env.CODEATLAS_CANARY_HOOK_BUDGET_MS ? 'CODEATLAS_CANARY_HOOK_BUDGET_MS override; installer declares no route timeout' : 'existing runHook 20-second deadline; installer declares no route timeout',
     budget_ms: hookCompletionBudgetMs,
     completion_count: hookLatencySamples.length,
-    max_elapsed_ms: elapsed.length ? elapsed[elapsed.length - 1] : null,
+    max_elapsed_ms: elapsed.length ? elapsed.at(-1) : null,
     p95_elapsed_ms: elapsed.length ? elapsed[p95Index] : null,
     completed_calls: hookLatencySamples,
   }));

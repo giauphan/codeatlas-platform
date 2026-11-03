@@ -176,7 +176,7 @@ export class SQLiteAdapter implements IDatabaseAdapter {
       LIMIT :limit
     `;
 
-    const binds = { queryVector: blob, tenantId, limit, expectedBytes: embedding.length * 4, ...(filterBinds || {}) };
+    const binds = { queryVector: blob, tenantId, limit, expectedBytes: embedding.length * 4, ...filterBinds };
     return this.query<VectorSearchResult>(sql, binds);
   }
 

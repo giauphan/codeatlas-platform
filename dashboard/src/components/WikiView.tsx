@@ -620,7 +620,7 @@ export const WikiView: React.FC<WikiViewProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', padding: '1rem' }}>
                 <Loader2 size={16} className="animate-spin" /> Loading hierarchy...
               </div>
-            ) : tree && tree.root && tree.root.length > 0 ? (
+            ) : tree?.root?.length > 0 ? (
               tree.root.map(node => renderTreeNode(node))
             ) : (
               <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>

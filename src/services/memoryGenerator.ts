@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { AnalysisResult, GraphNode } from '../types/index.js';
+import { AnalysisResult } from '../types/index.js';
 import { logger } from "../utils/logger.js";
 
 /**

@@ -1832,7 +1832,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const ops: ("dedup" | "extract_concepts" | "score" | "score_dreams")[] = [];
       if (dedup) ops.push("dedup");
       if (extractConcepts) ops.push("extract_concepts");
-      if (score) { ops.push("score"); ops.push("score_dreams"); }
+      if (score) { ops.push("score", "score_dreams"); }
       if (ops.length === 0) {
         return { content: [{ type: "text" as const, text: "No operations requested. At least one of dedup, extractConcepts, or score must be enabled." }], isError: true as const };
       }
@@ -2351,7 +2351,7 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       }
       const service = getWikiService();
       return service.searchWiki(params.project, params.query, {
-        maxPages: params.limit === undefined ? 3 : params.limit,
+        maxPages: params.limit ?? 3,
       });
     }
   );
