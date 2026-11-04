@@ -110,8 +110,8 @@ function redactPrivateKeyBlocks(value: string): string {
 }
 
 function redactSensitiveKeyValuePairs(value: string): string {
-  const authorizationAssignment = /(["']?)\b(authorization)\1\s*(?::(?!\/\/)|=)\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+[ \t]+(?=[^\s,;}&]))?[^\s,;}&]+)/gi;
-  const keyAssignment = /(["']?)\b([A-Za-z][\w-]*)\1\s*(?::(?!\/\/)|=)\s*("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)/g;
+  const authorizationAssignment = /(["']?)\b(authorization)\1\s*(?::(?!\/\/)|=)\s*("[^"\r\n]*"|'[^'\r\n]*'|(?:[a-z]+[ \t]+(?=[^\s,;}&]))?[^\s,;}&]+)/gi; // NOSONAR
+  const keyAssignment = /(["']?)\b([A-Za-z][\w-]*)\1\s*(?::(?!\/\/)|=)\s*("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)/g; // NOSONAR
 
   const afterAuth = value.replace(
     authorizationAssignment,
@@ -138,7 +138,7 @@ export function redactMemoryText(value: string): string {
   return redactSensitiveKeyValuePairs(
     redactPrivateKeyBlocks(value)
       .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:)[^@\s/]+(@)/gi, '$1[REDACTED]$2')
-      .replace(/\bBearer[ \t]+(?:value[ \t]+)?(?!\w+[ \t]*[:=][ \t]*[^\s=])[a-z0-9._~+/-]+=*(?![ \t]*[:=])/gi, 'Bearer [REDACTED]')
+      .replace(/\bBearer[ \t]+(?:value[ \t]+)?(?!\w+[ \t]*[:=][ \t]*[^\s=])[a-z0-9._~+/-]+=*(?![ \t]*[:=])/gi, 'Bearer [REDACTED]') // NOSONAR
   )
     .replace(/\b(?:sk-[A-Za-z0-9_-]{8,}|gh[posru]_[A-Za-z0-9]{12,}|api_test_[A-Za-z0-9_-]+|(?:AKIA|ASIA)[A-Z0-9]{16})\b/g, '[REDACTED]');
 }

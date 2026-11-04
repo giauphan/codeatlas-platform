@@ -15,11 +15,11 @@ export async function mergeGenesOperation(
   project: string,
   upsertGeneFn: (input: GeneInput) => Promise<string>,
 ): Promise<string> {
-  if (geneIds.length < 2) throw new Error("Need at least 2 genes to merge");
+  if (!Array.isArray(geneIds) || geneIds.length < 2) throw new Error("Need at least 2 genes to merge");
 
   return withGenomeConnection(async (connection) => {
     // Bound reads as well as writes; one unbounded SELECT would defeat batching.
-    const sourceIds = [...new Set(geneIds)];
+    const sourceIds = [...new Set(geneIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0))];
     const genes: Record<string, unknown>[] = [];
     const batchSize = 900;
     const tenantId = getTenantId();
@@ -99,10 +99,19 @@ export async function splitGeneOperation(
   project: string,
   upsertGeneFn: (input: GeneInput) => Promise<string>,
 ): Promise<string[]> {
-  if (childNames.length < 2)
+  if (!Array.isArray(childNames) || childNames.length < 2)
     throw new Error("Need at least 2 child gene names");
   if (childNames.length > 20)
     throw new Error("Cannot split gene into more than 20 child genes");
+
+  const safeNames: string[] = [];
+  for (const name of childNames.slice(0, 20)) {
+    if (typeof name === "string" && name.trim().length > 0) {
+      safeNames.push(name.trim());
+    }
+  }
+  if (safeNames.length < 2)
+    throw new Error("Need at least 2 child gene names");
 
   return withGenomeConnection(async (connection: AdapterConnection) => {
     const result = await connection.execute<unknown[]>(
@@ -121,12 +130,13 @@ export async function splitGeneOperation(
 
     const childIds: string[] = [];
     const relBinds: Record<string, unknown>[] = [];
-    for (let i = 0; i < childNames.length; i++) {
-      const sliceStart = Math.floor(i * (solutionLines.length / childNames.length));
-      const sliceEnd = Math.floor((i + 1) * (solutionLines.length / childNames.length));
+    const totalCount = Math.min(safeNames.length, 20);
+    for (let i = 0; i < totalCount; i++) {
+      const sliceStart = Math.floor(i * (solutionLines.length / totalCount));
+      const sliceEnd = Math.floor((i + 1) * (solutionLines.length / totalCount));
       const childId = await upsertGeneFn({ // NOSONAR
-        name: childNames[i],
-        description: `Split from: ${sourceName} (part ${i + 1}/${childNames.length})`,
+        name: safeNames[i],
+        description: `Split from: ${sourceName} (part ${i + 1}/${totalCount})`,
         problem: String(rowValue(g, "problem") || ""),
         solution:
           solutionLines.slice(sliceStart, sliceEnd).join("\n") ||
@@ -268,12 +278,14 @@ export async function mutateGeneOperation(
 }
 
 export async function retireGenesOperation(geneIds: string[]): Promise<number> {
+  if (!Array.isArray(geneIds) || geneIds.length === 0) return 0;
   return withGenomeConnection(async (connection) => {
     let count = 0;
-    if (geneIds.length > 0) {
+    const validIds = geneIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+    if (validIds.length > 0) {
       const BATCH_CHUNK_SIZE = 900;
-      for (let k = 0; k < geneIds.length; k += BATCH_CHUNK_SIZE) {
-        const chunk = geneIds.slice(k, k + BATCH_CHUNK_SIZE);
+      for (let k = 0; k < validIds.length; k += BATCH_CHUNK_SIZE) {
+        const chunk = validIds.slice(k, k + BATCH_CHUNK_SIZE);
         const { clause, binds } = buildInClause(chunk, { tenantId: getTenantId() });
         const result = await connection.execute( // NOSONAR
           `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP

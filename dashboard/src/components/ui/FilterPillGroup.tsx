@@ -1,20 +1,21 @@
 import { FOCUS_RING_CLASS } from '../../lib/constants';
 
 interface FilterPillGroupProps<T extends string> {
-  ariaLabel: string;
-  options: readonly T[];
-  selected: T;
-  onSelect: (option: T) => void;
-  formatLabel?: (option: T) => string;
+  readonly ariaLabel: string;
+  readonly options: readonly T[];
+  readonly selected: T;
+  readonly onSelect: (option: T) => void;
+  readonly formatLabel?: (option: T) => string;
 }
 
-export function FilterPillGroup<T extends string>({
-  ariaLabel,
-  options,
-  selected,
-  onSelect,
-  formatLabel = (option) => option,
-}: FilterPillGroupProps<T>) {
+export function FilterPillGroup<T extends string>(props: Readonly<FilterPillGroupProps<T>>) {
+  const {
+    ariaLabel,
+    options,
+    selected,
+    onSelect,
+    formatLabel = (option) => option,
+  } = props;
   return (
     <fieldset
       aria-label={ariaLabel}
