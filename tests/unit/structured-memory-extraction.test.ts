@@ -219,6 +219,10 @@ test('quoted JSON credentials and credential query parameters are redacted', asy
   assert.equal(redactMemoryText('Error: password=hunter2'), 'Error: password=[REDACTED]');
   assert.equal(redactMemoryText('Failed: api_key=abc123'), 'Failed: api_key=[REDACTED]');
   assert.equal(redactMemoryText('database:\n  password: hunter2'), 'database:\n  password=[REDACTED]');
+  assert.equal(redactMemoryText('password:hunter2'), 'password=[REDACTED]');
+  assert.equal(redactMemoryText('"api_key":"myKey"'), 'api_key=[REDACTED]');
+  assert.equal(redactMemoryText("'api_key': 'myKey'"), 'api_key=[REDACTED]');
+  assert.equal(redactMemoryText('https://example.com/api'), 'https://example.com/api');
 });
 
 test('validated assistant-only candidates cannot claim completed work even when marked uncertain', () => {

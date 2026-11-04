@@ -111,7 +111,7 @@ function redactPrivateKeyBlocks(value: string): string {
 
 function redactSensitiveKeyValuePairs(value: string): string {
   const authorizationAssignment = /(["']?)\b(authorization)\1\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\r\n,;}&]+)/gi;
-  const keyAssignment = /(["']?)\b([A-Za-z][\w-]*)\1\s*[:=](?!\/)\s*("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)/g;
+  const keyAssignment = /(["']?)\b([A-Za-z][\w-]*)\1\s*[:=]\s*("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)/g;
 
   const afterAuth = value.replace(
     authorizationAssignment,
