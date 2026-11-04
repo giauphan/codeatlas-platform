@@ -56,6 +56,33 @@ async function countRows(table: string, tenantId: string): Promise<number> {
   return Number(rows[0]?.count ?? 0);
 }
 
+async function countDuplicateMemoryRows(tenantId: string): Promise<number> {
+  const rows = await adapter.query<{ count: number }>(
+    `SELECT COALESCE(SUM(grouped.row_count - 1), 0) AS count FROM (
+       SELECT COUNT(*) AS row_count FROM ai_dreaming_memory
+       WHERE tenant_id = :tenantId
+       GROUP BY project_id, memory_type, content_hash
+       HAVING COUNT(*) > 1
+     ) grouped`,
+    { tenantId },
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
+function assertCheckpointContains(
+  checkpoint: Awaited<ReturnType<typeof SessionCheckpointService.latest>>,
+  expected: { decision: string; completed: string; nextAction?: string; sourceEventId: string },
+): NonNullable<Awaited<ReturnType<typeof SessionCheckpointService.latest>>> {
+  assert.ok(checkpoint);
+  assert.ok(checkpoint.decisions.includes(expected.decision));
+  assert.ok(checkpoint.completed.includes(expected.completed));
+  if (expected.nextAction) {
+    assert.ok(checkpoint.next_actions.includes(expected.nextAction));
+  }
+  assert.ok(checkpoint.source_event_ids.includes(expected.sourceEventId));
+  return checkpoint;
+}
+
 test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, and bootstrap with denominators', async () => {
   adapter = new SQLiteAdapter(':memory:');
   const priorProcessing = process.env.CODEATLAS_MEMORY_PROCESSING_ENABLED;
@@ -117,26 +144,22 @@ test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, 
     };
 
     const sessionAResult = await ingestSession(firstSession, projectA);
-    const sessionACheckpoint = await authStorage.run(tenant, () => SessionCheckpointService.latest(projectA.id));
-    assert.ok(sessionACheckpoint);
-    assert.ok(sessionACheckpoint.decisions.some(value => value === repeatedDecision)); // NOSONAR
-    assert.ok(sessionACheckpoint.completed.some(value => value === toolOutcomeA)); // NOSONAR
-    assert.ok(sessionACheckpoint.source_event_ids.includes('telemetry-a-decision'));
+    const sessionACheckpoint = assertCheckpointContains(
+      await authStorage.run(tenant, () => SessionCheckpointService.latest(projectA.id)),
+      { decision: repeatedDecision, completed: toolOutcomeA, sourceEventId: 'telemetry-a-decision' },
+    );
 
     const sessionBResult = await ingestSession(secondSession, projectA);
-    const sessionBCheckpoint = await authStorage.run(tenant, () => SessionCheckpointService.latest(projectA.id));
-    assert.ok(sessionBCheckpoint);
-    assert.ok(sessionBCheckpoint.decisions.some(value => value === repeatedDecision)); // NOSONAR
-    assert.ok(sessionBCheckpoint.completed.some(value => value === toolOutcomeB)); // NOSONAR
-    assert.ok(sessionBCheckpoint.next_actions.some(value => value === nextAction)); // NOSONAR
-    assert.ok(sessionBCheckpoint.source_event_ids.includes('telemetry-b-next'));
+    const sessionBCheckpoint = assertCheckpointContains(
+      await authStorage.run(tenant, () => SessionCheckpointService.latest(projectA.id)),
+      { decision: repeatedDecision, completed: toolOutcomeB, nextAction, sourceEventId: 'telemetry-b-next' },
+    );
 
     const projectBResult = await ingestSession(thirdSession, projectB);
-    const projectBCheckpoint = await authStorage.run(tenant, () => SessionCheckpointService.latest(projectB.id));
-    assert.ok(projectBCheckpoint);
-    assert.ok(projectBCheckpoint.decisions.some(value => value === otherProjectDecision)); // NOSONAR
-    assert.ok(projectBCheckpoint.completed.some(value => value === otherProjectTool)); // NOSONAR
-    assert.ok(projectBCheckpoint.source_event_ids.includes('telemetry-c-decision'));
+    const projectBCheckpoint = assertCheckpointContains(
+      await authStorage.run(tenant, () => SessionCheckpointService.latest(projectB.id)),
+      { decision: otherProjectDecision, completed: otherProjectTool, sourceEventId: 'telemetry-c-decision' },
+    );
 
     const memoryRows = await adapter.query<{ id: string; content: string; project_id: string }>(
       `SELECT id, content, project_id FROM ai_dreaming_memory WHERE tenant_id = :tenantId ORDER BY project_id, id`,
@@ -192,15 +215,7 @@ test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, 
 
     const captureRowsBeforeReplay = await countRows('dream_capture_events', tenant.uid);
     const memoryRowsBeforeReplay = await countRows('ai_dreaming_memory', tenant.uid);
-    const duplicateRowsBeforeReplay = await adapter.query<{ count: number }>(
-      `SELECT COALESCE(SUM(grouped.row_count - 1), 0) AS count FROM (
-         SELECT COUNT(*) AS row_count FROM ai_dreaming_memory
-         WHERE tenant_id = :tenantId
-         GROUP BY project_id, memory_type, content_hash
-         HAVING COUNT(*) > 1
-       ) grouped`,
-      { tenantId: tenant.uid },
-    );
+    const persistedDuplicateMemoryRows = await countDuplicateMemoryRows(tenant.uid);
     const idsByEventBeforeReplay = new Map<string, string[]>();
     for (const event of persistedCaptures) {
       const rows = await adapter.query<{ memory_ids_json: string }>( // NOSONAR
@@ -226,20 +241,9 @@ test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, 
     assert.equal(replayResult.failed, 0);
     assert.equal(await countRows('dream_capture_events', tenant.uid), captureRowsBeforeReplay);
     assert.equal(await countRows('ai_dreaming_memory', tenant.uid), memoryRowsBeforeReplay);
-    const duplicateRowsAfterReplay = await adapter.query<{ count: number }>(
-      `SELECT COALESCE(SUM(grouped.row_count - 1), 0) AS count FROM (
-         SELECT COUNT(*) AS row_count FROM ai_dreaming_memory
-         WHERE tenant_id = :tenantId
-         GROUP BY project_id, memory_type, content_hash
-         HAVING COUNT(*) > 1
-       ) grouped`,
-      { tenantId: tenant.uid },
-    );
+    const duplicateRowsAfterReplay = await countDuplicateMemoryRows(tenant.uid);
 
-    const sourceEvidenceRows = await adapter.query<{ count: number }>(
-      `SELECT COUNT(*) AS count FROM dream_memory_evidence WHERE tenant_id = :tenantId`,
-      { tenantId: tenant.uid },
-    );
+    const sourceEvidenceRows = await countRows('dream_memory_evidence', tenant.uid);
     const groundingRows = await adapter.query<{ total: number; grounded: number }>(
       `SELECT COUNT(*) AS total,
           SUM(CASE WHEN evidence.span = source.content_redacted AND evidence.actor_role = source.actor_role THEN 1 ELSE 0 END) AS grounded
@@ -254,7 +258,6 @@ test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, 
     const memoryAckCount = sessionAResult.stored + sessionAResult.duplicate + sessionBResult.stored + sessionBResult.duplicate + projectBResult.stored + projectBResult.duplicate;
     const duplicateMemoryAcks = sessionAResult.duplicate + sessionBResult.duplicate + projectBResult.duplicate;
     const dedupHitRate = memoryAckCount ? duplicateMemoryAcks / memoryAckCount : 0;
-    const persistedDuplicateMemoryRows = Number(duplicateRowsBeforeReplay[0]?.count ?? 0);
     const expectedCheckpointComponents = 7;
     const observedCheckpointComponents = [
       Boolean(sessionACheckpoint.decisions.length), Boolean(sessionACheckpoint.completed.length),
@@ -278,8 +281,8 @@ test('synthetic memory telemetry measures capture, dedup, ranking, checkpoints, 
     assert.equal(bootstrapHitRate, 1);
     assert.equal(sourceGroundingRate, 1);
     assert.equal(persistedDuplicateMemoryRows, 0, 'same-project/type/content duplicates must not persist as multiple memory rows');
-    assert.equal(Number(duplicateRowsAfterReplay[0]?.count ?? 0), persistedDuplicateMemoryRows);
-    assert.ok(Number(sourceEvidenceRows[0]?.count) >= memoryAckCount - duplicateMemoryAcks);
+    assert.equal(duplicateRowsAfterReplay, persistedDuplicateMemoryRows);
+    assert.ok(sourceEvidenceRows >= memoryAckCount - duplicateMemoryAcks);
 
     // Only aggregate counts and synthetic measurements are emitted. UTF-8
     // bytes are a context-size proxy, never an actual token count or limit.

@@ -8,6 +8,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SQLiteAdapter } from '../../src/database/adapters/sqliteAdapter.js';
+import { buildInClause } from '../../src/database/utils.js';
 import { authStorage } from '../../src/utils/context.js';
 
 const enabled = process.env.RUN_MODEL_MEMORY_PIPELINE === '1';
@@ -85,9 +86,7 @@ test('configured model extraction persists grounded SQLite memories, retrieval, 
     assert.equal(saved.success, true);
     assert.ok(providerRequests > 0, 'the configured extraction provider must be called');
     assert.ok(saved.memory_ids.length > 0, 'the model must select at least one meaningful memory');
-    const binds: Record<string, unknown> = { tenant: tenant.uid, projectId };
-    saved.memory_ids.forEach((id, index) => { binds[`memory${index}`] = id; });
-    const memoryPlaceholders = saved.memory_ids.map((_, index) => `:memory${index}`).join(',');
+    const { clause: memoryPlaceholders, binds } = buildInClause(saved.memory_ids, { tenant: tenant.uid, projectId });
     const persisted = await adapter.query<{
       id: string; content: string; status: string; kind: string; extractor_version: string;
       source_event_id: string; span: string;
