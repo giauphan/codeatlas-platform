@@ -926,5 +926,38 @@ describe("GenomeService", () => {
         (err: Error) => err.message.includes("not found"),
       );
     });
+
+    test("inheritProjectGenes pairs each sorted gene with its own row embedding", async () => {
+      const emb1 = new Uint8Array([1, 1, 1]);
+      const emb2 = new Uint8Array([2, 2, 2]);
+      mockConnection.execute.mock.mockImplementation(async (sql: string) => {
+        if (sql.includes("SELECT id, name, description")) {
+          // Return rows in reverse score order (gene-2 score 0.85 first, gene-1 score 0.95 second)
+          return {
+            rows: [
+              { ...mockGeneRow("gene-2", "Lower Score Gene"), embedding: emb2 },
+              { ...mockGeneRow("gene-1", "Higher Score Gene"), embedding: emb1 },
+            ],
+          };
+        }
+        return { rows: [] };
+      });
+      mockConnection.executeMany.mock.mockImplementation(async () => ({ rowsAffected: 2 }));
+
+      const result = await GenomeService.inheritProjectGenes("target-proj", "context");
+      assert.equal(result.inherited, 2);
+      assert.equal(result.genes[0].id, "gene-1");
+      assert.equal(result.genes[1].id, "gene-2");
+
+      const insertCall = mockConnection.executeMany.mock.calls.find((c) =>
+        String(c.arguments[0]).includes("INSERT INTO codeatlas_genome"),
+      );
+      assert.ok(insertCall);
+      const inserted = insertCall.arguments[1] as Array<{ name: string; emb: Uint8Array }>;
+      assert.equal(inserted[0].name, "Higher Score Gene");
+      assert.equal(inserted[0].emb, emb1);
+      assert.equal(inserted[1].name, "Lower Score Gene");
+      assert.equal(inserted[1].emb, emb2);
+    });
   });
 });

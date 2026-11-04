@@ -218,12 +218,17 @@ export function mountGenomeRoutes(app: express.Application): void {
   app.post("/api/genome/merge", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { geneIds, targetName, project } = req.body;
-      if (!geneIds || geneIds.length < 2 || !targetName || !project) {
-        res.status(400).json({ error: "geneIds (min 2), targetName, project required" });
+      if (!Array.isArray(geneIds) || geneIds.length < 2 || typeof targetName !== "string" || typeof project !== "string") {
+        res.status(400).json({ error: "geneIds (min 2 array), targetName, project required" });
         return;
       }
-      const geneId = await GenomeService.mergeGenes(geneIds, targetName, project);
-      res.status(201).json({ success: true, geneId, absorbed: geneIds.length });
+      const validGeneIds = geneIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+      if (validGeneIds.length < 2) {
+        res.status(400).json({ error: "geneIds must contain at least 2 valid strings" });
+        return;
+      }
+      const geneId = await GenomeService.mergeGenes(validGeneIds, targetName, project);
+      res.status(201).json({ success: true, geneId, absorbed: validGeneIds.length });
     } catch (err) {
       logger.error(`[Genome merge] ${err}`);
       res.status(500).json({ error: "Internal Server Error" });
@@ -234,11 +239,16 @@ export function mountGenomeRoutes(app: express.Application): void {
   app.post("/api/genome/split", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { sourceGeneId, childNames, project } = req.body;
-      if (!sourceGeneId || !childNames || childNames.length < 2 || !project) {
-        res.status(400).json({ error: "sourceGeneId, childNames (min 2), project required" });
+      if (typeof sourceGeneId !== "string" || !Array.isArray(childNames) || childNames.length < 2 || childNames.length > 20 || typeof project !== "string") {
+        res.status(400).json({ error: "sourceGeneId, childNames (array of 2-20 strings), project required" });
         return;
       }
-      const childIds = await GenomeService.splitGene(sourceGeneId, childNames, project);
+      const validChildNames = childNames.filter((name): name is string => typeof name === "string" && name.trim().length > 0);
+      if (validChildNames.length < 2) {
+        res.status(400).json({ error: "childNames must contain at least 2 non-empty strings" });
+        return;
+      }
+      const childIds = await GenomeService.splitGene(sourceGeneId, validChildNames, project);
       res.status(201).json({ success: true, childIds });
     } catch (err) {
       logger.error(`[Genome split] ${err}`);
@@ -250,7 +260,7 @@ export function mountGenomeRoutes(app: express.Application): void {
   app.post("/api/genome/mutate", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { geneId, improvements, project } = req.body;
-      if (!geneId || !project) {
+      if (typeof geneId !== "string" || typeof project !== "string") {
         res.status(400).json({ error: "geneId and project required" });
         return;
       }
@@ -266,11 +276,16 @@ export function mountGenomeRoutes(app: express.Application): void {
   app.post("/api/genome/retire", genomeRateLimiter, authMiddleware, async (req: express.Request, res: express.Response) => {
     try {
       const { geneIds } = req.body;
-      if (!geneIds || geneIds.length === 0) {
+      if (!Array.isArray(geneIds) || geneIds.length === 0) {
         res.status(400).json({ error: "geneIds array required" });
         return;
       }
-      const count = await GenomeService.retireGenes(geneIds);
+      const validGeneIds = geneIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+      if (validGeneIds.length === 0) {
+        res.status(400).json({ error: "geneIds array required" });
+        return;
+      }
+      const count = await GenomeService.retireGenes(validGeneIds);
       res.status(200).json({ success: true, retired: count });
     } catch (err) {
       logger.error(`[Genome retire] ${err}`);

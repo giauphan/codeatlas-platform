@@ -7,93 +7,42 @@
  * - Vector search via sqlite-vec with NVIDIA embeddings
  */
 
-import { randomUUID } from "node:crypto";
-import { initPool, setSessionContext } from "../database/connection.js";
-import type { AdapterConnection } from "../database/connection.js";
 import { createDatabaseAdapter } from "../database/factory.js";
-import { generateEmbedding } from "./embeddingService.js";
-import { logger } from "../utils/logger.js";
-import { authStorage } from "../utils/context.js";
-import { buildInClause } from "../database/utils.js";
 import { GeneUpsertPersistenceAdapter } from "../database/adapters/geneUpsertPersistence.js";
+import { logger } from "../utils/logger.js";
+import { generateEmbedding } from "./embeddingService.js";
 import { upsertGene as executeGeneUpsert } from "./geneUpsertUseCase.js";
+import {
+  mergeGenesOperation,
+  mutateGeneOperation,
+  retireGenesOperation,
+  splitGeneOperation,
+} from "./genomeEvolution.js";
+import {
+  formatSkillPromptFromGene,
+  inheritProjectGenesOperation,
+} from "./genomeInheritance.js";
+import {
+  GENOME_SELECT_COLUMNS,
+  createPrefixedId,
+  fetchGenesByVectorMatches,
+  getTenantId,
+  incrementGeneUsageInBackground,
+  mapRowToGeneRecord,
+  withGenomeConnection,
+  type ExtractRequest,
+  type GeneInput,
+  type GeneRecord,
+  type GeneSearchResult,
+} from "./genomeShared.js";
 
-/** Get authenticated tenant ID — fallback to admin for testing */
-export function getTenantId(): string {
-  const auth = authStorage.getStore();
-  return auth ? auth.uid : "admin";
-}
-
-// ─── Row Index Constants ───────────────────────────────────
-function rowValue<T = unknown>(row: any, name: string): T | undefined {
-  return (
-    (row[name] as T | undefined) ??
-    (row[name.toUpperCase()] as T | undefined) ??
-    (row[name.toLowerCase()] as T | undefined)
-  );
-}
-
-// ─── Types ──────────────────────────────────────────────────
-export interface GeneInput {
-  name: string;
-  description: string;
-  problem: string;
-  solution: string;
-  architecture?: string;
-  category: string; // 'pattern' | 'decision' | 'lesson' | 'workflow' | 'immune'
-  project: string;
-  sourceType: string; // 'dream' | 'concept' | 'skill' | 'manual' | 'feedback'
-  sourceId?: string;
-  dependencies?: string[]; // gene IDs this depends on
-  confidence?: number;
-}
-
-export interface GeneRecord {
-  id: string;
-  name: string;
-  description: string;
-  problem: string;
-  solution: string;
-  architecture: string;
-  category: string;
-  project: string;
-  confidence: number;
-  version: number;
-  evolutionScore: number;
-  usageCount: number;
-  successRate: number;
-  status: string;
-  sourceType: string;
-  sourceId: string;
-  dependencies: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface GeneSearchResult extends GeneRecord {
-  score: number; // similarity score
-}
-
-export interface ExtractRequest {
-  sourceType: string;
-  sourceId: string;
-  project: string;
-  autoExtract?: boolean;
-}
-
-async function withGenomeConnection<T>(work: (connection: AdapterConnection) => Promise<T>): Promise<T> {
-  const connection = await (await initPool()).getConnection();
-  try {
-    await setSessionContext(connection);
-    return await work(connection);
-  } finally {
-    try {
-      await connection.close();
-    } catch {
-      // Preserve the existing best-effort cleanup policy.
-    }
-  }
-}
+export {
+  getTenantId,
+  type ExtractRequest,
+  type GeneInput,
+  type GeneRecord,
+  type GeneSearchResult,
+} from "./genomeShared.js";
 
 // ─── Service ─────────────────────────────────────────────────
 export class GenomeService {
@@ -107,7 +56,7 @@ export class GenomeService {
         getTenantId,
         generateEmbedding: (text) => generateEmbedding(text, "query"),
         logInfo: (message) => logger.info(message),
-        createId: (prefix) => `${prefix}-${randomUUID().slice(0, 8)}`,
+        createId: (prefix) => createPrefixedId(prefix),
       });
     });
   }
@@ -119,9 +68,7 @@ export class GenomeService {
     query: string,
     options: { project?: string; category?: string; limit?: number } = {},
   ): Promise<GeneSearchResult[]> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
+    return withGenomeConnection(async (connection) => {
       const { project, category, limit = 20 } = options;
       const tenantId = getTenantId();
 
@@ -147,157 +94,49 @@ export class GenomeService {
         embedding,
         limit,
         tenantId,
-        filterBinds
+        filterBinds,
       );
 
-      if (searchResults.length === 0) return [];
-
-      const ids = searchResults.map((r) => r.id);
-      const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const queryBinds: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
-
-      const result = await connection.execute<unknown[]>(
-        `SELECT id, name, description, problem, solution, architecture,
-                category, project, confidence, version, evolution_score,
-                usage_count, success_rate, embedding, status,
-                source_type, source_id, dependencies, created_at, updated_at
-         FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        queryBinds as any,
-      );
-
-      const rows = result.rows || [];
-      const genes = rows.map((r: any[]) => ({
-        id: String(rowValue(r, "id")),
-        name: String(rowValue(r, "name")),
-        description: String(rowValue(r, "description") || ""),
-        problem: String(rowValue(r, "problem") || ""),
-        solution: String(rowValue(r, "solution") || ""),
-        architecture: String(rowValue(r, "architecture") || ""),
-        category: String(rowValue(r, "category")),
-        project: String(rowValue(r, "project") || ""),
-        confidence: Number(rowValue(r, "confidence")),
-        version: Number(rowValue(r, "version")),
-        evolutionScore: Number(rowValue(r, "evolution_score")),
-        usageCount: Number(rowValue(r, "usage_count")),
-        successRate: Number(rowValue(r, "success_rate")),
-        status: String(rowValue(r, "status")),
-        sourceType: String(rowValue(r, "source_type") || ""),
-        sourceId: String(rowValue(r, "source_id") || ""),
-        dependencies: JSON.parse(String(rowValue(r, "dependencies") || "[]")),
-        createdAt: String(rowValue(r, "created_at")),
-        updatedAt: String(rowValue(r, "updated_at")),
-        score: scoreMap.get(String(rowValue(r, "id"))) ?? 0,
-      }));
-
-      // Sort by score descending
-      genes.sort((a, b) => b.score - a.score);
-
-      // Increment usage count for returned genes
-      // Dedupe + batch increments into chunks of 900.
+      const { genes } = await fetchGenesByVectorMatches(connection, searchResults, tenantId);
       if (genes.length > 0) {
-        const capturedTenantId = getTenantId();
-        const geneIds = Array.from(new Set(genes.map((g) => g.id))); // dedupe
-
-        // ⚡ Bolt Optimization: Fire and forget DB update to prevent "Write on Read" N+1 blocking
-        // We must obtain a new connection lifecycle since the main query's connection will be closed.
-        initPool().then(pool => pool.getConnection()).then(bgConn => {
-          return setSessionContext(bgConn).then(async () => {
-            const chunkSize = 900;
-            for (let i = 0; i < geneIds.length; i += chunkSize) {
-              const chunk = geneIds.slice(i, i + chunkSize);
-              const { clause: inClause, binds: inBinds } = buildInClause(chunk, { tenantId: capturedTenantId });
-              await bgConn.execute( // NOSONAR
-                `UPDATE codeatlas_genome SET usage_count = usage_count + 1,
-                 updated_at = CURRENT_TIMESTAMP WHERE id IN (${inClause}) AND tenant_id = :tenantId`,
-                inBinds,
-                { autoCommit: true },
-              );
-            }
-          }).finally(() => bgConn.close());
-        }).catch(err => {
-          logger.warn(`[Genome] Failed to non-blocking increment usage counts for genes: ${err instanceof Error ? err.message : String(err)}`);
-        });
+        incrementGeneUsageInBackground(
+          genes.map((g) => g.id),
+          getTenantId(),
+        );
       }
 
       return genes;
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+    });
   }
 
   /**
    * Get a single gene by ID.
    */
   static async getGene(id: string): Promise<GeneRecord | null> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
-
+    return withGenomeConnection(async (connection) => {
       const result = await connection.execute<unknown[]>(
-        `SELECT id, name, description, problem, solution, architecture,
-                category, project, confidence, version, evolution_score,
-                usage_count, success_rate, embedding, status,
-                source_type, source_id, dependencies, created_at, updated_at
+        `SELECT ${GENOME_SELECT_COLUMNS}
          FROM codeatlas_genome WHERE id = :id AND tenant_id = :tenantId`,
-        { id, tenantId: getTenantId() } as any,
+        { id, tenantId: getTenantId() },
       );
 
       if (!result.rows || result.rows.length === 0) return null;
-      const r = result.rows[0];
-
-      return {
-        id: String(rowValue(r, "id")),
-        name: String(rowValue(r, "name")),
-        description: String(rowValue(r, "description") || ""),
-        problem: String(rowValue(r, "problem") || ""),
-        solution: String(rowValue(r, "solution") || ""),
-        architecture: String(rowValue(r, "architecture") || ""),
-        category: String(rowValue(r, "category")),
-        project: String(rowValue(r, "project") || ""),
-        confidence: Number(rowValue(r, "confidence")),
-        version: Number(rowValue(r, "version")),
-        evolutionScore: Number(rowValue(r, "evolution_score")),
-        usageCount: Number(rowValue(r, "usage_count")),
-        successRate: Number(rowValue(r, "success_rate")),
-        status: String(rowValue(r, "status")) as GeneRecord["status"],
-        sourceType: String(rowValue(r, "source_type") || ""),
-        sourceId: String(rowValue(r, "source_id") || ""),
-        dependencies: JSON.parse(String(rowValue(r, "dependencies") || "[]")),
-        createdAt: String(rowValue(r, "created_at")),
-        updatedAt: String(rowValue(r, "updated_at")),
-      };
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+      return mapRowToGeneRecord(result.rows[0]);
+    });
   }
 
   /**
    * Extract genes from existing Dreams or Concepts.
    */
   static async extractGene(req: ExtractRequest): Promise<string> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
-
+    return withGenomeConnection(async (connection) => {
       let content: string;
       let memoryType = "lesson";
 
       if (req.sourceType === "dream") {
         const dreams = await connection.execute<unknown[]>(
           `SELECT id, content, memory_type, project FROM ai_dreaming_memory WHERE id = :id AND tenant_id = :tenantId`,
-          { id: req.sourceId, tenantId: getTenantId() } as any,
+          { id: req.sourceId, tenantId: getTenantId() },
         );
         if (!dreams.rows || dreams.rows.length === 0)
           throw new Error("Dream not found");
@@ -308,7 +147,7 @@ export class GenomeService {
       } else if (req.sourceType === "concept") {
         const concepts = await connection.execute<unknown[]>(
           `SELECT id, label, description, project FROM codeatlas_concepts WHERE id = :id AND tenant_id = :tenantId`,
-          { id: req.sourceId, tenantId: getTenantId() } as any,
+          { id: req.sourceId, tenantId: getTenantId() },
         );
         if (!concepts.rows || concepts.rows.length === 0)
           throw new Error("Concept not found");
@@ -319,7 +158,6 @@ export class GenomeService {
         throw new Error(`Unsupported source type: ${req.sourceType}`);
       }
 
-      // Parse the structured content block into a gene object.
       let geneCategory: "immune" | "pattern" | "lesson" = "lesson";
       if (memoryType === "MISTAKE") {
         geneCategory = "immune";
@@ -327,7 +165,7 @@ export class GenomeService {
         geneCategory = "pattern";
       }
 
-      const geneId = await this.upsertGene({
+      return this.upsertGene({
         name: this.generateGeneName(content),
         description: content.slice(0, 300),
         problem: this.extractProblem(content),
@@ -339,15 +177,7 @@ export class GenomeService {
         sourceId: req.sourceId,
         confidence: 0.5,
       });
-
-      return geneId;
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+    });
   }
 
   // ─── Heuristic helpers ──────────────────────────────────
@@ -387,218 +217,22 @@ export class GenomeService {
   // Phase 4: Evolution Engine
   // ════════════════════════════════════════════════════════
 
-  /**
-   * Merge: combine multiple genes into one unified gene.
-   * The target gene absorbs source genes — they get marked as 'merged'.
-   * Confidence is averaged; version increments.
-   */
   static async mergeGenes(
     geneIds: string[],
     targetName: string,
     project: string,
   ): Promise<string> {
-    if (geneIds.length < 2) throw new Error("Need at least 2 genes to merge");
-
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
-
-      // Bound reads as well as writes; one unbounded SELECT would defeat batching.
-      const sourceIds = [...new Set(geneIds)];
-      const genes: Record<string, unknown>[] = [];
-      const batchSize = 900;
-      const tenantId = getTenantId();
-      for (let offset = 0; offset < sourceIds.length; offset += batchSize) {
-        const { clause, binds } = buildInClause(sourceIds.slice(offset, offset + batchSize), { tenantId });
-        const result = await connection.execute<Record<string, unknown>>( // NOSONAR
-          `SELECT id, name, description, problem, solution, architecture,
-                category, confidence, version, embedding
-           FROM codeatlas_genome WHERE tenant_id = :tenantId AND id IN (${clause})`,
-          binds,
-        );
-        genes.push(...(result.rows || []));
-      }
-      if (genes.length < 2 || genes.length !== sourceIds.length) {
-        throw new Error("Not all genes found");
-      }
-
-      // Combine content
-      const combinedProblem = genes
-        .map((g) => String(rowValue(g, "problem") || ""))
-        .join("\n\n");
-      const combinedSolution = genes
-        .map((g) => String(rowValue(g, "solution") || ""))
-        .join("\n\n");
-      const avgConfidence =
-        genes.reduce(
-          (s, g) => s + Number(rowValue(g, "confidence")),
-          0,
-        ) / genes.length;
-
-      // Create unified gene
-      const geneId = await this.upsertGene({
-        name: targetName,
-        description: `Merged from ${genes.length} genes:\n${genes.map((g) => String(rowValue(g, "name"))).join(", ")}`,
-        problem: combinedProblem,
-        solution: combinedSolution,
-        architecture: String(rowValue(genes[0], "architecture") || ""),
-        category: String(rowValue(genes[0], "category")),
-        project,
-        sourceType: "manual",
-        sourceId: geneIds.join(","),
-        dependencies: geneIds,
-        confidence: avgConfidence,
-      });
-
-      // Mark source genes as merged
-      if (genes.length > 0) {
-        const updateIds = genes.map((g) => String(rowValue(g, "id")));
-        for (let k = 0; k < updateIds.length; k += batchSize) {
-          const chunk = updateIds.slice(k, k + batchSize);
-          const { clause, binds } = buildInClause(chunk, { tenantId });
-          await connection.execute( // NOSONAR
-            `UPDATE codeatlas_genome SET status = 'merged', updated_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenantId AND id IN (${clause})`,
-            binds,
-            { autoCommit: true }
-          );
-        }
-
-        // Record relationship
-        const insertBinds = genes.map((g) => ({
-          id: `rel-${randomUUID().slice(0, 8)}`,
-          src: String(rowValue(g, "id")),
-          tgt: geneId,
-        }));
-        await connection.executeMany(
-          `INSERT INTO gene_relationships (id, source_id, target_id, relationship, weight)
-           VALUES (:id, :src, :tgt, 'merged_into', 1.0)`,
-          insertBinds,
-          { autoCommit: true },
-        );
-      }
-
-      logger.info(
-        `[Genome] Merged ${geneIds.length} genes → "${targetName}" (${geneId})`,
-      );
-      return geneId;
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+    return mergeGenesOperation(geneIds, targetName, project, (input) => this.upsertGene(input));
   }
 
-  /**
-   * Split: break a large gene into multiple specialized genes.
-   * The original gene is marked 'retired' and child genes are created.
-   */
   static async splitGene(
     sourceGeneId: string,
     childNames: string[],
     project: string,
   ): Promise<string[]> {
-    if (childNames.length < 2)
-      throw new Error("Need at least 2 child gene names");
-    if (childNames.length > 20)
-      throw new Error("Cannot split gene into more than 20 child genes");
-
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
-
-      const result = await connection.execute<unknown[]>(
-        `SELECT id, name, description, problem, solution, architecture, category, confidence
-         FROM codeatlas_genome WHERE id = :id AND tenant_id = :tenantId`,
-        { id: sourceGeneId, tenantId: getTenantId() } as any,
-      );
-
-      if (!result.rows || result.rows.length === 0)
-        throw new Error("Source gene not found");
-      const g = result.rows[0];
-
-      const sourceConfidence = Number(rowValue(g, "confidence"));
-
-      const childIds: string[] = [];
-      const relBinds: Record<string, any>[] = [];
-      for (let i = 0; i < childNames.length; i++) {
-        const childId = await this.upsertGene({ // NOSONAR
-          name: childNames[i],
-          description: `Split from: ${String(rowValue(g, "name"))} (part ${i + 1}/${childNames.length})`,
-          problem: String(rowValue(g, "problem") || ""),
-          solution:
-            String(rowValue(g, "solution") || "")
-              .split("\n")
-              .slice(
-                Math.floor(
-                  i *
-                    (String(rowValue(g, "solution") || "").split("\n").length /
-                      childNames.length),
-                ),
-                Math.floor(
-                  (i + 1) *
-                    (String(rowValue(g, "solution") || "").split("\n").length /
-                      childNames.length),
-                ),
-              )
-              .join("\n") ||
-            `Sub-gene ${i + 1} of ${String(rowValue(g, "name"))}`,
-          architecture: String(rowValue(g, "architecture") || ""),
-          category: String(rowValue(g, "category")),
-          project,
-          sourceType: "manual",
-          sourceId: sourceGeneId,
-          confidence: sourceConfidence * 0.8, // slightly lower confidence initially
-        });
-        childIds.push(childId);
-
-        relBinds.push({
-          id: `rel-${randomUUID().slice(0, 8)}`,
-          src: sourceGeneId,
-          tgt: childId,
-        });
-      }
-
-      if (relBinds.length > 0) {
-        // ⚡ Bolt Optimization: Batch relationship insertions
-        const result = await connection.executeMany(
-          `INSERT INTO gene_relationships (id, source_id, target_id, relationship, weight)
-           VALUES (:id, :src, :tgt, 'split_from', 0.8)`,
-          relBinds as any,
-          { autoCommit: true, batchErrors: true },
-        );
-        if (result.batchErrors && result.batchErrors.length > 0) {
-          logger.error(
-            `[Genome] Failed to insert relationships during splitGene: ${result.batchErrors.map((e) => e.message).join(", ")}`,
-          );
-        }
-      }
-
-      // Mark source as retired
-      await connection.execute(
-        `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP WHERE id = :id AND tenant_id = :tenantId`,
-        { id: sourceGeneId, tenantId: getTenantId() } as any,
-        { autoCommit: true },
-      );
-
-      logger.info(
-        `[Genome] Split "${String(rowValue(g, "name"))}" → ${childNames.length} children`,
-      );
-      return childIds;
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+    return splitGeneOperation(sourceGeneId, childNames, project, (input) => this.upsertGene(input));
   }
 
-  /**
-   * Mutate: increment version with improvements.
-   * Uses feedback (success/failure) to adjust confidence.
-   */
   static async mutateGene(
     geneId: string,
     improvements: {
@@ -606,158 +240,24 @@ export class GenomeService {
       solution?: string;
       success?: boolean;
     },
-    project: string,
+    _project: string,
   ): Promise<string> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
-
-      const result = await connection.execute<unknown[]>(
-        `SELECT id, name, problem, solution, confidence, version, success_rate, usage_count
-         FROM codeatlas_genome WHERE id = :id AND tenant_id = :tenantId`,
-        { id: geneId, tenantId: getTenantId() } as any,
-      );
-
-      if (!result.rows || result.rows.length === 0)
-        throw new Error("Gene not found");
-      const g = result.rows[0];
-
-      const oldConfidence = Number(rowValue(g, "confidence"));
-      const oldVersion = Number(rowValue(g, "version"));
-      const oldSuccessRate = Number(rowValue(g, "success_rate"));
-      const oldUsage = Number(rowValue(g, "usage_count"));
-
-      // Bayesian confidence update based on feedback
-      let newConfidence = oldConfidence;
-      let newSuccessRate = oldSuccessRate;
-
-      if (improvements.success === true) {
-        // Success boosts confidence
-        newConfidence = Math.min(
-          0.99,
-          oldConfidence + 0.05 * Math.log2(2 + (oldUsage || 0)),
-        );
-        newSuccessRate = (oldSuccessRate * oldUsage + 1) / (oldUsage + 1);
-      } else if (improvements.success === false) {
-        // Failure penalties
-        newConfidence = Math.max(0.05, oldConfidence * 0.85);
-        newSuccessRate =
-          (oldSuccessRate * oldUsage) / Math.max(1, oldUsage + 1);
-      }
-
-      // Save mutation record
-      await connection.execute(
-        `INSERT INTO gene_mutations (id, gene_id, old_version, new_version, changes)
-         VALUES (:id, :geneId, :oldVer, :newVer, :changes)`,
-        {
-          id: `mut-${randomUUID().slice(0, 8)}`,
-          geneId,
-          oldVer: oldVersion,
-          newVer: oldVersion + 1,
-          changes: JSON.stringify({
-            ...improvements,
-            oldConfidence,
-            newConfidence,
-          }),
-        } as any,
-        { autoCommit: true },
-      );
-
-      // Update gene
-      const updates: string[] = [];
-      const binds: Record<string, any> = {
-        id: geneId,
-        tenantId: getTenantId(),
-      };
-
-      if (improvements.description) {
-        updates.push("description = :desc");
-        binds.desc = improvements.description;
-      }
-      if (improvements.solution) {
-        updates.push("solution = :sol");
-        binds.sol = improvements.solution;
-      }
-      updates.push(
-        "confidence = :conf",
-        "version = version + 1",
-        "success_rate = :sr",
-        "evolution_score = evolution_score + 1",
-        "updated_at = CURRENT_TIMESTAMP",
-      );
-      binds.conf = newConfidence;
-      binds.sr = newSuccessRate;
-
-      await connection.execute(
-        `UPDATE codeatlas_genome SET ${updates.join(", ")} WHERE id = :id AND tenant_id = :tenantId`,
-        binds as any,
-        { autoCommit: true },
-      );
-
-      logger.info(
-        `[Genome] Mutated "${String(rowValue(g, "name"))}" (v${oldVersion}→v${oldVersion + 1}, confidence: ${oldConfidence}→${newConfidence.toFixed(2)})`,
-      );
-      return geneId;
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+    return mutateGeneOperation(geneId, improvements);
   }
 
-  /**
-   * Retire: mark one or more genes as retired (obsolete).
-   */
   static async retireGenes(geneIds: string[]): Promise<number> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
-
-      let count = 0;
-      // ⚡ Bolt Optimization: Batch retirement update using IN clause instead of executeMany to reduce DB overhead.
-      if (geneIds.length > 0) {
-        const BATCH_CHUNK_SIZE = 900;
-        for (let k = 0; k < geneIds.length; k += BATCH_CHUNK_SIZE) {
-          const chunk = geneIds.slice(k, k + BATCH_CHUNK_SIZE);
-          const { clause, binds } = buildInClause(chunk, { tenantId: getTenantId() });
-          const result = await connection.execute( // NOSONAR
-            `UPDATE codeatlas_genome SET status = 'retired', updated_at = CURRENT_TIMESTAMP
-             WHERE status != 'retired' AND tenant_id = :tenantId AND id IN (${clause})`,
-            binds,
-            { autoCommit: true },
-          );
-          count += result.rowsAffected || 0;
-        }
-      }
-
-      logger.info(`[Genome] Retired ${count} genes`);
-      return count;
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+    return retireGenesOperation(geneIds);
   }
 
   // ════════════════════════════════════════════════════════
   // Phase 5: Immune System — CRISPR-inspired failure prevention
   // ════════════════════════════════════════════════════════
 
-  /**
-   * Scan for immune genes matching a given problem description.
-   * Returns prevention context that should be injected BEFORE reasoning.
-   */
   static async scanImmuneGenes(
     problem: string,
     project?: string,
   ): Promise<GeneRecord[]> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
+    return withGenomeConnection(async (connection) => {
       const tenantId = getTenantId();
 
       const embedding = await generateEmbedding(problem, "query");
@@ -781,73 +281,14 @@ export class GenomeService {
         embedding,
         limit,
         tenantId,
-        filterBinds
+        filterBinds,
       );
 
-      if (searchResults.length === 0) return [];
-
-      const ids = searchResults.map((r) => r.id);
-      const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const queryBinds: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
-
-      const result = await connection.execute<unknown[]>(
-        `SELECT id, name, description, problem, solution, architecture,
-                category, project, confidence, version, evolution_score,
-                usage_count, success_rate, embedding, status,
-                source_type, source_id, dependencies, created_at, updated_at
-         FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        queryBinds as any,
-      );
-
-      const rows = result.rows || [];
-      const genes = rows.map((r: any[]) => ({
-        id: String(rowValue(r, "id")),
-        name: String(rowValue(r, "name")),
-        description: String(rowValue(r, "description") || ""),
-        problem: String(rowValue(r, "problem") || ""),
-        solution: String(rowValue(r, "solution") || ""),
-        architecture: String(rowValue(r, "architecture") || ""),
-        category: String(rowValue(r, "category")),
-        project: String(rowValue(r, "project") || ""),
-        confidence: Number(rowValue(r, "confidence")),
-        version: Number(rowValue(r, "version")),
-        evolutionScore: Number(rowValue(r, "evolution_score")),
-        usageCount: Number(rowValue(r, "usage_count")),
-        successRate: Number(rowValue(r, "success_rate")),
-        status: String(rowValue(r, "status")),
-        sourceType: String(rowValue(r, "source_type") || ""),
-        sourceId: String(rowValue(r, "source_id") || ""),
-        dependencies: JSON.parse(String(rowValue(r, "dependencies") || "[]")),
-        createdAt: String(rowValue(r, "created_at")),
-        updatedAt: String(rowValue(r, "updated_at")),
-        score: scoreMap.get(String(rowValue(r, "id"))) ?? 0,
-      }));
-
-      // Sort by score descending
-      genes.sort((a, b) => b.score - a.score);
-
-      // Return without the injected score field to match GeneRecord exactly
-      return genes.map((g) => {
-        const { score, ...rest } = g;
-        return rest as unknown as GeneRecord; // we mapped everything needed
-      });
-    } finally {
-      try {
-        await connection.close();
-      } catch {
-        /* ignore */
-      }
-    }
+      const { genes } = await fetchGenesByVectorMatches(connection, searchResults, tenantId);
+      return genes.map(({ score: _score, ...rest }) => rest);
+    });
   }
 
-  /**
-   * Create immune gene from a failure (FEEDBACK dream with result='failure').
-   * This records the failure pattern so future tasks can avoid the same mistake.
-   */
   static async createImmuneGene(
     problem: string,
     failureDescription: string,
@@ -863,14 +304,10 @@ export class GenomeService {
       category: "immune",
       project,
       sourceType: "feedback",
-      confidence: 0.7, // immune genes start with higher confidence
+      confidence: 0.7,
     });
   }
 
-  /**
-   * Build prevention context from immune genes.
-   * Returns formatted text to inject before agent reasoning.
-   */
   static async buildImmuneContext(
     problem: string,
     project?: string,
@@ -880,10 +317,10 @@ export class GenomeService {
 
     const parts = ["\n# ⚠️ Immune System: Previously encountered failures\n"];
     for (const g of genes) {
-      parts.push(`### ${g.name}`);
-      parts.push(`**Failure**: ${g.problem}`); // NOSONAR
-      parts.push(`**Prevention**: ${g.solution}`); // NOSONAR
-      parts.push( // NOSONAR
+      parts.push(
+        `### ${g.name}`,
+        `**Failure**: ${g.problem}`,
+        `**Prevention**: ${g.solution}`,
         `**Confidence**: ${(g.confidence * 100).toFixed(0)}% | Success rate: ${(g.successRate * 100).toFixed(0)}%\n`,
       );
     }
@@ -895,20 +332,13 @@ export class GenomeService {
   // Phase 7: Multi-Repository Intelligence & Skill Generation
   // ═══════════════════════════════════════════════════════════
 
-  /**
-   * Recommend genes relevant to a task/context across all projects.
-   * Enables multi-repository intelligence — knowledge from one project
-   * benefits another when relevant.
-   */
   static async recommendGenes(
     context: string,
     project?: string,
-    limit: number = 10,
-    minConfidence: number = 0.3,
+    limit = 10,
+    minConfidence = 0.3,
   ): Promise<GeneSearchResult[]> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
+    return withGenomeConnection(async (connection) => {
       const tenantId = getTenantId();
       const embedding = await generateEmbedding(context, "query");
       if (!embedding) return [];
@@ -928,416 +358,62 @@ export class GenomeService {
         embedding,
         limit,
         tenantId,
-        filterBinds
+        filterBinds,
       );
 
-      if (searchResults.length === 0) return [];
-
-      const ids = searchResults.map((r) => r.id);
-      const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const queryBinds: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
-
-      const result = await connection.execute<unknown[]>(
-        `SELECT id, name, description, problem, solution, architecture,
-                category, project, confidence, version, evolution_score,
-                usage_count, success_rate,embedding, status,
-                source_type, source_id, dependencies, created_at, updated_at
-         FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        queryBinds as any,
-      );
-
-      const rows = result.rows || [];
-      const genes: GeneSearchResult[] = rows.map((r: any[]) => ({
-        id: String(rowValue(r, "id")),
-        name: String(rowValue(r, "name")),
-        description: String(rowValue(r, "description") || ""),
-        problem: String(rowValue(r, "problem") || ""),
-        solution: String(rowValue(r, "solution") || ""),
-        architecture: String(rowValue(r, "architecture") || ""),
-        category: String(rowValue(r, "category")),
-        project: String(rowValue(r, "project") || ""),
-        confidence: Number(rowValue(r, "confidence")),
-        version: Number(rowValue(r, "version")),
-        evolutionScore: Number(rowValue(r, "evolution_score")),
-        usageCount: Number(rowValue(r, "usage_count")),
-        successRate: Number(rowValue(r, "success_rate")),
-        status: String(rowValue(r, "status")),
-        sourceType: String(rowValue(r, "source_type") || ""),
-        sourceId: String(rowValue(r, "source_id") || ""),
-        dependencies: JSON.parse(String(rowValue(r, "dependencies") || "[]")),
-        createdAt: String(rowValue(r, "created_at")),
-        updatedAt: String(rowValue(r, "updated_at")),
-        score: scoreMap.get(String(rowValue(r, "id"))) ?? 0,
-      }));
-
-      // Sort by score descending
-      genes.sort((a, b) => b.score - a.score);
-
+      const { genes } = await fetchGenesByVectorMatches(connection, searchResults, tenantId);
       return genes;
-    } finally {
-      try {
-        await connection.close();
-      } catch {}
-    }
+    });
   }
 
-  /**
-   * Generate an AI-optimized skill prompt from a gene.
-   * Any AI IDE can request this via MCP — no manual installation needed.
-   * "Skills Become Genes" — dynamic capability delivery.
-   */
   static async generateSkillFromGene(geneId: string): Promise<string | null> {
     const gene = await this.getGene(geneId);
     if (!gene) return null;
 
-    const parts: string[] = [
-      `# Skill: ${gene.name}\n`,
-      `**Description**: ${gene.description}\n`,
-      `## Problem\n${gene.problem}\n`,
-      `## Solution\n${gene.solution}\n`,
-    ];
-    if (gene.architecture) {
-      parts.push(`## Architecture\n${gene.architecture}\n`);
-    }
-    parts.push(
-      `## Metadata`,
-      `- Category: ${gene.category}`,
-      `- Confidence: ${(gene.confidence * 100).toFixed(0)}%`,
-      `- Version: ${gene.version}`,
-      `- Usage count: ${gene.usageCount}`,
-      `- Success rate: ${(gene.successRate * 100).toFixed(0)}%\n`,
-      `## Instructions
-Apply this knowledge when encountering similar problems.
-1. Analyze the current context against the problem description
-2. If matched, apply the solution pattern
-3. Adapt to current project specifics
-4. Report outcome to improve the gene's success rate\n`
-    );
-    if (gene.dependencies && gene.dependencies.length > 0) {
-      parts.push(`\n**Depends on**: ${gene.dependencies.join(", ")}`);
-    }
-
-    // Increment usage count
-    try {
-      const capturedTenantId = getTenantId();
-      initPool().then(pool => pool.getConnection()).then(bgConn => {
-        // ⚡ Bolt Optimization: Fire and forget DB update to prevent "Write on Read" N+1 blocking
-        // Return the promise chain to correctly handle rejections and ensure connection cleanup
-        return setSessionContext(bgConn).then(() => {
-          return bgConn.execute(
-            `UPDATE codeatlas_genome SET usage_count = usage_count + 1 WHERE id = :id AND tenant_id = :tenantId`,
-            { id: geneId, tenantId: capturedTenantId } as any,
-            { autoCommit: true },
-          );
-        }).finally(() => bgConn.close());
-      }).catch(() => {
-        // Non-critical — don't fail the skill generation
-      });
-    } catch {
-      // Non-critical — don't fail the skill generation
-    }
-
-    return parts.join("\n");
+    const formatted = formatSkillPromptFromGene(gene);
+    incrementGeneUsageInBackground([geneId], getTenantId());
+    return formatted;
   }
 
-  /**
-   * Inherit relevant genes from other projects when setting up a new project.
-   * DNA Inheritance — every new project is born smarter.
-   */
   static async inheritProjectGenes(
     newProject: string,
     context: string,
     sourceProjects?: string[],
-    limit: number = 20,
+    limit = 20,
   ): Promise<{ inherited: number; genes: GeneSearchResult[] }> {
-    const connection = await (await initPool()).getConnection();
-    try {
-      await setSessionContext(connection);
-      const tenantId = getTenantId();
-      const embedding = await generateEmbedding(context, "query");
-      if (!embedding) return { inherited: 0, genes: [] };
-
-      const safeLimit = Math.min(limit, 50);
-      let filterSql = `status = 'active'`;
-      const filterBinds: Record<string, unknown> = {};
-
-      if (sourceProjects && sourceProjects.length > 0) {
-        const projBinds = sourceProjects.map((_, i) => `:proj${i}`).join(",");
-        filterSql += ` AND project IN (${projBinds})`;
-        sourceProjects.forEach((p, i) => { filterBinds[`proj${i}`] = p; });
-      } else {
-        filterSql += ` AND project != :newProject`;
-        filterBinds.newProject = newProject;
-      }
-
-      const tableSubquery = `(SELECT * FROM codeatlas_genome WHERE ${filterSql}) tbl`;
-      const db = createDatabaseAdapter();
-      await db.connect();
-      const searchResults = await db.searchVector(
-        tableSubquery,
-        embedding,
-        safeLimit,
-        tenantId,
-        filterBinds
-      );
-
-      if (searchResults.length === 0) return { inherited: 0, genes: [] };
-
-      const ids = searchResults.map((r) => r.id);
-      const scoreMap = new Map(searchResults.map((r) => [r.id, r.score]));
-
-      const idBinds = ids.map((_, i) => `:id${i}`).join(",");
-      const queryBinds: Record<string, unknown> = { tenantId };
-      ids.forEach((id, i) => { queryBinds[`id${i}`] = id; });
-
-      const result = await connection.execute<unknown[]>(
-        `SELECT id, name, description, problem, solution, architecture,
-                category, project, confidence, version, evolution_score,
-                usage_count, success_rate, embedding, status,
-                source_type, source_id, dependencies, created_at, updated_at
-         FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND id IN (${idBinds})`,
-        queryBinds as any,
-      );
-
-      const rows = result.rows || [];
-
-      // Map rows to GeneRecords using R_IDX
-      const genes: GeneSearchResult[] = rows.map((r: any[]) => ({
-        id: String(rowValue(r, "id")),
-        name: String(rowValue(r, "name")),
-        description: String(rowValue(r, "description") || ""),
-        problem: String(rowValue(r, "problem") || ""),
-        solution: String(rowValue(r, "solution") || ""),
-        architecture: String(rowValue(r, "architecture") || ""),
-        category: String(rowValue(r, "category")),
-        project: String(rowValue(r, "project") || ""),
-        confidence: Number(rowValue(r, "confidence")),
-        version: Number(rowValue(r, "version")),
-        evolutionScore: Number(rowValue(r, "evolution_score")),
-        usageCount: Number(rowValue(r, "usage_count")),
-        successRate: Number(rowValue(r, "success_rate")),
-        status: String(rowValue(r, "status")),
-        sourceType: String(rowValue(r, "source_type") || ""),
-        sourceId: String(rowValue(r, "source_id") || ""),
-        dependencies: JSON.parse(String(rowValue(r, "dependencies") || "[]")),
-        createdAt: String(rowValue(r, "created_at")),
-        updatedAt: String(rowValue(r, "updated_at")),
-        score: scoreMap.get(String(rowValue(r, "id"))) ?? 0,
-      }));
-
-      // Sort by score descending
-      genes.sort((a, b) => b.score - a.score);
-
-      const inherited = genes.length > 0
-        ? await this.persistInheritedGenes(connection, genes, rows, newProject, tenantId)
-        : 0;
-
-      return { inherited, genes };
-    } catch (err) {
-      logger.error("inheritProjectGenes failed", err);
-      return { inherited: 0, genes: [] };
-    } finally {
-      try {
-        await connection.close();
-      } catch {}
-    }
-  }
-
-  private static async persistInheritedGenes(
-    connection: Awaited<ReturnType<Awaited<ReturnType<typeof initPool>>["getConnection"]>>,
-    genes: GeneSearchResult[], rows: unknown[], newProject: string, tenantId: string,
-  ): Promise<number> {
-    // ⚡ Bolt Optimization: Batch updates and inserts instead of querying inside loop (avoids N+1 DB roundtrips)
-    const nameList = genes.map((g) => g.name);
-    const existingRows: unknown[][] = [];
-
-    // SQLite limits bound parameters, so batch the IN clause
-    const chunkSize = 900;
-    for (let i = 0; i < nameList.length; i += chunkSize) {
-      const chunk = nameList.slice(i, i + chunkSize);
-      const { clause: inClause, binds: nameBinds } = buildInClause(chunk, {
-        newProject,
-        tenantId: getTenantId(),
-      });
-
-      const existingQuery = await connection.execute<unknown[]>( // NOSONAR -- reuse the connection for one bounded query at a time.
-        `SELECT id, name, version FROM codeatlas_genome WHERE name IN (${inClause}) AND project = :newProject AND tenant_id = :tenantId`,
-        nameBinds,
-      );
-      if (existingQuery.rows) {
-        existingRows.push(...existingQuery.rows);
-      }
-    }
-    const existingMap = new Map(
-      existingRows.map((r) => [
-        String(r[1]),
-        { id: String(r[0]), version: Number(r[2]) },
-      ]),
-    );
-
-    const toInsert: Record<string, unknown>[] = [];
-    const toUpdate: Record<string, unknown>[] = [];
-    const mutations: Record<string, unknown>[] = [];
-
-    for (let i = 0; i < genes.length; i++) {
-      const gene = genes[i];
-      const rawEmbedding = rowValue(rows[i], "embedding");
-      const existing = existingMap.get(gene.name);
-
-      if (existing) {
-        const newVersion = existing.version + 1;
-        mutations.push({
-          id: `mut-${randomUUID().slice(0, 8)}`,
-          geneId: existing.id,
-          oldVer: existing.version,
-          newVer: newVersion,
-          changes: JSON.stringify({
-            description: gene.description,
-            solution: gene.solution,
-          }),
-        });
-        toUpdate.push({
-          id: existing.id,
-          desc: gene.description,
-          problem: gene.problem,
-          solution: gene.solution,
-          arch: gene.architecture || "",
-          cat: gene.category,
-          conf: gene.confidence * 0.9,
-          ver: newVersion,
-          emb: rawEmbedding,
-          tenantId,
-        });
-      } else {
-        toInsert.push({
-          id: `gene-${randomUUID().slice(0, 8)}`,
-          name: gene.name,
-          desc: gene.description,
-          problem: gene.problem,
-          solution: gene.solution,
-          arch: gene.architecture || "",
-          cat: gene.category,
-          project: newProject,
-          conf: gene.confidence * 0.9,
-          emb: rawEmbedding,
-          srcType: "inherited",
-          srcId: gene.id,
-          deps: JSON.stringify(gene.dependencies || []),
-          tenantId,
-        });
-      }
-    }
-
-    if (mutations.length > 0) {
-      await connection.executeMany(
-        `INSERT INTO gene_mutations (id, gene_id, old_version, new_version, changes, created_at)
-         VALUES (:id, :geneId, :oldVer, :newVer, :changes, CURRENT_TIMESTAMP)`,
-        mutations,
-        { autoCommit: false, batchErrors: true },
-      );
-    }
-
-    if (toUpdate.length > 0) {
-      await connection.executeMany(
-        `UPDATE codeatlas_genome SET
-         description = :desc, problem = :problem, solution = :solution,
-         architecture = :arch, category = :cat, confidence = :conf,
-         version = :ver, evolution_score = evolution_score + 1,
-         embedding = :emb, status = 'active', updated_at = CURRENT_TIMESTAMP
-         WHERE id = :id AND tenant_id = :tenantId`,
-        toUpdate,
-        { autoCommit: false, batchErrors: true },
-      );
-    }
-
-    if (toInsert.length > 0) {
-      await connection.executeMany(
-        `INSERT INTO codeatlas_genome (
-           id, name, description, problem, solution, architecture,
-           category, project, confidence, version, evolution_score,
-           usage_count, success_rate, embedding, status, source_type,
-           source_id, dependencies, created_at, updated_at, tenant_id
-         ) VALUES (
-           :id, :name, :desc, :problem, :solution, :arch,
-           :cat, :project, :conf, 1, 1, 0, 0.50, :emb, 'active',
-           :srcType, :srcId, :deps, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :tenantId
-         )`,
-        toInsert,
-        { autoCommit: false, batchErrors: true },
-      );
-    }
-
-    return toUpdate.length + toInsert.length;
+    return inheritProjectGenesOperation(newProject, context, sourceProjects, limit);
   }
 
   // ═══════════════════════════════════════════════════════════
   // Skill Store Methods (Cloud-backed skill persistence)
   // ═══════════════════════════════════════════════════════════
 
-  /**
-   * Find a gene by exact name and category (for skill lookup).
-   * Uses text match, not vector similarity.
-   */
   static async getGeneByNameAndCategory(
     name: string,
     category: string,
   ): Promise<GeneSearchResult | null> {
-    const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
-      const result = await connection.execute<unknown[]>(
-        `SELECT id, name, description, problem, solution, architecture,
-                category, project, confidence, version, evolution_score,
-                usage_count, success_rate, embedding, status,
-                source_type, source_id, dependencies, created_at, updated_at
-         FROM codeatlas_genome
-         WHERE tenant_id = :tenantId AND name = :name AND category = :cat AND status = 'active'
-         LIMIT 1`,
-        { tenantId: getTenantId(), name, cat: category } as any,
-      );
-      const row = result.rows?.[0];
-      if (!row) return null;
-      return {
-        id: String(rowValue(row, "id")),
-        name: String(rowValue(row, "name")),
-        description: String(rowValue(row, "description") || ""),
-        problem: String(rowValue(row, "problem") || ""),
-        solution: String(rowValue(row, "solution") || ""),
-        architecture: String(rowValue(row, "architecture") || ""),
-        category: String(rowValue(row, "category")),
-        project: String(rowValue(row, "project") || ""),
-        confidence: Number(rowValue(row, "confidence")),
-        version: Number(rowValue(row, "version")),
-        evolutionScore: Number(rowValue(row, "evolution_score")),
-        usageCount: Number(rowValue(row, "usage_count")),
-        successRate: Number(rowValue(row, "success_rate")),
-        status: String(rowValue(row, "status")),
-        sourceType: String(rowValue(row, "source_type") || ""),
-        sourceId: String(rowValue(row, "source_id") || ""),
-        dependencies: JSON.parse(String(rowValue(row, "dependencies") || "[]")),
-        createdAt: String(rowValue(row, "created_at")),
-        updatedAt: String(rowValue(row, "updated_at")),
-        score: 1,
-      };
+      return await withGenomeConnection(async (connection) => {
+        const result = await connection.execute<unknown[]>(
+          `SELECT ${GENOME_SELECT_COLUMNS}
+           FROM codeatlas_genome
+           WHERE tenant_id = :tenantId AND name = :name AND category = :cat AND status = 'active'
+           LIMIT 1`,
+          { tenantId: getTenantId(), name, cat: category },
+        );
+        const row = result.rows?.[0];
+        if (!row) return null;
+        return {
+          ...mapRowToGeneRecord(row),
+          score: 1,
+        };
+      });
     } catch (err) {
       logger.error(`getGeneByNameAndCategory failed: ${name}/${category}`, err);
       return null;
-    } finally {
-      try {
-        await connection.close();
-      } catch {}
     }
   }
 
-  /**
-   * Convenience wrapper: create a gene (skill) with defaults.
-   * Calls upsertGene internally.
-   */
   static async createGene(input: {
     name: string;
     description: string;
@@ -1360,16 +436,11 @@ Apply this knowledge when encountering similar problems.
       dependencies: input.dependencies || [],
       confidence: input.confidence ?? 0.5,
     });
-    // Fetch back the created gene as GeneRecord (has all fields)
     const created = await this.getGene(geneId);
     if (!created) throw new Error(`Gene created but not found: ${geneId}`);
     return created;
   }
 
-  /**
-   * Update specific fields of an existing gene.
-   * Only updates provided fields, regenerates embedding if name/solution/description changes.
-   */
   static async updateGene(
     geneId: string,
     fields: {
@@ -1384,86 +455,63 @@ Apply this knowledge when encountering similar problems.
       version?: number;
     },
   ): Promise<void> {
-    const connection = await (await initPool()).getConnection();
     try {
-      await setSessionContext(connection);
-      const sets: string[] = [];
-      const binds: Record<string, any> = {
-        id: geneId,
-        tenantId: getTenantId(),
-      };
-      if (fields.name !== undefined) {
-        sets.push("name = :name");
-        binds.name = fields.name;
-      }
-      if (fields.description !== undefined) {
-        sets.push("description = :desc");
-        binds.desc = fields.description;
-      }
-      if (fields.problem !== undefined) {
-        sets.push("problem = :problem");
-        binds.problem = fields.problem;
-      }
-      if (fields.solution !== undefined) {
-        sets.push("solution = :solution");
-        binds.solution = fields.solution;
-      }
-      if (fields.architecture !== undefined) {
-        sets.push("architecture = :arch");
-        binds.arch = fields.architecture;
-      }
-      if (fields.category !== undefined) {
-        sets.push("category = :cat");
-        binds.cat = fields.category;
-      }
-      if (fields.dependencies !== undefined) {
-        sets.push("dependencies = :deps");
-        binds.deps = JSON.stringify(fields.dependencies);
-      }
-      if (fields.confidence !== undefined) {
-        sets.push("confidence = :conf");
-        binds.conf = fields.confidence;
-      }
-      if (fields.version !== undefined) {
-        sets.push("version = :ver");
-        binds.ver = fields.version;
-      }
-      sets.push("updated_at = CURRENT_TIMESTAMP");
+      await withGenomeConnection(async (connection) => {
+        const sets: string[] = [];
+        const binds: Record<string, unknown> = {
+          id: geneId,
+          tenantId: getTenantId(),
+        };
+        const fieldMapping: ReadonlyArray<[keyof typeof fields, string, string, (val: unknown) => unknown]> = [
+          ["name", "name = :name", "name", (v) => v],
+          ["description", "description = :desc", "desc", (v) => v],
+          ["problem", "problem = :problem", "problem", (v) => v],
+          ["solution", "solution = :solution", "solution", (v) => v],
+          ["architecture", "architecture = :arch", "arch", (v) => v],
+          ["category", "category = :cat", "cat", (v) => v],
+          ["dependencies", "dependencies = :deps", "deps", (v) => JSON.stringify(v)],
+          ["confidence", "confidence = :conf", "conf", (v) => v],
+          ["version", "version = :ver", "ver", (v) => v],
+        ];
+        for (const [key, clause, bindKey, transform] of fieldMapping) {
+          if (fields[key] !== undefined) {
+            sets.push(clause);
+            binds[bindKey] = transform(fields[key]);
+          }
+        }
+        sets.push("updated_at = CURRENT_TIMESTAMP");
 
-      await this.addUpdatedEmbedding(fields, sets, binds);
+        await this.addUpdatedEmbedding(fields, sets, binds);
 
-      if (sets.length === 1) return; // nothing to update
-      const sql = `UPDATE codeatlas_genome SET ${sets.join(", ")} WHERE id = :id AND tenant_id = :tenantId`;
-      await connection.execute(sql, binds as any, { autoCommit: true });
+        if (sets.length === 1) return;
+        const sql = `UPDATE codeatlas_genome SET ${sets.join(", ")} WHERE id = :id AND tenant_id = :tenantId`;
+        await connection.execute(sql, binds, { autoCommit: true });
+      });
     } catch (err) {
       logger.error(`updateGene failed for ${geneId}`, err);
       throw err;
-    } finally {
-      try {
-        await connection.close();
-      } catch {}
     }
   }
+
   private static async addUpdatedEmbedding(
     fields: { name?: string; description?: string; solution?: string },
-    sets: string[], binds: Record<string, unknown>,
+    sets: string[],
+    binds: Record<string, unknown>,
   ): Promise<void> {
-  // Regenerate embedding if content changed
-  const shouldReEmbed =
-    fields.name !== undefined ||
-    fields.description !== undefined ||
-    fields.solution !== undefined;
-  if (shouldReEmbed) {
-    const embedText =
-      `${fields.name || ""} ${fields.description || ""} ${fields.solution || ""}`.trim();
-    if (embedText) {
-      const embedding = await generateEmbedding(embedText, "passage");
-      if (embedding) {
-        sets.push("embedding = :emb");
-        binds.emb = new Uint8Array(new Float32Array(embedding).buffer);
+    const shouldReEmbed =
+      fields.name !== undefined ||
+      fields.description !== undefined ||
+      fields.solution !== undefined;
+    if (shouldReEmbed) {
+      const embedText =
+        `${fields.name || ""} ${fields.description || ""} ${fields.solution || ""}`.trim();
+      if (embedText) {
+        const embedding = await generateEmbedding(embedText, "passage");
+        if (embedding) {
+          sets.push("embedding = :emb");
+          binds.emb = new Uint8Array(new Float32Array(embedding).buffer);
+        }
       }
     }
   }
-  }
-
 }

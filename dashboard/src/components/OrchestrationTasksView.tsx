@@ -3,6 +3,7 @@ import { Network, Loader2, AlertCircle, CheckCircle2, CircleDot, GitBranch, Ligh
 import { motion } from 'framer-motion';
 import { getAuthHeaders } from '../lib/auth'; // Reusing auth headers utility
 import type { A2AOrchestrationTask, OrchestrationState } from '../../../src/types/a2a'; // Importing types
+import { FilterPillGroup } from './ui/FilterPillGroup';
 import { SearchInputWithHint } from './ui/SearchInputWithHint';
 import { FOCUS_RING_CLASS } from '../lib/constants';
 
@@ -116,26 +117,13 @@ export function OrchestrationTasksView() {
             onClear={() => setSearchQuery('')}
           />
         </div>
-        <fieldset aria-label="Filter tasks by state" style={{ border: 'none', padding: 0, margin: 0, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {availableStates.map(state => (
-            <button
-              key={state}
-              type="button"
-              onClick={() => setFilterState(state)}
-              aria-pressed={filterState === state}
-              className={FOCUS_RING_CLASS}
-              style={{
-                padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
-                background: filterState === state ? 'rgba(0,240,255,0.15)' : 'rgba(0,0,0,0.2)',
-                color: filterState === state ? 'var(--primary-neon)' : 'var(--text-muted)',
-                cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s',
-                outline: 'none'
-              }}
-            >
-              {state.charAt(0).toUpperCase() + state.slice(1).replace('_', ' ')}
-            </button>
-          ))}
-        </fieldset>
+        <FilterPillGroup
+          ariaLabel="Filter tasks by state"
+          options={availableStates}
+          selected={filterState}
+          onSelect={setFilterState}
+          formatLabel={state => state.charAt(0).toUpperCase() + state.slice(1).replace('_', ' ')}
+        />
       </div>
 
       {/* Loading */}

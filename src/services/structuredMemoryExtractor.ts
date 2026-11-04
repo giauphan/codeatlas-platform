@@ -62,8 +62,8 @@ export interface StructuredExtractionOutcome {
 
 const MAX_CANDIDATE_LENGTH = 8_000;
 const SENSITIVE_MEMORY_FIELD_PATTERNS = [
-  /(?:api|secret_access)[_-]?key/i,
-  /(?:access|refresh|session)[_-]?token/i,
+  /(?:api|secret(?:_access)?|private)[_-]?key/i,
+  /(?:access|refresh|session|auth)[_-]?token/i,
   /(?:password|secret|authorization|credential)/i,
 ];
 
@@ -110,20 +110,48 @@ function redactPrivateKeyBlocks(value: string): string {
 }
 
 function redactSensitiveKeyValuePairs(value: string): string {
-  const keys = 'api_key|api-key|apikey|access_token|access-token|accesstoken|refresh_token|refresh-token|refreshtoken|aws_secret_access_key|aws-secret-access-key|awssecretaccesskey|aws_session_token|aws-session-token|awssessiontoken|password|secret|authorization';
-  const keyAssignment = new RegExp(String.raw`(["']?(?:${keys})["']?\s*[:=]\s*)("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)`, 'gi');
-  return value.replace(
-    keyAssignment,
-    (_match, prefix: string) => `${prefix.replace(/["']/g, '').trimEnd().slice(0, -1).trimEnd()}=[REDACTED]`
+  const authorizationAssignment = /(["']?)\b(authorization)\1\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\r\n,;}&]+)/gi;
+  const keyAssignment = /(["']?)\b([A-Za-z][\w-]*)\1\s*[:=](?!\/)\s*("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}&]+)/g;
+
+  const afterAuth = value.replace(
+    authorizationAssignment,
+    (_match, _quote: string, key: string) => `${key}=[REDACTED]`
   );
+  let output = '';
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+  while ((m = keyAssignment.exec(afterAuth)) !== null) {
+    const [match, , key, assigned] = m;
+    if (isSensitiveMemoryFieldName(key)) {
+      output += afterAuth.slice(cursor, m.index) + `${key}=[REDACTED]`;
+      cursor = m.index + match.length;
+    } else {
+      // Rescan the assigned value because it may contain a nested sensitive assignment.
+      keyAssignment.lastIndex = m.index + match.length - assigned.length;
+    }
+  }
+  return output + afterAuth.slice(cursor);
+}
+
+function redactBearerTokens(value: string): string {
+  return value.replace(/\bBearer[ \t]+(?:value[ \t]+)?([^\s,;}&]+)/gi, (full, token: string) => {
+    if (/^[\w-]+\s*[:=]+\s*[^\s:=]/.test(token)) {
+      return full;
+    }
+    if (/^[a-z0-9._~+/-]+=*$/i.test(token)) {
+      return full.replace(token, '[REDACTED]');
+    }
+    return full;
+  });
 }
 
 /** Redact before persistence, evidence construction, or provider submission. */
 export function redactMemoryText(value: string): string {
   return redactSensitiveKeyValuePairs(
-    redactPrivateKeyBlocks(value)
-      .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:)[^@\s/]+(@)/gi, '$1[REDACTED]$2')
-      .replace(/\bBearer[ \t]+(?:value[ \t]+)?(?!\w+\s*[:=])[A-Za-z0-9._~+/-]+=*(?![ \t]*[:=])/gi, 'Bearer [REDACTED]')
+    redactBearerTokens(
+      redactPrivateKeyBlocks(value)
+        .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:)[^@\s/]+(@)/gi, '$1[REDACTED]$2')
+    )
   )
     .replace(/\b(?:sk-[A-Za-z0-9_-]{8,}|gh[posru]_[A-Za-z0-9]{12,}|api_test_[A-Za-z0-9_-]+|(?:AKIA|ASIA)[A-Z0-9]{16})\b/g, '[REDACTED]');
 }
