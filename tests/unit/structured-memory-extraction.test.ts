@@ -190,14 +190,35 @@ test('technical file names and a negated caveat remain in the same evidence quot
 });
 
 test('quoted JSON credentials and credential query parameters are redacted', async () => {
-  const text = 'The API request failed with {"api_key":"fakeJsonCredential654321"}, Authorization: Bearer fakeBearerHeaderToken998877, Authorization: Bearer\npassword=fakeNewlinePassword554433, https://example.test?access_token=fakeQueryCredential123456, and postgresql://fixture_user:fakeUrlPassword765432@127.0.0.1:5432/test because credentials expired.';
+  const secrets = [
+    'fakeJsonCredential654321',
+    'fakeBearerHeaderToken998877',
+    'dGVzdFBhZGRlZEJlYXJlcg==',
+    'fakeNewlinePassword554433',
+    'fakeQueryCredential123456',
+    'fakeUrlPassword765432',
+  ];
+  const text = `The API request failed with {"api_key":"${secrets[0]}"}, Authorization: Bearer ${secrets[1]}, Authorization: Bearer ${secrets[2]}, Authorization: Bearer\npassword=${secrets[3]}, https://example.test?access_token=${secrets[4]}, and postgresql://fixture_user:${secrets[5]}@127.0.0.1:5432/test because credentials expired.`;
   const memories = await extractStructuredMemories([{ id: 'json-secret', role: 'USER', text }]);
   assert.ok(memories.length > 0);
-  assert.ok(!JSON.stringify(memories).includes('fakeJsonCredential654321'));
-  assert.ok(!JSON.stringify(memories).includes('fakeBearerHeaderToken998877'));
-  assert.ok(!JSON.stringify(memories).includes('fakeNewlinePassword554433'));
-  assert.ok(!JSON.stringify(memories).includes('fakeQueryCredential123456'));
-  assert.ok(!JSON.stringify(memories).includes('fakeUrlPassword765432'));
+  const serialized = JSON.stringify(memories);
+  for (const secret of secrets) {
+    assert.ok(!serialized.includes(secret));
+  }
+  assert.equal(redactMemoryText('Bearer dGVzdA=='), 'Bearer [REDACTED]');
+  assert.equal(redactMemoryText('Authorization: Bearer dGVzdA=='), 'Authorization=[REDACTED]');
+  assert.equal(redactMemoryText('Authorization: Basic dXNlcjpwYXNz'), 'Authorization=[REDACTED]');
+  assert.equal(redactMemoryText('Authorization: Token 9948281938'), 'Authorization=[REDACTED]');
+  assert.equal(redactMemoryText('Bearer password=secretValue123'), 'Bearer password=[REDACTED]');
+  assert.equal(redactMemoryText('SECRET_KEY=mySecretKey123'), 'SECRET_KEY=[REDACTED]');
+  assert.equal(redactMemoryText('SESSION_TOKEN=session123'), 'SESSION_TOKEN=[REDACTED]');
+  assert.equal(redactMemoryText('credentials=myCreds'), 'credentials=[REDACTED]');
+  assert.equal(redactMemoryText('client_credential=clientSecret'), 'client_credential=[REDACTED]');
+  assert.equal(redactMemoryText('private_key=myPrivateKey'), 'private_key=[REDACTED]');
+  assert.equal(redactMemoryText('auth_token=myAuthToken'), 'auth_token=[REDACTED]');
+  assert.equal(redactMemoryText('Error: password=hunter2'), 'Error: password=[REDACTED]');
+  assert.equal(redactMemoryText('Failed: api_key=abc123'), 'Failed: api_key=[REDACTED]');
+  assert.equal(redactMemoryText('database:\n  password: hunter2'), 'database:\n  password=[REDACTED]');
 });
 
 test('validated assistant-only candidates cannot claim completed work even when marked uncertain', () => {

@@ -54,7 +54,7 @@ function redactAndNormalize(content: string): string {
     .replace(/\r\n?/g, "\n")
     .replace(/[\t ]+/g, " ")
     .replace(/(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|authorization)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [REDACTED]")
+    .replace(/\bBearer\s+[a-z0-9._~+/-]+=*/gi, "Bearer [REDACTED]")
     .replace(/\b(?:sk-[A-Za-z0-9_-]{12,}|gh[posru]_[A-Za-z0-9]{20,})\b/g, "[REDACTED]")
     .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]")
     .trim();
