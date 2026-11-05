@@ -52,6 +52,14 @@ const NON_SECRET_SUBSTRINGS = new Set([
   "client",
 ]);
 
+// ⚡ Bolt: Hoisted static variables for extractWords to avoid recompiling Regex per function call
+const REGEX_WITH_SLASH = /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/;
+const REGEX_WITHOUT_SLASH = /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/;
+
+// ⚡ Bolt: Hoisted secret sets to module scope to avoid reallocating Sets on every AST node scan
+const SECRET_WORDS = new Set(["secret", "password", "token", "credential", "bearer", "apikey"]);
+const KEY_CONTEXT = new Set(["api", "private", "access", "secret", "encryption", "decryption", "auth", "session"]);
+
 export interface SecurityFinding {
   severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
   type: string;
@@ -83,9 +91,7 @@ export class SecurityScanner {
 
     // Helper to extract words from a camelCase, snake_case, or kebab-case string
     const extractWords = (text: string, includeSlash: boolean = false): string[] => {
-      const regex = includeSlash
-        ? /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_./-]/
-        : /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[_.-]/;
+      const regex = includeSlash ? REGEX_WITH_SLASH : REGEX_WITHOUT_SLASH;
       return text.split(regex).map((p) => p.toLowerCase());
     };
 
@@ -114,10 +120,8 @@ export class SecurityScanner {
         return false;
       }
 
-      const secretWords = new Set(["secret", "password", "token", "credential", "bearer", "apikey"]);
-      const keyContext = new Set(["api", "private", "access", "secret", "encryption", "decryption", "auth", "session"]);
-      return parts.some((part, index) => secretWords.has(part) ||
-        (part === "key" && (keyContext.has(parts[index - 1]) || keyContext.has(parts[index + 1]))));
+      return parts.some((part, index) => SECRET_WORDS.has(part) ||
+        (part === "key" && (KEY_CONTEXT.has(parts[index - 1]) || KEY_CONTEXT.has(parts[index + 1]))));
     };
 
     // Helper to verify if a function is actually SQL/Database related to avoid false-positive SQL injection warnings
