@@ -226,9 +226,13 @@ function createUndirectedAdjacency(links: FeatureLink[]): Map<string, string[]> 
 }
 
 function appendNeighbor(adjacency: Map<string, string[]>, source: string, target: string): void {
-  const neighbors = adjacency.get(source) ?? [];
+  // ⚡ Bolt: Optimize map population to avoid redundant Map writes
+  let neighbors = adjacency.get(source);
+  if (!neighbors) {
+    neighbors = [];
+    adjacency.set(source, neighbors);
+  }
   neighbors.push(target);
-  adjacency.set(source, neighbors);
 }
 
 function expandFeatureNeighbors(seeds: Set<string>, adjacency: Map<string, string[]>, depth: number): Set<string> {
@@ -279,9 +283,13 @@ function buildFeatureTraceData(loaded: LoadedProjectAnalysis, keyword: string, d
   const files = new Map<string, Array<{ name: string; type: string; isSeed: boolean; line: number | null }>>();
   for (const node of traceNodes) {
     const filePath = node.filePath || "external";
-    const entities = files.get(filePath) ?? [];
+    // ⚡ Bolt: Optimize map population to avoid redundant Map writes
+    let entities = files.get(filePath);
+    if (!entities) {
+      entities = [];
+      files.set(filePath, entities);
+    }
     entities.push({ name: node.label, type: node.type, isSeed: seeds.has(node.id), line: node.line || null });
-    files.set(filePath, entities);
   }
   const filesArray = Array.from(files.entries()).map(([filePath, entities]) => {
     const isExternal = filePath === "external";
@@ -878,13 +886,20 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       const linksByTarget = new Map<string, Array<{ from: string; type: string }>>();
       const linksBySource = new Map<string, Array<{ to: string; type: string }>>();
       for (const l of links) {
-        const byTarget = linksByTarget.get(l.target) ?? [];
+        // ⚡ Bolt: Optimize map population to avoid redundant Map writes
+        let byTarget = linksByTarget.get(l.target);
+        if (!byTarget) {
+          byTarget = [];
+          linksByTarget.set(l.target, byTarget);
+        }
         byTarget.push({ from: nodeMap.get(l.source) || l.source, type: l.type });
-        linksByTarget.set(l.target, byTarget);
 
-        const bySource = linksBySource.get(l.source) ?? [];
+        let bySource = linksBySource.get(l.source);
+        if (!bySource) {
+          bySource = [];
+          linksBySource.set(l.source, bySource);
+        }
         bySource.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
-        linksBySource.set(l.source, bySource);
       }
 
       const result = {
@@ -937,9 +952,13 @@ export function registerTools(server: McpServer, sessionAuth?: { tier: string; u
       // Pre-calculate adjacency lists for O(1) lookup
       const linksBySource = new Map<string, Array<{ to: string; type: string }>>();
       for (const l of links) {
-        const bySource = linksBySource.get(l.source) ?? [];
+        // ⚡ Bolt: Optimize map population to avoid redundant Map writes
+        let bySource = linksBySource.get(l.source);
+        if (!bySource) {
+          bySource = [];
+          linksBySource.set(l.source, bySource);
+        }
         bySource.push({ to: nodeMap.get(l.target) || l.target, type: l.type });
-        linksBySource.set(l.source, bySource);
       }
 
       // Group by file
