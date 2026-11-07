@@ -240,7 +240,7 @@ const freqLabels: Record<string, string> = {
           <div className="glass-panel" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid rgba(255,255,255,0.05)', alignSelf: 'start' }}>
             <h3 className="tech-font" style={{ fontSize: '1.25rem', marginBottom: '1.5rem', fontWeight: 800 }}>GENERATE TOKEN</h3>
             <form onSubmit={createKey} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <button type="submit" className={`btn-neon-cyan ${FOCUS_RING_CLASS}`} style={{ width: '100%', height: '54px', fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={loading}>
+              <button type="submit" className={`btn-neon-cyan ${FOCUS_RING_CLASS}`} style={{ width: '100%', height: '54px', fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: loading ? 'wait' : undefined }} disabled={loading}>
                 {loading ? <><RefreshCw className="animate-spin" size={20} /> CREATING...</> : 'CREATE ACCESS TOKEN'}
               </button>
             </form>
