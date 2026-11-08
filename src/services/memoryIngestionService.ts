@@ -208,9 +208,13 @@ export class MemoryIngestionService {
       if (!ack.persisted || !ack.id) throw new Error('Memory persistence was not acknowledged');
       for (const source of sources) {
         await this.persistEvidence(ack.id, { ...memory, evidence: memory.evidence.filter(item => item.sourceEventId === source.eventId) }, source, outcome.mode === 'model'); // NOSONAR
-        const ids = memoryIdsBySource.get(source.eventId) ?? [];
+        // ⚡ Bolt: Optimize map population to avoid redundant Map writes
+        let ids = memoryIdsBySource.get(source.eventId);
+        if (!ids) {
+          ids = [];
+          memoryIdsBySource.set(source.eventId, ids);
+        }
         ids.push(ack.id);
-        memoryIdsBySource.set(source.eventId, ids);
       }
       if (ack.status === 'stored') result.stored++;
       else result.duplicate++;
