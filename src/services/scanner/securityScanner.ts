@@ -24,6 +24,9 @@ const DB_KEYWORDS = [
   "pool",
   "transaction",
 ];
+const DB_KEYWORDS_REGEX = new RegExp(DB_KEYWORDS.join("|"));
+const TEST_MOCK_FILE_REGEX = /\/tests\/|\/test\/|\/__tests__\/|\.test\.|\.spec\.|\/mocks\/|\/mock\/|\/scratch\/|\/diagnostic\//;
+const SQL_INJECTION_RISK_REGEX = /select|insert|update|delete|drop|alter/;
 
 const NON_SECRET_SUBSTRINGS = new Set([
   "expired",
@@ -92,17 +95,8 @@ export class SecurityScanner {
     // Helper to identify test, mock or diagnostic files
     const isTestOrMockFile = (filePath: string): boolean => {
       const fp = filePath.toLowerCase().replaceAll("\\", "/");
-      return (
-        fp.includes("/tests/") ||
-        fp.includes("/test/") ||
-        fp.includes("/__tests__/") ||
-        fp.includes(".test.") ||
-        fp.includes(".spec.") ||
-        fp.includes("/mocks/") ||
-        fp.includes("/mock/") ||
-        fp.includes("/scratch/") ||
-        fp.includes("/diagnostic/")
-      );
+      // ⚡ Bolt Optimization: Replaced O(N) array .includes check with O(1) RegExp .test check
+      return TEST_MOCK_FILE_REGEX.test(fp);
     };
 
     // Helper to detect if a variable name represents a real security secret/token/password
@@ -122,15 +116,17 @@ export class SecurityScanner {
 
     // Helper to verify if a function is actually SQL/Database related to avoid false-positive SQL injection warnings
     const isSqlRelated = (node: GraphNode): boolean => {
+      // ⚡ Bolt Optimization: Replaced O(N) array .some/.includes with precompiled RegExp .test
+
       // 1. Check file path
       const fp = (node.filePath || "").toLowerCase();
-      if (DB_KEYWORDS.some((k) => fp.includes(k))) {
+      if (DB_KEYWORDS_REGEX.test(fp)) {
         return true;
       }
 
       // 2. Check node label itself
       const labelLower = node.label.toLowerCase();
-      if (DB_KEYWORDS.some((k) => labelLower.includes(k))) {
+      if (DB_KEYWORDS_REGEX.test(labelLower)) {
         return true;
       }
 
@@ -142,11 +138,7 @@ export class SecurityScanner {
         if (otherNode) {
           const otherLabel = otherNode.label.toLowerCase();
           const otherFp = (otherNode.filePath || "").toLowerCase();
-          if (
-            DB_KEYWORDS.some(
-              (k) => otherLabel.includes(k) || otherFp.includes(k),
-            )
-          ) {
+          if (DB_KEYWORDS_REGEX.test(otherLabel) || DB_KEYWORDS_REGEX.test(otherFp)) {
             return true;
           }
         }
@@ -191,9 +183,7 @@ export class SecurityScanner {
         // 3. Detect Potential SQL Injection
         if (
           (node.label.includes("Query") || node.label.includes("execute") ||
-           labelLower.includes("select") || labelLower.includes("insert") ||
-           labelLower.includes("update") || labelLower.includes("delete") ||
-           labelLower.includes("drop") || labelLower.includes("alter")) &&
+           SQL_INJECTION_RISK_REGEX.test(labelLower)) &&
           node.label !== "execute" &&
           !node.label.endsWith("UseCase") &&
           isSqlRelated(node)
