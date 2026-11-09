@@ -295,6 +295,7 @@ export function DreamMemoryView() {
           />
           {(startDate || endDate) && (
             <button
+              type="button"
               aria-label="Clear date filters"
               title="Clear date filters"
               onClick={() => {
@@ -319,7 +320,7 @@ export function DreamMemoryView() {
           )}
         </div>
 
-        <button aria-label={showConfig ? 'Close configuration' : 'Open configuration'} onClick={() => {
+        <button type="button" aria-label={showConfig ? 'Close configuration' : 'Open configuration'} onClick={() => {
             const currentConfig = dreamConfigRef.current;
             if (!showConfig && currentConfig) {
               setTempEnabled(currentConfig.dreams_enabled ?? true);
@@ -337,7 +338,7 @@ export function DreamMemoryView() {
           }}>
           <Settings size={18} style={{ marginRight: '0.5rem' }} /> Config
         </button>
-        <button onClick={() => { setShowAll(!showAll); fetchMemories(searchQuery, 0, dreamConfig); }}
+        <button type="button" onClick={() => { setShowAll(!showAll); fetchMemories(searchQuery, 0, dreamConfig); }}
           aria-pressed={showAll}
           className={FOCUS_RING_CLASS}
           style={{
@@ -363,10 +364,10 @@ export function DreamMemoryView() {
             <label htmlFor="config-provider">Provider:</label>
             <input id="config-provider" type="text" value={tempProvider} onChange={e => setTempProvider(e.target.value)} className={FOCUS_RING_CLASS} style={{ padding: '0.5rem' }} />
           </div>
-          <button onClick={saveDreamConfig} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={DREAM_CONFIG_LOADING_BUTTON_STYLE}>
+          <button type="button" onClick={saveDreamConfig} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={DREAM_CONFIG_LOADING_BUTTON_STYLE}>
             {savingConfig ? (<><Loader2 className="animate-spin" size={14} /> Saving...</>) : 'Save Config'}
           </button>
-          <button onClick={runDailyDreamsNow} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={DREAM_CONFIG_RUN_BUTTON_STYLE}>
+          <button type="button" onClick={runDailyDreamsNow} disabled={savingConfig || runningDailyDreams} className={FOCUS_RING_CLASS} style={DREAM_CONFIG_RUN_BUTTON_STYLE}>
             {runningDailyDreams ? (<><Loader2 className="animate-spin" size={14} /> Running...</>) : 'Run Now'}
           </button>
         </div>
@@ -477,7 +478,7 @@ export function DreamMemoryView() {
 
       {/* Pagination */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', padding: '0.75rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }}>
-        <button onClick={() => goToPage(page - 1)} disabled={!hasPrev} aria-label="Previous page"
+        <button type="button" onClick={() => goToPage(page - 1)} disabled={!hasPrev} aria-label="Previous page"
           className={FOCUS_RING_CLASS}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
@@ -490,7 +491,7 @@ export function DreamMemoryView() {
         <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>
           Page {page + 1}
         </span>
-        <button onClick={() => goToPage(page + 1)} disabled={!hasNext} aria-label="Next page"
+        <button type="button" onClick={() => goToPage(page + 1)} disabled={!hasNext} aria-label="Next page"
           className={FOCUS_RING_CLASS}
           style={{
             padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)',
