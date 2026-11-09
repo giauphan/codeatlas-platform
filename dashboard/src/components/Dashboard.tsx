@@ -551,6 +551,7 @@ export const Dashboard: React.FC = () => {
             {['Control Center', 'Knowledge Graph', 'Memory Tree', 'DeepWiki', 'Cloud Index', 'Dream Memories', 'Second Brain', 'Orchestration Tasks', 'Documentation'].map(tab => (
               <li key={tab} style={{ marginBottom: '1rem' }}>
                 <button
+                  type="button"
                   onClick={() => setActiveTab(tab)}
                   aria-current={activeTab === tab ? 'page' : undefined}
                   className={FOCUS_RING_CLASS}
@@ -588,6 +589,7 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
           <button
+            type="button"
             onClick={clearAllCaches}
             className={FOCUS_RING_CLASS}
             style={{

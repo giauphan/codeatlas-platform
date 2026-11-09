@@ -121,6 +121,7 @@ export function SecondBrainView() {
           </p>
         </div>
         <motion.button
+          type="button"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={handleConsolidate}
@@ -196,6 +197,7 @@ export function SecondBrainView() {
           </p>
           {!searchQuery.trim() && (
             <motion.button
+              type="button"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleConsolidate}

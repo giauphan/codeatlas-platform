@@ -193,7 +193,7 @@ const freqLabels: Record<string, string> = {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span id="cron-enabled-label" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Enabled</span>
-                  <button role="switch" aria-checked={cronEnabled} aria-labelledby="cron-enabled-label" onClick={() => setCronEnabled(!cronEnabled)}
+                  <button type="button" role="switch" aria-checked={cronEnabled} aria-labelledby="cron-enabled-label" onClick={() => setCronEnabled(!cronEnabled)}
                     className={FOCUS_RING_CLASS}
                     style={{
                       width: '44px', height: '24px', borderRadius: '12px', border: 'none', cursor: 'pointer',
@@ -208,7 +208,7 @@ const freqLabels: Record<string, string> = {
                   </button>
                 </div>
 
-                <button onClick={saveCron} disabled={cronSaving}
+                <button type="button" onClick={saveCron} disabled={cronSaving}
                   className={FOCUS_RING_CLASS}
                   style={{
                     width: '100%', padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--primary-neon)',
@@ -233,7 +233,7 @@ const freqLabels: Record<string, string> = {
               <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', wordBreak: 'break-all', padding: '1rem', borderRadius: '12px', background: 'rgba(0,255,0,0.05)', border: '1px solid rgba(0,255,0,0.2)', marginBottom: '1rem' }}>
                 {createdKey}
               </div>
-              <button onClick={clearCreatedKey} className={`btn-neon-cyan ${FOCUS_RING_CLASS}`} style={{ width: '100%' }}>DISMISS</button>
+              <button type="button" onClick={clearCreatedKey} className={`btn-neon-cyan ${FOCUS_RING_CLASS}`} style={{ width: '100%' }}>DISMISS</button>
             </motion.div>
           )}
 

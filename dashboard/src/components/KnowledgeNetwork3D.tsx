@@ -108,6 +108,7 @@ export function SphericalKnowledgeGraph({
           zIndex: 10,
         }}>
           <button
+            type="button"
             className={FOCUS_RING_CLASS}
             title="Load all nodes and links"
             onClick={() => setShowAll(true)}
