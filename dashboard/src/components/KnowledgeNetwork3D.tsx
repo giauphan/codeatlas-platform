@@ -69,10 +69,14 @@ export function SphericalKnowledgeGraph({
       );
 
       const nodeIds = new Set(filteredNodesByType.map((n: GraphNode) => n.id));
-      const clonedLinks = allLinks.map((l: GraphLink) => ({ ...l }));
-      const filteredLinks = clonedLinks.filter(
-        (l: GraphLink) => nodeIds.has(l.source) && nodeIds.has(l.target)
-      );
+
+      // ⚡ Bolt: Single pass reduce prevents unnecessary object cloning and GC pressure for filtered-out links
+      const filteredLinks = allLinks.reduce<GraphLink[]>((acc, l) => {
+        if (nodeIds.has(l.source) && nodeIds.has(l.target)) {
+          acc.push({ ...l });
+        }
+        return acc;
+      }, []);
       
       setTotalNodes(filteredNodesByType.length);
       setTotalLinks(filteredLinks.length);
