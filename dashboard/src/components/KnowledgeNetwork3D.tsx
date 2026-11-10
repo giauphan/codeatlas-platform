@@ -69,10 +69,16 @@ export function SphericalKnowledgeGraph({
       );
 
       const nodeIds = new Set(filteredNodesByType.map((n: GraphNode) => n.id));
-      const clonedLinks = allLinks.map((l: GraphLink) => ({ ...l }));
-      const filteredLinks = clonedLinks.filter(
-        (l: GraphLink) => nodeIds.has(l.source) && nodeIds.has(l.target)
-      );
+
+      // ⚡ Bolt: Combine clone and filter into a single reduce pass.
+      // Avoids unnecessary intermediate array allocations and memory/GC pressure
+      // from cloning link objects that are subsequently filtered out.
+      const filteredLinks = allLinks.reduce((acc: GraphLink[], l: GraphLink) => {
+        if (nodeIds.has(l.source) && nodeIds.has(l.target)) {
+          acc.push({ ...l });
+        }
+        return acc;
+      }, []);
       
       setTotalNodes(filteredNodesByType.length);
       setTotalLinks(filteredLinks.length);
