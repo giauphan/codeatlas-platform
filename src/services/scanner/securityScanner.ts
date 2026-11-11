@@ -25,6 +25,8 @@ const DB_KEYWORDS = [
   "transaction",
 ];
 
+const DB_KEYWORDS_REGEX = new RegExp(DB_KEYWORDS.join("|"));
+
 const NON_SECRET_SUBSTRINGS = new Set([
   "expired",
   "count",
@@ -124,13 +126,13 @@ export class SecurityScanner {
     const isSqlRelated = (node: GraphNode): boolean => {
       // 1. Check file path
       const fp = (node.filePath || "").toLowerCase();
-      if (DB_KEYWORDS.some((k) => fp.includes(k))) {
+      if (DB_KEYWORDS_REGEX.test(fp)) {
         return true;
       }
 
       // 2. Check node label itself
       const labelLower = node.label.toLowerCase();
-      if (DB_KEYWORDS.some((k) => labelLower.includes(k))) {
+      if (DB_KEYWORDS_REGEX.test(labelLower)) {
         return true;
       }
 
@@ -142,11 +144,7 @@ export class SecurityScanner {
         if (otherNode) {
           const otherLabel = otherNode.label.toLowerCase();
           const otherFp = (otherNode.filePath || "").toLowerCase();
-          if (
-            DB_KEYWORDS.some(
-              (k) => otherLabel.includes(k) || otherFp.includes(k),
-            )
-          ) {
+          if (DB_KEYWORDS_REGEX.test(otherLabel) || DB_KEYWORDS_REGEX.test(otherFp)) {
             return true;
           }
         }
