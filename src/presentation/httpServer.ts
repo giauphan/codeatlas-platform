@@ -165,6 +165,8 @@ export const syncQueue = new TaskQueue(1);
 // Setup Express app to serve as both MCP SSE and REST API
 export const app = express();
 app.set("trust proxy", 1);
+app.disable("x-powered-by"); // Prevent Express version leakage
+
 // Use helmet for standard security headers
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin to match CORS logic below
